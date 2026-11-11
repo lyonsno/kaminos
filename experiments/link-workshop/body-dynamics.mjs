@@ -1,0 +1,76 @@
+import {checkedMechanism} from './model.mjs';
+
+const cross=(a,b)=>a[0]*b[1]-a[1]*b[0];
+const dot=(a,b)=>a.reduce((s,x,i)=>s+x*b[i],0);
+const zeros=n=>new Float64Array(n);
+const vector=(a,b)=>[a[0]+b[0],a[1]+b[1]];
+const rotate=(p,a)=>[Math.cos(a)*p[0]-Math.sin(a)*p[1],Math.sin(a)*p[0]+Math.cos(a)*p[1]];
+function bodies(m){return m.nodes.map(n=>n.parent===null?null:{mass:n.bodyDynamics?.mass??1,center:n.bodyDynamics?.center??[n.length/2,0],inertia:n.bodyDynamics?.inertia??(n.bodyDynamics?.mass??1)*n.length*n.length/12});}
+function world(m,q){const p=[],a=[],r=[],c=[];for(let i=0;i<m.nodes.length;i++){const n=m.nodes[i];if(n.parent===null){p[i]=n.point;a[i]=0;r[i]=c[i]=[0,0];}else{a[i]=a[n.parent]+q[i];r[i]=rotate([n.length,0],a[i]);c[i]=rotate(n.bodyDynamics?.center??[n.length/2,0],a[i]);p[i]=vector(p[n.parent],r[i]);}}return {p,a,r,c};}
+function velocity(m,w,v){const linear=[],omega=[];for(let i=0;i<m.nodes.length;i++){const n=m.nodes[i];if(n.parent===null){linear[i]=[0,0];omega[i]=0;}else{omega[i]=omega[n.parent]+v[i];linear[i]=vector(linear[n.parent],[-omega[i]*w.r[i][1],omega[i]*w.r[i][0]]);}}return {linear,omega};}
+const loads=n=>({f:Array.from({length:n},()=>[0,0]),t:zeros(n)});
+function at(m,w,id,offset){return offset?vector(w.p[m.nodes[id].parent??id],rotate(offset,w.a[id])):w.p[id];}
+function pointVelocity(m,w,t,id,p){const n=m.nodes[id];if(n.parent===null)return [0,0];const r=[p[0]-w.p[n.parent][0],p[1]-w.p[n.parent][1]];return vector(t.linear[n.parent],[-t.omega[id]*r[1],t.omega[id]*r[0]]);}
+function loadAt(m,w,L,id,p,f){if(m.nodes[id].parent===null)return;L.f[id][0]+=f[0];L.f[id][1]+=f[1];L.t[id]+=cross([p[0]-w.p[id][0],p[1]-w.p[id][1]],f);}
+function backward(m,w,L){const out=zeros(m.nodes.length);for(let i=m.nodes.length-1;i>=0;i--){const parent=m.nodes[i].parent;if(parent===null)continue;out[i]=L.t[i]+cross(w.r[i],L.f[i]);L.f[parent][0]+=L.f[i][0];L.f[parent][1]+=L.f[i][1];L.t[parent]+=out[i];}return out;}
+function bodyLoads(m,w,b,t){const L=loads(m.nodes.length);for(let i=0;i<m.nodes.length;i++){if(!b[i])continue;const parent=m.nodes[i].parent,cv=vector(t.linear[parent],[-t.omega[i]*w.c[i][1],t.omega[i]*w.c[i][0]]),f=cv.map(x=>x*b[i].mass);L.f[i]=f;L.t[i]=b[i].inertia*t.omega[i]+cross([w.c[i][0]-w.r[i][0],w.c[i][1]-w.r[i][1]],f);}return L;}
+const mv=(a,x)=>[dot(a.slice(0,3),x),dot(a.slice(3,6),x),dot(a.slice(6,9),x)];
+const transpose=a=>[a[0],a[3],a[6],a[1],a[4],a[7],a[2],a[5],a[8]];
+function mm(a,b){const out=Array(9).fill(0);for(let i=0;i<3;i++)for(let j=0;j<3;j++)for(let k=0;k<3;k++)out[i*3+j]+=a[i*3+k]*b[k*3+j];return out;}
+function inertiaAt(m,w,b){
+ const n=m.nodes.length,I=Array.from({length:n},()=>Array(9).fill(0)),X=[],S=[],U=[],d=zeros(n);
+ for(let i=0;i<n;i++){if(!b[i])continue;const x=w.c[i][0]-w.r[i][0],y=w.c[i][1]-w.r[i][1],mass=b[i].mass;I[i]=[b[i].inertia+mass*(x*x+y*y),-mass*y,mass*x,-mass*y,mass,0,mass*x,0,mass];X[i]=[1,0,0,-w.r[i][1],1,0,w.r[i][0],0,1];S[i]=[1,-w.r[i][1],w.r[i][0]];}
+ // Articulated-body elimination: exact inverse mass application in linear
+ // tree passes, retaining body inertia rather than independent hinge weights.
+ for(let i=n-1;i>=0;i--){const parent=m.nodes[i].parent;if(parent===null)continue;U[i]=mv(I[i],S[i]);d[i]=dot(S[i],U[i]);if(!(d[i]>0)||!Number.isFinite(d[i]))throw Error('Body inertia exceeds finite positive solver range');const reduced=I[i].map((x,k)=>x-U[i][Math.floor(k/3)]*U[i][k%3]/d[i]),up=mm(transpose(X[i]),mm(reduced,X[i]));I[parent]=I[parent].map((x,k)=>x+up[k]);}
+ const solve=rhs=>{const P=Array.from({length:n},()=>[0,0,0]),u=zeros(n),acc=Array.from({length:n},()=>[0,0,0]),out=zeros(n);for(let i=n-1;i>=0;i--){const parent=m.nodes[i].parent;if(parent===null)continue;u[i]=rhs[i]-dot(S[i],P[i]);const up=mv(transpose(X[i]),P[i].map((x,k)=>x+U[i][k]*u[i]/d[i]));P[parent]=P[parent].map((x,k)=>x+up[k]);}for(let i=0;i<n;i++){const parent=m.nodes[i].parent;if(parent===null)continue;const a=mv(X[i],acc[parent]);out[i]=(u[i]-dot(U[i],a))/d[i];acc[i]=a.map((x,k)=>x+S[i][k]*out[i]);}return out;};
+ return {multiply:v=>backward(m,w,bodyLoads(m,w,b,velocity(m,w,v))),solve};
+}
+export function createBodyInertia(value,angles){const m=checkedMechanism(value);if(angles.length!==m.nodes.length||!angles.every(Number.isFinite))throw Error('Finite body angles required');return inertiaAt(m,world(m,angles),bodies(m));}
+function external(m,w,b,v,gravity){const t=velocity(m,w,v),acc=[],L=loads(m.nodes.length);for(let i=0;i<m.nodes.length;i++){const parent=m.nodes[i].parent;if(parent===null){acc[i]=[0,0];continue;}const om=t.omega[i]**2;acc[i]=vector(acc[parent],w.r[i].map(x=>-om*x));const com=vector(acc[parent],w.c[i].map(x=>-om*x)),f=com.map((x,k)=>b[i].mass*(gravity[k]-x));loadAt(m,w,L,i,vector(w.p[parent],w.c[i]),f);}return backward(m,w,L);}
+function cg(A,pre,rhs,initial,dofs){const ax=A(initial);let x=Float64Array.from(initial),r=Float64Array.from(rhs,(b,i)=>b-ax[i]);let z=pre(r),p=Float64Array.from(z),rz=dot(r,z),residual=Math.sqrt(dot(r,r)),iterations=0;const tolerance=1e-9*Math.max(1,Math.sqrt(dot(rhs,rhs)));while(residual>tolerance&&iterations<dofs){const ap=A(p),den=dot(p,ap);if(!(den>0)||!Number.isFinite(den))throw Error('Body velocity system is not finite positive definite');const alpha=rz/den;for(let i=0;i<x.length;i++){x[i]+=alpha*p[i];r[i]-=alpha*ap[i];}iterations++;residual=Math.sqrt(dot(r,r));if(residual<=tolerance)break;z=pre(r);const next=dot(r,z),beta=next/rz;for(let i=0;i<p.length;i++)p[i]=z[i]+beta*p[i];rz=next;}if(!x.every(Number.isFinite))throw Error('Body velocity exceeds finite solver range');return {velocity:x,iterations,residual,converged:residual<=tolerance};}
+function activePart(m,joint){
+ const parent=m.nodes.map((n,i)=>i),find=x=>{while(parent[x]!==x){parent[x]=parent[parent[x]];x=parent[x];}return x;},join=(a,b)=>{a=find(a);b=find(b);if(a!==b)parent[b]=a;};
+ for(let i=0;i<m.nodes.length;i++){const p=m.nodes[i].parent;if(p!==null&&m.nodes[p].parent!==null)join(i,p);}
+ for(const p of m.pistons)if(m.nodes[p.a].parent!==null&&m.nodes[p.b].parent!==null)join(p.a,p.b);
+ const active=m.nodes.map((n,i)=>n.parent!==null&&find(i)===find(joint)?i:null).filter(i=>i!==null),ids=new Set(active);for(const i of active)ids.add(m.nodes[i].parent);
+ const indices=[...ids].sort((a,b)=>a-b),map=new Map(indices.map((id,i)=>[id,i])),ps=m.pistons.map((p,i)=>({p,i})).filter(({p})=>active.includes(p.a)||active.includes(p.b));for(const {p}of ps)for(const id of [p.a,p.b])if(!map.has(id)){map.set(id,indices.length);indices.push(id);}
+ // Extra fixed endpoints may appear after moving bodies; parent indices of
+ // moving nodes retain their original order and no link depends on an extra.
+ const sub={schema:m.schema,period:m.period,nodes:indices.map(i=>({...m.nodes[i],parent:m.nodes[i].parent===null?null:map.get(m.nodes[i].parent)})),pistons:ps.map(({p})=>({...p,a:map.get(p.a),b:map.get(p.b)})),mechanics:m.mechanics};
+ return {sub,indices,map,active,pistonIndices:ps.map(x=>x.i)};
+}
+export const defaultHydraulics=Object.freeze({areaA:.0025,areaB:.002,bulkModulus:2e6,deadVolume:.00005,conductance:2e-7,reliefConductance:2e-5,minPressure:-90000,maxPressure:2e6,valve:'metered'});
+function chamber(old,C,area,sign,speed,h,s){const G=s.valve==='closed'?0:s.conductance*(s.valve==='free'?1000:1),z=C*old+sign*h*area*speed,den=C+h*G,trial=z/den,limit=trial<s.minPressure?s.minPressure:trial>s.maxPressure?s.maxPressure:null,d=den+(limit===null?0:h*s.reliefConductance);const pressure=(z+(limit===null?0:h*s.reliefConductance*limit))/d;return pressure<s.minPressure?{p:s.minPressure,slope:0}:{p:pressure,slope:sign*h*area/d};}
+function hydraulic(p,old,length,speed,h,enabled){if(!enabled)return {force:0,slope:0,pressures:[0,0]};const s={...defaultHydraulics,...p.hydraulics},stroke=p.mechanics.maxLength-p.mechanics.minLength,x=Math.max(0,Math.min(stroke,length-p.mechanics.minLength)),a=chamber(old[0],(s.deadVolume+s.areaA*x)/s.bulkModulus,s.areaA,-1,speed,h,s),b=chamber(old[1],(s.deadVolume+s.areaB*(stroke-x))/s.bulkModulus,s.areaB,1,speed,h,s);return {force:s.areaA*a.p-s.areaB*b.p,slope:s.areaA*a.slope-s.areaB*b.slope,pressures:[a.p,b.p]};}
+function cylinderResponse(p,old,length,speed,h,settings){const fluid=hydraulic(p,old,length,speed,h,settings.hydraulicsEnabled!==false),drag=settings.cylinderDrag??2,s=p.mechanics,k=settings.endStopStiffness??s.stopStiffness,d=2*Math.sqrt(k),low=Math.max(0,k*(s.minLength-length)-(h*k+d)*speed),high=Math.min(0,k*(s.maxLength-length)-(h*k+d)*speed);return {...fluid,hydraulicForce:fluid.force,force:fluid.force-drag*speed+low+high,slope:fluid.slope-drag-((low||high)?h*k+d:0),stopForce:low+high};}
+
+export function createBodyDynamics(value,{fraction=0,joint,velocities}={}){
+ const all=checkedMechanism(value);if(!Number.isFinite(fraction)||fraction<0||fraction>1)throw Error('Body pose fraction must be between zero and one');if(velocities&&(velocities.length!==all.nodes.length||!velocities.every(Number.isFinite)))throw Error('One finite body velocity per node required');if(!all.mechanics?.enabled)throw Error('Enable mechanical body response first');if(!Number.isInteger(joint)||all.nodes[joint]?.parent===null||!all.nodes[joint])throw Error('Choose a moving body joint');
+ const {sub:m,indices,map,active,pistonIndices}=activePart(all,joint),n=m.nodes.length,b=bodies(m),settings=m.mechanics,gravity=settings.gravity??[0,-9.81],dofs=m.nodes.filter(n=>n.parent!==null).length;
+ let q=indices.map(i=>all.nodes[i].parent===null?0:all.nodes[i].angles[0]+(all.nodes[i].angles[1]-all.nodes[i].angles[0])*fraction),v=Float64Array.from(indices,i=>velocities?.[i]??0),pressures=m.pistons.map(()=>[0,0]),last={iterations:0,linearResidual:0,converged:true},grab=null,time=0;
+ if(!v.every(Number.isFinite))throw Error('Finite body velocities required');m.nodes.forEach((node,i)=>{if(node.parent===null)v[i]=0;});
+ function read(){const whole=all.nodes.map(n=>n.parent===null?0:n.angles[0]+(n.angles[1]-n.angles[0])*fraction),vv=Array(all.nodes.length).fill(0);indices.forEach((id,i)=>{whole[id]=q[i];vv[id]=v[i];});const w=world(all,whole),twist=velocity(all,w,vv),actuators=all.pistons.map((p,index)=>{const a=at(all,w,p.a,p.aOffset),bp=at(all,w,p.b,p.bOffset),d=[bp[0]-a[0],bp[1]-a[1]],length=Math.hypot(...d),local=pistonIndices.indexOf(index),s=p.mechanics,ps=local<0?[0,0]:pressures[local],hs={...defaultHydraulics,...p.hydraulics};return {index,length,minLength:s.minLength,maxLength:s.maxLength,pressures:[...ps],hydraulicForce:settings.hydraulicsEnabled===false?0:hs.areaA*ps[0]-hs.areaB*ps[1],stopCompression:Math.max(0,s.minLength-length,length-s.maxLength),barrelLength:s.barrelLength,rodLength:s.rodLength,active:local>=0};});const point=grab?w.p[grab.joint]:null;return {angles:whole,velocities:vv,points:w.p,actuators,hand:grab?{joint:grab.joint,point:[...point],target:[...grab.target],force:point.map((x,k)=>(settings.grabStiffness??1e6)*(grab.target[k]-x)-(settings.grabDamping??80)*twist.linear[grab.joint][k]),residual:Math.hypot(point[0]-grab.target[0],point[1]-grab.target[1])}:null,activeJoints:active,activeCylinders:pistonIndices,time,...last,kineticEnergy:.5*dot(v,inertiaAt(m,world(m,q),b).multiply(v)),model:'connected planar rigid-body inertia with implicit two-chamber hydraulic response'};}
+ function step(h,{grab:requested}={}){
+  if(!Number.isFinite(h)||h<=0)throw Error('Positive finite body step required');if(requested&&(!map.has(requested.joint)||all.nodes[requested.joint].parent===null||requested.target?.length!==2||!requested.target.every(Number.isFinite)))throw Error('Grab a moving joint in this active island with a finite target');
+  const w=world(m,q),inertia=inertiaAt(m,w,b),ext=external(m,w,b,v,gravity),mvOld=inertia.multiply(v),jointDamping=settings.jointDamping??.1;
+  const ps=m.pistons.map(p=>{const a=at(m,w,p.a,p.aOffset),bp=at(m,w,p.b,p.bOffset),delta=[bp[0]-a[0],bp[1]-a[1]],length=Math.hypot(...delta);return {a,b:bp,length,u:length?delta.map(x=>x/length):[0,0]};});
+  const speeds=twist=>ps.map((p,i)=>{const c=m.pistons[i],a=pointVelocity(m,w,twist,c.a,p.a),b=pointVelocity(m,w,twist,c.b,p.b);return dot(p.u,[b[0]-a[0],b[1]-a[1]]);});
+  const applyCylinder=(L,i,force)=>{const p=m.pistons[i],data=ps[i],f=data.u.map(x=>x*force);loadAt(m,w,L,p.a,data.a,f.map(x=>-x));loadAt(m,w,L,p.b,data.b,f);};
+  const hand=requested?{id:map.get(requested.joint),target:requested.target,stiffness:settings.grabStiffness??1e6,damping:settings.grabDamping??80}:null;
+  const forceAt=trial=>{const twist=velocity(m,w,trial),ss=speeds(twist),L=loads(n);for(let i=0;i<ps.length;i++)applyCylinder(L,i,cylinderResponse(m.pistons[i],pressures[i],ps[i].length,ss[i],h,settings).force);if(hand){const point=w.p[hand.id],vel=twist.linear[hand.id],f=point.map((x,k)=>hand.stiffness*(hand.target[k]-x-h*vel[k])-hand.damping*vel[k]);loadAt(m,w,L,hand.id,point,f);}return backward(m,w,L);};
+  let trial=Float64Array.from(v),totalIterations=0,nonlinearIterations=0,solved;
+  for(;;){const ss=speeds(velocity(m,w,trial)),responses=ps.map((p,i)=>cylinderResponse(m.pistons[i],pressures[i],p.length,ss[i],h,settings));
+   const A=input=>{const twist=velocity(m,w,input),L=bodyLoads(m,w,b,twist),speed=speeds(twist);for(let i=0;i<ps.length;i++)applyCylinder(L,i,-h*responses[i].slope*speed[i]);if(hand)loadAt(m,w,L,hand.id,w.p[hand.id],twist.linear[hand.id].map(x=>(h*h*hand.stiffness+h*hand.damping)*x));const out=backward(m,w,L);for(let i=0;i<n;i++)out[i]+=h*jointDamping*input[i];return out;};
+   const L=loads(n);for(let i=0;i<ps.length;i++)applyCylinder(L,i,h*(responses[i].force-responses[i].slope*ss[i]));if(hand)loadAt(m,w,L,hand.id,w.p[hand.id],w.p[hand.id].map((x,k)=>h*hand.stiffness*(hand.target[k]-x)));const row=backward(m,w,L),rhs=Float64Array.from(mvOld,(x,i)=>x+h*ext[i]+row[i]);
+   solved=cg(A,inertia.solve,rhs,trial,dofs);totalIterations+=solved.iterations;nonlinearIterations++;const delta=Float64Array.from(solved.velocity,(x,i)=>x-trial[i]),size=Math.sqrt(dot(delta,delta));if(size<=1e-8*(1+Math.sqrt(dot(trial,trial)))){trial=solved.velocity;break;}
+   // Exact directional minimization of the convex piecewise-quadratic velocity
+   // problem keeps pressure relief/stop changes from oscillating active sets.
+   const directional=alpha=>{const x=Float64Array.from(trial,(a,i)=>a+alpha*delta[i]),mass=inertia.multiply(x),force=forceAt(x);return delta.reduce((s,d,i)=>s+d*(mass[i]-mvOld[i]+h*jointDamping*x[i]-h*ext[i]-h*force[i]),0);};
+   let alpha=1;if(directional(1)>0){let lo=0,hi=1;while(hi-lo>1e-10){const mid=(lo+hi)/2;if(directional(mid)>0)hi=mid;else lo=mid;}alpha=(lo+hi)/2;}
+   const next=Float64Array.from(trial,(x,i)=>x+alpha*delta[i]);if(next.every((x,i)=>x===trial[i]))throw Error('Body response stalled before nonlinear convergence');trial=next;
+  }
+  const speed=speeds(velocity(m,w,trial));pressures=ps.map((p,i)=>hydraulic(m.pistons[i],pressures[i],p.length,speed[i],h,settings.hydraulicsEnabled!==false).pressures);q=q.map((x,i)=>m.nodes[i].parent===null?x:x+h*trial[i]);if(!q.every(Number.isFinite))throw Error('Body pose exceeds finite solver range');v=trial;time+=h;grab=requested?structuredClone(requested):null;last={iterations:totalIterations,nonlinearIterations,linearResidual:solved.residual,converged:solved.converged};return read();
+ }
+ return {read,step};
+}
