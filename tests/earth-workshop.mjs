@@ -9,7 +9,7 @@ import transport from '../experiments/earth-surface-teacher.experiment.mjs';
 import {createOwnerSceneSession} from '../owner-scene-session.mjs';
 function fakeHost({strict=false}={}){
  const frames=new Set(),roots=[];let doc;
- const make=tag=>({tag,ownerDocument:doc,value:'',children:[],style:{},dataset:{},classList:{add(){},remove(){}},append(...a){this.children.push(...a);},insertBefore(a,b){this.children=this.children.filter(x=>x!==a);this.children.splice(Math.max(0,this.children.indexOf(b)),0,a);},setAttribute(k,v){this[k]=v;},addEventListener(){},removeEventListener(){},remove(){},contains(){return false;},getBoundingClientRect:()=>({left:0,top:0,width:640,height:480})});
+ const make=tag=>({tag,ownerDocument:doc,value:'',children:[],style:{},dataset:{},classList:{add(){},remove(){}},append(...a){this.children.push(...a);},insertBefore(a,b){this.children=this.children.filter(x=>x!==a);this.children.splice(Math.max(0,this.children.indexOf(b)),0,a);},setAttribute(k,v){this[k]=v;},addEventListener(){},removeEventListener(){},remove(){},contains(){return false;},getBoundingClientRect:()=>({left:0,top:0,right:640,bottom:480,width:640,height:480})});
  doc={activeElement:null,createElement:make,addEventListener(){},removeEventListener(){}};const viewport=make('viewport');doc.getElementById=id=>id==='viewport'?viewport:null;doc.head=make('head');doc.body=make('body');
  let view={position:[1,1,1],target:[0,0,0],fov:40};const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera();
  const session={attach:async root=>{roots.push(root);scene.add(root);return {id:`object-${roots.length}`,root};},redraw(){},readView:()=>view,setView:v=>view=v,onFrame:fn=>{frames.add(fn);return()=>frames.delete(fn);}};
@@ -204,4 +204,9 @@ test('explicit live teacher export keeps the displayed finer mesh, and replaceme
 test('temporary finer inspection pause preserves saved live intent and restores it on return',async()=>{
  const {host}=fakeHost(),app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8}},record:()=>{},admitReplay:async(options,run)=>({result:await run({status:'test'}),lease:{}})});
  try{assert.equal(app.read().live.enabled,true);await app.operations.replay();await app.operations.viewReplay();assert.equal((await app.operations.snapshot()).live,true);await app.operations.returnToLive();assert.equal(app.read().live.enabled,true);}finally{await app.dispose();}
+});
+
+test('closing during replay still reports failed lease handback after owned resources close',async()=>{
+ const {host,roots}=fakeHost();let entered,release;const enteredPromise=new Promise(r=>entered=r),releasePromise=new Promise(r=>release=r);const app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8}},record:()=>{},admitReplay:async(options,run)=>{const result=await run({status:'test'});entered();await releasePromise;return {result,lease:{releaseError:'injected closing handback failed'}};}});
+ const pending=app.operations.replay();const observed=pending.catch(e=>e);await enteredPromise;const closing=app.dispose();release();await assert.rejects(closing,/handback failed/);assert.match((await observed).message,/handback failed/);assert.ok(roots.every(root=>root.parent===null),'resource cleanup must still complete');
 });
