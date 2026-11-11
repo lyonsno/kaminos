@@ -4,8 +4,9 @@ import {flameSourceInputs,checkedFireSourceRecord} from './scene-fire-domain.mjs
 import {FLAME_EMITTER_TYPE,createFlameEmitterHandle} from './scene-flame-emitter.mjs';
 import {applySceneObjectTransformState} from './scene-object-state.mjs';
 import {checkedFireRendering} from './scene-fire-render-settings.mjs';
-import {LOCAL_LIQUID_EMITTER_TYPE,normalizeLocalLiquidEmitter} from './local-liquid-setup.mjs';
+import {LOCAL_LIQUID_EMITTER_TYPE,normalizeLocalLiquidEmitter,normalizeLocalLiquidSetup} from './local-liquid-setup.mjs';
 import {createLocalLiquidEmitterObject,isLocalLiquidEmitterSceneRecord} from './local-liquid-scene-object.mjs';
+import {resolveAuthoredWaterSampling} from './authored-water-drop.mjs';
 import {createAuthoredWaterFeature} from './authored-water-feature.mjs';
 import {mountSceneRadianceResources} from './scene-radiance-resource-mount.mjs';
 import {readFireShadowSceneSettings} from './fire-shadow-scene-settings.mjs';
@@ -116,7 +117,7 @@ export function createSceneWorkerFireResources(input,{definitions,fetch:request=
   if(sources.length>1&&(controls.emitterSourceLaw!=='immersed-source'||sources.some(record=>(record.emission?.settings?.['volume-emitter-source-law']?.rawValue??record.emission?.settings?.['volume-emitter-source-law']?.value??controls.emitterSourceLaw)!=='immersed-source')))throw Error('Multiple scene sources require the immersed source law');
   if(sources.length&&controls.emitterSourceLaw==='immersed-source')flameSourceInputs(sources,{controls,translation:next.flameDomainTranslation??[0,0,0],scale:next.flameDomainScale??1,worldSources:controls.worldSmoke==='on'});
  }
- async function prepareDocument(data,next,meta){check(meta.context);const values=await loader.prepare(next,meta.context);check(meta.context);checkSources(next,values);preparedDocuments.set(next,{values,rendering:renderingFor(data,next)});}
+ async function prepareDocument(data,next,meta){check(meta.context);const values=await loader.prepare(next,meta.context);check(meta.context);checkSources(next,values);const waterSetup=next.localLiquid?normalizeLocalLiquidSetup({...next.localLiquid,waterSampling:resolveAuthoredWaterSampling((next.objects??[]).filter(row=>row.type===LOCAL_LIQUID_EMITTER_TYPE),next.localLiquid)}):null;preparedDocuments.set(next,{values,rendering:renderingFor(data,next),waterSetup});}
  function accept(data,next,values,ctx,nextRendering=renderingFor(data,next)){
   check(ctx);checkSources(next,values);plan=next;prepared=values;rendering=nextRendering;
   if(values)applyFlameControls(values.controls,ctx);
@@ -158,7 +159,7 @@ export function createSceneWorkerFireResources(input,{definitions,fetch:request=
     if(next.fireDomain?.simulation.collision||next.composition?.route?.volume_collision==='kiln')throw Error('Fire geometry collision preparation is not mounted yet');
    },prepareDocument,
    async beforeReplace(data,next,meta){check(meta.context);const cached=preparedDocuments.get(next);if(!cached)throw Error('Scene fire settings were not prepared');if(volume)await volume.setActive(false);await releaseRadiance();check(meta.context);if(volume)volume.setSceneCompositionPresentation(Boolean(next.composition));
-    accept(data,next,cached.values,meta.context,cached.rendering);waterFeature.clear();waterFeature.setup=structuredClone(next.localLiquid??null);waterPreview=false;documentData=null;configured=null;sourceSignature=null;return {};},
+    accept(data,next,cached.values,meta.context,cached.rendering);waterFeature.clear();waterFeature.setup=structuredClone(cached.waterSetup);waterPreview=false;documentData=null;configured=null;sourceSignature=null;return {};},
    async afterReplace(data,next,meta){check(meta.context);documentData=data;plan=next;configure();if(volume){await volume.setActive(present()&&ordinary.visible('flame-field'));check(meta.context);await mount(meta.context);}if(waterFeature.setup){await waterFeature.restore();check(meta.context);}},
   },
   commands:{'water.read'(_input,ctx){check(ctx);return readWater();},'fire.read'(_input,ctx){check(ctx);return {active:Boolean(volume?.isActive()),present:present(),source:prepared?.source?{presetId:prepared.source.presetId}:null,lighting:radiance?.debugState?.()??null};}},
