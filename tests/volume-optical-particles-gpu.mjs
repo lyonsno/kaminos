@@ -72,7 +72,7 @@ async function opticalFixture(d,run,view={}){
  const camera=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,1,1,0,0,0,1,0]);const source={buffer:births,uniform,width:4,height:4,pixels:n,step:0,backtrace:view.backtrace??0,reactionStepScale:view.stepScale??1,viewProj:view.vp??identity};
  const seed=rows=>{d.queue.writeBuffer(births,0,rows);owner.reset();};
  const draw=async(step=0,settings={})=>{source.step=step;const e=d.createCommandEncoder();const dp=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthClearValue:view.depth??1,depthStoreOp:'store'}});dp.end();const measured=view.trace||view.passTrace?new Proxy(e,{get(target,key){if(key==='beginRenderPass')return desc=>{view.passTrace?.push(desc.label);const pass=target.beginRenderPass(desc);return desc.label==='spatial material support'?new Proxy(pass,{get(p,k){const value=p[k];return typeof value==='function'?function(...args){if(k==='draw'||k==='drawIndexed')view.trace?.push({method:k,args});return value.apply(p,args);}:value;}}):pass;};const value=target[key];return typeof value==='function'?value.bind(target):value;}}):e;owner.encode(measured,{view:target.createView(),format:'rgba8unorm',source,fine,reactants,dims:[2,2,2],invViewProj:view.inverse??identity,depthZeroToOne:view.depthZeroToOne??false,settings:{enabled:true,refresh:0,exchangeStrength:0,stateLife:0,...settings},cameraValues:camera,depth,identity:'fixture',gridExtinction:view.gridExtinction,allowUnavailableGridExtinction:view.allowUnavailableGridExtinction});const read=d.createBuffer({size:1024,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});e.copyTextureToBuffer({texture:target},{buffer:read,bytesPerRow:256},[4,4]);d.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);const pixels=new Uint8Array(read.getMappedRange().slice(0));read.unmap();read.destroy();return pixels;};
- try{await run({owner,seed,draw,setMaterial:grid.upload,upload:rows=>d.queue.writeBuffer(births,0,rows)});}finally{owner.dispose();births.destroy();uniform.destroy();grid.dispose();target.destroy();depth.destroy();}
+ try{await run({owner,seed,draw,setMaterial:grid.upload,setFreshSamples:n=>{source.samples=n;},upload:rows=>d.queue.writeBuffer(births,0,rows)});}finally{owner.dispose();births.destroy();uniform.destroy();grid.dispose();target.destroy();depth.destroy();}
 }
 test('optically negligible carriers cannot dilute an overlapping live carrier',async()=>{
  await withKaminosGpu(async({device:d})=>opticalFixture(d,async({seed,draw})=>{
@@ -364,3 +364,19 @@ test('paused lifetime edits defer retirement and preserve renewal provenance unt
 });
 
 test('birth-only source-focused updates clear renewal counters even with carrier advance disabled',async()=>withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw})=>{const rows=new Float32Array(16*16);for(let i=0;i<16;i++)rows.set([4,2,1,0,0,0,0,1,-.5,.5,1,1,4,2,1,0],16*i);seed(rows);const settings={acquisitionMode:1,capacity:4,refresh:1,updateEnabled:false,birthsEnabled:true};await draw(0,settings);const a=await owner.statistics();await draw(1,settings);const b=await owner.statistics();assert.equal(a.accepted,16);assert.equal(b.accepted,16,'birth count describes this draw rather than accumulating across held updates');assert.equal(b.placed,4);})));
+
+
+test('skipped acquisition steps retain and render live source-focused material between birth batches',async()=>{
+ await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw,setFreshSamples})=>{
+  const rows=new Float32Array(16*16);for(let i=0;i<16;i++)rows.set([4,2,1,.2,0,0,0,1,-.5,.5,1,1,4,2,1,0],16*i);seed(rows);
+  const cfg={acquisitionMode:1,capacity:4,refresh:1,flow:0,stateLife:1,lifeFuel:24,lifeHeat:24,lifeSmoke:48,lifeQuiet:6,renewalDiagnostics:true};
+  setFreshSamples(16);await draw(0,cfg);const born=await owner.sample();assert.equal((await owner.statistics()).active,4);
+  setFreshSamples(0);
+  for(let step=1;step<=8;step++){
+   const image=await draw(step,cfg),sample=await owner.sample(),stats=await owner.statistics();
+   assert.equal(sample.state.reset,false,'a zero fresh budget must not replace the retained pool');assert.equal(stats.active,4,'supported material must survive skipped acquisition steps');assert.equal(stats.placed,0,'skipped acquisition must not secretly birth observations');
+   for(let i=0;i<4;i++)assert.ok(sample.records[24*i+3]>born.records[24*i+3],'age advances on the same retained carrier');
+   let alpha=0;for(let y=0;y<4;y++)for(let x=0;x<4;x++)alpha+=image[y*256+x*4+3];assert.ok(alpha>0,'retained extinction must remain drawn without a fresh source batch');
+  }
+ }));
+});
