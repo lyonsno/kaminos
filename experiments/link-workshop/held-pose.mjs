@@ -4,7 +4,7 @@ import {previewMountMatrix,matrixFrame,frameMatrix,hingeWorldFrame} from './moun
 import {reachChain} from './planar-reach.mjs';
 import {frames} from './model.mjs';
 const position=m=>new T.Vector3().setFromMatrixPosition(m),rotation=m=>new T.Quaternion().setFromRotationMatrix(m),axis=m=>new T.Vector3(0,0,1).transformDirection(m);
-export function holdFrame(root,model,objectId,t,entries){const a=model.attachments.find(a=>a.objectId===objectId);if(!a?.sourceMount)throw Error('Choose a mounted panel');return matrixFrame(previewMountMatrix(root,model,a.sourceMount,t,entries));}
+export function holdFrame(root,model,objectId,t,entries){const a=model.attachments.find(a=>a.objectId===objectId);if(!a?.sourceMount)throw Error('Choose a mounted panel');return {...matrixFrame(previewMountMatrix(root,model,a.sourceMount,t,entries)),scale:[1,1,1]};}
 export function heldChain(model,edited){
  const result=[],seen=new Set();let id=model.poseHold?.objectId;
  while(id&&!seen.has(id)){seen.add(id);const a=model.attachments?.find(a=>a.objectId===id);if(!a)return [];result.unshift(a);if(id===edited)return result;id=model.mounts.find(m=>m.id===a.targetMount)?.owner.objectId;}
