@@ -57,7 +57,7 @@ excluded from the frozen material response. Source capture supports native
 point/spot/directional lights and constant environment through the existing
 integrator; it adds no new rendering model.
 
-**Save specimen JSON** and **Load specimen JSON** round-trip the represented
+**Specimen files → Save** and **Load** round-trip the represented
 particle/grit positions, velocities, orientations, yielded/broken bonds, physical
 clock, settings, view and object/tool poses. Reconstruction rebuilds contact
 caches, so a loaded continuation is a cold-contact continuation rather than a
