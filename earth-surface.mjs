@@ -20,7 +20,7 @@ export function createEarthField(input){
 }
 // Six consistent tetrahedra per voxel. Extraction is a display/capture operation:
 // changing resolution never modifies the retained physical specimen.
-export function meshEarthMatrix(field,resolution=28){
+export function meshEarthMatrix(field,resolution=28,{maxTriangles=Infinity}={}){
  if(!Number.isSafeInteger(resolution)||resolution<2)throw Error('Invalid surface resolution');
  const {min,max}=field.bounds,cell=(max[0]-min[0])/resolution;
  const dims=[resolution,Math.ceil((max[1]-min[1])/cell),resolution],ny=dims[1],nx=dims[0],nz=dims[2];
@@ -40,7 +40,7 @@ export function meshEarthMatrix(field,resolution=28){
    if(polygon.length<3)continue;
    const center=[0,1,2].map(k=>polygon.reduce((s,p)=>s+p[k],0)/polygon.length),normal=field.normal(...center),axis=norm(sub(polygon[0],center)),other=cross(normal,axis);
    polygon.sort((a,b)=>Math.atan2(dot(sub(a,center),other),dot(sub(a,center),axis))-Math.atan2(dot(sub(b,center),other),dot(sub(b,center),axis)));
-   for(let i=1;i<polygon.length-1;i++){let[a,b,c]=[polygon[0],polygon[i],polygon[i+1]];const n=cross(sub(b,a),sub(c,a));if(Math.hypot(...n)<1e-14)continue;if(dot(n,normal)<0)[b,c]=[c,b];triangles.push({a,b,c,materialIndex:0,kind:'matrix',identity:`matrix-${x}-${y}-${z}-${triangles.length}`});}
+   for(let i=1;i<polygon.length-1;i++){let[a,b,c]=[polygon[0],polygon[i],polygon[i+1]];const n=cross(sub(b,a),sub(c,a));if(Math.hypot(...n)<1e-14)continue;if(dot(n,normal)<0)[b,c]=[c,b];if(triangles.length>=maxTriangles)throw Error('Surface output exceeds available interactive storage; previous surface retained');triangles.push({a,b,c,materialIndex:0,kind:'matrix',identity:`matrix-${x}-${y}-${z}-${triangles.length}`});}
   }
  }
  return triangles;
@@ -50,13 +50,15 @@ export function transformGritPoint(p,grain){
  const uv=cross([x,y,z],v),uuv=cross([x,y,z],uv);
  return v.map((q,k)=>q+2*w*uv[k]+2*uuv[k]+grain.position[k]);
 }
-export function createEarthTeacherSource({snapshot,resolution=40,halo=0}={}){
+export function createEarthTeacherSource({snapshot,resolution=40,halo=0,maxTriangles=Infinity}={}){
  if(!Number.isSafeInteger(halo)||halo<0)throw Error('Invalid source halo');
- const field=createEarthField(snapshot),triangles=meshEarthMatrix(field,resolution);
+ const field=createEarthField(snapshot),triangles=meshEarthMatrix(field,resolution,{maxTriangles});
+ if(triangles.length+field.snapshot.grit.length*20>maxTriangles)throw Error('Surface output exceeds available interactive storage; previous surface retained');
  for(const [i,g]of field.snapshot.grit.entries()){
   const vertices=GRIT_VERTICES.map(p=>transformGritPoint(p,g));
   for(const [a,b,c]of GRIT_FACES)triangles.push({a:vertices[a],b:vertices[b],c:vertices[c],materialIndex:g.materialIndex,kind:'grit',identity:`grit-${i}`});
  }
+ if(triangles.length*(2*halo+1)**2>maxTriangles)throw Error('Surface output exceeds available interactive storage; previous surface retained');
  const central=triangles.slice(),width=field.snapshot.config.width;
  let projected=0,heightMoment=0;for(const t of central)if(t.materialIndex===0){const n=cross(sub(t.b,t.a),sub(t.c,t.a));if(n[1]>0){projected+=n[1];heightMoment+=n[1]*(t.a[1]+t.b[1]+t.c[1])/3;}}
  const samplingPlaneHeight=projected?heightMoment/projected:0;

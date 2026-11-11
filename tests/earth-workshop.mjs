@@ -33,5 +33,5 @@ test('failed reconstruction during load retains the existing physical specimen',
  const original=host.scene.rendering;host.scene.rendering=()=>{const context=original();context.renderer.backend.device=device;return context;};
  const app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8,captureResolution:10}},record:()=>{}});
  const before=app.operations.snapshot(),incoming=structuredClone(before);incoming.snapshot.time=123;
- device.limits.maxBufferSize=1;await assert.rejects(app.operations.load(incoming),/too large/);assert.deepEqual(app.operations.snapshot(),before,'failed load must not replace physical state or settings');await app.dispose();
+ device.limits.maxBufferSize=1;await assert.rejects(app.operations.load(incoming),/storage/);assert.deepEqual(app.operations.snapshot(),before,'failed load must not replace physical state or settings');await app.dispose();
 });

@@ -1,6 +1,6 @@
 import * as THREE from '../lib/three.webgpu.js';
 import {EarthSpecimen,EARTH_MATERIALS} from '../earth-specimen.mjs';
-import {createEarthSurfaceTask,planEarthSurface} from '../earth-surface-task.mjs';
+import {createEarthSurfaceTask,planEarthSurface,rememberEarthSurface} from '../earth-surface-task.mjs';
 import {mountEarthControls} from './earth-workshop-controls.mjs';
 
 const defaults={previewResolution:24,captureResolution:48,advanceSeconds:.12,pressDepth:.055,pressSeconds:.35,releaseSeconds:.2};
@@ -14,7 +14,7 @@ export default {
  async create({host,inputs={},record,updateInputs=()=>{}}){
   let model=inputs.snapshot?EarthSpecimen.fromSnapshot(inputs.snapshot):new EarthSpecimen(inputs.config),config=settings(inputs.settings),disposed=false,busy=false,failure=null,source=null,ui,stopRequested=false;
   const session=await host.scene.open(),root=new THREE.Group();
-  const limits=()=>{const device=host.scene.rendering().renderer.backend.device,heap=globalThis.performance?.memory;return {maxBufferSize:device.limits.maxBufferSize??Infinity,heapBytes:heap?Math.max(0,heap.jsHeapSizeLimit-heap.usedJSHeapSize):Infinity};};
+  const limits=()=>{const device=host.scene.rendering().renderer.backend.device,heap=globalThis.performance?.memory;return {maxGridCells:2**21,maxBufferSize:device.limits.maxBufferSize??Infinity,heapBytes:heap?Math.max(0,heap.jsHeapSizeLimit-heap.usedJSHeapSize):Infinity};};
   const builder=createEarthSurfaceTask({limits});root.name='Worked earth specimen';
   const materials=EARTH_MATERIALS.map(m=>new THREE.MeshStandardMaterial({color:new THREE.Color(...m.color),roughness:m.roughness,metalness:0,side:THREE.DoubleSide}));
   const surfaces=materials.map((m,i)=>{const mesh=new THREE.Mesh(new THREE.BufferGeometry(),m);mesh.name=i?'Embedded mineral grit':'Cohesive earth matrix';mesh.castShadow=true;mesh.receiveShadow=true;root.add(mesh);return mesh;});
@@ -34,7 +34,7 @@ export default {
    try{for(let i=0;i<materials.length;i++)geometries.push(meshGeometry(next.triangles.filter(t=>t.materialIndex===i)));if(disposed)throw Error('Earth workshop disposed');return {next,geometries};}
    catch(error){for(const g of geometries)g.dispose();throw error;}
   };
-  const install=({next,geometries})=>{for(let i=0;i<surfaces.length;i++){const old=surfaces[i].geometry;surfaces[i].geometry=geometries[i];old.dispose();}source=next;session.redraw();show();};
+  const install=({next,geometries})=>{for(let i=0;i<surfaces.length;i++){const old=surfaces[i].geometry;surfaces[i].geometry=geometries[i];old.dispose();}source=rememberEarthSurface(next);session.redraw();show();};
   const rebuild=async(resolution=config.previewResolution)=>install(await prepare(model.snapshot(),resolution));
   const replaceModel=async(next,nextSettings,value={})=>{
    let prepared,installed=false;
@@ -81,7 +81,7 @@ export default {
     async load(value){if(busy)throw Error('Wait for forming to finish');checkedPose(value.pose);checkedPose(value.tool);const nextSettings=settings(value.settings),next=EarthSpecimen.fromSnapshot(value.snapshot);if(next.config.width!==model.config.width){next.dispose();throw Error('Load a different tray width by reopening the specimen setup');}return work(async()=>{await replaceModel(next,nextSettings,value);host.scene.refreshPresentation(asset);host.scene.refreshPresentation(toolAsset);sync();},false);},
     async freeze(){if(busy)throw Error('Wait for forming to finish');await work(()=>rebuild(config.captureResolution),false);update();record({kind:'earth.freeze',phase:'applied',effective:{state:model.state(),resolution:config.captureResolution,triangles:source.triangles.length}});return {source:{...source.config,halo:1},authoring:recipe(),surface:{...read().surface,captureHalo:1}};},
     source(){if(busy)throw Error('Wait for forming to finish');return structuredClone(source);},
-   },mount({document,invoke}){ui=mountEarthControls({document,host,session,root,tool,invoke,read,stop:()=>{stopRequested=true;builder.cancel();},trace:async()=>{const frozen=await invoke('freeze');return window.kaminosWorkbenchExperiments.open('earth-surface-teacher',{source:{...frozen.source,halo:0},authoring:frozen.authoring,scale:.3,bounces:3,environment:.15});}});},async dispose(){disposed=true;ui?.dispose();builder.dispose();model.dispose();try{await session.dispose();}finally{disposeResources();}}};
+   },mount({document,invoke}){ui=mountEarthControls({document,host,session,root,tool,invoke,read,stop:()=>{stopRequested=true;builder.cancel();},trace:async()=>{const frozen=await invoke('freeze');return window.kaminosWorkbenchExperiments.open('earth-surface-teacher',{source:{...frozen.source,halo:0},authoring:frozen.authoring,view:frozen.authoring.view,scale:.3,bounces:3,environment:.15});}});},async dispose(){disposed=true;ui?.dispose();builder.dispose();model.dispose();try{await session.dispose();}finally{disposeResources();}}};
   }catch(error){ui?.dispose();builder.dispose();model.dispose();try{await session.dispose();}finally{disposeResources();}throw error;}
  }
 };

@@ -21,3 +21,5 @@ console.log('implicit matrix, complete mesh/grit, frozen identity, invalid input
 
 const dense=structuredClone(snapshot);dense.config.grains=3000;dense.grit=Array.from({length:3000},()=>structuredClone(snapshot.grit[0]));
 const denseSource=createEarthTeacherSource({snapshot:dense,resolution:2});assert.equal(denseSource.triangles.filter(t=>t.kind==="grit").length,60000);assert.ok(Number.isFinite(denseSource.referenceHeight));
+
+assert.throws(()=>createEarthTeacherSource({snapshot,resolution:12,maxTriangles:1}),/storage/,'actual emitted triangles must enforce memory allowance');

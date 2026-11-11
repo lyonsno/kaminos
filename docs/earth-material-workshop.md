@@ -13,13 +13,21 @@ shows its error in the viewport. Interactive timing controls support 0.01–1 se
 per operation; the underlying physical preparation API still accepts longer work.
 This is an interactive control allowance, not a measured solver capacity ceiling.
 
-Surface rebuilding runs in a disposable worker after checking a conservative
-worst-case mesh-buffer bound against the active device's `maxBufferSize` and an
-estimated transient-memory bound against available JS heap when exposed by the
-browser. It never silently reduces detail. **Stop** cancels reconstruction and
-retains the last completed surface; it also stops a forming operation at its next
-physical chunk. The retained physical state may have advanced beyond that last
-surface after a stopped stroke; the next successful action rebuilds it.
+Surface rebuilding runs in a disposable worker. Interactive reconstruction admits
+at most 2,097,152 grid cells per request; this is a provisional work allowance for
+the authoring interface, not a measured hardware-capacity ceiling. The grid's
+actual storage is checked against exposed heap availability, and actual emitted
+triangles are checked during extraction against the device buffer limit and a
+conservative transient-storage estimate. Interior cells are not charged as
+surface triangles. There is no fixed resolution45 ceiling and no silent detail
+reduction. The underlying source builder accepts caller-owned allowances for
+offline work.
+
+**Stop** cancels reconstruction and retains the last completed surface; it also
+stops forming at the next physical chunk. Physical state may have advanced beyond
+that last surface after a stopped stroke; the next successful action rebuilds it.
+Object chips remain reachable at the viewport edge when their world anchors move
+offscreen and identify that offscreen condition. Hidden objects keep hidden chips.
 
 The first preparation model uses the already installed Cannon ES 0.20.0 CPU
 contact/rigid solver. Soil is represented by contacting mass-bearing spheres
@@ -42,7 +50,9 @@ surface we will improve through authoring, not a claim of naturalistic earth.
 state as a single bounded specimen in the existing surface path tracer, under
 the ordinary scene camera and lights. The saved training recipe separately retains
 its finite repeated query neighborhood. **Back to earth** restores the saved authoring specimen.
-This switch has one active experiment at a time. The physical forming tool is
+This switch has one active experiment at a time. It preserves the authoring
+camera and reuses the already prepared frozen surface; a cache miss reconstructs
+in a worker. Derived geometry is not serialized into the authoring address. The physical forming tool is
 excluded from the frozen material response. Source capture supports native
 point/spot/directional lights and constant environment through the existing
 integrator; it adds no new rendering model.

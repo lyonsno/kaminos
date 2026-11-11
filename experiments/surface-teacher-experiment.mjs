@@ -12,7 +12,7 @@ export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,
  async create({host,inputs={},record,updateInputs=()=>{}}){
   if(!inputs||typeof inputs!=='object'||Array.isArray(inputs))throw Error('Teacher inputs must be an object');
   let configuration=checkedConfiguration({scale:inputs.scale??.5,bounces:inputs.bounces??3,environment:inputs.environment??.15,reconstruction:inputs.reconstruction??true,paused:inputs.paused??false});
-  let source=createSource(inputs.source),engine,texture,screenMaterial,screen,asset,stop;
+  let source=await createSource(inputs.source),engine,texture,screenMaterial,screen,asset,stop;
   const session=await host.scene.open();let context;
   try{context=host.scene.rendering();const size=context.renderer.getDrawingBufferSize(new THREE.Vector2()),limit=context.renderer.backend.device.limits.maxTextureDimension2D;if(Math.round(size.x*configuration.scale)>limit||Math.round(size.y*configuration.scale)>limit)throw Error('Image scale exceeds active device capacity');}catch(error){await session.dispose();throw error;}
   const {renderer,scene,camera}=context;
@@ -79,7 +79,7 @@ export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,
    });
    const operations={
     frame(){return session.setView(initialView);},
-    async source(values){const next=createSource({...source.config,...values});await pending;source=next;replaceGeometry();syncScene();failure=null;syncControls();updateInputs({source:source.config,view:session.readView(),...configuration});session.redraw();record({kind:'surface-teacher.source',phase:'applied',effective:source.config});return read();},
+    async source(values){const next=await createSource({...source.config,...values});await pending;source=next;replaceGeometry();syncScene();failure=null;syncControls();updateInputs({source:source.config,view:session.readView(),...configuration});session.redraw();record({kind:'surface-teacher.source',phase:'applied',effective:source.config});return read();},
     async configure(values){
      const next=checkedConfiguration({...configuration,...values}),size=renderer.getDrawingBufferSize(new THREE.Vector2());if(Math.round(size.x*next.scale)>renderer.backend.device.limits.maxTextureDimension2D||Math.round(size.y*next.scale)>renderer.backend.device.limits.maxTextureDimension2D)throw Error('Image scale exceeds active device capacity');
      await pending;configuration=next;syncScene();failure=null;syncControls();updateInputs({source:source.config,view:session.readView(),...configuration});session.redraw();record({kind:'surface-teacher.configuration',phase:'applied',effective:{...configuration}});showStatus();return read();
