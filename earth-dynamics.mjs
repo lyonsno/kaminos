@@ -1,7 +1,8 @@
 import {EarthSpecimen} from './earth-specimen.mjs';
 
 // The same physical model serves live forming and explicit offline advance.
-// Presentation and reconstruction clocks do not determine its solver timestep.
+// Recorded intervals use substeps at or below the configured physical timestep.
+// Reconstruction never advances the physical clock.
 export function createEarthDynamicsKernel(){
  let model;
  const result=()=>({snapshot:model.snapshot(),state:model.state()});
