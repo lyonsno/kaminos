@@ -1,160 +1,147 @@
-# Local TRELLIS support and geometry LOD
+# Local TRELLIS support, source labels and geometry LOD
 
-The `trellis-support` Workbench experiment partitions an existing mesh into a
-bounded local teacher region and retained exterior geometry. It keeps the
-original triangle address, barycentric coordinates, interpolated normal and UV
-for every clipped vertex. A closed twelve-triangle support volume encloses that
-teacher, including disconnected and nonmanifold source sheets.
+The `trellis-support` Workbench experiment isolates bounded regions of an
+existing mesh while preserving the original source triangle, barycentric
+coordinates, UV and base vertex normal. One WebGPU operation computes both the
+inside fragments and complementary retained geometry using shared intersections.
+A twelve-triangle closed support encloses the selected source.
 
-This is geometry preparation and inspection. The solid support is a diagnostic
-surface. There is no trained neural material, automatic candidate ranking,
-measured LOD crossover, all-angle footprint guarantee or depth/coverage decoder
-in this slice. LOD preview switches representations using projected bounding-box
-width; close views return to the original source geometry. That preview exposes
-the routing operation before an appearance model exists.
+This is source/teacher preparation. There is no trained neural material,
+automatic region search or measured geometry/appearance crossover yet. The
+orange solid support is a diagnostic. Its LOD preview returns to the original
+source geometry above the selected projected width.
 
-## Open the experiment
+## Work with a source region
 
-Use the normal Workbench route:
+Open `/?workspace=workbench&experiment=trellis-support`. The default source is an
+existing Metal-finished machined graphite/metal plate:
 
-```text
-/?workspace=workbench&experiment=trellis-support&experiment_inputs=<URL-encoded JSON>
-```
+- Source: `~/.local/state/kaminos/stockroom-shocktroops/2026-11-08/selected-five/plate-machined-graphite/finish-original-metal/output/output.glb`.
+- SHA256: `fb92b5218ec297d51020f6008c5b69779c544589aa56b2e22ecf399f7ad7c45d`.
+- 187,308 triangles, 147,095 vertices, one indexed opaque, single-sided PBR
+  material, base-color and metallic/roughness PNG maps at 1024×1024, no normal map.
+- Byte-identical shared mount: `/api/read?root=generated-meshes&path=barycentric-support%2Fmachined-graphite-finished.glb`.
 
-Inputs accept `sourceUrl`, `region`, `mode` and `threshold`. The default source is
-`/api/read?root=generated-meshes&path=barycentric-support%2Fweathered-timber-beam.glb`;
-it reads a byte-identical prepared copy under the shared generated-meshes mount,
-with `source-receipt.json` recording its original location and hash. Supply an
-existing mounted GLB URL for another source. The source used
-for the first inspection is the stockroom weathered timber beam:
+The selected source has no open boundary edges after exact coincident-position
+welding. It has nonmanifold joins; this is not a claim of a globally manifold
+solid. The earlier timber mesh has an unintended open knot hole and is retained
+as historical diagnostic evidence rather than the default source.
 
-```text
-~/.local/state/kaminos/stockroom-shocktroops/2026-10-30/selected-four/weathered-timber-beam/output.glb
-sha256: 7be0be2857ce5100ffa86f329e4068ba83ebb701c8582e2f982d28e68b8f8bdd
-97,670 triangles, 120,301 vertices; one indexed primitive, one PBR material.
-```
-
-The first constructor accepts one static indexed mesh with one material and
-packed float32 position, normal and UV attributes. It refuses attributes it
-cannot preserve (such as vertex colors, tangents and secondary UVs), deformation
-and instances. The source is
-loaded through the shared scene service and stays on the normal native object
-selection and transformation path. It uses the shared renderer's WebGPU device,
-camera, lights and frame service. It starts no independent adapter or renderer.
-Reopening `read().shareInputs` reconstructs the source and region. Generated
-partition geometry is an experiment lifetime resource, not a separately saved
-scene-domain format.
-
-Region coordinates are source-mesh local coordinates. `origin`, `normal` and
-`tangent` define a chart; `radius` is the square half-width, `depth` the inward
-extent, and `top` the outward extent. The CPU constructs only the triangle AABB
-broad phase. One production WGSL operation clips candidate triangles against all
-six planes and returns both interior and complementary exterior polygons, using
-the same computed intersection for each side of a cut. It returns local
-positions, source barycentrics and clipping-plane provenance. A convex triangle
-gains at most one vertex per clipping plane,
-so nine polygon vertices are sufficient by construction; no source triangles
-are dropped to meet a budget. Empty intersections fail visibly.
-
-The result also exports source/support intersection segments with source
-triangle and barycentric addresses, support face IDs and that face's UVs.
-These locate the source/retained interface on the support; they may branch or
-include coplanar contact edges and are not promised to form one manifold rim.
-The closed box remains an untrained candidate domain. Its six-face
-parameterization and the useful eventual support shape remain teacher/decoder
-design questions; boundary metadata does not establish learned fidelity.
-
-All triangles of the chosen primitive participate, irrespective of winding.
-Source geometry outside the volume remains explicit; other scene objects stay
-external. Bounded geometry does not imply that incident lighting or later ray
-transport is local: the future decoder/renderer needs an explicit exit contract.
+**Plate examples** offers a shallow milled panel as a material control and a
+rolled rim as a curved geometry candidate. Both are manually selected examples,
+not results of an automatic classifier. Region edits remain adjustable.
+**Frame region** looks toward the selected region from its local frame, including
+regions whose normal is not world-up. The loaded asset keeps native selection
+and transformation ownership.
 
 Display modes:
 
-- **Source region + support outline**: retain the original maps and tint the
-  clipped source region teal, with an orange support outline and pink source/
-  support intersection curves in x-ray display.
-- **Original source**: restore the complete original mesh.
-- **Solid support diagnostic**: retain the exterior and replace the local
-  source by the orange closed support. Its visible difference is intentional.
-- **LOD routing preview**: show the source above the configured projected width
-  and the diagnostic support below it. Near-plane crossings retain the source.
+- **Source region + support outline**: teal source patch, orange enclosure and
+  pink source/support boundary curves in x-ray display.
+- **Isolated source region**: only the clipped source, with its original
+  material. Surrounding geometry is hidden for inspection.
+- **Original source**: complete original mesh.
+- **Solid support diagnostic**: retained exterior plus the untrained orange
+  support replacing the source patch.
+- **LOD routing preview**: source above the configured projected box width,
+  diagnostic support below it. Near-plane crossings retain the source.
 
-Numeric region edits rebuild automatically. `setRegion`, `setMode`, `load`,
-`setThreshold`, `frame`, `frameRegion`, `probe` and `inspectCandidate` are available through
-`window.kaminosWorkbenchExperiments.invoke`. The display and agent operations
-share the same implementation. Failed region proposals retain the last
-successful candidate and expose the error.
+The experiment temporarily disables this page's normal automatic beauty LOD
+while it owns the inspection, restoring the previous enabled state on close or
+initial-load failure. Otherwise a separately simplified full-object proxy can
+hide the very source partition being inspected. The effective and preceding
+settings are exposed in `read().sourceRoute`. This is an inspection setting;
+it is not a production LOD policy or performance claim.
 
-## Bounded geometric ray teacher
+`experiment_inputs` accepts URL-encoded JSON containing `sourceUrl`, `region`,
+`mode` and `threshold`. `read().shareInputs` retains the reconstruction inputs.
+Region `origin`, `normal` and `tangent` use source-mesh local coordinates;
+`radius` is square half-width, `depth` inward extent, and `top` outward extent.
+Other mounted GLB URLs can be loaded through the Source GLB control. Plate
+examples are unavailable for another source.
 
-**Probe region** sends a diagnostic three-by-three set of inward rays from the
-outer support face. Green lines end at source hits; red lines reach the support
-exit without meeting source geometry. These are x-ray annotations. The operation
-is explicit and adds no ray tracing to the steady frame loop. The sample pattern
-is a small diagnostic, not an all-angle coverage estimate; agents can supply an
-arbitrary ray array to `probe` through the same operation.
+Agent operations through `window.kaminosWorkbenchExperiments.invoke` are
+`setRegion`, `selectExample`, `setMode`, `load`, `setThreshold`, `frame`,
+`frameRegion`, `probe` and `inspectCandidate`. Failed proposals retain the last
+successful candidate. Partition geometry is owned by the experiment lifetime;
+it is not a separately serialized scene domain.
 
-`traceSupportRays` in `trellis-support-rays.mjs` executes production WGSL on the
-shared device. It intersects the ray with the finite support first, then returns
-the nearest clipped source triangle inside that interval. Material sidedness is
-explicit. Results include support entry/exit distances, original triangle ID,
-original barycentrics and source-local hit position. Entry and exit boundary
-addresses name the face and UV on the actual twelve-triangle support mesh, with
-chart-local and source-local positions. An origin already inside the support has
-no entry boundary; its entry distance is zero. Exact edge/corner crossings choose
-the lowest incident face ID deterministically. `sampleSourceAddress` samples
-that original triangle's UV island and interpolated vertex normal. A geometric
-miss reports a finite support exit rather than silently including another part
-of the asset. Continuing into retained geometry remains a renderer operation.
+## Bounded ray and material queries
 
-The first knot contains an open source hole. Its central downward ray leaves
-this local support; the apparent brown floor visible in the original asset is
-the far underside of the double-sided hollow shell. Reproducing that source is
-distinct from filling it to depict solid timber. This inspector preserves the
-source and reports the miss; it does not repair the hole or classify it as
-intentional transparency. Grazing rays can also leave a support without meeting
-the local source, independently of such source defects.
+**Probe region** sends nine inward rays from the outer support face. Green lines
+end at source hits; red lines reach a finite support exit. Agents may supply
+another ray array through `probe`. This explicit operation adds no tracing or
+material-query dispatch to steady frames.
 
-This teacher currently labels geometry and source addresses. It does not
-evaluate material opacity, normal maps, radiance, indirect transport or learned
-appearance. The initial kernel directly visits every clipped triangle; it is
-for small preparation/probe queries, with no hidden triangle truncation. Large
-training batches and performance measurements belong in Greenroom. This slice
-makes no throughput or BVH claim.
+`traceSupportRays` executes production WGSL on the shared renderer device. It
+finds support entry/exit and the nearest clipped source triangle within that
+interval, respecting the selected material's sidedness. A hit carries original
+triangle/barycentrics and source-local position. `sampleSourceAddress` resolves
+that original triangle's UV island and interpolated base vertex normal.
 
-## Fitted lid constructor
+Entry and exit boundary addresses name the actual support mesh face and UV,
+with chart-local and source-local positions. An interior origin has entry
+zero and `entryBoundary:null`. Edge/corner crossing ties choose the lowest
+incident face ID. Source/support intersection segments carry the same support
+chart addresses and original source provenance; they may branch and do not
+promise one manifold rim.
 
-`extractLocalSupport` additionally attempts a single-valued square source chart
-with a shared rim. It rejects holes, disconnected sheets, nonmanifold edges and
-inconsistent projected coverage. `fitLocalSupport` fits a fan-shaped enclosing
-roof in WebGPU. It intersects source triangles with roof sectors and solves the
-height constraints at their intersection vertices, rather than testing only
-source vertices or the central sample. The first examined beam regions fail the
-source-chart topology gate; the closed-volume constructor handles their raw
-triangle soup without repairing it.
+`trellis-source-material.mjs` evaluates the hit UVs in WebGPU using Three's
+actual uploaded source textures, including their effective sRGB format and
+upload orientation. It uses each channel's UV transform, wrap/filter settings
+and PBR factors. Base color is linear; roughness uses G and metalness B. Opaque
+material opacity is one even if stored texture alpha is lower. Returned raw
+texture/factor alpha is diagnostic only. Missing maps use white channel inputs.
+
+These are explicit LOD0 point labels, not a footprint or lighting integral.
+There is no irradiance, radiance, visibility-lighting integration or learned
+response in this module. GPU textures remain caller-owned; temporary buffers
+and fallback textures are released by their owner. The adapter refuses material
+channels it cannot represent: normal/bump/displacement/AO/light/emissive maps,
+vertex colors, physical-material extensions, non-opaque alpha and non-UV0 or
+unsupported texture sampling. The first geometry adapter also refuses
+multi-material, non-indexed, interleaved, non-float32, deforming, instanced or
+additional-attribute meshes.
+
+A bounded miss remains a miss; the query does not absorb external source or
+scene geometry. Genuine exits at the rolled rim differ from the rejected
+beam's unintended source hole. How a future decoder and renderer continue those
+rays is a separate composition step.
+
+## Geometric constructors and limits
+
+CPU work is a triangle-AABB broad phase. The GPU clips all candidates against
+six planes without a triangle cap. A convex triangle gains at most one vertex
+per plane, giving a geometric nine-vertex bound. Every source winding/sheet in
+the admitted primitive participates. Other scene objects remain external.
+
+The older `extractLocalSupport` square-chart constructor additionally requires
+a single-valued manifold sheet with a shared rim; it rejects holes and folded
+or disconnected coverage. `fitLocalSupport` fits a fan-shaped lid by intersecting
+triangles with roof sectors. It remains a separate constructor; the volume
+path does not require a watertight teacher. No all-angle footprint guarantee,
+BVH throughput claim or useful neural carrier fit is established.
 
 ## Verification
 
 ```sh
-npm test -- --only tests/trellis-local-support.mjs,tests/trellis-support-rays.mjs,tests/trellis-support-evidence.mjs
-SHADER_HERDER_STRICT_METAL=1 node --test tests/trellis-local-support.mjs tests/trellis-support-rays.mjs
+SHADER_HERDER_STRICT_METAL=1 npm test -- --only tests/trellis-local-support.mjs,tests/trellis-support-rays.mjs,tests/trellis-source-material.mjs,tests/trellis-support-evidence.mjs
 ```
 
-The native tests execute production WGSL through the installed Shader Herder.
-They check coincident sheets, source interpolation, square coverage and an
-off-center peak that a naive maximum-height roof intersects. Ray tests check
-nearest hits, sidedness, misses/exits, parallel slab directions, transformed
-charts, all six carrier face UVs, interior starts, corner ties and source UV
-addresses. These small kernel checks establish numerical
-behavior, not throughput.
+Native checks execute production WGSL for clipping, support fitting, ray
+intersections and texture sampling. The material oracle includes sRGB decoding
+before bilinear interpolation, channel/factor separation, repeat addressing,
+UV transforms and opaque alpha. This is numerical behavior, not performance.
 
 `tools/trellis-support-witness.mjs URL OUTPUT_DIRECTORY INDEPENDENT_CHROMIUM`
-uses Playwright Core (or `KAMINOS_PLAYWRIGHT_MODULE`) and an independent browser
-with a private profile and mock Keychain. It changes actual controls, captures
-source/partition/support views, verifies both footprint-routing branches and
-records served asset identity. It retains the actual partition in `candidate.json`
-and ray inputs/results in `probe.json`, alongside screenshots. It writes a
-report on success or failure. Saved
-asset inspection is a lightweight direct run; performance comparisons and
-heavy extraction/training use Greenroom.
+uses Playwright Core or `KAMINOS_PLAYWRIGHT_MODULE`, an independent browser,
+a private profile and mock Keychain. It exercises actual controls, exact source
+and served module hashes, source-geometry LOD suppression/restoration, original/
+partition/support/isolated views, both routing-preview branches and the curved
+rim example. Full candidate and query data, screenshots, and an independent
+PNG point-sampling reference are retained. Setup failures retain a terminal
+report, including a missing local inspection dependency.
+
+Saved-asset inspection and small native checks run directly. Heavy source
+processing, actual training and performance assays use Greenroom with the
+corresponding source/config identity and operator assay boundary.

@@ -2,9 +2,11 @@ import {BufferGeometry,BufferAttribute,Mesh,Group,MeshStandardMaterial,LineSegme
 import {prepareSupportVolume,materializeFragments,supportVolumeMesh,worldPoint,supportSourceFromMesh,sampleSourceAddress} from '../trellis-local-support.mjs';
 import {clipSupportVolume} from '../trellis-support-gpu.mjs';
 import {traceSupportRays} from '../trellis-support-rays.mjs';
+import {createSourceMaterialSampler} from '../trellis-source-material.mjs';
 
-const MODES=['partition','source','support','lod'];
-const DEFAULT_SOURCE='/api/read?root=generated-meshes&path=barycentric-support%2Fweathered-timber-beam.glb';
+const MODES=['partition','isolated','source','support','lod'];
+const DEFAULT_SOURCE='/api/read?root=generated-meshes&path=barycentric-support%2Fmachined-graphite-finished.glb';
+const PLATE_REGIONS={panel:{origin:[0,.112,.2],normal:[0,1,0],tangent:[1,0,0],radius:.06,depth:.04,top:.015},rim:{origin:[.12,.095,.48],normal:[0,1,1],tangent:[1,0,0],radius:.04,depth:.05,top:.03}};
 function geometry(part){const g=new BufferGeometry();g.setAttribute('position',new BufferAttribute(part.positions,3));if(part.normals)g.setAttribute('normal',new BufferAttribute(part.normals,3));else g.computeVertexNormals();if(part.uvs)g.setAttribute('uv',new BufferAttribute(part.uvs,2));return g;}
 const summary=c=>({originalTriangles:c.sourceTriangleCount,broadPhaseTriangles:c.candidates.length,sourcePatchTriangles:c.patch.length,sourceTriangleIds:Array.from(new Set(c.patch.map(t=>t.sourceTriangle))),retainedCutTriangles:c.retained.length,untouchedTriangles:c.untouched.length,supportTriangles:12,boundarySegments:c.boundarySegments.length,diagnostics:c.diagnostics});
 
@@ -14,28 +16,34 @@ export default {
     const session=await host.scene.open(),renderer=host.scene.renderer();
     if(!renderer.backend?.isWebGPUBackend){await session.dispose();throw Error('Local support construction requires WebGPU');}
     const device=renderer.backend.device;if(!device){await session.dispose();throw Error('The shared WebGPU device is unavailable');}
-    let recipe={origin:[0,.12,0],normal:[0,1,0],tangent:[1,0,0],radius:.04,depth:.09,top:.015,...inputs.region};
+    let recipe={...structuredClone(PLATE_REGIONS.panel),...inputs.region};
     let draftRecipe=structuredClone(recipe),lastProjectionKey;
     let mode=inputs.mode??'partition',threshold=inputs.threshold??180,sourceUrl=inputs.sourceUrl??DEFAULT_SOURCE;
     if(!MODES.includes(mode)||!Number.isFinite(threshold)||threshold<=0){await session.dispose();throw Error('Invalid support display mode or positive LOD threshold');}
-    let asset,sourceMesh,source,candidate,group,patchMesh,volumeMesh,wire,boundaryWire,resources=[],status,selector,disposed=false,pending=false,error=null,generation=0,loadGeneration=0,effective='source',projectedPixels=null,loadSession;
-    let probeResult=null,probeLines,probeResources=[],probePending=false,probeVersion=0;
-    const fields=new Map();
+    const lod=host.controls.document.defaultView.kaminosSceneLodBudget,previousLod=lod?.read();
+    if(!previousLod){await session.dispose();throw Error('Source-exact inspection requires the scene LOD service');}
+    lod.setSettings({enabled:false});
+    const restoreLod=()=>lod.setSettings({enabled:previousLod.enabled});
+    let asset,sourceMesh,source,candidate,group,patchMesh,patchTint,retainedMeshes=[],volumeMesh,wire,boundaryWire,resources=[],status,selector,disposed=false,pending=false,error=null,generation=0,loadGeneration=0,effective='source',projectedPixels=null,loadSession;
+    let probeResult=null,probeLines,probeResources=[],probePending=false,probeVersion=0,sourceMaterial;
+    const fields=new Map();let exampleSelector;
     const clearProbe=(cancel=true)=>{if(cancel)probeVersion++;probeLines?.removeFromParent();for(const r of probeResources)r.dispose();probeResources=[];probeLines=null;probeResult=null;probePending=false;};
     const free=()=>{clearProbe();group?.removeFromParent();for(const r of resources)r.dispose();resources=[];group=null;};
-    const read=()=>({objectId:asset?.id,sourceUrl,source:asset?.source,backend:'WebGPU',mode,effective,threshold,projectedPixels,pending,error,region:structuredClone(recipe),candidate:candidate?summary(candidate):null,probe:probeResult?structuredClone(probeResult):null,probePending,
+    const read=()=>({objectId:asset?.id,sourceUrl,source:asset?.source,backend:'WebGPU',mode,effective,threshold,projectedPixels,pending,error,region:structuredClone(recipe),candidate:candidate?summary(candidate):null,probe:probeResult?structuredClone(probeResult):null,probePending,sourceMaterial:sourceMaterial?.read(),
+      sourceRoute:{beautyLodEnabled:lod.read().enabled,previousBeautyLodEnabled:previousLod.enabled,scope:'page-local full-source inspection; restored when experiment closes'},
       learnedMaterial:'absent: solid support is a geometry diagnostic',continuation:'Reopen using shareInputs; source and fitted geometry are reconstructed. Native scene transforms apply to the loaded asset.',shareInputs:{sourceUrl,region:structuredClone(recipe),mode,threshold}});
     const publish=()=>updateInputs(read().shareInputs);
     const sync=()=>{
       if(selector)selector.value=mode;
+      if(exampleSelector){exampleSelector.disabled=sourceUrl!==DEFAULT_SOURCE;exampleSelector.value=sourceUrl===DEFAULT_SOURCE?(Object.entries(PLATE_REGIONS).find(([,r])=>Object.entries(r).every(([k,v])=>JSON.stringify(recipe[k])===JSON.stringify(v)))?.[0]??'custom'):'custom';}
       for(const[k,field]of fields){const v=k.startsWith('origin')?recipe.origin[Number(k.at(-1))]:k==='threshold'?threshold:recipe[k];if(field.ownerDocument.activeElement!==field)field.value=String(v);}
-      if(status){status.dataset.trellisSupportStatus=JSON.stringify({origin:recipe.origin,pending,error,probePending,probeSamples:probeResult?.samples.length??0});status.textContent=pending?'Constructing support in WebGPU…':error?`Retaining previous candidate: ${error}`:candidate?`${candidate.patch.length} source fragments from ${new Set(candidate.patch.map(t=>t.sourceTriangle)).size} original triangles; 12 support triangles; ${candidate.boundarySegments.length} addressed boundary segments. ${effective==='support'?'Solid support diagnostic — no learned material.':'Original material maps preserved.'}\nProjected support box: ${projectedPixels===null?'not measured':Math.round(projectedPixels)+' pixels across'}. LOD is a footprint routing preview; no performance crossover measured.`:'No candidate';if(probePending)status.textContent+=' Tracing source probes…';else if(probeResult)status.textContent+=` Probes: ${probeResult.samples.filter(s=>s.hit).length} source hits, ${probeResult.samples.filter(s=>!s.hit&&s.intersectsSupport).length} volume exits. Geometric queries only; no radiance integration.`;}
+      if(status){status.dataset.trellisSupportStatus=JSON.stringify({origin:recipe.origin,pending,error,probePending,probeSamples:probeResult?.samples.length??0});status.textContent=pending?'Constructing support in WebGPU…':error?`Retaining previous candidate: ${error}`:candidate?`${candidate.patch.length} source fragments from ${new Set(candidate.patch.map(t=>t.sourceTriangle)).size} original triangles; 12 support triangles; ${candidate.boundarySegments.length} addressed boundary segments. ${effective==='support'?'Solid support diagnostic — no learned material.':'Original material maps preserved.'}\nProjected support box: ${projectedPixels===null?'not measured':Math.round(projectedPixels)+' pixels across'}. LOD is a footprint routing preview; no performance crossover measured.`:'No candidate';if(probePending)status.textContent+=' Tracing source probes…';else if(probeResult){const hits=probeResult.samples.filter(s=>s.hit),range=k=>`${Math.min(...hits.map(s=>s.material[k])).toFixed(3)}–${Math.max(...hits.map(s=>s.material[k])).toFixed(3)}`;status.textContent+=` Probes: ${hits.length} source hits, ${probeResult.samples.filter(s=>!s.hit&&s.intersectsSupport).length} volume exits.`;if(hits.length)status.textContent+=` Material samples: roughness ${range('roughness')}, metalness ${range('metalness')}.`;status.textContent+=' Source-map LOD 0; no radiance integration.';}}
     };
     function applyVisibility(){
       if(!candidate)return;
       effective=mode==='lod'?(projectedPixels===null||projectedPixels>threshold?'source':'support'):mode;
       sourceMesh.visible=effective==='source';group.visible=effective!=='source';
-      patchMesh.visible=effective==='partition';volumeMesh.visible=effective==='support';wire.visible=effective==='partition';boundaryWire.visible=effective==='partition';
+      patchMesh.visible=effective==='partition'||effective==='isolated';patchMesh.material=effective==='isolated'?sourceMesh.material:patchTint;for(const mesh of retainedMeshes)mesh.visible=effective!=='isolated';volumeMesh.visible=effective==='support';wire.visible=effective==='partition';boundaryWire.visible=effective==='partition';
       session.redraw();sync();
     }
     function measure(){
@@ -65,52 +73,57 @@ export default {
         const boundaryGeometry=new BufferGeometry();boundaryGeometry.setAttribute('position',new BufferAttribute(Float32Array.from(c.boundarySegments.flatMap(e=>e.vertices.flatMap(v=>worldPoint(v.p,c.frame)))),3));const boundaryMaterial=new LineBasicMaterial({color:0xff66ab,depthTest:false,depthWrite:false});owned.push(boundaryGeometry,boundaryMaterial);const cutBoundary=new LineSegments(boundaryGeometry,boundaryMaterial);cutBoundary.renderOrder=2;cutBoundary.name='Source/support boundary (x-ray)';
         const untouchedMesh=new Mesh(untouched,sourceMesh.material),cutMesh=new Mesh(cut,sourceMesh.material),detail=new Mesh(patch,tint),volume=new Mesh(support,solid),outline=new LineSegments(edges,line);
         nextGroup.add(untouchedMesh,cutMesh,detail,volume,outline,cutBoundary);for(const m of [untouchedMesh,cutMesh,detail,volume]){m.castShadow=true;m.receiveShadow=true;}
-        free();resources=owned;group=nextGroup;patchMesh=detail;volumeMesh=volume;wire=outline;boundaryWire=cutBoundary;candidate=c;recipe=structuredClone(next);draftRecipe=structuredClone(recipe);sourceMesh.parent.add(group);pending=false;lastProjectionKey=null;measure();applyVisibility();publish();
+        free();resources=owned;group=nextGroup;patchMesh=detail;patchTint=tint;retainedMeshes=[untouchedMesh,cutMesh];volumeMesh=volume;wire=outline;boundaryWire=cutBoundary;candidate=c;recipe=structuredClone(next);draftRecipe=structuredClone(recipe);sourceMesh.parent.add(group);pending=false;lastProjectionKey=null;measure();applyVisibility();publish();
         record({kind:'trellis-support.region',phase:'applied',target:asset.id,effective:read()});return read();
       }catch(e){if(request===generation){pending=false;error=e.message;sync();}throw e;}
     }
     async function load(url){
       if(typeof url!=='string'||!url.trim())throw Error('Source GLB URL required');
-      const loadRequest=++loadGeneration,nextSession=await host.scene.open();let next;
+      const loadRequest=++loadGeneration,nextSession=await host.scene.open();let next,nextMaterial;
       try{
         next=await nextSession.loadAsset({url,normalize:false});const meshes=[];next.root.traverse(o=>{if(o.isMesh)meshes.push(o);});
         if(meshes.length!==1||Array.isArray(meshes[0].material)||!meshes[0].geometry.index)throw Error('First support constructor requires one indexed mesh with one material');
         if(disposed||loadRequest!==loadGeneration){await nextSession.dispose();return read();}
         const nextSource=supportSourceFromMesh(meshes[0]);
+        nextMaterial=createSourceMaterialSampler(renderer,meshes[0].material);
         const prepared=prepareSupportVolume(nextSource,recipe),clipped=await clipSupportVolume(device,prepared);
-        if(disposed||loadRequest!==loadGeneration){await nextSession.dispose();return read();}
-        free();if(loadSession)await loadSession.dispose();loadSession=nextSession;asset=next;sourceMesh=meshes[0];sourceUrl=url;
+        if(disposed||loadRequest!==loadGeneration){nextMaterial.dispose();await nextSession.dispose();return read();}
+        free();sourceMaterial?.dispose();sourceMaterial=nextMaterial;if(loadSession)await loadSession.dispose();loadSession=nextSession;asset=next;sourceMesh=meshes[0];sourceUrl=url;
         source=nextSource;await rebuild(recipe,{prepared,clipped});return read();
-      }catch(e){if(loadSession!==nextSession)await nextSession.dispose();throw e;}
+      }catch(e){if(loadSession!==nextSession){nextMaterial?.dispose();await nextSession.dispose();}throw e;}
     }
     async function probe(queries){
-      const request=generation,token=++probeVersion,c=candidate,s=source;
+      const request=generation,token=++probeVersion,c=candidate,s=source,material=sourceMaterial;
       queries??=[-.65,0,.65].flatMap(u=>[-.65,0,.65].map(v=>({origin:worldPoint([u,v,c.hi[2]],c.frame),direction:c.frame.n.map(x=>-x)})));
       probePending=true;sync();
       try{
         const result=await traceSupportRays(device,c,queries,{twoSided:sourceMesh.material.side===2});if(disposed||request!==generation||token!==probeVersion){if(token===probeVersion)probePending=false;return read();}
         result.samples=result.samples.map(sample=>sample.hit?{...sample,...sampleSourceAddress(s,sample.sourceTriangle,sample.sourceBary)}:sample);
+        const hits=result.samples.filter(s=>s.hit),labels=await material.sample(hits.map(s=>s.sourceUV));hits.forEach((s,i)=>s.material=labels[i]);
+        if(disposed||request!==generation||token!==probeVersion)return read();result.materialSampling=material.read();
         clearProbe(false);probeResult=result;const positions=[],colors=[];
         for(const sample of result.samples){if(!sample.intersectsSupport)continue;const end=sample.hit?sample.distance:sample.exit;for(const d of [sample.entry,end]){positions.push(...sample.origin.map((x,k)=>x+sample.direction[k]*d));colors.push(...(sample.hit?[.2,1,.4]:[1,.25,.25]));}}
         const g=new BufferGeometry();g.setAttribute('position',new BufferAttribute(Float32Array.from(positions),3));g.setAttribute('color',new BufferAttribute(Float32Array.from(colors),3));const m=new LineBasicMaterial({vertexColors:true,depthTest:false,depthWrite:false});probeResources=[g,m];probeLines=new LineSegments(g,m);probeLines.renderOrder=3;probeLines.name='Bounded source ray probes (x-ray)';group.add(probeLines);session.redraw();sync();record({kind:'trellis-support.probe',phase:'applied',target:asset.id,effective:probeResult});return read();
       }catch(e){if(request===generation&&token===probeVersion){probePending=false;error=e.message;sync();}throw e;}
     }
-    try{await load(sourceUrl);}catch(e){await loadSession?.dispose();await session.dispose();throw e;}
+    try{await load(sourceUrl);}catch(e){sourceMaterial?.dispose();await loadSession?.dispose();await session.dispose();restoreLod();throw e;}
     const stop=session.onFrame(()=>measure());
     return {
       read,
       operations:{
         setRegion:next=>rebuild({...recipe,...next}),load,probe,
+        selectExample(name){if(sourceUrl!==DEFAULT_SOURCE||!Object.hasOwn(PLATE_REGIONS,name))throw Error('Choose a named example on the finished plate source');return rebuild(structuredClone(PLATE_REGIONS[name]));},
         setMode(value){if(!MODES.includes(value))throw Error('Unknown support display mode');mode=value;measure();applyVisibility();publish();return read();},
         setThreshold(value){if(!Number.isFinite(value)||value<=0)throw Error('positive LOD threshold required');threshold=value;measure();applyVisibility();publish();return read();},
         frame(){const box=new Box3().setFromObject(asset.root),target=box.getCenter(new Vector3()),size=box.getSize(new Vector3()).length();return session.setView({position:target.clone().add(new Vector3(size*1.1,size*.8,size*1.25)).toArray(),target:target.toArray(),near:Math.max(size/10000,.0001)});},
-        frameRegion(){sourceMesh.updateWorldMatrix(true,false);const target=new Vector3().fromArray(recipe.origin).applyMatrix4(sourceMesh.matrixWorld),size=recipe.radius*sourceMesh.getWorldScale(new Vector3()).length();return session.setView({position:target.clone().add(new Vector3(size*2,size*3,size*2)).toArray(),target:target.toArray(),near:Math.max(size/10000,.00001)});},
-        inspectCandidate(){return {state:read(),patch:candidate.patch,retained:candidate.retained,boundarySegments:candidate.boundarySegments,untouched:Array.from(candidate.untouched),frame:candidate.frame,lo:candidate.lo,hi:candidate.hi};},
+        frameRegion(){sourceMesh.updateWorldMatrix(true,false);const target=new Vector3().fromArray(recipe.origin).applyMatrix4(sourceMesh.matrixWorld),position=new Vector3().fromArray(worldPoint([3,-3,4.5],candidate.frame)).applyMatrix4(sourceMesh.matrixWorld),size=recipe.radius*sourceMesh.getWorldScale(new Vector3()).length();return session.setView({position:position.toArray(),target:target.toArray(),near:Math.max(size/10000,.00001)});},
+        inspectCandidate(){sourceMesh.updateWorldMatrix(true,false);group.updateWorldMatrix(true,false);return {state:read(),patch:candidate.patch,retained:candidate.retained,boundarySegments:candidate.boundarySegments,untouched:Array.from(candidate.untouched),frame:candidate.frame,lo:candidate.lo,hi:candidate.hi,transforms:{sourceWorld:sourceMesh.matrixWorld.elements,partitionWorld:group.matrixWorld.elements,sourceParentVisible:sourceMesh.parent.visible,sourceVisible:sourceMesh.visible,partitionVisible:group.visible,patchVisible:patchMesh.visible,wireVisible:wire.visible,partitionParent:group.parent.name,sourceParent:sourceMesh.parent.name}};},
       },
       mount({root:panel,document,invoke}){
         const description=document.createElement('p');description.textContent='Local geometry partition on the original TRELLIS asset. Teal marks the source region, orange its closed support, pink the source/support boundary (x-ray). No neural material has been trained.';panel.append(description);
         const row=(text,node)=>{const label=document.createElement('label'),grip=document.createElement('span');grip.textContent=text+' ';label.append(grip,node);panel.append(label);return grip;};
-        selector=document.createElement('select');for(const[value,label]of [['partition','Source region + support outline'],['source','Original source'],['support','Solid support diagnostic'],['lod','LOD routing preview']]){const opt=document.createElement('option');opt.value=value;opt.textContent=label;selector.append(opt);}row('Display',selector);selector.addEventListener('change',()=>invoke('setMode',selector.value).catch(failed));
+        selector=document.createElement('select');for(const[value,label]of [['partition','Source region + support outline'],['isolated','Isolated source region'],['source','Original source'],['support','Solid support diagnostic'],['lod','LOD routing preview']]){const opt=document.createElement('option');opt.value=value;opt.textContent=label;selector.append(opt);}row('Display',selector);selector.addEventListener('change',()=>invoke('setMode',selector.value).catch(failed));
+        exampleSelector=document.createElement('select');exampleSelector.setAttribute('aria-label','Plate region example');for(const[value,text]of [['panel','Milled panel — material control'],['rim','Rolled rim — curved geometry'],['custom','Custom region']]){const option=document.createElement('option');option.value=value;option.textContent=text;option.disabled=value==='custom';exampleSelector.append(option);}row('Plate examples',exampleSelector);exampleSelector.addEventListener('change',()=>invoke('selectExample',exampleSelector.value).catch(failed));
         let timer;const failed=e=>{error=e.message;draftRecipe=structuredClone(recipe);sync();};
         for(const[k,label,step]of [['origin0','Region X',.005],['origin1','Region Y',.005],['origin2','Region Z',.005],['radius','Half width',.005],['depth','Inward depth',.005],['top','Outward extent',.005],['threshold','LOD switch footprint (pixels)',10]]){
           const field=document.createElement('input');field.type='number';field.step='any';field.className='transform-input';field.setAttribute('aria-label',label);const grip=row(label,field);fields.set(k,field);host.controls.installNumberDrag({input:field,grip,step});
@@ -121,7 +134,7 @@ export default {
         const frame=document.createElement('button');frame.textContent='Frame asset';frame.addEventListener('click',()=>invoke('frame').catch(failed));const close=document.createElement('button');close.textContent='Frame region';close.addEventListener('click',()=>invoke('frameRegion').catch(failed));const probeButton=document.createElement('button');probeButton.textContent='Probe region';probeButton.addEventListener('click',()=>invoke('probe').catch(failed));status=document.createElement('p');status.setAttribute('role','status');panel.append(loadButton,frame,close,probeButton,status);sync();
         return ()=>clearTimeout(timer);
       },
-      async dispose(){disposed=true;generation++;loadGeneration++;stop();if(sourceMesh)sourceMesh.visible=true;free();await loadSession?.dispose();await session.dispose();},
+      async dispose(){disposed=true;generation++;loadGeneration++;stop();if(sourceMesh)sourceMesh.visible=true;free();sourceMaterial?.dispose();try{await loadSession?.dispose();await session.dispose();}finally{restoreLod();}},
     };
   },
 };
