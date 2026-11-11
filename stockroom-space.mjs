@@ -107,7 +107,9 @@ export function rebuildSpace(root,value,context=null){
  const p=checkedSpace(value);context??=root.userData.spaceNeighborhood??{boxes:[],unavailable:p.neighbors.map(id=>({id,reason:'unresolved construction neighbor'}))};
  root.userData.stockroomSpace=p;root.userData.spaceNeighborhood=context;
  const unresolved=!!context.unavailable?.length;
- if(unresolved&&resources.has(root)){resources.get(root).mesh.visible=false;return root;}
+ if(unresolved&&resources.has(root)){
+  const mesh=resources.get(root).mesh;if(mesh.visible){mesh.visible=false;root.userData.spaceRevision=(root.userData.spaceRevision??0)+1;}return root;
+ }
  // Construct the hidden mesh/material before native admission even when a
  // neighbor loads later; never display the unconstrained intermediate shape.
  const distance=compileSpace(p,unresolved?{boxes:[]}:context),bounds=spaceBounds(p),size=bounds.getSize(new THREE.Vector3()),center=bounds.getCenter(new THREE.Vector3());

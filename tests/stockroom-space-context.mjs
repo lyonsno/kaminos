@@ -1,7 +1,9 @@
 // kaminos-test: node
 import test from 'node:test';import assert from 'node:assert/strict';import * as THREE from '../lib/three.core.js';
 import {collectSpaceNeighborhood,nearestSpaceBoundary,compileNeighborBoxes} from '../stockroom-space-context.mjs';
-import {defaultSpace,pullSpace,compileSpace} from '../stockroom-space.mjs';
+import {defaultSpace,pullSpace,compileSpace,createSpace,rebuildSpace,SPACE_SOURCE} from '../stockroom-space.mjs';
+import {createSceneRepetitionController} from '../scene-repetition-controller.mjs';
+import {repetitionDefaults,isRepetitionCopy} from '../scene-repetition.mjs';
 const fixture=()=>{const root=new THREE.Group(),box=new THREE.Mesh(new THREE.BoxGeometry(2,.2,2));box.position.set(0,1.9,0);box.updateMatrixWorld(true);return {root,box,entries:[{id:'ceiling',object:box,type:'procedural-mesh',geometry:{kind:'box'}}]};};
 test('live native geometry resolves a named neighbor and supplies a pre-click surface normal',()=>{
  const {root,entries}=fixture(),context=collectSpaceNeighborhood(root,{neighbors:['ceiling']},entries);
@@ -22,4 +24,13 @@ test('the actual concrete field respects a native neighbor and changes when it m
  const {root,box,entries}=fixture(),p={...defaultSpace(),neighbors:['ceiling']},a=collectSpaceNeighborhood(root,p,entries);
  assert.ok(compileSpace(defaultSpace())(.8,1.9,0)<0);assert.ok(compileSpace(p,a)(.8,1.9,0)>.01,'concrete must not occupy the ceiling');
  box.position.x=4;const b=collectSpaceNeighborhood(root,p,entries);assert.ok(compileSpace(p,b)(.8,1.9,0)<-.01,'moving ceiling must release its actual constraint');
+});
+for(const mode of ['object','group'])test(`unresolved construction withholds ${mode} repeated concrete and restoration refreshes it`,()=>{
+ const {entries}=fixture(),p={...defaultSpace(),resolution:12,neighbors:['ceiling']},root=createSpace(p),repetition={...repetitionDefaults(),mode:'line',count:2,step:[6,0,0]};
+ const pose=o=>({position:o.position.toArray(),rotation:[o.rotation.x,o.rotation.y,o.rotation.z],scale:o.scale.toArray()}),entry={id:'place',object:root,type:'pbr',source:SPACE_SOURCE,space:p,repetition:mode==='object'?repetition:null};
+ const groups=mode==='group'?[{id:'assembly',objectIds:['place'],transform:pose(root),repetition}]:[],controller=createSceneRepetitionController({objects:()=>[entry],groups:()=>groups,readPose:pose});
+ const resolved=collectSpaceNeighborhood(root,p,entries);rebuildSpace(root,p,resolved);controller.sync();
+ const source=()=>root.children.find(c=>c.userData.spaceSurface),copy=()=>root.children.find(isRepetitionCopy).children[0];assert.equal(source().visible,true);assert.equal(copy().visible,true);
+ const previous=source().geometry;rebuildSpace(root,p,collectSpaceNeighborhood(root,p,[]));controller.sync();assert.equal(source().visible,false);assert.equal(copy().visible,false,'unresolved repeated concrete must not remain visible');
+ rebuildSpace(root,p,resolved);controller.sync();assert.equal(source().visible,true);assert.equal(copy().visible,true);assert.notEqual(source().geometry,previous);assert.equal(copy().geometry,source().geometry);controller.clearAll();
 });
