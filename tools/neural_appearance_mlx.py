@@ -22,21 +22,31 @@ def smelu(x):
 
 
 class Appearance(nn.Module):
-    def __init__(self, resolution=64, width=16, seed=41):
+    def __init__(self, resolution=64, width=16, seed=41, *, recipe="legacy"):
+        if recipe not in ["legacy", "published-direct"]:raise ValueError("Known initialization recipe required")
         super().__init__()
         mx.random.seed(seed)
         self.resolution=resolution
-        self.latents=mx.random.normal((resolution*resolution,8))*.1
+        self.normalized_latents=recipe=="legacy"
+        self.latents=mx.random.normal((resolution*resolution,8))*.1 if self.normalized_latents else mx.zeros((resolution*resolution,8))
         self.rotation=nn.Linear(8,12,bias=False)
         self.layers=[nn.Linear(24,width),nn.Linear(width,width),nn.Linear(width,3)]
         # Start near a plausible reflectance; the official output mapping has
         # exp-like slope in this range, with a high finite asymptote.
-        self.layers[-1].bias=mx.full((3,),-2.)
+        if recipe=="legacy":self.layers[-1].bias=mx.full((3,),-2.)
+        else:
+            # Released LinearLayer: NumPy-seeded Xavier uniform and zero biases.
+            rng=np.random.RandomState(seed)
+            for layer in [self.rotation,*self.layers]:
+                outputs,inputs=layer.weight.shape;bound=math.sqrt(6./(inputs+outputs))
+                layer.weight=mx.array(rng.uniform(-bound,bound,(outputs,inputs)).astype(np.float32))
+                if 'bias' in layer:layer.bias=mx.zeros((outputs,))
 
     def __call__(self, queries):
         uv=queries[:,:2]-mx.floor(queries[:,:2])
         xy=mx.clip(mx.floor(uv*self.resolution).astype(mx.int32),0,self.resolution-1)
-        z=mx.tanh(self.latents[xy[:,1]*self.resolution+xy[:,0]])
+        z=self.latents[xy[:,1]*self.resolution+xy[:,0]]
+        if self.normalized_latents:z=mx.tanh(z)
         frames=self.rotation(z)
         n=normalize(frames[:,:6].reshape((-1,2,3))+mx.array([0.,0.,1.]))
         t=normalize(frames[:,6:].reshape((-1,2,3))+mx.array([1.,0.,0.]))
@@ -58,7 +68,7 @@ class Appearance(nn.Module):
         def layer(l):
             w=np.asarray(l.weight);b=np.asarray(l.bias) if 'bias' in l else np.zeros(w.shape[0])
             return {'num_inputs':w.shape[1],'num_outputs':w.shape[0],'weights':w.flatten().tolist(),'biases':b.tolist()}
-        return {'latents':{'num_channels':8,'num_mip_levels':1,'normalize':True},'decoder':{
+        return {'latents':{'num_channels':8,'num_mip_levels':1,'normalize':self.normalized_latents},'decoder':{
             'hidden_layers':[self.layers[0].weight.shape[0]]*2,'hidden_activations':'SmeLU',
             'output_activation':{'type':'ScaledSigmoid','scale':1e5},'half_diff_parameterization':'StableRusinkiewicz',
             'num_shading_frames':2,'direction_inputs':'WhWdZiZo',
@@ -66,7 +76,7 @@ class Appearance(nn.Module):
 
     def save_bundle(self, out, provenance):
         out=Path(out);out.mkdir(parents=True,exist_ok=True)
-        data=np.asarray(mx.tanh(self.latents)).astype('<f4').tobytes()
+        data=np.asarray(mx.tanh(self.latents) if self.normalized_latents else self.latents).astype('<f4').tobytes()
         (out/'latents.f32').write_bytes(data)
         ckpt=self.checkpoint();ckpt['kaminos']={'schema':'kaminos.neural-appearance.bundle.v1','response':'projected-bsdf',
             'filtering':'nearest-authored-texel-mip','levels':[{'width':self.resolution,'height':self.resolution,'url':'latents.f32','sha256':hashlib.sha256(data).hexdigest()}],

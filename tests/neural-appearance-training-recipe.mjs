@@ -20,3 +20,10 @@ const batch=publishedQueryBatch(2048,random,{batchSize:1024});assert.equal(batch
 for(let i=0;i<2048;i++){const x=batch[i*8],y=batch[i*8+1],cell=i%1024;assert.equal(Math.floor(x*32),cell%32);assert.equal(Math.floor(y*32),Math.floor(cell/32));}
 assert.throws(()=>publishedQueryBatch(3,random),/square/);assert.throws(()=>publishedQueryBatch(1024,()=>NaN),/Uniform/);
 assert.throws(()=>validateAppearanceDirections(new Float32Array([.5,.5,0,0,2,0,0,1])),/Unit/);
+// Float32 storage must not move an upper-edge jitter into a neighboring stratum.
+let edgeCall=0;const edge=publishedQueryBatch(4,()=>edgeCall++%6<2?1-Number.EPSILON:0);
+for(let i=0;i<4;i++){assert.equal(Math.floor(edge[i*8]*2),i%2);assert.equal(Math.floor(edge[i*8+1]*2),Math.floor(i/2));}
+
+// Canonical datagen default snaps the stratified UV to latent texel centers.
+const snapped=publishedQueryBatch(1024,random,{batchSize:1024,resolution:64,snapToTexelCenter:true});
+for(let i=0;i<1024;i++)for(let c=0;c<2;c++)assert.equal((snapped[i*8+c]*64)%1,.5);

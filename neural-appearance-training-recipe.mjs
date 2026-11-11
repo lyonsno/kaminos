@@ -19,13 +19,17 @@ export function cosineLearningRate(iteration,iterations,{initial=.001,endScale=.
  if(!Number.isFinite(iteration)||iteration<0||!Number.isSafeInteger(iterations)||iterations<=0||!Number.isFinite(initial)||initial<=0||!Number.isFinite(endScale)||endScale<0)throw Error('Valid cosine training schedule required');
  const t=Math.min(iteration/iterations,1);return initial*(endScale+(1-endScale)*.5*(1+Math.cos(Math.PI*t)));
 }
-export function publishedQueryBatch(count,random,{batchSize=count}={}){
+const coordinateStorage=new ArrayBuffer(4),coordinateFloat=new Float32Array(coordinateStorage),coordinateBits=new Uint32Array(coordinateStorage);
+function stratumCoordinate(value,lower,upper){coordinateFloat[0]=value;if(coordinateFloat[0]>=upper)coordinateBits[0]--;else if(coordinateFloat[0]<lower)coordinateBits[0]++;return coordinateFloat[0];}
+export function publishedQueryBatch(count,random,{batchSize=count,resolution,snapToTexelCenter=false}={}){
  const side=Math.sqrt(batchSize);
  if(!Number.isSafeInteger(count)||count<=0||!Number.isSafeInteger(side)||count%batchSize)throw Error('Whole square-stratified batches required');
+ if(snapToTexelCenter&&(!Number.isSafeInteger(resolution)||resolution<1))throw Error('Positive latent resolution required for snapped queries');
  const next=()=>{const x=random();if(!Number.isFinite(x)||x<0||x>=1)throw Error('Uniform random value required');return x;};
  const queries=new Float32Array(count*8);
  for(let i=0;i<count;i++){
-  const j=i*8,cell=i%batchSize;queries[j]=(cell%side+next())/side;queries[j+1]=(Math.floor(cell/side)+next())/side;
+  const j=i*8,cell=i%batchSize;const x=cell%side,y=Math.floor(cell/side);queries[j]=stratumCoordinate((x+next())/side,x/side,(x+1)/side);queries[j+1]=stratumCoordinate((y+next())/side,y/side,(y+1)/side);
+  if(snapToTexelCenter){queries[j]=(Math.min(resolution-1,Math.floor(queries[j]*resolution))+.5)/resolution;queries[j+1]=(Math.min(resolution-1,Math.floor(queries[j+1]*resolution))+.5)/resolution;}
   let d;for(let attempt=0;attempt<100;attempt++){d=uniformRusinkiewicz([next(),next(),next(),next()]);if(d.valid)break;}
   // Same validity-attempt bound as the author. Do not label failed samples or
   // silently replace them with a different distribution.
