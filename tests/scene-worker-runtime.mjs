@@ -1,6 +1,8 @@
 // kaminos-test: node
 import test from 'node:test';import assert from 'node:assert/strict';
 import {MessageChannel} from 'node:worker_threads';
+import * as THREE from '../lib/three.core.js';
+import {createSceneRenderObjects} from '../scene-render-bootstrap.mjs';
 import {createSceneWorkerClient,installSceneWorkerHost} from '../scene-worker-handoff.mjs';
 import * as realKit from '../webgpu-inference-kit/src/core.js';
 const {createWebGpuForegroundService}=realKit;
@@ -9,7 +11,7 @@ function factory(options){assert.equal(typeof module.createSceneWorkerRuntimeFac
 function fixture({failInitialize=false,failCleanup=false}={}){
  const calls=[],device={queue:{submit(){},onSubmittedWorkDone:async()=>calls.push('settled')},destroy:()=>calls.push('device.dispose')},shared={device,adapter:{},queue:device.queue};
  const signal=new AbortController().signal,context={signal,assertCurrent(){signal.throwIfAborted();},report(){}};
- let owner=null,volumeOptions,registered=false,cleanupFails=failCleanup;
+ let owner=null,volumeOptions,objects,registered=false,cleanupFails=failCleanup;
  const sceneFrames={runForegroundFrame:run=>({...run(),sceneDrawn:true}),setForegroundServiceActive:()=>calls.push('foreground.active')};
  const sceneResources={frames:sceneFrames,commands:{'scene.read':()=>({registered})},foregroundCommands:{'scene.move':()=>{registered=true;return {moved:true};}},
   async initialize(){calls.push('scene.initialize');if(failInitialize)throw Error('scene allocation failed');},
@@ -20,18 +22,19 @@ function fixture({failInitialize=false,failCleanup=false}={}){
  const renderResources={renderer,pmremGenerator:{dispose:()=>calls.push('pmrem.dispose')},lighting:null,
   async initializeRenderer(){calls.push('renderer.initialize');},
   initializeLighting(){calls.push('lighting.initialize');this.lighting={};},
+  resize(){calls.push('render.resize');},
   async retire(){if(this.lighting){calls.push('lighting.dispose');this.lighting=null;}this.pmremGenerator.dispose();renderer.dispose();},
  };
  const initializeScene=sceneResources.initialize;sceneResources.initialize=async function(ctx){await initializeScene.call(this,ctx);renderResources.initializeLighting(ctx);};
- const options={THREE:{},createSceneResources:input=>{assert.equal(input.sharedGpu,shared);assert.equal(input.renderResources,renderResources,'retain the actual renderer resource owner before domain initialization');calls.push('scene.shell');return sceneResources;},imageOptions:null,
+ const options={THREE,createSceneResources:input=>{assert.equal(input.sharedGpu,shared);assert.equal(input.renderResources,renderResources,'retain the actual renderer resource owner before domain initialization');calls.push('scene.shell');return sceneResources;},imageOptions:null,
   services:{createRenderResources:input=>{assert.equal(input.readSharedGpu(),shared);calls.push('render.shell');return renderResources;},requestDevice:async()=>{calls.push('acquire');return shared;},kit:{createWebGpuForegroundService},
-   createRenderObjects:()=>({scene:{},camera:{}}),
+   createRenderObjects:input=>(objects=createSceneRenderObjects(input)),
    createVolume:input=>{volumeOptions=input;owner={setActive:async active=>{input.presentationSurface.setActive(active);calls.push(['volume.active',active]);},setControls:input=>{calls.push(['controls',input]);if(input.resolution===0)throw Error('invalid grid');},dispose:()=>calls.push('volume.dispose'),
     foregroundGpuContext:()=>({device,queue:device.queue,renderer:'ordinary-volume',productFrameOwner:'prototype'}),
     renderSharedFrame:({service})=>{assert.equal(service.device,device);calls.push('volume.frame');return {flameDrawn:true};}};return owner;},
   }};
  const payload={sceneCanvas:{},volumeCanvas:{getContext(){}},viewport:{width:32,height:32,pixelRatio:1},flameControls:{resolution:16}};
- return {options,payload,context,calls,device,sceneResources,volumeOptions:()=>volumeOptions};
+ return {options,payload,context,calls,device,sceneResources,objects:()=>objects,volumeOptions:()=>volumeOptions};
 }
 test('factory retains a shell before any allocation and composes one admitted ordinary frame',async()=>{
  const f=fixture(),runtime=factory(f.options)({payload:f.payload,lifecycle:{}});assert.deepEqual(f.calls,[]);assert.equal(runtime.host,null);
@@ -93,7 +96,7 @@ test('initialization cannot publish a scene without its frame-input consumer',as
 
 test('frame viewport and authored controls reach the live readers without rewriting the boot payload',async()=>{
  const f=fixture();f.options.services.timeOrigin=1000;const runtime=factory(f.options)({payload:f.payload,lifecycle:{}});await runtime.initialize(f.context);
- const input={now:20,timeOrigin:1500,viewport:{width:80,height:40,pixelRatio:2},camera:{position:[1,2,3]}};
+ const input={now:20,timeOrigin:1500,viewport:{width:80,height:40,pixelRatio:2},camera:viewSnapshot([1,2,3])};
  await runtime.requestFrame(input,f.context,()=>runtime.frame(input,f.context));
  assert.equal(f.volumeOptions().presentationSurface.viewport().width,80);assert.equal(f.calls.findLast(row=>row[0]==='input')[1].now,520);
  assert.equal(f.payload.viewport.width,32,'accepted state is not mutable invocation input');
@@ -102,4 +105,14 @@ test('frame viewport and authored controls reach the live readers without rewrit
  assert.equal(f.volumeOptions().getControls().resolution,32);assert.equal(f.payload.flameControls.resolution,16);
  assert.throws(()=>runtime.foregroundCommands['flame.controls']({resolution:0},f.context),/invalid grid/);assert.equal(f.volumeOptions().getControls().resolution,32);
  await runtime.retire(f.context);
+});
+
+function viewSnapshot(position){const camera=new THREE.PerspectiveCamera(51,2,.1,300);camera.position.fromArray(position);camera.lookAt(0,0,0);return {type:'PerspectiveCamera',position:camera.position.toArray(),quaternion:camera.quaternion.toArray(),up:camera.up.toArray(),target:[0,0,0],fov:camera.fov,aspect:camera.aspect,near:camera.near,far:camera.far,zoom:camera.zoom,filmGauge:camera.filmGauge,filmOffset:camera.filmOffset,projectionMatrix:camera.projectionMatrix.toArray()};}
+test('common factory applies initial and admitted camera snapshots to its actual scene camera',async()=>{
+ const f=fixture();f.payload.camera=viewSnapshot([2,3,6]);const runtime=factory(f.options)({payload:f.payload,lifecycle:{}});await runtime.initialize(f.context);
+ assert.deepEqual(f.objects().camera.position.toArray(),[2,3,6]);
+ const input={now:1,viewport:{width:80,height:40,pixelRatio:2},camera:viewSnapshot([-2,4,7])};
+ await runtime.requestFrame(input,f.context,()=>runtime.frame(input,f.context));
+ assert.deepEqual(f.objects().camera.position.toArray(),[-2,4,7]);assert.deepEqual(f.objects().camera.projectionMatrix.toArray(),input.camera.projectionMatrix);
+ assert.equal(f.calls.filter(row=>row==='render.resize').length,1);await runtime.retire(f.context);
 });

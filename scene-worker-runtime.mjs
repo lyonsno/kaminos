@@ -1,5 +1,6 @@
 import {createSceneRenderObjects} from './scene-render-bootstrap.mjs';
 import {createSceneRenderResources} from './scene-render-resources.mjs';
+import {createSceneWorkerView} from './scene-worker-view.mjs';
 import {createOffscreenVolumeSurface} from './volume-runtime-surface.mjs';
 import {createAppGpuHost} from './app-gpu-host.mjs';
 import {createVolumeWorkerFrameBinding} from './volume-worker-frame-binding.mjs';
@@ -26,18 +27,14 @@ function register(...maps){
 export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imageOptions=null,samRequirements=null,services={}}={}){
  if(!THREE||typeof createSceneResources!=='function')throw Error('scene worker needs its Three namespace and actual scene resource constructor');
  return ({payload,lifecycle})=>{
-  let shared=null,renderResources=null,sceneResources=null,volume=null,appHost=null,frames=null,mutations=null,image=null;
+  let shared=null,renderResources=null,view=null,sceneResources=null,volume=null,appHost=null,frames=null,mutations=null,image=null;
   let commands=null,foregroundCommands=null,started=false,queueSettled=false,appRetired=false;
   let appliedViewport={...payload.viewport},appliedControls=structuredClone(payload.flameControls);
   const surfaceState={active:false,transparent:false};
   const viewport=()=>appliedViewport;
   function applyFrameInputs(input,context){
    if(Object.hasOwn(input,'flameControls'))throw Error('authored flame settings require the flame.controls command');
-   if(input.viewport){
-    const {width,height,pixelRatio}=input.viewport;
-    if(![width,height,pixelRatio].every(value=>Number.isFinite(value)&&value>0))throw Error('frame viewport requires positive finite dimensions and pixel ratio');
-    appliedViewport={...input.viewport};
-   }
+   view.apply(input,context);
    return sceneResources.applyFrameInputs(input,context);
   }
   function current(){if(!frames)throw Error('scene worker runtime is not initialized');}
@@ -59,6 +56,9 @@ export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imag
     if(typeof renderResources?.initializeRenderer!=='function'||typeof renderResources?.retire!=='function')throw Error('scene worker requires its retained renderer resource owner');
     await renderResources.initializeRenderer(ctx);
     ctx.assertCurrent();
+    view=createSceneWorkerView({camera:objects.camera,renderResources,readViewport:viewport,writeViewport:value=>{appliedViewport=value;}});
+    view.apply({camera:payload.camera},ctx);
+
     sceneResources=createSceneResources({...objects,THREE,renderer:renderResources.renderer,pmremGenerator:renderResources.pmremGenerator,
      renderResources,sharedGpu:shared,payload,lifecycle,viewport,
      readFlameControls:()=>appliedControls,readAppHost:()=>appHost});
@@ -118,7 +118,7 @@ export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imag
     if(volume){await volume.dispose();volume=null;}
     if(renderResources){await renderResources.retire();renderResources=null;}
     if(shared){shared.device.destroy();shared=null;}
-    appHost=null;frames=null;mutations=null;commands=null;foregroundCommands=null;
+    appHost=null;frames=null;mutations=null;view=null;commands=null;foregroundCommands=null;
     return {retired:true};
    },
   };
