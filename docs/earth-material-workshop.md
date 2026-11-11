@@ -184,7 +184,8 @@ snapshot; it does not rerun the dynamics at finer physical resolution.
 
 Render frozen surface opens a borrowed transport preview while retaining the
 workshop, its physics worker and its contact state. Back to earth closes only
-that preview and restores the authoring view and prior live/paused state. A
+that preview, keeps the inspection camera and restores the prior live/paused state.
+The capture mesh is separate: returning retains the cheaper authoring geometry. A
 renderer opening failure retains the specimen. The standalone earth transport
 experiment remains available, but workshop inspection no longer switches away
 from and disposes the authoring experiment.

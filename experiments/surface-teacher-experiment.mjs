@@ -7,17 +7,26 @@ function checkedConfiguration(value){
  return value;
 }
 
+
+function checkedPose(value){
+ if(value===undefined)return;
+ for(const [key,n]of [['position',3],['quaternion',4],['scale',3]])if(!Array.isArray(value?.[key])||value[key].length!==n||!value[key].every(Number.isFinite))throw Error('Invalid teacher source pose');
+ if(value.scale.some(v=>v<=0)||Math.abs(Math.hypot(...value.quaternion)-1)>1e-5)throw Error('Invalid teacher source pose');
+ return value;
+}
+
 export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,boundary,initialView,sourceControls,defaultMaterials,readSchema='kaminos.surface-teacher-experiment.v1'}){return {
  id,title,
  async create({host,inputs={},record,updateInputs=()=>{}}){
   if(!inputs||typeof inputs!=='object'||Array.isArray(inputs))throw Error('Teacher inputs must be an object');
+  const sourcePose=checkedPose(inputs.pose);
   let configuration=checkedConfiguration({scale:inputs.scale??.5,bounces:inputs.bounces??3,environment:inputs.environment??.15,reconstruction:inputs.reconstruction??true,paused:inputs.paused??false});
   let source=await createSource(inputs.source),engine,texture,screenMaterial,screen,asset,stop;
   const session=await host.scene.open();let context;
   try{context=host.scene.rendering();const size=context.renderer.getDrawingBufferSize(new THREE.Vector2()),limit=context.renderer.backend.device.limits.maxTextureDimension2D;if(Math.round(size.x*configuration.scale)>limit||Math.round(size.y*configuration.scale)>limit)throw Error('Image scale exceeds active device capacity');}catch(error){await session.dispose();throw error;}
   const {renderer,scene,camera}=context;
   const sourceMaterials=(source.materials??defaultMaterials).map(m=>new THREE.MeshStandardMaterial({color:new THREE.Color(...m.color),roughness:m.roughness,metalness:m.metalness,side:THREE.DoubleSide,colorWrite:false,depthWrite:false}));
-  const root=new THREE.Mesh(new THREE.BufferGeometry(),sourceMaterials);root.name=label;root.castShadow=false;root.receiveShadow=false;
+  const root=new THREE.Mesh(new THREE.BufferGeometry(),sourceMaterials);root.name=label;root.castShadow=false;root.receiveShadow=false;if(sourcePose){root.position.fromArray(sourcePose.position);root.quaternion.fromArray(sourcePose.quaternion);root.scale.fromArray(sourcePose.scale);}
   let sceneKey='',failure=null,capturing=false,disposed=false,status,pending=null,fieldDocument;
   const fields=[];
   const syncControls=()=>{for(const {input,group,key}of fields){if(fieldDocument.activeElement===input)continue;const value=group==='source'?source.config[key]:configuration[key];if(input.type==='checkbox')input.checked=value;else input.value=String(value);}};
@@ -51,7 +60,7 @@ export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,
    }
    engine.setTransport(configuration);
   };
-  const read=()=>({schema:readSchema,sourceSchema:source.schema,objectId:asset?.id,source:source.config,configuration:{...configuration},effective:engine?.state()??null,view:session.readView(),cameraFrame:cameraFrame(),failure,capturing,display:'shared Kaminos scene and camera; native selection/gizmos',displaySourceVisible:!!root.parent&&host.scene.isVisible(asset?.id),presentationLighting:screenMaterial?.lights===false?'lighting bypassed':'unverified',navigationIndexReady:!!root.geometry.boundsTree,supportedLights:'native directional, inverse-square point and spot; constant environment',boundary,deviceOwnership:'borrowed'});
+  const read=()=>({schema:readSchema,sourceSchema:source.schema,objectId:asset?.id,pose:{position:root.position.toArray(),quaternion:root.quaternion.toArray(),scale:root.scale.toArray()},source:source.config,configuration:{...configuration},effective:engine?.state()??null,view:session.readView(),cameraFrame:cameraFrame(),failure,capturing,display:'shared Kaminos scene and camera; native selection/gizmos',displaySourceVisible:!!root.parent&&host.scene.isVisible(asset?.id),presentationLighting:screenMaterial?.lights===false?'lighting bypassed':'unverified',navigationIndexReady:!!root.geometry.boundsTree,supportedLights:'native directional, inverse-square point and spot; constant environment',boundary,deviceOwnership:'borrowed'});
   const showStatus=()=>{if(status)status.textContent=failure?`Stopped: ${failure}`:capturing?'Capturing raw reference…':`${configuration.paused?'Paused · ':''}${engine?.samples??0} samples · ${engine?.width??0} × ${engine?.height??0} · ${configuration.bounces} bounces`;};
   const render=({width,height,filter=configuration.reconstruction}={})=>{
    if(disposed)return;

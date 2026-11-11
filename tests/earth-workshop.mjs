@@ -6,11 +6,14 @@ import workshop from '../experiments/earth-material.experiment.mjs';
 import {createEarthDynamicsKernel} from '../earth-dynamics.mjs';
 import {createEarthTeacherSource} from '../earth-surface.mjs';
 import transport from '../experiments/earth-surface-teacher.experiment.mjs';
-function fakeHost(){
- const frames=new Set(),roots=[],doc={activeElement:null,createElement:tag=>({tag,ownerDocument:doc,value:'',children:[],append(...a){this.children.push(...a);},setAttribute(k,v){this[k]=v;},addEventListener(){}})};
+import {createOwnerSceneSession} from '../owner-scene-session.mjs';
+function fakeHost({strict=false}={}){
+ const frames=new Set(),roots=[];let doc;
+ const make=tag=>({tag,ownerDocument:doc,value:'',children:[],style:{},dataset:{},classList:{add(){},remove(){}},append(...a){this.children.push(...a);},insertBefore(a,b){this.children=this.children.filter(x=>x!==a);this.children.splice(Math.max(0,this.children.indexOf(b)),0,a);},setAttribute(k,v){this[k]=v;},addEventListener(){},removeEventListener(){},remove(){},contains(){return false;},getBoundingClientRect:()=>({left:0,top:0,width:640,height:480})});
+ doc={activeElement:null,createElement:make,addEventListener(){},removeEventListener(){}};const viewport=make('viewport');doc.getElementById=id=>id==='viewport'?viewport:null;doc.head=make('head');doc.body=make('body');
  let view={position:[1,1,1],target:[0,0,0],fov:40};const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera();
- const session={attach:async root=>{roots.push(root);scene.add(root);return {id:`object-${roots.length}`,root};},redraw(){},readView:()=>view,setView:v=>view=v,onFrame:fn=>{frames.add(fn);return()=>frames.delete(fn);},dispose:async()=>{for(const r of roots)scene.remove(r);}};
- return {roots,doc,frame:(deltaSeconds=1/60)=>{for(const fn of frames)fn({deltaSeconds,timestampMs:performance.now()});},host:{scene:{open:async()=>{const owned=[];return {...session,attach:async root=>{const handle=await session.attach(root);owned.push(root);return handle;},dispose:async()=>{for(const root of owned)scene.remove(root);}};},refreshPresentation(){},isVisible:()=>true,rendering:()=>({scene,camera,renderer:{getDrawingBufferSize:v=>v.set(64,48),backend:{device:{limits:{maxTextureDimension2D:4096},addEventListener(){},removeEventListener(){}}}}})},controls:{document:doc,installNumberDrag:({input})=>{input.readOnly=true;return {dispose(){}};}}}};
+ const session={attach:async root=>{roots.push(root);scene.add(root);return {id:`object-${roots.length}`,root};},redraw(){},readView:()=>view,setView:v=>view=v,onFrame:fn=>{frames.add(fn);return()=>frames.delete(fn);}};
+ return {roots,doc,frame:(deltaSeconds=1/60)=>{for(const fn of frames)fn({deltaSeconds,timestampMs:performance.now()});},host:{scene:{open:async()=>{if(strict)return createOwnerSceneSession({...session,loadAsset:async()=>{throw Error('No asset fixture');},attach:async(root,options)=>({...await session.attach(root),owned:options.owned}),remove:async handle=>scene.remove(handle.root)});const owned=[];return {...session,attach:async root=>{const handle=await session.attach(root);owned.push(root);return handle;},dispose:async()=>{for(const root of owned)scene.remove(root);}};},refreshPresentation(){},isVisible:()=>true,rendering:()=>({scene,camera,renderer:{domElement:viewport,getDrawingBufferSize:v=>v.set(64,48),backend:{device:{limits:{maxTextureDimension2D:4096},addEventListener(){},removeEventListener(){}}}}})},controls:{document:doc,installNumberDrag:({input})=>{input.readOnly=true;return {dispose(){}};}}}};
 }
 test('closing the workshop disposes its final geometry and materials',async()=>{
  const {host,roots}=fakeHost();const app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8}},record:()=>{}});
@@ -61,9 +64,9 @@ test('refined preview converges to the same evolved state and survives a new mot
 
 function simulatedWorker(){
  class Worker{
-  static instances=[];static failSweep=false;
+  static instances=[];static failSweep=false;static holdSurface=false;
   constructor(url){this.physics=String(url).includes('earth-dynamics-worker');this.kernel=this.physics?createEarthDynamicsKernel():null;this.messages=[];Worker.instances.push(this);}
-  postMessage(data){this.messages.push(data);queueMicrotask(()=>{if(this.closed)return;try{if(this.physics&&data.kind==='sweep'&&Worker.failSweep){Worker.failSweep=false;throw Error('injected physics failure');}this.onmessage({data:this.physics?{id:data.id,result:this.kernel.apply(data)}:{id:data.id,source:createEarthTeacherSource(data)}});}catch(e){this.onmessage({data:{id:data.id,error:e.message}});}});}
+  postMessage(data){this.messages.push(data);if(!this.physics&&Worker.holdSurface)return;queueMicrotask(()=>{if(this.closed)return;try{if(this.physics&&data.kind==='sweep'&&Worker.failSweep){Worker.failSweep=false;throw Error('injected physics failure');}this.onmessage({data:this.physics?{id:data.id,result:this.kernel.apply(data)}:{id:data.id,source:createEarthTeacherSource(data)}});}catch(e){this.onmessage({data:{id:data.id,error:e.message}});}});}
   terminate(){this.closed=true;this.kernel?.dispose();}
  }
  return Worker;
@@ -113,4 +116,30 @@ test('render inspection returns to the same retained specimen and a failed openi
  host.scene.open=async()=>{throw Error('injected transport opening failure');};await assert.rejects(app.operations.render({paused:true,scale:.02}),/transport opening/);assert.equal(root.visible,true);assert.deepEqual((await app.operations.snapshot()).snapshot,before.snapshot);
  host.scene.open=open;await app.operations.render({paused:true,scale:.02});assert.equal(app.read().renderPreview.active,true);assert.equal(root.visible,false);const released=new Set(),resources=new Set();for(const r of roots.slice(2))r.traverse(o=>{if(o.geometry)resources.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material])if(m)resources.add(m);});for(const r of resources)r.addEventListener('dispose',()=>released.add(r));await app.operations.returnToEarth();assert.equal(released.size,resources.size,'preview geometry and materials must release');assert.ok(root.parent,'closing inspection must not remove the retained workshop');assert.equal(root.visible,true);assert.equal(app.read().renderPreview.active,false);assert.deepEqual((await app.operations.snapshot()).snapshot,before.snapshot);
  }finally{await app.dispose();}
+});
+
+
+test('mounted controls do not read the disposed scene after pending surface cancellation',async()=>{
+ const Saved=globalThis.Worker,Worker=simulatedWorker();globalThis.Worker=Worker;let app;
+ try{const {host,roots,frame,doc}=fakeHost({strict:true});app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8,captureResolution:10}},record:()=>{}});await app.mount({document:doc,invoke:(name,input)=>app.operations[name](input)});Worker.holdSurface=true;roots[1].position.y=.04;frame();await app.operations.snapshot();await app.dispose();await new Promise(setImmediate);assert.ok(Worker.instances.every(w=>w.closed));
+ }finally{await app?.dispose();globalThis.Worker=Saved;}
+});
+
+test('render opening rejects overlap, preserves cheap mesh and saved live intent, and return keeps the inspection camera',async()=>{
+ const {host,roots}=fakeHost(),updates=[],app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8,captureResolution:12}},record:()=>{},updateInputs:value=>updates.push(value)});
+ try{const advancing=app.operations.advance({seconds:.04}),live=app.read().live.enabled;const overlapping=app.operations.render({paused:true,scale:.02});overlapping.catch(()=>{});assert.equal(app.read().live.enabled,live,'refused preview must not mutate live mode');await assert.rejects(overlapping,/worked|forming/);await advancing;const detail=app.read().surface.resolution;await app.operations.render({paused:true,scale:.02});assert.equal(app.read().surface.resolution,detail);assert.equal(updates.at(-1).live,true,'ephemeral preview pause must not become saved author intent');const session=await host.scene.open(),view={position:[2,1,3],target:[0,.1,0],fov:40};session.setView(view);await app.operations.returnToEarth();assert.deepEqual(app.read().view,view);assert.ok(roots[0].parent);await session.dispose();
+ }finally{await app.dispose();}
+});
+
+test('closing waits for preview cleanup and opening cannot publish after workshop disposal',async()=>{
+ const {host,roots}=fakeHost(),app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8,captureResolution:10}},record:()=>{}}),open=host.scene.open;
+ let releaseClose,closingStarted;const closingGate=new Promise(r=>{releaseClose=r;}),started=new Promise(r=>{closingStarted=r;});host.scene.open=async()=>{const session=await open();return {...session,dispose:async()=>{closingStarted();await closingGate;await session.dispose();}};};
+ try{await app.operations.render({paused:true,scale:.02});const closing=app.operations.returnToEarth();await started;assert.equal(app.read().renderPreview.active,true,'closing preview is still active until restoration');await assert.rejects(app.operations.live(true),/Return|preview/);releaseClose();await closing;
+ let releaseOpen,openingStarted;const openingGate=new Promise(r=>{releaseOpen=r;}),begun=new Promise(r=>{openingStarted=r;});host.scene.open=async()=>{openingStarted();await openingGate;return open();};const opening=app.operations.render({paused:true,scale:.02});await begun;const disposal=app.dispose();releaseOpen();await disposal;await assert.rejects(opening,/disposed/);assert.ok(roots.every(root=>!root.parent),'late preview roots must be released');
+ }finally{releaseClose();await app.dispose();}
+});
+
+test('frozen transport uses the authored specimen placement',async()=>{
+ const {host,roots}=fakeHost(),placement={position:[.2,.1,-.1],quaternion:[0,Math.sin(.2),0,Math.cos(.2)],scale:[1.2,1.2,1.2]},app=await workshop.create({host,inputs:{pose:placement,config:{columns:3,layers:2,grains:0},settings:{previewResolution:8,captureResolution:10}},record:()=>{}});
+ try{await app.operations.render({paused:true,scale:.02});const frozen=roots.find(r=>r.name==='Frozen worked earth');assert.deepEqual(frozen.position.toArray(),placement.position);assert.deepEqual(frozen.quaternion.toArray(),placement.quaternion);assert.deepEqual(frozen.scale.toArray(),placement.scale);await app.operations.returnToEarth();}finally{await app.dispose();}
 });

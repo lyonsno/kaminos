@@ -28,12 +28,12 @@ export default {
   const tool=new THREE.Mesh(new THREE.SphereGeometry(1,24,16),new THREE.MeshStandardMaterial({color:0x91a3a6,roughness:.34,metalness:.55,transparent:true,opacity:.48,depthWrite:false}));tool.name='Earth forming tool';tool.scale.setScalar(.075);tool.position.set(0,model.state().top+.10,0);
   restore(root,inputs.pose);restore(tool,inputs.tool);
   let asset,toolAsset,liveEnabled=inputs.live!==false,lastTool=null,liveFlight=null,previewFlight=null,refineTimer=null,stopFrames=()=>{},revision=0,surfaceRevision=0,epoch=0,settling=0,physicsError=null,visibilityReset=false;
-  let renderPreview=null,renderReturn=null,uiContext=null;
+  let renderPreview=null,renderReturn=null,renderTransition=null,renderOpening=null,renderClosing=null,uiContext=null;
   let previewFailure=null;const samples=[],history=acceptedHistory??{initial:model.snapshot(),samples:[]};
   const frame=()=>session.setView({position:[.63,.48,.69],target:[0,.065,0],fov:40});
-  const read=()=>({schema:'kaminos.earth-authoring.v1',objectId:asset?.id,toolId:toolAsset?.id,physics:model.state(),physicsWidth:model.config.width,material:{cohesion:model.config.cohesion,friction:model.config.friction,plasticYield:model.config.plasticYield,clodStrength:model.config.clodStrength,interfaceStrength:model.config.interfaceStrength,gritBinding:model.config.gritBinding},ingredients:{clodCount:model.config.clodCount,maxClods:model.config.columns**2*(model.config.layers-Math.floor(model.config.layers/2))},settings:{...config},busy,failure,renderPreview:{active:!!renderPreview,state:renderPreview?.read()??null},live:{enabled:liveEnabled,pendingSamples:samples.length,inFlight:!!liveFlight,revision,surfaceRevision,previewDetail:Math.min(config.liveResolution,config.previewResolution),previewFailure,recordedSamples:history.samples.length,settlingSeconds:settling},surface:source?{resolution:source.reconstruction.resolution,triangles:source.triangles.length,matrixTriangles:source.reconstruction.matrixTriangles,clodTriangles:source.reconstruction.clodTriangles,boundary:source.boundary}:null,view:session.readView(),pose:pose(root),tool:pose(tool),snapshotContinuation:'cold contact reconstruction; retained physical values, not solver contact caches'});
-  const recipe=()=>({snapshot:model.snapshot(),live:liveEnabled,forming:structuredClone(history),settings:{...config},pose:pose(root),tool:pose(tool),view:session.readView()});
-  const show=()=>ui?.refresh?.();
+  const read=()=>({schema:'kaminos.earth-authoring.v1',objectId:asset?.id,toolId:toolAsset?.id,physics:model.state(),physicsWidth:model.config.width,material:{cohesion:model.config.cohesion,friction:model.config.friction,plasticYield:model.config.plasticYield,clodStrength:model.config.clodStrength,interfaceStrength:model.config.interfaceStrength,gritBinding:model.config.gritBinding},ingredients:{clodCount:model.config.clodCount,maxClods:model.config.columns**2*(model.config.layers-Math.floor(model.config.layers/2))},settings:{...config},busy,failure,renderPreview:{active:!!renderPreview||renderTransition==='opening',transition:renderTransition,state:renderTransition?null:renderPreview?.read()??null},live:{enabled:liveEnabled,pendingSamples:samples.length,inFlight:!!liveFlight,revision,surfaceRevision,previewDetail:Math.min(config.liveResolution,config.previewResolution),previewFailure,recordedSamples:history.samples.length,settlingSeconds:settling},surface:source?{resolution:source.reconstruction.resolution,triangles:source.triangles.length,matrixTriangles:source.reconstruction.matrixTriangles,clodTriangles:source.reconstruction.clodTriangles,boundary:source.boundary}:null,view:session.readView(),pose:pose(root),tool:pose(tool),snapshotContinuation:'cold contact reconstruction; retained physical values, not solver contact caches'});
+  const recipe=()=>({snapshot:model.snapshot(),live:renderReturn?.live??liveEnabled,forming:structuredClone(history),settings:{...config},pose:pose(root),tool:pose(tool),view:session.readView()});
+  const show=()=>{if(!disposed)ui?.refresh?.();};
   const sync=()=>show();
   const update=()=>{updateInputs(recipe());show();};
   const prepare=async(snapshot,resolution)=>{
@@ -54,10 +54,10 @@ export default {
    if(Math.max(rootScale.x,rootScale.y,rootScale.z)-Math.min(rootScale.x,rootScale.y,rootScale.z)>1e-6||rootScale.x<=0||Math.max(s.x,s.y,s.z)-Math.min(s.x,s.y,s.z)>1e-6||s.x<=0)throw Error('Use uniform positive scale for the specimen and spherical forming tool');
    return {position:root.worldToLocal(tool.getWorldPosition(new THREE.Vector3())).toArray(),radius:s.x/rootScale.x};
   };
-  const work=async(action,reconstruct=true,{replace=false}={})=>{
-   if(renderPreview)throw Error('Return to earth before changing the specimen');if(busy)throw Error('Earth is already being worked');busy=true;settling=0;clearTimeout(refineTimer);builder.cancel();liveBuilder.cancel();stopRequested=replace;failure=null;show();
+  const work=async(action,reconstruct=true,{replace=false,inspection=false}={})=>{
+   if((renderPreview||renderTransition)&&!inspection)throw Error('Return to earth before changing the specimen');if(busy)throw Error('Earth is already being worked');busy=true;settling=0;clearTimeout(refineTimer);builder.cancel();liveBuilder.cancel();stopRequested=replace;failure=null;show();
    try{if(replace)await liveFlight;else await settleInput();if(disposed||(!replace&&stopRequested))throw Error('Stopped before the next operation');stopRequested=false;await action();if(disposed)throw Error('Earth workshop disposed');if(reconstruct)await rebuild();update();return read();}
-   catch(error){failure=error.message;show();throw error;}finally{busy=false;if(!disposed&&!stopRequested&&!physicsError&&samples.length)pump();if(!disposed&&!stopRequested&&!physicsError&&(surfaceRevision!==revision||source?.reconstruction.resolution<config.previewResolution)){if(surfaceRevision<revision)coarse();scheduleRefinement();}show();}
+   catch(error){failure=error.message;show();throw error;}finally{busy=false;if(!disposed&&!renderPreview&&!renderTransition&&!stopRequested&&!physicsError&&samples.length)pump();if(!disposed&&!renderPreview&&!renderTransition&&!stopRequested&&!physicsError&&(surfaceRevision!==revision||source?.reconstruction.resolution<config.previewResolution)){if(surfaceRevision<revision)coarse();scheduleRefinement();}show();}
   };
   const yieldFrame=()=>new Promise(resolve=>setTimeout(resolve,0));
   const evolve=async(seconds,contact)=>{let remaining=seconds;while(remaining>1e-9){if(disposed)throw Error('Earth workshop disposed');if(stopRequested)throw Error('Stopped; last completed surface retained');const dt=Math.min(remaining,.025);await model.advance(dt,{tool:contact?.()??null});revision++;remaining-=dt;await yieldFrame();}};
@@ -67,21 +67,21 @@ export default {
   const sameTool=(a,b)=>a&&a.radius===b.radius&&a.position.every((v,k)=>v===b.position[k]);
   const disposePrepared=p=>{for(const g of p.geometries)g.dispose();};
   const coarse=()=>{
-   if(disposed||previewFlight)return;
+   if(disposed||renderPreview||renderTransition||previewFlight)return;
    const atEpoch=epoch,atRevision=revision,snapshot=model.snapshot(),resolution=Math.min(config.liveResolution,config.previewResolution);
    previewFlight=liveBuilder.build(snapshot,resolution).then(next=>{
-    if(disposed||busy||atEpoch!==epoch||atRevision<surfaceRevision||(atRevision===surfaceRevision&&source?.reconstruction.resolution>=resolution))return;
+    if(disposed||renderPreview||renderTransition||busy||atEpoch!==epoch||atRevision<surfaceRevision||(atRevision===surfaceRevision&&source?.reconstruction.resolution>=resolution))return;
     const geometries=materials.map((_,i)=>meshGeometry(next.triangles.filter(t=>t.materialIndex===i)));
     install({next,geometries},atRevision);previewFailure=null;
-   }).catch(e=>{if(!disposed&&e.name!=='AbortError')previewFailure=e.message;}).finally(()=>{previewFlight=null;show();if(!disposed&&!busy&&atRevision<revision)coarse();});
+   }).catch(e=>{if(!disposed&&e.name!=='AbortError')previewFailure=e.message;}).finally(()=>{previewFlight=null;show();if(!disposed&&!renderPreview&&!renderTransition&&!busy&&atRevision<revision)coarse();});
   };
   const scheduleRefinement=()=>{
    clearTimeout(refineTimer);
    refineTimer=setTimeout(async()=>{
-    if(disposed||busy||liveFlight||samples.length||settling>1e-9)return;
+    if(disposed||renderPreview||renderTransition||busy||liveFlight||samples.length||settling>1e-9)return;
     const atEpoch=epoch,atRevision=revision;
     try{const prepared=await prepare(model.snapshot(),config.previewResolution);
-     if(disposed||busy||atEpoch!==epoch||atRevision!==revision||samples.length||liveFlight){disposePrepared(prepared);return;}
+     if(disposed||renderPreview||renderTransition||busy||atEpoch!==epoch||atRevision!==revision||samples.length||liveFlight){disposePrepared(prepared);return;}
      install(prepared,atRevision);previewFailure=null;update();
     }catch(e){if(!disposed&&e.name!=='AbortError')previewFailure=e.message;}show();
    },0);
@@ -107,26 +107,43 @@ export default {
    }}catch(e){failure=e.message;liveEnabled=false;show();}
   };
   const mountAuthoring=()=>{if(!uiContext)return;ui=mountEarthControls({...uiContext,host,session,root,tool,read,stop:halt,trace:()=>uiContext.invoke('render')});};
-  const returnToEarth=async()=>{
-   if(!renderPreview)return read();const closing=renderPreview;renderPreview=null;
-   try{await closing.dispose();}finally{ui?.dispose();root.visible=renderReturn.rootVisible;tool.visible=renderReturn.toolVisible;session.setView(renderReturn.view);liveEnabled=renderReturn.live;lastTool=toolQuery();renderReturn=null;mountAuthoring();update();}
-   return read();
+  const returnToEarth=()=>{
+   if(renderClosing)return renderClosing;
+   if(renderTransition)return Promise.reject(Error('Wait for render preview to finish opening'));
+   if(!renderPreview)return Promise.resolve(read());
+   const closing=renderPreview,previous=renderReturn;renderTransition='closing';
+   renderClosing=(async()=>{
+    try{await closing.dispose();}finally{
+     ui?.dispose();ui=null;renderPreview=null;renderTransition=null;renderReturn=null;
+     if(!disposed){root.visible=previous.rootVisible;tool.visible=previous.toolVisible;liveEnabled=previous.live;lastTool=toolQuery();mountAuthoring();update();}
+     renderClosing=null;
+    }
+    return disposed?undefined:read();
+   })();return renderClosing;
   };
   const inspectRender=async(values={})=>{
+   if(disposed)throw Error('Earth workshop disposed');
+   if(busy)throw Error('Earth is already being worked');
+   if(renderTransition)throw Error('Wait for render preview transition');
    if(renderPreview)return renderPreview.read();
    if(!values||typeof values!=='object'||Array.isArray(values)||Object.keys(values).some(k=>!['scale','bounces','environment','reconstruction','paused'].includes(k)))throw Error('Invalid render preview setting');
    const previous={view:session.readView(),live:liveEnabled,rootVisible:root.visible,toolVisible:tool.visible};
-   // Inspection borrows a frozen surface, keeping the actual workshop and its
-   // worker/contact state resident. A failed renderer cannot dispose the work.
-   liveEnabled=false;let preview;
+   renderTransition='opening';renderReturn=previous;liveEnabled=false;let preview,captured;
    try{
-    await settleInput();await work(()=>rebuild(config.captureResolution),false);
-    preview=await createEarthTransport({host,record,inputs:{source:{...source.config,halo:0},view:previous.view,scale:.3,bounces:3,environment:.15,...values},updateInputs:()=>{}});
-    renderReturn=previous;renderPreview=preview;root.visible=false;tool.visible=false;ui?.dispose();
+    // Capture gets its own mesh; the cheap authoring surface stays resident.
+    await work(async()=>{captured=rememberEarthSurface(await builder.build(model.snapshot(),config.captureResolution));},false,{inspection:true});
+    if(disposed)throw Error('Earth workshop disposed');
+    preview=await createEarthTransport({host,record,inputs:{source:{...captured.config,halo:0},pose:pose(root),view:previous.view,scale:.3,bounces:3,environment:.15,...values},updateInputs:()=>{}});
+    if(disposed)throw Error('Earth workshop disposed');
+    renderPreview=preview;renderTransition=null;root.visible=false;tool.visible=false;ui?.dispose();ui=null;
     if(uiContext)ui=mountEarthRenderControls({document:uiContext.document,host,sessionRead:preview.read,invoke:(name,input)=>uiContext.invoke(name==='configure'?'renderSettings':name==='capture'?'renderCapture':name,input),back:()=>uiContext.invoke('returnToEarth')});
     update();return preview.read();
-   }catch(error){let cleanup;try{if(preview){renderPreview=null;await preview.dispose();}}catch(e){cleanup=e;}finally{root.visible=previous.rootVisible;tool.visible=previous.toolVisible;session.setView(previous.view);liveEnabled=previous.live;lastTool=toolQuery();renderReturn=null;if(uiContext){ui?.dispose();mountAuthoring();}show();}throw cleanup?new AggregateError([error,cleanup],'Render preview failed; earth retained'):error;}
+   }catch(error){let cleanup;try{if(preview)await preview.dispose();}catch(e){cleanup=e;}finally{
+    renderPreview=null;renderTransition=null;renderReturn=null;
+    if(!disposed){root.visible=previous.rootVisible;tool.visible=previous.toolVisible;session.setView(previous.view);liveEnabled=previous.live;lastTool=toolQuery();if(uiContext){ui?.dispose();ui=null;mountAuthoring();}show();}
+   }throw cleanup?new AggregateError([error,cleanup],'Render preview failed; earth retained'):error;}
   };
+  const openRender=values=>{if(renderTransition)return Promise.reject(Error('Wait for render preview transition'));if(renderPreview)return Promise.resolve(renderPreview.read());const flight=inspectRender(values);renderOpening=flight;const clear=()=>{if(renderOpening===flight)renderOpening=null;};flight.then(clear,clear);return flight;};
   const halt=()=>{stopRequested=true;liveEnabled=false;settling=0;clearTimeout(refineTimer);for(const sample of samples)sample.disposition='stopped';samples.length=0;builder.cancel();liveBuilder.cancel();record({kind:'earth.stop',phase:'applied',effective:{revision,pendingSamples:0}});show();};
   const disposeResources=()=>{for(const mesh of surfaces)mesh.geometry.dispose();for(const m of materials)m.dispose();tray.geometry.dispose();trayMaterial.dispose();tool.geometry.dispose();tool.material.dispose();};
   try{
@@ -135,13 +152,13 @@ export default {
    if(inputs.view)session.setView(inputs.view);else frame();lastTool=toolQuery();stopFrames=session.onFrame(liveFrame);
    return {read,operations:{
     frame,
-    render:inspectRender,returnToEarth,
-    renderSettings(values){if(!renderPreview)throw Error('Open the rendered surface first');return renderPreview.operations.configure(values);},
-    renderCapture(values){if(!renderPreview)throw Error('Open the rendered surface first');return renderPreview.operations.capture(values);},
+    render:openRender,returnToEarth,
+    renderSettings(values){if(!renderPreview||renderTransition)throw Error('Open the rendered surface first and wait for its transition');return renderPreview.operations.configure(values);},
+    renderCapture(values){if(!renderPreview||renderTransition)throw Error('Open the rendered surface first and wait for its transition');return renderPreview.operations.capture(values);},
     stop(){halt();return read();},
     async snapshot(){await work(async()=>{},false);return recipe();},
-    async live(value){if(renderPreview)throw Error('Return to earth before changing live physics');if(typeof value!=='boolean')throw Error('Live physics expects a boolean');liveEnabled=value;settling=0;if(value){if(physicsError)throw physicsError;stopRequested=false;if(surfaceRevision!==revision)coarse();scheduleRefinement();}if(!value)await settleInput();lastTool=toolQuery();show();return read();},
-    async configure(patch){if(renderPreview)throw Error('Return to earth before changing surface detail');const next=settings({...config,...patch});if(busy)throw Error('Wait for forming to finish');planEarthSurface(model.snapshot(),next.liveResolution,limits());planEarthSurface(model.snapshot(),next.previewResolution,limits());planEarthSurface(model.snapshot(),next.captureResolution,limits());if(next.previewResolution!==config.previewResolution)return work(async()=>{await rebuild(next.previewResolution);config=next;},false);config=next;failure=null;sync();update();return read();},
+    async live(value){if(renderPreview||renderTransition)throw Error('Return to earth before changing live physics');if(typeof value!=='boolean')throw Error('Live physics expects a boolean');liveEnabled=value;settling=0;if(value){if(physicsError)throw physicsError;stopRequested=false;if(surfaceRevision!==revision)coarse();scheduleRefinement();}if(!value)await settleInput();lastTool=toolQuery();show();return read();},
+    async configure(patch){if(renderPreview||renderTransition)throw Error('Return to earth before changing surface detail');const next=settings({...config,...patch});if(busy)throw Error('Wait for forming to finish');planEarthSurface(model.snapshot(),next.liveResolution,limits());planEarthSurface(model.snapshot(),next.previewResolution,limits());planEarthSurface(model.snapshot(),next.captureResolution,limits());if(next.previewResolution!==config.previewResolution)return work(async()=>{await rebuild(next.previewResolution);config=next;},false);config=next;failure=null;sync();update();return read();},
     async material(values){return work(async()=>{await model.setMaterial(values);record({kind:'earth.material',phase:'applied',effective:model.config});},false);},
     async advance({seconds=config.advanceSeconds}={}){if(!Number.isFinite(seconds)||seconds<=0)throw Error('Invalid advance duration');return work(async()=>{await evolve(seconds);record({kind:'earth.advance',phase:'applied',effective:{seconds,state:model.state()}});});},
     async press(){
@@ -160,7 +177,7 @@ export default {
     async load(value){if(busy)throw Error('Wait for forming to finish');checkedPose(value.pose);checkedPose(value.tool);const nextSettings=settings(value.settings),nextHistory=value.forming===undefined?null:checkedForming(value.forming);return work(async()=>{const next=await createEarthDynamics({snapshot:value.snapshot});if(next.config.width!==model.config.width){next.dispose();throw Error('Load a different tray width by reopening the specimen setup');}await replaceModel(next,nextSettings,value);physicsError=null;history.initial=structuredClone(nextHistory?.initial??value.snapshot);history.samples=structuredClone(nextHistory?.samples??[]);samples.length=0;lastTool=toolQuery();liveEnabled=value.live!==false;host.scene.refreshPresentation(asset);host.scene.refreshPresentation(toolAsset);sync();},false,{replace:true});},
     async freeze(){await settleInput();if(busy)throw Error('Wait for forming to finish');await work(()=>rebuild(config.captureResolution),false);update();record({kind:'earth.freeze',phase:'applied',effective:{state:model.state(),resolution:config.captureResolution,triangles:source.triangles.length}});return {source:{...source.config,halo:1},authoring:recipe(),surface:{...read().surface,captureHalo:1}};},
     source(){if(busy||liveFlight||samples.length||settling>1e-9||surfaceRevision!==revision||source?.reconstruction.resolution<config.previewResolution)throw Error('The displayed surface is behind the physical state; freeze the current specimen first');return structuredClone(source);},
-   },mount({document,invoke}){uiContext={document,invoke};mountAuthoring();},async dispose(){disposed=true;stopFrames();if(renderPreview){await renderPreview.dispose();renderPreview=null;}clearTimeout(refineTimer);ui?.dispose();builder.dispose();liveBuilder.dispose();model.dispose();try{await session.dispose();}finally{disposeResources();}}};
+   },mount({document,invoke}){uiContext={document,invoke};mountAuthoring();},async dispose(){disposed=true;stopFrames();clearTimeout(refineTimer);builder.dispose();liveBuilder.dispose();model.dispose();try{await renderOpening?.catch(()=>{});if(renderClosing)await renderClosing;else if(renderPreview)await renderPreview.dispose();}finally{renderPreview=null;ui?.dispose();ui=null;try{await session.dispose();}finally{disposeResources();}}}};
   }catch(error){stopFrames();clearTimeout(refineTimer);ui?.dispose();builder.dispose();liveBuilder.dispose();model.dispose();try{await session.dispose();}finally{disposeResources();}throw error;}
  }
 };
