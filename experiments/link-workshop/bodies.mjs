@@ -44,11 +44,11 @@ export function bodyLayout(recipe){
  recipe.nodes.forEach((n,i)=>{if(n.parent===null){layers[i]=0;used[i].add(0);}else{let slot=0;while(used[n.parent].has(slot))slot++;used[n.parent].add(slot);used[i].add(slot);layers[i]=n.layer??slot*pitch;}});
  const pistonZ=layers.reduce((a,b)=>Math.max(a,b),0)+pitch;
  const joints=recipe.nodes.map((n,i)=>{const z=[layers[i],...recipe.nodes.flatMap((c,j)=>c.parent===i?[layers[j]]:[]),...recipe.pistons.flatMap((p,j)=>((p.a===i&&!p.aOffset)||(p.b===i&&!p.bOffset))?[p.z??pistonZ+j*pitch]:[])];return {low:Math.min(...z)-thickness/2,high:Math.max(...z)+thickness/2};});
- return {layers,pistonZ,joints};
+ return {layers,pistonZ,pistonLayers:recipe.pistons.map((p,j)=>p.z??pistonZ+j*pitch),joints};
 }
 
 export function constructBodies(value,reuse=new Map()){
- const recipe=checkedMechanism(value),defs=[],{layers,pistonZ,joints}=bodyLayout(recipe);
+ const recipe=checkedMechanism(value),defs=[],{layers,pistonLayers,joints}=bodyLayout(recipe);
  const holes=recipe.nodes.map((n,i)=>Math.min(bore,...recipe.nodes.flatMap((c,j)=>(j===i||c.parent===i)&&c.parent!==null?[c.length/6]:[])));
  const add=(id,kind,parameters,build,pose,geometryKey=JSON.stringify([kind,parameters]))=>{const prior=reuse.get(id);let object=prior?.geometryKey===geometryKey?prior.object:null;if(!object){object=new T.Group();object.name=id;object.userData.assemblyBody={id,kind,parameters,frame:'local XY links, local Z hinges, local X piston travel'};build(object);}defs.push({id,kind,geometryKey,object,pose});};
  recipe.nodes.forEach((n,i)=>{
@@ -56,7 +56,7 @@ export function constructBodies(value,reuse=new Map()){
   const baseZ=n.parent===null?0:layers[i];
   add(`${kind}:${i}`,kind,parameters,object=>{
    if(n.parent===null)box(object,[.5,.5,.18],[0,0,-.16],0x374653);else plate(object,n.length,[holes[n.parent],holes[i]]);
-  for(const [j,p]of recipe.pistons.entries())for(const end of ['a','b'])if(p.hinge&&p[end]===i){const at=p[end+'Offset'],rx=Math.max(0,Math.min(n.length??0,at[0])),z=(p.z??pistonZ+j*pitch)-baseZ,seat=p[end+'BaseZ']??0;
+  for(const [j,p]of recipe.pistons.entries())for(const end of ['a','b'])if(p.hinge&&p[end]===i){const at=p[end+'Offset'],rx=Math.max(0,Math.min(n.length??0,at[0])),z=pistonLayers[j]-baseZ,seat=p[end+'BaseZ']??0;
    const shape=new T.Shape();shape.moveTo(rx-.09,0);shape.lineTo(at[0],at[1]);shape.lineTo(rx+.09,0);shape.closePath();const geo=new T.ExtrudeGeometry(shape,{depth:.12,bevelEnabled:false});geo.translate(0,0,-.06);const horn=mesh(object,geo,0xc9a875);horn.position.z=seat;horn.name='Hinge horn';horn.userData.surfaceDrive=true;
    if(p[end+'Seat']){const from=new T.Vector3(...p[end+'Seat']),to=new T.Vector3(rx,0,seat),direction=to.clone().sub(from),length=direction.length();if(length>1e-6){const support=mesh(object,new T.CylinderGeometry(.065,.065,length+.12,16),0xc9a875);support.position.copy(from).add(to).multiplyScalar(.5);support.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),direction.normalize());support.name='Panel-to-horn support';support.userData.surfaceDrive=true;}}
 
@@ -67,7 +67,7 @@ export function constructBodies(value,reuse=new Map()){
   add(`pin:${i}`,'pin',[low,high,holes[i]],g=>{cylinder(g,holes[i]*.94,high-low,[0,0,(high+low)/2],0xc9a875);for(const z of [low-.025,high+.025])cylinder(g,.105,.05,[0,0,z],0xc9a875);},f=>({position:[...f[i].point,0],angle:f[i].angle}));
  });
  const travels=recipe.pistons.map((p,j)=>{
-  const fixed=p.mechanics,range=fixed?{min:fixed.minLength,max:fixed.maxLength,tolerance:0}:travelEnvelope(recipe,p.a,p.b,1e-3,p),barrel=fixed?.barrelLength??Math.max(.04,range.min*.85),rod=fixed?.rodLength??Math.max(.04,range.max-barrel+.08),z=p.z??pistonZ+j*pitch;
+  const fixed=p.mechanics,range=fixed?{min:fixed.minLength,max:fixed.maxLength,tolerance:0}:travelEnvelope(recipe,p.a,p.b,1e-3,p),barrel=fixed?.barrelLength??Math.max(.04,range.min*.85),rod=fixed?.rodLength??Math.max(.04,range.max-barrel+.08),z=pistonLayers[j];
   const a=f=>pistonMountPoint(recipe,f,p.a,p.aOffset),b=f=>pistonMountPoint(recipe,f,p.b,p.bOffset),angle=f=>Math.atan2(b(f)[1]-a(f)[1],b(f)[0]-a(f)[0]);
   add(`piston:${j}:barrel`,'barrel',[barrel,holes[p.a]],g=>{const m=cylinder(g,.11,barrel,[barrel/2,0,0],0x374653,'x',.049);m.userData.baseColor=0x374653;cylinder(g,.13,thickness,[0,0,0],0xc9a875,'z',holes[p.a]);},f=>({position:[...a(f),z],angle:angle(f)}));
   add(`piston:${j}:rod`,'rod',[rod,holes[p.b]],g=>{const m=cylinder(g,.045,rod,[-rod/2,0,0],0xcdd7de,'x');m.userData.baseColor=0xcdd7de;cylinder(g,.13,thickness,[0,0,0],0xc9a875,'z',holes[p.b]);},f=>({position:[...b(f),z],angle:angle(f)}));
