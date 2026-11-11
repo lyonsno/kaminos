@@ -6,7 +6,7 @@ Adam, cosine schedule and fresh stratified UniformRusinkiewicz batches. The
 geometric integral teacher, FP32 MLX and UniformRus alternative are explicit
 integration choices, not the complete encoder/sampler/auxiliary pipeline.
 """
-import argparse,hashlib,json,os,pathlib,shutil,subprocess,traceback
+import argparse,hashlib,json,os,pathlib,shutil,subprocess,traceback,uuid
 from neural_appearance_fresh_plan import validate_plan,blocks,storage_bytes
 from neural_appearance_source_stream import SourceStream,load_batch_arrays
 
@@ -18,11 +18,14 @@ def atomic_json(path,value):
 def run(args):
  out=pathlib.Path(args.output).resolve();out.mkdir(parents=True,exist_ok=True);stream=None
  report={'status':'running','phase':'admission','job':os.environ.get('GREENROOM_JOB_ID'),'repoRoot':str(pathlib.Path.cwd()),'configPath':str(pathlib.Path(args.config).resolve()),'checkpoints':[],'rawBatches':[]}
- publish=lambda:atomic_json(out/'report.json',report)
- # Never replace the history of a previous invocation without its resume state.
- if (out/'report.json').exists() and not args.resume:raise ValueError('Existing fit output requires its explicit resume checkpoint')
+ canonical=out/'report.json';previous=canonical.read_bytes() if canonical.exists() else None;canonical_allowed=previous is None
+ attempt=out/'attempts'/(uuid.uuid4().hex+'.json') if previous is not None else None
+ def publish():
+  if attempt:attempt.parent.mkdir(parents=True,exist_ok=True);atomic_json(attempt,report)
+  if canonical_allowed:atomic_json(canonical,report)
  publish()
  try:
+  if previous is not None and not args.resume:raise ValueError('Existing fit output requires its explicit resume checkpoint')
   if not report['job']:raise RuntimeError('Greenroom admission required')
   report['sourceCommit']=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
   if report['sourceCommit']!=os.environ.get('EXPECTED_COMMIT') or subprocess.check_output(['git','status','--porcelain'],text=True).strip():raise RuntimeError('Pinned clean training source required')
@@ -46,6 +49,10 @@ def run(args):
   mx.set_default_device(mx.gpu);report['backend']={'library':'mlx','device':str(mx.default_device()),'metalAvailable':True}
   pool=CandidatePool(plan['resolution'],16,[plan['seed']],epsilon=plan['adamEpsilon'],loss_kind=plan['lossKind'],loss_power=plan['lossPower'],recipe='published-direct')
   if resume:pool.load_state(resume['state']['path'])
+  if previous is not None:
+   prior=json.loads(previous)
+   if any(prior.get(k)!=report[k] for k in ['sourceCommit','configHash','sourceHash']):raise ValueError('Existing execution and resume identity differ')
+   prior_path=attempt.with_suffix('.prior.json');prior_path.write_bytes(previous);report['previousReport']={'path':str(prior_path),'sha256':hashlib.sha256(previous).hexdigest()};canonical_allowed=True
   source_out=out/('source-'+report['job']+'-'+str(start));report['phase']='source-start';publish()
   if source_out.exists():raise ValueError('Source invocation already exists; preserve it and use a distinct execution job')
   stream=SourceStream(pathlib.Path.cwd(),config_path,source_out,report['sourceCommit'],report['sourceHash'],args.resume,resume['sourceCounter'] if resume else 0)
