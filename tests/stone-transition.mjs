@@ -22,6 +22,20 @@ test('joint backing is exposed above the side-wall pinch',()=>{
  const hit=traceMasonryRay(source,{origin:[0,.5,-.7],direction:[0,-1,0]});
  assert.ok(hit.triangleId.startsWith('backing-'));assert.ok(Math.abs(hit.position[1]+source.config.jointDepth)<1e-10);
 });
+test('tile and halo transforms preserve reference/carrier coordinates',()=>{
+ const source=createStoneTransitionSource({cells:4,halo:1});
+ const point=traceMasonryRay(source,{origin:[.7,.5,.7],direction:[0,-1,0]});
+ assert.deepEqual(point.referencePosition.map(v=>Math.round(v*1e8)/1e8),[.7,0,.7]);
+ assert.ok(source.triangles.every(t=>['a','b','c'].every(k=>t.reference[k][1]<=1e-12&&t.carrier[k][1]<=1e-12)));
+ assert.ok(source.triangles.some(t=>t.reference.a[0]>1));
+ assert.ok(Number.isFinite(stoneTransitionRegion([.25,.25],{margin:.1}).distance));
+});
+test('source experiment rejects non-object input before opening a scene',async()=>{
+ const experiment=(await import('../experiments/stone-transition.experiment.mjs')).default;
+ let opened=0;const host={scene:{open:async()=>{opened++;throw Error('scene must not open');}}};
+ for(const inputs of [null,[],42,'bad'])await assert.rejects(experiment.create({host,inputs}),/Teacher inputs must be an object/);
+ assert.equal(opened,0);
+});
 test('stone source preserves flat centers, inward detail, backing and repeat identity',()=>{
  const a=createStoneTransitionSource({cells:4,halo:0}),b=createStoneTransitionSource({cells:4,halo:1});
  assert.deepEqual(a,createStoneTransitionSource(a.config));assert.equal(a.stones.length,4);

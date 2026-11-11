@@ -7,4 +7,8 @@ const experiment=surfaceTeacherExperiment({
  initialView:{position:[4.3,3.4,4.6],target:[0,-.04,0],fov:42},
  sourceControls:[['Stone relief','source','relief',.002],['Shoulder width','source','margin',.002],['Corner rounding','source','bevel',.002],['Joint depth','source','jointDepth',.002],['Source seed','source','seed',1]],
 });
-export default {...experiment,create:context=>experiment.create({...context,inputs:{tracing:false,...context.inputs}})};
+export default {...experiment,create:context=>{
+ const inputs=context.inputs===undefined?{}:context.inputs;
+ if(!inputs||typeof inputs!=='object'||Array.isArray(inputs))return Promise.reject(Error('Teacher inputs must be an object'));
+ return experiment.create({...context,inputs:{tracing:false,...inputs}});
+}};
