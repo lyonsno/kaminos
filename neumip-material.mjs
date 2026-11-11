@@ -27,6 +27,12 @@ export function createNeumipMaterial(model,{uvScale=3,gain=4}={}) {
     return featuresFn(coords,view,lod,...tex);
   })().toVar('neumipFeaturesShared');
   class NeumipMaterial extends MeshStandardNodeMaterial {
+    customProgramCacheKey() {
+      // setupLightingModel closes over this instance's weights, latent textures
+      // and uniforms. They are not material Node properties, so Three cannot
+      // discover them when constructing its shared NodeBuilderState cache key.
+      return `${super.customProgramCacheKey()}:neumip:${this.uuid}`;
+    }
     setupLightingModel(builder) {
       const lighting=super.setupLightingModel(builder);
       lighting.direct=({lightDirection,lightColor,reflectedLight})=>{
