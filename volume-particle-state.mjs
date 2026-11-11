@@ -1,8 +1,12 @@
 // Composition is (fuel, heat, soot, oxidizer); position and optical history stay
 // in the existing 96-byte record. The lifetime clock is representation state.
-export const PARTICLE_STATE_DEFAULTS=Object.freeze({exchangeStrength:1,exchangeTime:8,exchangeCellSize:1,stateLife:1,lifeFuel:24,lifeHeat:24,lifeSmoke:48,lifeQuiet:6,lifeFade:.2,followFraction:.75,followJitter:.25,followFuel:1,followHeat:1,followSmoke:1,debugView:0,emissionFalloff:1,extinctionFalloff:1,emissionEdgeSoftness:.2,extinctionEdgeSoftness:.3});
+export const PARTICLE_STATE_DEFAULTS=Object.freeze({materialStateVersion:1,exchangeStrength:1,exchangeTime:8,exchangeCellSize:1,stateLife:1,lifeFuel:24,lifeHeat:24,lifeSmoke:48,lifeQuiet:6,lifeFade:.2,followFraction:.75,followJitter:.25,followFuel:1,followHeat:1,followSmoke:1,debugView:0,emissionFalloff:1,extinctionFalloff:1,emissionEdgeSoftness:.2,extinctionEdgeSoftness:.3});
 export const PARTICLE_STATE_WGSL=/* wgsl */`
 struct ParticleReactionResult {state:vec4<f32>,burned:f32}
+fn particleSootBurnout(state:vec4<f32>,dt:f32,rate:f32,kelvinPerHeat:f32,threshold:f32)->f32{
+ let gate=smoothstep(threshold-150.0,threshold+150.0,300.0+max(0.0,state.y)*kelvinPerHeat);
+ return state.z*exp(-max(0.0,rate)*max(0.0,dt)*clamp(state.w,0.0,1.0)*gate);
+}
 fn particleCompositionBurn(state:vec4<f32>,dt:f32,chemistry:vec4<f32>,rates:vec4<f32>)->ParticleReactionResult {
  if(dt<=0){return ParticleReactionResult(state,0.0);}
  let fuel=max(0.0,state.x);let heat=max(0.0,state.y);let soot=max(0.0,state.z);let oxygen=max(0.0,state.w);
@@ -24,6 +28,7 @@ fn particleLifeAdvance(state:vec4<f32>,initialFuel:f32,clock:f32,dt:f32,lives:ve
 `;
 
 export function validateParticleStateSettings(s){
+ if(s.materialStateVersion!==1)throw Error("Unsupported particle material-state version");
  for(const k of ['exchangeStrength','stateLife','lifeFade','followFraction','emissionEdgeSoftness','extinctionEdgeSoftness'])if(!(s[k]>=0&&s[k]<=1))throw Error('Particle '+k+' must be between zero and one');
  for(const k of ['exchangeTime','exchangeCellSize','lifeFuel','lifeHeat','lifeSmoke','lifeQuiet','emissionFalloff','extinctionFalloff'])if(!(s[k]>0&&Math.fround(s[k])>0))throw Error('Particle '+k+' must be positive');
  if(!Number.isInteger(s.debugView)||s.debugView<0||s.debugView>7)throw Error('Unknown particle material view');

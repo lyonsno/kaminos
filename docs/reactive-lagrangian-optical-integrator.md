@@ -10,7 +10,7 @@ The active architecture is **Fine plus optional Coarse (World)**. Middle is supe
 
 `volume-optical-particles.mjs` owns a persistent world-space pool with a96-byte record: position/age; captured scattered light and initial soot; intrinsic emission and initial fuel; residual velocity and representation-life clock; birth support/direction; and carried fuel, heat, soot and oxidizer. Births sample current Fine material and oxidizer, independently from the local optical observation. Clear fuel can be acquired before it emits. Composition is a trilinear sample of the stored grid channels; a separately reconstructed display material can differ. Current development rejects Coarse input explicitly.
 
-Carriers consume colocated fuel/oxidizer stoichiometrically, release heat, cool, create soot and retire soot using the shared simulation model and reference-time controls. Intrinsic emission then follows the native soot/temperature thermal LUT and fresh-burn spectrum. Captured scattered light retains birth illumination with independent gain and age fade. There is no current-field relighting or chemical reservoir gather on existing carriers.
+Carriers consume colocated fuel/oxidizer stoichiometrically, release heat, cool, create soot and retire soot using the shared simulation model and reference-time controls. The native oxygen/temperature-gated soot-burnout term is applied with the authored appearance calibration as well. Intrinsic emission then follows the native soot/temperature thermal LUT and fresh-burn spectrum. Captured scattered light retains birth illumination with independent gain and age fade. There is no current-field relighting or chemical reservoir gather on existing carriers.
 
 `volume-particle-exchange.mjs` bins the live population with GPU count, exclusive prefix and scatter. Disjoint pairs within each bin partially mix carried composition, weighted by fixed birth pitch² × represented ray length. Pairing is linear in the live population and requires no nearest-neighbor search or all-pairs enumeration. The quadrature-weighted sum is conserved by each exchange; this is not a proof of physical domain-mass conservation under biased acquisition. Atomic scatter order within a cell is unspecified. Exchange strength, e-folding time and cell size are independently authored; zero strength preserves state. Large bins can mix distinct sheets and must be judged visually.
 
@@ -22,7 +22,7 @@ The raster uses perspective-projected Gaussian footprints. Optional orientation 
 
 ## What reaction currently changes about motion
 
-Every advancing carrier samples the current admitted Fine or Coarse velocity in the active configuration. The **Grid flow transport** control scales that displacement. Independently, the implementation already carries a heat-driven residual velocity:
+Every advancing carrier in this candidate samples the current Fine velocity. The **Grid flow transport** control scales that displacement. Independently, the implementation already carries a heat-driven residual velocity:
 
 ```text
 H = updated carrier heat
@@ -93,3 +93,5 @@ Renewal counters retain the last population update across paused redraws. Their 
 In the live host, an extinction request whose current-field prerequisites disappear suspends to the original transfer and reports `gridAssist.effective="unavailable"` with its reason in the panel. The request remains visible and can resume when the field is available. Direct component callers retain strict field validation unless they explicitly admit this suspension. This avoids starting a hidden extra lighting/preparation route or stopping the existing effect.
 
 Display-only redraws also leave the rotating birth cursor unchanged. Maximum-age edits retire material on the next population update, keeping retained renewal counters and their timestamp consistent.
+
+Saved carrier settings declare `materialStateVersion:1`. Older settings may still parse obsolete proxy fields, but their former particle-only soot yield/retirement values do not silently overwrite the shared simulation when restored. Explicit saved shared reaction overrides and newly authored state-versioned settings retain their intended shared meaning.

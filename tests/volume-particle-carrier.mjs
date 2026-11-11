@@ -15,13 +15,19 @@ async function fixture(d,run){
  function seed(state,q=[4,2,1,.4]){const material=new Float32Array(8*16),oxygen=new Float32Array(8*2);for(let i=0;i<8;i++){material.set([state[2],state[1],state[0],0],i*16+4);oxygen.set([state[3],.01],i*2);}d.queue.writeBuffer(fine,0,material);d.queue.writeTexture({texture:reactants},oxygen,{bytesPerRow:16,rowsPerImage:2},[2,2,2]);d.queue.writeBuffer(buffer,0,new Float32Array([...q,0,0,0,1,-.25,.25,1,1,...q.slice(0,3),0]));owner.reset();}
  async function draw(step,settings={}){source.step=step;const e=d.createCommandEncoder();const p=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthStoreOp:'store',depthClearValue:1}});p.end();owner.encode(e,{view:target.createView(),format:'rgba8unorm',source,fine,reactants,dims:[2,2,2],invViewProj:matrix,settings:{enabled:true,acquisitionMode:1,capacity:1,refresh:0,flow:0,...settings},cameraValues:camera,depth,identity:'actual-composition-fixture'});d.queue.submit([e.finish()]);await d.queue.onSubmittedWorkDone();return owner.sample();}
  async function propose(step){source.step=step;const read=d.createBuffer({size:64,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ}),e=d.createCommandEncoder();owner.prepareAcquisition?.(e,{source,fine,dims:[2,2,2],settings:{enabled:true,acquisitionMode:1,capacity:1,refresh:0,flow:0,followFraction:1,followFuel:1,followHeat:0,followSmoke:0,followJitter:0},identity:'actual-composition-fixture'});e.copyBufferToBuffer(buffer,0,read,0,64);d.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);const rows=new Float32Array(read.getMappedRange().slice(0));read.unmap();read.destroy();return rows;}
- try{await run({owner,seed,draw,propose});}finally{owner.dispose();for(const r of [buffer,uniform,fine,reactants,target,depth])r.destroy();}
+ async function pixels(){const e=d.createCommandEncoder(),read=d.createBuffer({size:8*256,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});e.copyTextureToBuffer({texture:target},{buffer:read,bytesPerRow:256},[8,8]);d.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);const data=new Uint8Array(read.getMappedRange().slice(0));read.unmap();read.destroy();return data;}
+ try{await run({owner,seed,draw,propose,pixels});}finally{owner.dispose();for(const r of [buffer,uniform,fine,reactants,target,depth])r.destroy();}
 }
 test('production carrier retains actual reactants and advances a state-dependent lifetime without enlarging the record',async()=>{
  await withKaminosGpu(async({device:d})=>fixture(d,async({seed,draw})=>{
   seed([1,.8,.2,3]);const birth=await draw(0);assert.equal(birth.records.length,24);[1,.8,.2,3].forEach((v,i)=>assert.ok(Math.abs(birth.records[20+i]-v)<1e-6,'birth samples actual F/H/S/O'));
   const live=await draw(1,{exchangeStrength:0,lifeFuel:30,lifeHeat:30,lifeSmoke:30,lifeQuiet:30});assert.ok(live.records[20]<1&&live.records[23]<3,'reaction uses both carried reactants');assert.ok(live.records[15]>0,'motion.w retains representation lifetime progress');
   const held=await draw(1,{exchangeStrength:1,exchangeTime:.01,lifeHeat:.1});assert.deepEqual(held.records,live.records,'presentation changes cannot advance material or survival');
+ }));
+});
+test('actual particle pixels expose carried material diagnostics while holding the same medium',async()=>{
+ await withKaminosGpu(async({device:d})=>fixture(d,async({seed,draw,pixels})=>{
+  seed([1,.8,.2,3]);const before=await draw(0),normal=await pixels();await draw(0,{debugView:1});const fuel=await pixels();assert.notDeepEqual(fuel,normal,'fuel view changes actual rendered pixels');await draw(0,{debugView:3});assert.notDeepEqual(await pixels(),fuel,'oxygen view has a different material color');const after=await draw(0,{debugView:0});assert.deepEqual(after.records,before.records,'diagnostic views do not edit material');assert.deepEqual(await pixels(),normal,'normal view restores the exact image');
  }));
 });
 test('follow acquisition writes an actual retained material position without a CPU population readback',async()=>{

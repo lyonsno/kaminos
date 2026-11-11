@@ -7,11 +7,11 @@ export default {
  async create({host,inputs={},record,updateInputs}){
   let settings=opticalParticleSettings({enabled:true,...inputs.particles});
   let sourceSettings={...inputs.source};
-  let reactionOverrides={...Object.fromEntries(Object.entries(inputs.particles??{}).filter(([key])=>REACTION_KEYS.includes(key))),...inputs.simulationReaction};
+  let reactionOverrides={...Object.fromEntries(Object.entries(inputs.particles??{}).filter(([key])=>(inputs.particles?.materialStateVersion===1?REACTION_KEYS:["burnTime","cooling","heatRelease"]).includes(key))),...inputs.simulationReaction};
   await host.volume?.ready;const session=await host.scene.open(),win=host.controls.document.defaultView;
   let current=null,previous=null,panel,notice,error=null,measurement=null,proposalLabel,renewalLabel,population=null,reading=false,lastPopulationRead=0,disposed=false;const drags=[],fields=new Map(),stats=new Map();
   function source(){const next=win.__kaminosVolumePrototype;if(!next?.opticalParticleState)throw Error('This revision does not supply the particle controls');
-   if(next!==current){if(current)try{current.setOpticalParticles(previous.particles);current.setSplitIntegral(previous.split);}catch{}current=next;previous={particles:next.opticalParticleSettings(),split:next.splitIntegralSettings()};next.setOpticalParticles(settings);if(Object.keys(sourceSettings).length)applySource(next,sourceSettings);if(Object.keys(reactionOverrides).length&&next.opticalParticleState().simulationReaction)next.setParticleSimulationReaction(reactionOverrides);projectReaction(next.opticalParticleState().simulationReaction);}return current;
+   if(next!==current){if(current)try{current.setOpticalParticles(previous.particles);current.setSplitIntegral(previous.split);}catch{}current=next;previous={particles:next.opticalParticleSettings(),split:next.splitIntegralSettings()};next.setOpticalParticles(settings);if(Object.keys(sourceSettings).length)applySource(next,sourceSettings);if(Object.keys(reactionOverrides).length&&next.opticalParticleState().simulationReaction)next.setParticleSimulationReaction(reactionOverrides);const shared=next.opticalParticleState().simulationReaction;if(shared){settings=opticalParticleSettings({...settings,...shared});next.setOpticalParticles(settings);}projectReaction(shared);}return current;
   }
   function projectReaction(reaction){
    if(!reaction)return;const document=host.controls.document;

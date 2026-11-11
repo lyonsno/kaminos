@@ -9,6 +9,9 @@ test('actual carried reaction consumes both reactants and produces heat and soot
   assert.ok(r[0]<1,'fuel must be consumed');assert.ok(r[3]<3,'oxidizer must be consumed');assert.ok(r[1]>1,'heat must be released');assert.ok(r[2]>0,'soot must be generated');assert.ok(Math.abs((1-r[0])*3-(3-r[3]))<1e-5,'stoichiometric consumption');
  });
 });
+test('carried soot follows the native oxygen and temperature dependent burnout law',async()=>{
+ await withKaminosGpu(async ctx=>{const r=await evalWgslBatch(ctx,{preamble:PARTICLE_STATE_WGSL,argTypes:['f32','f32','f32'],returnType:'f32',body:'return particleSootBurnout(vec4<f32>(0,arg0,1,arg1),arg2,1,1600,1300);',inputs:[[1,1,1],[1,0,1],[0,1,1],[1,1,0]]});assert.ok(Math.abs(Number(r[0])-Math.exp(-1))<1e-6,'hot oxygenated soot burns out');assert.deepEqual(r.slice(1).map(Number),[1,1,1],'cold/starved/paused soot survives this term');});
+});
 test('finite authored profiles taper at the quad edge and preserve their coefficient integral',async()=>{
  await withKaminosGpu(async ctx=>{
   const profiles=[[1,0],[1,.3],[.6,.5],[1.8,.2]],n=160,dx=5/n;
