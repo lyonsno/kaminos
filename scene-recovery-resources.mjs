@@ -7,7 +7,14 @@ export function createSceneRecoveryResourceCallbacks({state,readInputs,acquireDe
   retireModel,adoptRenderer,restoreFlame,rebuildOutput,restoreEnvironment,activateFlame})){
   if(typeof value!=='function')throw Error(`Scene recovery requires ${name}`);
  }
- let snapshot=null;
+ let snapshot=null,failedCandidate=null;
+ async function releaseFailedCandidate(){
+  if(!failedCandidate)return;
+  if(failedCandidate.renderer){
+   await releaseRenderer();state.pmremGenerator=null;failedCandidate.renderer=false;
+  }
+  await discardDevice(failedCandidate.sharedGpu);failedCandidate=null;
+ }
  return {
   readSnapshot:()=>snapshot,
   clearSnapshot(){snapshot=null;},
@@ -42,11 +49,16 @@ export function createSceneRecoveryResourceCallbacks({state,readInputs,acquireDe
    state.sceneFlameHDR?.dispose();state.sceneFlameHDR=null;state.sceneBloom.dispose();
    state.neutralEnvironmentMap?.dispose();state.neutralEnvironmentMap=null;
    state.scene.environment=null;state.scene.background=null;
+   // Failed cleanup retains its candidate. Finish that release before a new
+   // acquisition can overwrite the caller's live device handle.
+   await releaseFailedCandidate();assertCurrent();
    const next=await acquireDevice(context);
-   try{assertCurrent();}catch(error){await discardDevice(next);throw error;}
+   failedCandidate={sharedGpu:next,renderer:false};
    let detachCandidate,created;
    try{
+    assertCurrent();
     detachCandidate=watch(next.device);
+    failedCandidate.renderer=true;
     created=await replaceRenderer(next,context);
     assertCurrent();
     state.renderer=created.renderer;state.sharedGpu=next;state.pmremGenerator=created.pmremGenerator;
@@ -62,12 +74,13 @@ export function createSceneRecoveryResourceCallbacks({state,readInputs,acquireDe
      if(!mounted)throw Error(state.waterFeature.failure||'Water could not restart');
     }
     if(snapshot.active){await activateFlame(snapshot,context);assertCurrent();}
+    failedCandidate=null;
    }catch(error){
     detachCandidate?.();state.waterFeature.restart(state.waterFeature.setup);
     state.volumePrototype?.retireLostDevice();
     try{await state.volumePrototype?.setActive(false);}
     finally{
-     await releaseRenderer();state.pmremGenerator=null;await discardDevice(next);
+     await releaseFailedCandidate();
     }
     throw error;
    }
