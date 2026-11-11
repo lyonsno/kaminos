@@ -20,7 +20,7 @@ export function installPageSceneDraw(context,source=page){
     syncWaterProxy:noop,syncFireProxy:noop,ensureSimFramePlan:()=>({water:{advance:true}}),
     withViewportVisibility:run,viewportVisibilityObjects:()=>[],camera:{},renderWithViewportShading:draw=>draw(),
     authoredWaterControls:null,sharedWorkbench:null,recordingFrameSink:null,console,refreshLocalLiquidPerformance:noop,setInfo:noop,
-    waterProxy:null,sceneFrameCount:0,outputCaptureFrame:null,lastViewportShadingRender:null,fpsFrames:0,fpsLast:100,fpsEl:{},performance:{now:()=>100},
+    waterProxy:null,sceneFrameCount:0,sceneCameraStatusText:'',outputCaptureFrame:null,lastViewportShadingRender:null,fpsFrames:0,fpsLast:100,fpsEl:{},performance:{now:()=>100},
   };
   for(const [name,value] of Object.entries(defaults))if(!(name in context))context[name]=value;
   const start=source.indexOf('  const sceneDrawRuntime=createSceneDrawRuntime('),end=source.indexOf('\n  function animate() {',start);
