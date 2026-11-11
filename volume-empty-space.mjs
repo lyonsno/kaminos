@@ -6,6 +6,11 @@ var<private> emptyCertificateSupportTests:u32;
 fn emptyIntervalOverlaps(a:f32,b:f32,hit:vec2<f32>)->bool{
  return hit.y>hit.x&&b>=hit.x&&a<=hit.y;
 }
+fn emptyFineWorldBlendWeight(p:vec3<f32>)->f32{
+ let top=2.0*f32(GRID_Y)/f32(GRID)-1.0;
+ let d=min(min(1.0-abs(p.x),1.0-abs(p.z)),min(p.y+1.0,top-p.y));
+ return 1.0-smoothstep(0.0,min(.5,worldRender.loPitch.w),d);
+}
 fn emptyWorldBoundValid(bound:vec4<f32>,node:vec4<f32>)->bool{
  return node.w>0.0&&bound.w==1.0&&bound.z==0.0;
 }
@@ -104,7 +109,7 @@ fn emptyOpticalInterval(ro:vec3<f32>,rd:vec3<f32>,a:f32,b:f32,sampleT:f32,worldA
  }
  if(worldActive){
   if(a<nearHit.x||b>nearHit.y){return false;}
-  if(worldSmokeBlendWeight(ro+rd*a)>0.0||worldSmokeBlendWeight(ro+rd*b)>0.0){return false;}
+  if(emptyFineWorldBlendWeight(ro+rd*a)>0.0||emptyFineWorldBlendWeight(ro+rd*b)>0.0){return false;}
  }
  if(!(u.emissive_physics.x>0.5)||displayReconstructionActive()||u.reconstruction_kernel_controls.x>0.0){return false;}
  return emptyFineInterval(ro,rd,a,b);

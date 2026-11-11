@@ -13,7 +13,6 @@ var<private> worldRender:WorldFixture;
 fn index3(c:vec3<u32>)->u32{return select(0u,1u,fixtureMode==3u&&c.x==3u);}
 fn reactantLawOn()->bool{return fixtureMode==4u;}
 fn displayReconstructionActive()->bool{return fixtureMode==7u;}
-fn worldSmokeBlendWeight(p:vec3<f32>)->f32{return select(0.0,.2,fixtureMode==11u);}
 fn worldResidentLeafBoundsAtGrid(q:vec3<f32>,n:ptr<function,vec4<f32>>)->vec4<f32>{
  *n=vec4<f32>(floor(q/4.0)*4.0,1);return vec4<f32>(0,0,select(0.0,1.0,fixtureMode==14u&&q.x>=4.0),select(1.0,0.0,fixtureMode==12u));
 }
