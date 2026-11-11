@@ -2,7 +2,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
-import {pathToFileURL} from 'node:url';
+import {fileURLToPath,pathToFileURL} from 'node:url';
 import {runParticleLightWitness} from './particle-light-witness.mjs';
 import {sampleLightPlane} from './particle-light-reference.mjs';
 export function validateResolutionReports(records,widths){
@@ -36,7 +36,10 @@ export async function runLightResolutionComparison(manifest,out){
  const save=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2)+'\n');await save();
  try{
   if(!manifest.repoRoot||!manifest.expectedLightingCommit)throw Error('Explicit source root and lighting commit are required');
-  report.effectiveSource={repoRoot:execFileSync('git',['-C',manifest.repoRoot,'rev-parse','--show-toplevel'],{encoding:'utf8'}).trim(),head:execFileSync('git',['-C',manifest.repoRoot,'rev-parse','HEAD'],{encoding:'utf8'}).trim(),status:execFileSync('git',['-C',manifest.repoRoot,'status','--porcelain'],{encoding:'utf8'}).trim()};
+  const executionRoot=await fs.realpath(fileURLToPath(new URL('..',import.meta.url)));
+  report.effectiveSource={executionRoot};
+  if(executionRoot!==await fs.realpath(manifest.repoRoot))throw Error('Executing module root differs from requested source root');
+  Object.assign(report.effectiveSource,{repoRoot:execFileSync('git',['-C',executionRoot,'rev-parse','--show-toplevel'],{encoding:'utf8'}).trim(),head:execFileSync('git',['-C',executionRoot,'rev-parse','HEAD'],{encoding:'utf8'}).trim(),status:execFileSync('git',['-C',executionRoot,'status','--porcelain'],{encoding:'utf8'}).trim()});
   if(report.effectiveSource.repoRoot!==manifest.repoRoot||report.effectiveSource.head!==manifest.expectedLightingCommit||report.effectiveSource.status)throw Error('Lighting source is dirty or differs from requested revision');
   const widths=manifest.widths,depths=manifest.depths;
   if(!Array.isArray(widths)||widths.length<2||widths.some((n,i)=>!Number.isSafeInteger(n)||n<2||n%2||(i&&(n<=widths[i-1]||n%widths[i-1]))))throw Error('Comparison needs increasing nested even widths');
@@ -64,5 +67,14 @@ export async function runLightResolutionComparison(manifest,out){
  }catch(error){report.status='failed';report.error=error.stack??String(error);throw error;}finally{await save();}
  return report;
 }
-if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){const [file,out]=process.argv.slice(2);if(!out)throw Error('Usage: particle-light-resolution.mjs manifest.json output-dir');await runLightResolutionComparison(JSON.parse(await fs.readFile(file)),out);}
+export async function runLightResolutionFile(file,out){
+ let manifest;
+ try{manifest=JSON.parse(await fs.readFile(file));}catch(error){
+  await fs.mkdir(out,{recursive:true});
+  await fs.writeFile(path.join(out,'report.json'),JSON.stringify({schema:'kaminos.particle-light-resolution.v1',status:'failed',phase:'manifest-load',manifestPath:file,lastTrustworthy:null,error:error.stack??String(error)},null,2)+'\n');
+  throw error;
+ }
+ return runLightResolutionComparison(manifest,out);
+}
+if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){const [file,out]=process.argv.slice(2);if(!out)throw Error('Usage: particle-light-resolution.mjs manifest.json output-dir');await runLightResolutionFile(file,out);}
 

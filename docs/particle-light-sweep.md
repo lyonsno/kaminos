@@ -15,7 +15,7 @@ The atlas uses additive RGBA16F. Extremely bright/overlapping deposits can excee
 Run the small production-kernel checks with:
 
 ```sh
-npm test -- --only tests/volume-particle-light-sweep.mjs,tests/particle-light-witness.mjs
+npm test -- --only tests/volume-particle-light-sweep.mjs,tests/particle-light-witness.mjs,tests/particle-light-resolution.mjs
 ```
 
 The larger captured-population witness belongs in Greenroom. Its positional inputs are snapshot JSON, native capture report, expected source revision, and caller-owned output directory. Source capture may precede the lighting implementation revision; both identities are retained separately. No FPS or full-scene benefit follows from a two-direction correctness result. The next comparison charges oblique deposition, transport, receiver reconstruction and solid visibility across a useful angular set.

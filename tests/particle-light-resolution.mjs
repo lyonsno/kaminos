@@ -31,3 +31,25 @@ test('comparison failure before native setup leaves a terminal identity-phase re
  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'particle-light-resolution-'));
  try{await assert.rejects(runLightResolutionComparison({},dir),/Explicit source root/);const report=JSON.parse(await fs.readFile(path.join(dir,'report.json')));assert.equal(report.status,'failed');assert.equal(report.phase,'identity');assert.equal(report.lastTrustworthy,null);assert.deepEqual(report.levels,[]);}finally{await fs.rm(dir,{recursive:true,force:true});}
 });
+import {execFileSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+test('comparison binds claimed source to the checkout executing its imports',async()=>{
+ const dir=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'particle-light-source-')));
+ try{
+  execFileSync('git',['init','--quiet',dir]);execFileSync('git',['-C',dir,'-c','user.name=Test','-c','user.email=test@example.invalid','commit','--quiet','--allow-empty','-m','source fixture']);
+  const head=execFileSync('git',['-C',dir,'rev-parse','HEAD'],{encoding:'utf8'}).trim(),out=path.join(dir,'.git','evidence');
+  await assert.rejects(runLightResolutionComparison({repoRoot:dir,expectedLightingCommit:head,widths:[],depths:[]},out),/Executing module root differs/);
+  const r=JSON.parse(await fs.readFile(path.join(out,'report.json')));assert.equal(r.status,'failed');assert.equal(r.phase,'identity');assert.equal(r.effectiveSource.executionRoot,path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'));
+ }finally{await fs.rm(dir,{recursive:true,force:true});}
+});
+test('CLI manifest loading failures retain a terminal report before native setup',async()=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'particle-light-manifest-'));
+ try{
+  const bad=path.join(dir,'bad.json');await fs.writeFile(bad,'{bad json');
+  for(const file of [bad,path.join(dir,'missing.json')]){
+   const out=path.join(dir,path.basename(file)+'-out');
+   assert.throws(()=>execFileSync(process.execPath,[fileURLToPath(new URL('../tools/particle-light-resolution.mjs',import.meta.url)),file,out],{stdio:'pipe'}));
+   const r=JSON.parse(await fs.readFile(path.join(out,'report.json')));assert.equal(r.status,'failed');assert.equal(r.phase,'manifest-load');assert.equal(r.manifestPath,file);assert.equal(r.lastTrustworthy,null);
+  }
+ }finally{await fs.rm(dir,{recursive:true,force:true});}
+});
