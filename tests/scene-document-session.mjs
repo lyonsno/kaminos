@@ -90,6 +90,13 @@ test('superseded apply stages cannot claim a newer document',async()=>{
  assert.equal((await old).stale,true);assert.equal(f.session.state().filename,'new.kaminos.json');assert.deepEqual(f.bindings,['new.kaminos.json']);
 });
 
+test('restore carries explicit application context without changing ordinary page metadata',async()=>{
+ const seen=[],f=fixture({apply:async(_data,_plan,meta)=>seen.push(meta)}),context={signal:new AbortController().signal};
+ await f.session.restore(file(document()),{applyContext:context});
+ assert.equal(seen[0].context,context);
+ await f.session.restore(file(document()));assert.equal(Object.hasOwn(seen[1],'context'),false);
+});
+
 test('a rejected newer read restores the viable admission, while an interrupted apply stays blocked',async()=>{
  const gate=deferred(),f=fixture();const old=f.session.restore({text:()=>gate.promise});
  await f.session.restore({text:async()=>'{invalid'});assert.equal(f.session.state().blocked,false);assert.equal(f.session.state().filename,'existing.kaminos.json');
