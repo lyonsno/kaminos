@@ -12,6 +12,7 @@ for(let i=0;i<3;i++){
  m.attachments.push({objectId,sourceMount:source,targetMount:target,offset:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},hinge:[[.6,-1,.4][i],[.7,-.7,.2][i]],hardware:{family:'clevis',size:.1,mounting:'part-frames'}});
 }
 const distance=(a,b)=>Math.max(...a.elements.map((v,i)=>Math.abs(v-b.elements[i])));
+const parameters=m=>m.attachments.flatMap(a=>[...a.hinge,...(a.axle?.position??[0,0,0]),...(a.axle?.rotation??[0,0,0])]),parameterError=(a,b)=>Math.max(...parameters(a).map((v,i)=>Math.abs(v-parameters(b)[i])));
 for(const pose of ['A','B'])for(const edited of ['one','two','door']){
  const t=pose==='B'?1:0,base=checkedMechanism(m);base.poseHold={objectId:'door',pose,target:holdFrame(root,base,'door',t,entries)};
  const wanted=frameMatrix(base.poseHold.target),offsets=structuredClone(base.attachments.map(a=>a.offset));
@@ -54,6 +55,8 @@ try{
     assert.ok(distance(entries.find(e=>e.id==='door').object.matrixWorld,body)<1e-7,`Live door remains held when editing ${objectId} in ${pose}`);
    }
    edits.commit();const result=c.read().recipe;assert.notDeepEqual(result,baseline);edits.undo();assert.deepEqual(c.read().recipe,baseline);edits.redo();assert.deepEqual(c.read().recipe,result);edits.undo();
+   edits.begin(native.id);const requested={position:[before.position[0]+.04,before.position[1],before.position[2]]};edits.preview(requested);const once=c.read().recipe;edits.preview(requested);assert.ok(parameterError(c.read().recipe,once)<1e-9,`Repeating one absolute input is idempotent at ${objectId}/${pose}`);edits.cancel();
+   edits.begin(native.id);for(const dx of [.01,.025,.04])edits.preview({position:[before.position[0]+dx,before.position[1],before.position[2]]});assert.ok(parameterError(c.read().recipe,once)<1e-9,`One final absolute input and a segmented gesture agree at ${objectId}/${pose}`);edits.cancel();
    edits.begin(native.id);edits.preview({scale:before.scale.map(x=>x*1.1)});assert.equal(c.read().poseHold.status,'held',`${objectId} native resize accommodates in ${pose}`);assert.ok(distance(entries.find(e=>e.id==='door').object.matrixWorld,body)<1e-7);edits.cancel();assert.deepEqual(c.read().recipe,baseline);
    edits.begin(native.id);edits.preview({rotation:[before.rotation[0],before.rotation[1],before.rotation[2]+.03]});assert.equal(c.read().poseHold.status,'held',`${objectId} native rotation accommodates in ${pose}`);assert.ok(distance(entries.find(e=>e.id==='door').object.matrixWorld,body)<1e-7);edits.cancel();assert.deepEqual(c.read().recipe,baseline);
    c.operations.hingeHardware({objectId,size:baseline.attachments.find(a=>a.objectId===objectId).hardware.size*1.08});
