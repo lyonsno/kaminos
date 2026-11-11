@@ -2,11 +2,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.core.js';
-import {defaultSpace,checkedSpace,concreteDistance,spaceDirection,pullSpace,transformSpaceClaim,createSpace,rebuildSpace,spaceBounds,SPACE_SOURCE} from '../stockroom-space.mjs';
+import {defaultSpace,checkedSpace,concreteDistance,spaceDirection,pullSpace,transformSpaceClaim,createSpace,rebuildSpace,spaceBounds,SPACE_SOURCE,closestSpaceClaim} from '../stockroom-space.mjs';
 import {createSceneEdits} from '../scene-edit-session.mjs';
 import {createSceneObjectRecord} from '../scene-object-record.mjs';
 import {createSceneRecordOperations} from '../scene-record-operations.mjs';
 import {buildSceneDocument,planSceneRestore} from '../scene-persistence-core.js';
+import {createSceneRepetitionController} from '../scene-repetition-controller.mjs';
+import {repetitionDefaults,isRepetitionCopy} from '../scene-repetition.mjs';
 test('an authored empty region has real concrete around it, not in it',()=>{
  const p=defaultSpace();
  assert.ok(concreteDistance(p,[0,1.05,0])>0,'passage must remain empty');
@@ -43,6 +45,11 @@ test('native region transforms move its authored claim without changing its sibl
  const next=transformSpaceClaim({space,claim:c.id,anchor,...anchor,position:[.4,1.05,0]},new THREE.Matrix4());
  next.claims[0].center.forEach((v,i)=>assert.ok(Math.abs(v-[.4,1.05,0][i])<1e-12));next.claims[0].radii.forEach((v,i)=>assert.ok(Math.abs(v-c.radii[i])<1e-12));
 });
+test('native region rotation and scale carry the surrounding boundary plane',()=>{
+ const space=defaultSpace(),c=space.claims[0],anchor={position:c.center,rotation:c.rotation,scale:c.radii};
+ const next=transformSpaceClaim({space,claim:c.id,anchor,...anchor,rotation:[0,Math.PI/2,0],scale:c.radii.map(x=>x*2)},new THREE.Matrix4()).claims[0];
+ assert.ok(Math.abs(next.bandNormal[0]-1)<1e-12);assert.ok(Math.abs(next.bandNormal[2])<1e-12);assert.ok(Math.abs(next.bandHalfWidth-.88)<1e-12);
+});
 test('kept empty remains empty even when a material claim covers the opening',()=>{
  const p=defaultSpace(),grown=pullSpace(p,{point:[0,1.05,0],axis:[1,0,0]},1,'occupy');
  assert.ok(concreteDistance(grown,[0,1.05,0])>0);
@@ -50,6 +57,7 @@ test('kept empty remains empty even when a material claim covers the opening',()
 test('actual extraction changes rendered triangles, keeps full capacity and follows bounds',()=>{
  const p={...defaultSpace(),resolution:20},root=createSpace(p),mesh=root.children[0],before=mesh.geometry.attributes.position.array.slice(0,mesh.count*3);
  assert.ok(mesh.count>0);assert.equal(mesh.geometry.drawRange.count,mesh.count);assert.ok(mesh.count<=5*(p.resolution-3)**3*3);
+ assert.equal(mesh.geometry.attributes.position.count,mesh.count,'native geometry must expose drawn vertices, not the extractor capacity');
  assert.ok([...before].every(Number.isFinite));assert.ok([...mesh.geometry.attributes.normal.array.slice(0,mesh.count*3)].every(Number.isFinite));
  rebuildSpace(root,pullSpace(p,{claim:'passage',point:[0,1.9,0],axis:[0,1,0]},.5,'empty'));
  assert.equal(root.children[0],mesh);assert.notDeepEqual(mesh.geometry.attributes.position.array.slice(0,mesh.count*3),before);
@@ -70,4 +78,21 @@ test('ordinary scene record and document reload recreate source, claims and plac
  assert.equal(record.source,SPACE_SOURCE);assert.deepEqual(record.space,p);assert.equal(records.reloadable(record),true);
  const restored=await records.load(record);assert.deepEqual(restored.position.toArray(),root.position.toArray());assert.equal(restored.children[0].count,root.children[0].count);assert.deepEqual(restored.userData.stockroomSpace,p);
  assert.equal(records.reloadable({...record,space:{...p,resolution:2}}),false);
+});
+test('shrinking a surface keeps framing bounds equal to actual rendered vertices',()=>{
+ const p={...defaultSpace(),resolution:20},root=createSpace(p),probe={claim:'passage',point:[0,1.9,0],axis:[0,1,0]};
+ rebuildSpace(root,pullSpace(p,probe,1.8,'empty'));rebuildSpace(root,pullSpace(p,probe,-.6,'empty'));
+ const mesh=root.children[0],active=new THREE.Box3(),position=mesh.geometry.attributes.position;root.updateMatrixWorld(true);
+ for(let i=0;i<mesh.geometry.drawRange.count;i++)active.expandByPoint(new THREE.Vector3().fromBufferAttribute(position,i).applyMatrix4(mesh.matrixWorld));
+ const all=new THREE.Box3().setFromObject(root);for(const key of ['min','max'])for(const axis of ['x','y','z'])assert.ok(Math.abs(active[key][axis]-all[key][axis])<1e-6,`${key}.${axis} contains an unwritten/stale extractor vertex`);
+});
+test('native repeated space copies refresh their child frames after shape changes',()=>{
+ const p={...defaultSpace(),resolution:16},root=createSpace(p),entry={id:'place',object:root,type:'pbr',source:SPACE_SOURCE,space:p,repetition:{...repetitionDefaults(),mode:'line',count:2,step:[6,0,0]}};
+ const controller=createSceneRepetitionController({objects:()=>[entry],groups:()=>[],readPose:o=>({position:o.position.toArray(),rotation:[o.rotation.x,o.rotation.y,o.rotation.z],scale:o.scale.toArray()})});controller.sync();
+ const next=pullSpace(p,{claim:'passage',point:[0,1.9,0],axis:[0,1,0]},.8,'empty');rebuildSpace(root,next);entry.space=next;controller.sync();
+ const original=root.children.find(c=>c.userData.spaceSurface),copy=root.children.find(isRepetitionCopy).children[0];assert.deepEqual(copy.position.toArray(),original.position.toArray());assert.deepEqual(copy.scale.toArray(),original.scale.toArray());assert.equal(copy.geometry,original.geometry);controller.clearAll();
+});
+test('region picking uses each claim rotation rather than an axis-aligned proxy',()=>{
+ const p=defaultSpace(),base=p.claims[0];p.claims=[{...base,id:'decoy',role:'occupy',rim:false,center:[3.2,1.5,0],radii:[.2,.2,.2]},{...base,id:'rotated',role:'occupy',rim:false,center:[2,1,0],radii:[.3,1.2,.3],rotation:[0,0,Math.PI/2]}];
+ assert.equal(closestSpaceClaim(p,[3.2,1,0]),'rotated');
 });

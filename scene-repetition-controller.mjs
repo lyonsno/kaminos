@@ -14,10 +14,10 @@ export function createSceneRepetitionController({objects,groups,readPose}){
   for(const entry of objects()){
    const group=groupFor(entry),own=checkedRepetition(entry.repetition),inherited=checkedRepetition(group?.repetition);
    if(!own&&!inherited){if(mounted.has(entry.object)){view.clear(entry.object);mounted.delete(entry.object);}continue;}
-   const pose=readPose(entry.object),key=JSON.stringify([own,inherited,pose,group?.transform,entry.source,entry.geometry,entry.surface,entry.dock,entry.object.uuid]);
+   const pose=readPose(entry.object),key=JSON.stringify([own,inherited,pose,group?.transform,entry.source,entry.geometry,entry.surface,entry.dock,entry.space,entry.object.userData.spaceRevision,entry.object.uuid]);
    if(mounted.get(entry.object)===key)continue;
    if(!canRepeatSceneObject(entry))throw Error('Repetition supports static mesh objects and mesh groups');
-   const outer=inherited?repetitionMatrices(inherited,group.transform):[new Matrix4()];if(entry.dock)view.clear(entry.object);view.sync(entry.object,own,pose,{outer});mounted.set(entry.object,key);
+   const outer=inherited?repetitionMatrices(inherited,group.transform):[new Matrix4()];if(entry.dock||entry.space)view.clear(entry.object);view.sync(entry.object,own,pose,{outer});mounted.set(entry.object,key);
   }
  }
  function clear(root){view.clear(root);mounted.delete(root);}

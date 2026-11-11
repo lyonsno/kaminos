@@ -1,8 +1,9 @@
 import * as THREE from './lib/three.core.js';
 import {MarchingCubes} from './vendor/MarchingCubes.js';
 import {checkedPose} from './scene-edit-session.mjs';
+import {compileNeighborBoxes} from './stockroom-space-context.mjs';
 export const SPACE_SOURCE='kaminos:stockroom-space-v1';
-export const defaultSpace=()=>({schema:'kaminos.stockroom-space.v1',resolution:36,claims:[{id:'passage',role:'empty',center:[0,1.05,0],radii:[1.25,.85,1.2],rotation:[0,0,0],rim:true}]});
+export const defaultSpace=()=>({schema:'kaminos.stockroom-space.v1',resolution:36,neighbors:[],claims:[{id:'passage',role:'empty',center:[0,1.05,0],radii:[1.25,.85,1.2],rotation:[0,0,0],rim:true,bandNormal:[0,0,1],bandHalfWidth:.44}]});
 const resources=new WeakMap();
 const vector=(v,name)=>{if(!Array.isArray(v)||v.length!==3||!v.every(x=>Number.isFinite(x)&&Number.isFinite(Math.fround(x))))throw Error(`Finite ${name} required`);return [...v];};
 export function checkedSpace(value){
@@ -11,9 +12,12 @@ export function checkedSpace(value){
  const claims=value.claims.map(c=>{
   if(typeof c?.id!=='string'||!c.id||ids.has(c.id)||!['occupy','empty'].includes(c.role)||typeof c.rim!=='boolean'||c.rim&&c.role!=='empty')throw Error('Space claims require unique identity, role and boundary choice');
   ids.add(c.id);const radii=vector(c.radii,'claim radii');if(radii.some(x=>x<=.04))throw Error('Claim radii must exceed four centimetres');
-  return {id:c.id,role:c.role,center:vector(c.center,'claim center'),radii,rotation:vector(c.rotation,'claim rotation'),rim:c.rim};
+  const bandNormal=vector(c.bandNormal??[0,0,1],'boundary normal'),length=Math.hypot(...bandNormal),bandHalfWidth=c.bandHalfWidth??.44;
+  if(length<1e-8||!Number.isFinite(bandHalfWidth)||bandHalfWidth<=0)throw Error('An explicit boundary frame and positive thickness are required');
+  return {id:c.id,role:c.role,center:vector(c.center,'claim center'),radii,rotation:vector(c.rotation,'claim rotation'),rim:c.rim,bandNormal:bandNormal.map(x=>x/length),bandHalfWidth};
  });
- return {schema:value.schema,resolution:value.resolution,claims};
+ const neighbors=value.neighbors??[];if(!Array.isArray(neighbors)||!neighbors.every(id=>typeof id==='string'&&id)||new Set(neighbors).size!==neighbors.length)throw Error('Construction neighbors require unique scene identities');
+ return {schema:value.schema,resolution:value.resolution,neighbors:[...neighbors],claims};
 }
 function frame(claim){return new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(...claim.rotation));}
 function compiledClaim(c){
@@ -25,17 +29,18 @@ function compiledClaim(c){
  };
 }
 const smoothUnion=(a,b)=>{const h=Math.max(.18-Math.abs(a-b),0)/.18;return Math.min(a,b)-h*h*.045;};
-export function compileSpace(value){
- const p=checkedSpace(value),parts=p.claims.map(c=>({c,distance:compiledClaim(c)}));
+export function compileSpace(value,context={boxes:[]}){
+ const p=checkedSpace(value),parts=p.claims.map(c=>({c,distance:compiledClaim(c)})),obstacles=compileNeighborBoxes(context.boxes);
  return (x,y,z)=>{
   let solid=1e6;
   for(const {c,distance}of parts){
    if(c.role==='occupy')solid=smoothUnion(solid,distance(x,y,z));
    // A kept-open region can bring its surrounding bearing into being. The
    // shallow band is an explicit fixture construction rule, not a terrain solve.
-   else if(c.rim)solid=smoothUnion(solid,Math.max(distance(x,y,z,.3),Math.abs(z-c.center[2])-.44));
+   else if(c.rim)solid=smoothUnion(solid,Math.max(distance(x,y,z,.3),Math.abs((x-c.center[0])*c.bandNormal[0]+(y-c.center[1])*c.bandNormal[1]+(z-c.center[2])*c.bandNormal[2])-c.bandHalfWidth));
   }
   for(const {c,distance}of parts)if(c.role==='empty')solid=Math.max(solid,-distance(x,y,z));
+  for(const distance of obstacles)solid=Math.max(solid,-distance(x,y,z));
   return Math.max(solid,-y);
  };
 }
@@ -55,15 +60,17 @@ export function spaceDirection(value,probe){
  return normal.normalize().toArray().map(x=>Math.abs(x)<1e-12?0:x);
 }
 export function nextSpaceClaimId(value){const ids=new Set(value.claims.map(c=>c.id));let i=1;while(ids.has(`region:${i}`))i++;return `region:${i}`;}
+export function closestSpaceClaim(value,point){return checkedSpace(value).claims.map(c=>({id:c.id,distance:Math.abs(compiledClaim(c)(...point))})).sort((a,b)=>a.distance-b.distance)[0].id;}
 export function transformSpaceClaim(value,parentWorld){
  const p=checkedSpace(value.space),c=p.claims.find(c=>c.id===value.claim),pose=checkedPose(value),anchor=checkedPose(value.anchor);
  if(!c||!parentWorld?.isMatrix4||Math.abs(parentWorld.determinant())<1e-12||anchor.scale.some(x=>Math.abs(x)<1e-12))throw Error('An existing region and invertible construction frame are required');
  if(['position','rotation','scale'].every(k=>pose[k].every((x,i)=>x===anchor[k][i])))return p;
  const matrix=s=>new THREE.Matrix4().compose(new THREE.Vector3(...s.position),new THREE.Quaternion().setFromEuler(new THREE.Euler(...s.rotation)),new THREE.Vector3(...s.scale));
- const local=parentWorld.clone().invert().multiply(matrix(pose)).multiply(matrix(anchor).invert()).multiply(parentWorld).multiply(matrix({position:c.center,rotation:c.rotation,scale:c.radii}));
+ const delta=parentWorld.clone().invert().multiply(matrix(pose)).multiply(matrix(anchor).invert()).multiply(parentWorld),local=delta.clone().multiply(matrix({position:c.center,rotation:c.rotation,scale:c.radii}));
  const position=new THREE.Vector3(),rotation=new THREE.Quaternion(),scale=new THREE.Vector3();local.decompose(position,rotation,scale);
  const reconstructed=new THREE.Matrix4().compose(position,rotation,scale),magnitude=Math.max(1,...local.elements.map(Math.abs));
  if(local.elements.some((x,i)=>Math.abs(x-reconstructed.elements[i])>1e-8*magnitude))throw Error('This region edit would introduce shear; use Local axes or uniform construction scale');
+ const bandNormal=new THREE.Vector3(...c.bandNormal).applyMatrix3(new THREE.Matrix3().getNormalMatrix(delta));c.bandHalfWidth/=bandNormal.length();c.bandNormal=bandNormal.normalize().toArray();
  const euler=new THREE.Euler().setFromQuaternion(rotation);c.center=position.toArray();c.rotation=[euler.x,euler.y,euler.z];c.radii=scale.toArray();return checkedSpace(p);
 }
 export function pullSpace(value,probe,amount,role){
@@ -81,7 +88,8 @@ export function pullSpace(value,probe,amount,role){
   const id=probe.id??nextSpaceClaimId(p);if(p.claims.some(c=>c.id===id))throw Error('New region identity already exists');
   const effectiveRole=amount>0?role:role==='empty'?'occupy':'empty',direction=axis.clone().multiplyScalar(Math.sign(amount));
   const rotation=new THREE.Euler().setFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),direction));
-  p.claims.push({id,role:effectiveRole,center:point.map((v,i)=>v+axis.getComponent(i)*amount/2),radii:[.42,Math.abs(amount)/2+.19,.42],rotation:[rotation.x,rotation.y,rotation.z],rim:false});
+  const radius=probe.radius??.42;if(!Number.isFinite(radius)||radius<=.04)throw Error('Region reach must exceed four centimetres');
+  p.claims.push({id,role:effectiveRole,center:point.map((v,i)=>v+axis.getComponent(i)*amount/2),radii:[radius,Math.abs(amount)/2+.19,radius],rotation:[rotation.x,rotation.y,rotation.z],rim:effectiveRole==='empty',bandNormal:probe.bandNormal??[0,0,1],bandHalfWidth:radius});
  }
  return checkedSpace(p);
 }
@@ -95,21 +103,30 @@ export function spaceBounds(value){
  if(box.isEmpty())throw Error('A space needs at least one material-bearing claim');
  const size=box.getSize(new THREE.Vector3());box.expandByVector(size.multiplyScalar(4/(p.resolution-8)).addScalar(.22));return box;
 }
-export function rebuildSpace(root,value){
- const p=checkedSpace(value),distance=compileSpace(p),bounds=spaceBounds(p),size=bounds.getSize(new THREE.Vector3()),center=bounds.getCenter(new THREE.Vector3());
+export function rebuildSpace(root,value,context=null){
+ const p=checkedSpace(value);context??=root.userData.spaceNeighborhood??{boxes:[],unavailable:p.neighbors.map(id=>({id,reason:'unresolved construction neighbor'}))};
+ root.userData.stockroomSpace=p;root.userData.spaceNeighborhood=context;
+ const unresolved=!!context.unavailable?.length;
+ if(unresolved&&resources.has(root)){resources.get(root).mesh.visible=false;return root;}
+ // Construct the hidden mesh/material before native admission even when a
+ // neighbor loads later; never display the unconstrained intermediate shape.
+ const distance=compileSpace(p,unresolved?{boxes:[]}:context),bounds=spaceBounds(p),size=bounds.getSize(new THREE.Vector3()),center=bounds.getCenter(new THREE.Vector3());
  let resource=resources.get(root);
  if(!resource||resource.resolution!==p.resolution){
   const material=resource?.mesh.material??new THREE.MeshStandardMaterial({color:0x96999b,roughness:.86,metalness:0});
   // Five triangles per processed cell is the extractor's complete capacity,
   // rather than its default silent 10K polygon truncation.
-  const mesh=new MarchingCubes(p.resolution,material,false,false,5*(p.resolution-3)**3);
+  const extractor=new MarchingCubes(p.resolution,material,false,false,5*(p.resolution-3)**3),mesh=new THREE.Mesh(new THREE.BufferGeometry(),material);
   mesh.name='Concrete boundary';mesh.castShadow=mesh.receiveShadow=true;mesh.isolation=0;mesh.userData.spaceSurface=true;
-  if(resource){resource.mesh.removeFromParent();resource.mesh.geometry.dispose();}
-  root.add(mesh);resource={mesh,resolution:p.resolution};resources.set(root,resource);
+  extractor.isolation=0;
+  if(resource){resource.mesh.removeFromParent();resource.mesh.geometry.dispose();resource.extractor.geometry.dispose();}
+  root.add(mesh);resource={mesh,extractor,resolution:p.resolution};resources.set(root,resource);
  }
- const {mesh}=resource,n=p.resolution;mesh.normal_cache.fill(0);
- for(let z=0;z<n;z++)for(let y=0;y<n;y++)for(let x=0;x<n;x++)mesh.field[x+n*(y+n*z)]=-distance(bounds.min.x+size.x*x/n,bounds.min.y+size.y*y/n,bounds.min.z+size.z*z/n);
- mesh.update();mesh.position.copy(center);mesh.scale.copy(size).multiplyScalar(.5);mesh.geometry.boundingBox=null;
+ const {mesh,extractor}=resource,n=p.resolution;mesh.visible=!unresolved;extractor.normal_cache.fill(0);
+ for(let z=0;z<n;z++)for(let y=0;y<n;y++)for(let x=0;x<n;x++)extractor.field[x+n*(y+n*z)]=-distance(bounds.min.x+size.x*x/n,bounds.min.y+size.y*y/n,bounds.min.z+size.z*z/n);
+ extractor.update();const geometry=new THREE.BufferGeometry();
+ geometry.setAttribute('position',new THREE.Float32BufferAttribute(extractor.positionArray.slice(0,extractor.count*3),3));geometry.setAttribute('normal',new THREE.Float32BufferAttribute(extractor.normalArray.slice(0,extractor.count*3),3));geometry.setDrawRange(0,extractor.count);geometry.computeBoundingBox();geometry.computeBoundingSphere();
+ const old=mesh.geometry;mesh.geometry=geometry;old.dispose();mesh.count=extractor.count;mesh.position.copy(center);mesh.scale.copy(size).multiplyScalar(.5);root.userData.spaceRevision=(root.userData.spaceRevision??0)+1;
  root.userData.stockroomSpace=p;root.name='Concrete place';root.updateMatrixWorld(true);return root;
 }
 export const createSpace=value=>rebuildSpace(new THREE.Group(),value??defaultSpace());
