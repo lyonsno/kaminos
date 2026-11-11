@@ -26,7 +26,7 @@ fn followVelocity(p:vec3<f32>)->vec3<f32>{
  let p=particles[ids[min(n-1u,u32(followRandom(i,17u)*f32(n)))]];if(p.anchor.w<=0){return;}
  let activities=vec3<f32>(clamp(p.state.x/max(p.emission.w,1e-20),0.0,1.0),smoothstep(u.chemistry.z,u.chemistry.w,p.state.y),clamp(p.state.z/u.phases.w,0.0,1.0));
  let total=dot(u.phases.xyz,vec3<f32>(1));if(total<=0||followRandom(i,53u)>=dot(activities,u.phases.xyz)/total){return;}
- let dt=u.flow.z;let state=particleCompositionBurn(p.state,dt,u.chemistry,u.reaction).state;
+ let dt=u.motion.z;let state=particleCompositionBurn(p.state,u.flow.z,u.chemistry,u.reaction).state;
  let damping=exp(-dt/u.motion.y);let residual=p.motion.xyz*damping+vec3<f32>(0,u.motion.x*state.y*u.motion.y*(1.0-damping),0);
  let jitter=vec3<f32>(followRandom(i,103u),followRandom(i,191u),followRandom(i,293u))*2.0-vec3<f32>(1);
  var velocity=vec3<f32>(0);if(u.flow.y!=0){velocity=followVelocity(p.anchor.xyz);}
