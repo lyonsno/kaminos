@@ -31,7 +31,7 @@ function fixture({route={},realLoader=false}={}){
   setSceneTransportConsumer:value=>calls.push(['transport',value]),emissiveCameraState:()=>null};
  const input={THREE,scene,camera,sharedGpu:{device},renderResources:{renderer:{}},ordinary,payload:{location:{href:'http://localhost/?scene_worker=1'},admission:{data:document}},
   readFlameControls:()=>controls,applyFlameControls(next){calls.push(['accepted',next]);controls={...controls,...next};}};
- const options={settingsLoader:{prepare:async()=>prepared},mountRadiance:async mount=>{mount.readResources().onStatus({status:'mounted'});return ({canRender:()=>true,dispose(){calls.push('radiance.dispose');},setGain(){},setSurfaceGain(){},setSurfaceScattering(){},setSmokeMode(){},setSourceSoftness(){},setDirections(value){calls.push(['directions',value]);},setAngularPattern(value){calls.push(['pattern',value]);},setShadowCasterLevel:async value=>calls.push(['casterLevel',value]),prepareShadowCasters:async()=>calls.push('casters')});}};
+ const options={settingsLoader:{prepare:async()=>prepared},mountRadiance:async mount=>{calls.push(['mount-device',mount.readResources().device]);mount.readResources().onStatus({status:'mounted'});return ({canRender:()=>true,dispose(){calls.push('radiance.dispose');},setGain(){},setSurfaceGain(){},setSurfaceScattering(){},setSmokeMode(){},setSourceSoftness(){},setDirections(value){calls.push(['directions',value]);},setAngularPattern(value){calls.push(['pattern',value]);},setShadowCasterLevel:async value=>calls.push(['casterLevel',value]),prepareShadowCasters:async()=>calls.push('casters')});}};
  if(realLoader){delete options.settingsLoader;options.definitions=JSON.parse(execFileSync('python3',[new URL('../tools/scene-worker-control-definitions.py',import.meta.url).pathname,'--page',new URL('../index.html',import.meta.url).pathname])).controls;options.fetch=async url=>({ok:true,json:async()=>url.includes('schema')?schema:basin});}
  const resources=api.createSceneWorkerFireResources(input,options);
  return {resources,input,volume,ctx,calls,ordinary,document,plan:planSceneRestore(document),active:()=>active};
@@ -94,4 +94,10 @@ test('hybrid lighting preserves route angular sampling and selects caster geomet
  explicit.document.postprocessing??={};explicit.document.postprocessing.fireLighting={'rendering-angular-samples':12,'rendering-angular-pattern':'spatial'};
  await explicit.resources.initialize(explicit.ctx);await explicit.resources.prepareVolume({volume:explicit.volume,context:explicit.ctx});await explicit.resources.document.afterReplace(explicit.document,planSceneRestore(explicit.document),{context:explicit.ctx});
  assert.deepEqual(explicit.calls.findLast(row=>row[0]==='directions'),['directions',12]);assert.deepEqual(explicit.calls.findLast(row=>row[0]==='pattern'),['pattern','spatial']);await explicit.resources.retire(explicit.ctx);
+});
+
+test('fire presentation uses the live shared-device owner supplied by the common constructor',async()=>{
+ const f=fixture(),next={queue:{onSubmittedWorkDone:async()=>{}}};f.input.readSharedGpu=()=>({device:next,queue:next.queue});
+ await f.resources.initialize(f.ctx);await f.resources.prepareVolume({volume:f.volume,context:f.ctx});await f.resources.document.afterReplace(f.document,f.plan,{context:f.ctx});
+ assert.equal(f.calls.findLast(row=>row[0]==='mount-device')[1],next);await f.resources.retire(f.ctx);
 });

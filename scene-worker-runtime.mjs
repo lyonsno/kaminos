@@ -71,7 +71,7 @@ export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imag
     view.apply({camera:payload.camera},ctx);
 
     sceneResources=createSceneResources({...objects,THREE,renderer:renderResources.renderer,pmremGenerator:renderResources.pmremGenerator,
-     renderResources,sharedGpu:shared,payload,lifecycle,viewport,
+     renderResources,sharedGpu:shared,readSharedGpu:()=>shared,payload,lifecycle,viewport,
      readFlameControls:()=>appliedControls,applyFlameControls,readAppHost:()=>appHost});
     if(typeof sceneResources?.retire!=='function'||typeof sceneResources?.initialize!=='function')throw Error('scene resource shell requires initialize and retire');
     await sceneResources.initialize(ctx);ctx.assertCurrent();

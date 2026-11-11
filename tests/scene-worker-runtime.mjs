@@ -157,3 +157,10 @@ test('current domain UI reaches serviced frame and edit receipts without reusing
  phase='edited';const edit=await runtime.requestMutation('scene.move',{},f.context,()=>runtime.foregroundCommands['scene.move']());
  assert.equal(edit.ui.lighting?.phase,'edited');assert.equal(edit.ui.surfaces.volume.visible,false);await runtime.retire(f.context);
 });
+
+test('actual domain constructor receives a live shared-device reader that clears after retirement',async()=>{
+ const f=fixture();let input;const create=f.options.createSceneResources;f.options.createSceneResources=value=>{input=value;return create(value);};
+ const runtime=factory(f.options)({payload:f.payload,lifecycle:{}});await runtime.initialize(f.context);
+ assert.equal(typeof input.readSharedGpu,'function','presentation recovery needs the current owner rather than the initial device snapshot');assert.equal(input.readSharedGpu().device,f.device);
+ const read=input.readSharedGpu;await runtime.retire(f.context);assert.equal(read(),null);
+});

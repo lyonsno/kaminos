@@ -28,6 +28,7 @@ function routeValues(c){
 // synchronously so every later allocation remains reachable on failed setup.
 export function createSceneWorkerFireResources(input,{definitions,fetch:request=globalThis.fetch,settingsLoader=null,mountRadiance=mountSceneRadianceResources}={}){
  const {THREE,scene,camera,sharedGpu,renderResources,payload,ordinary,readFlameControls,applyFlameControls}=input;
+ const readGpu=()=>typeof input.readSharedGpu==='function'?input.readSharedGpu():sharedGpu;
  const url=new URL(payload.location?.href??payload.location??'http://localhost/');
  let volume=null,plan=null,prepared=null,radiance=null,hdr=null,retiring=false,transport=false,lightingStatus=null,configured=null,sourceSignature=null;
  let rendering=checkedFireRendering(),documentData=null;
@@ -37,7 +38,7 @@ export function createSceneWorkerFireResources(input,{definitions,fetch:request=
  const loader=settingsLoader??createSceneWorkerFireSettingsLoader({definitions,fetch:request,mappingOptions:next=>({route:routeValues(readFlameControls()),params:url.searchParams,lightFieldParams:route(next)})});
  const check=ctx=>{ctx.assertCurrent();if(retiring)throw Error('Fire resources are retiring');};
  const records=()=>ordinary.workingScene.objects.filter(row=>row.type===FLAME_EMITTER_TYPE).map(row=>ordinary.authored.records.serialize(row));
- const waterFeature=createAuthoredWaterFeature({services:()=>({renderer:renderResources.renderer,scene,camera,pipeline:ordinary.lighting.renderPipeline,device:sharedGpu.device,
+ const waterFeature=createAuthoredWaterFeature({services:()=>({renderer:renderResources.renderer,scene,camera,pipeline:ordinary.lighting.renderPipeline,device:readGpu().device,
    readColliders:()=>ordinary.workingScene.objects,decorateOutput:node=>ordinary.decorateOutput(node)}),emitters:()=>[],visible:()=>ordinary.visible('water-field')});
  function renderingFor(data,next){
   const params=route(next),shadow=params.get('volume_light_field_hybrid')==='1'?readFireShadowSceneSettings(params):{};
@@ -80,7 +81,7 @@ export function createSceneWorkerFireResources(input,{definitions,fetch:request=
  async function mount(ctx){
   check(ctx);await releaseRadiance();check(ctx);
   const params=route();if(!present()||params.get('volume_light_field')!=='1'){refreshOrdinaryLighting();return;}
-  radiance=await mountRadiance({params,readResources:()=>({renderer:renderResources.renderer,scene,prototype:volume,device:sharedGpu.device,
+  radiance=await mountRadiance({params,readResources:()=>({renderer:renderResources.renderer,scene,prototype:volume,device:readGpu().device,
    surfaceLighting:ordinary.surfaceLighting,shadowSettings:params.get('volume_light_field_hybrid')==='1'?readFireShadowSceneSettings(params):undefined,
    rebuild:{hold:value=>ordinary.lightingPreparation.setExternalHold(value),prepare:change=>ordinary.lightingPreparation.request(change)},
    readSourceRecords:sourceRecords,readControls:readFlameControls,
@@ -124,10 +125,10 @@ export function createSceneWorkerFireResources(input,{definitions,fetch:request=
   readRouteParams:route,
   readDrawResources:()=>({waterFeature}),
   readUi:()=>({fireLighting:structuredClone(lightingStatus),surfaces:{volume:{visible:!transport}}}),
-  createFireLightReceiver:(base,depth,normal)=>createSceneFireLightReceiver({THREE,sharedGpu,renderer:renderResources.renderer,scene,camera,sceneGiProxies:ordinary.giProxies,routeParams:route(),
+  createFireLightReceiver:(base,depth,normal)=>createSceneFireLightReceiver({THREE,sharedGpu:readGpu(),renderer:renderResources.renderer,scene,camera,sceneGiProxies:ordinary.giProxies,routeParams:route(),
    readLightField:()=>volume?.fireIrradianceLightField()??null,createFireLightFieldShadow,createFireShadowCasters,renderFireShadowBatch,retain:owner=>receiverOwners.add(owner)},base,depth,normal),
   drawOperations:{beforeDraw(){},syncProxies(){},readPhysicalCamera:()=>volume?.emissiveCameraState(),renderFlameHDR(frame){
-   hdr??=createSceneFlameHDR({renderer:renderResources.renderer,camera,device:sharedGpu.device,bloom:ordinary.bloom,decorate:node=>ordinary.decorateOutput(node)});
+   hdr??=createSceneFlameHDR({renderer:renderResources.renderer,camera,device:readGpu().device,bloom:ordinary.bloom,decorate:node=>ordinary.decorateOutput(node)});
    return hdr.render({...frame,physical:volume.emissiveCameraState()});
   }},
   applyFrameInputs(_input,ctx){check(ctx);},
