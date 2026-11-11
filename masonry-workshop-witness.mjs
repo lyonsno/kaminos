@@ -16,6 +16,7 @@ export async function runMasonryWorkshopWitness({evaluate,ws,capture,out,onEvide
  const mark=(phase,evidence={})=>onEvidence({phase,...evidence});
  mark('reading-initial-state');
  const before=assertMasonryWorkshopState(await read(),{display:'source',relief:.025});
+ const controls=await evaluate(ws,`(()=>{const e=document.querySelector('input[aria-label="Margin relief"]');return {wrapped:e?.parentElement?.classList.contains('authoring-number-wrap')};})()`);assert.equal(controls.wrapped,true,'numeric presentation must mount around the actual input');
  mark('source-coordinate-before',{before});
  const sourceBefore=await evaluate(ws,"window.kaminosWorkbenchExperiments.invoke('sourceData').then(d=>({point:d.stones[0].source.triangles[0].a,config:d.stones[0].source.config}))");
  mark('capturing-source',{before,sourceBefore});
@@ -27,13 +28,16 @@ export async function runMasonryWorkshopWitness({evaluate,ws,capture,out,onEvide
  const sourceAfter=await evaluate(ws,"window.kaminosWorkbenchExperiments.invoke('sourceData').then(d=>({point:d.stones[0].source.triangles[0].a,config:d.stones[0].source.config}))");
  assert.notDeepEqual(sourceAfter.point,sourceBefore.point,'source geometry did not change');
  const rejection=await evaluate(ws,"window.kaminosWorkbenchExperiments.invoke('source',{height:-1}).then(()=>false,()=>true)");assert.equal(rejection,true);assertMasonryWorkshopState(await read(),{relief:.045});
- mark('inspecting-ray',{changed,sourceBefore,sourceAfter});
+ const invalidField=await evaluate(ws,`(async()=>{const e=document.querySelector('input[aria-label="Margin relief"]');e.focus();e.value='.3';e.dispatchEvent(new Event('change',{bubbles:true}));await window.kaminosWorkbenchExperiments.invoke('recipe');return {value:e.value,error:document.querySelector('[role="status"]')?.textContent};})()`);assert.equal(Number(invalidField.value),.045,'rejected focused edit restores accepted value');
+ mark('inspecting-ray',{changed,sourceBefore,sourceAfter,invalidField});
  const inspect=await evaluate(ws,"window.kaminosWorkbenchExperiments.invoke('inspect',{})");assert.ok(inspect.carrier?.hit,'probe must reach the carrier');
  await evaluate(ws,`(async()=>{const s=document.querySelector('select[aria-label="Masonry view"]');if(!s)throw Error('Missing view control');s.value='regions';s.dispatchEvent(new Event('change',{bubbles:true}));await window.kaminosWorkbenchExperiments.invoke('recipe');})()`);
  mark('reading-regions',{changed,inspect});
  const regions=assertMasonryWorkshopState(await read(),{display:'regions',relief:.045});await settle();await capture(ws,out.replace(/\.png$/,'-regions.png'));
  await evaluate(ws,"window.kaminosWorkbenchExperiments.invoke('display',{mode:'carrier'})");assertMasonryWorkshopState(await read(),{display:'carrier'});await settle();await capture(ws,out.replace(/\.png$/,'-carrier.png'));
  await evaluate(ws,"window.kaminosWorkbenchExperiments.invoke('display',{mode:'source'})");
- await evaluate(ws,"window.kaminosWorkbenchExperiments.invoke('source',{relief:.025})");
+ await evaluate(ws,"document.querySelector('input[aria-label=\"Margin relief\"]').blur();window.kaminosWorkbenchExperiments.invoke('source',{relief:.025})");
  await settle();return {before,changed,regions,inspect,final:assertMasonryWorkshopState(await read(),{display:'source',relief:.025})};
 }
+
+export function assertMasonryBrowserValidation(stderr){assert.ok(!stderr.includes('used in submit while destroyed'),'destroyed GPU buffer invalidates the masonry browser run');}

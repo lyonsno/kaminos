@@ -9,13 +9,13 @@ remain intact. These are static authored shapes, not a wear/fracture simulation.
 This first stage uses explicit geometry and **ordinary PBR baseline materials**.
 NVIDIA appearance and the curved neural material (SBTF) are unimplemented and
 identified as such. Views show the detailed source, enclosing carrier, or the
-face/margin/corner partition. Region colors are an authored assignment.
+face/margin/corner partition. Region colors are an authored vertex assignment; each stone uses one material per view. Relief contracts the source radially inside its convex carrier, allowing deep dents without folding through a bevel center.
 
 Move the gold target with the native gizmo and choose **Inspect ray to gold
 target**. The query follows the current viewing position through that target
 and intersects the actual local source and carrier triangles, returning hit/miss,
-UV, reference position, triangle/region identity and local geometric normal.
-This is a small CPU geometry inspection, not an integrated lighting label or a
+UV, reference position, triangle/region identity, local geometric normal and separately named world-space normals.
+The inspected line stays fixed when the target moves. This is a small CPU geometry inspection, not an integrated lighting label or a
 claim of learned coverage. The line shows the inspected ray near the source.
 
 Each triangle retains face UVs and common pre-relief/rest-space positions.

@@ -55,3 +55,15 @@ test('source and carrier rays preserve the actual hit, chart and miss distinctio
  assert.deepEqual(masonry.traceMasonryRay(source,{...ray,direction:[0,-1,0]}),detailed,'ray direction is normalized');
  assert.throws(()=>masonry.traceMasonryRay(source,{origin:[0,1,0],direction:[0,0,0]}),/ray/);
 });
+
+
+test('deep relief retains outward winding through resolved bevels and corners',()=>{
+ for(const controls of [{cells:18,relief:.045},{cells:18,relief:.08},{cells:32,bevel:.02,relief:.1}]){
+  const source=createMasonrySource(controls);
+  for(const t of source.triangles){
+   const a=t.a,b=t.b,c=t.c,u=b.map((x,i)=>x-a[i]),v=c.map((x,i)=>x-a[i]);
+   const n=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]];
+   assert.ok(n.reduce((s,x,i)=>s+x*a[i],0)>0,'relief must not fold through the stone');
+  }
+ }
+});

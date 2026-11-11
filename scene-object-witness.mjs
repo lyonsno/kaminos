@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import {runMasonryWorkshopWitness} from './masonry-workshop-witness.mjs';
+import {runMasonryWorkshopWitness,assertMasonryBrowserValidation} from './masonry-workshop-witness.mjs';
 import {runWaterSourceWitness,runWaterCadenceWitness} from './authored-water-source-witness.mjs';
 import {assertAuthoredWaterPopulation} from './authored-water-evidence.mjs';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -75,6 +75,8 @@ function withGpuWindow(result) {
 
 function writeReport(report) {
   mkdirSync(dirname(reportPath), { recursive: true });
+  const browserStderrPath=scenario==='masonry-workshop'?reportPath+'.browser-stderr.log':null;
+  if(browserStderrPath)writeFileSync(browserStderrPath,stderr);
   writeFileSync(reportPath, JSON.stringify({
     requestedUrl: url,
     effectiveUrl: effectiveUrl,
@@ -89,6 +91,7 @@ function writeReport(report) {
     phase,
     browserVersion,
     stderrTail: stderr.slice(-2000),
+    ...(browserStderrPath?{browserStderrPath}:{}),
     liveBudget: liveBudget.report(),
     ...report,
   }, null, 2));
@@ -7802,6 +7805,7 @@ try {
   phase = 'capturing-screenshot';
   const finalShot = await capturePngScreenshot(ws, out);
 
+  if(scenario==='masonry-workshop')assertMasonryBrowserValidation(stderr);
   phase = 'writing-report';
   const report = {
     ok: true,

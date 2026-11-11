@@ -13,15 +13,15 @@ function fixture(){
  return {scene,borrowed,rows,events,host:{controls:{},scene:{open:async()=>shared.open(),refreshPresentation({root,id}){assert.equal(rows.get(root)?.id,id);}}}};
 }
 test('workshop edits real registered geometry, retains transforms and rejects invalid edits',async()=>{
- const f=fixture(),updates=[];const instance=await openExperiment(definition,{host:f.host,inputs:{source:{cells:8}},record:e=>f.events.push(e),updateInputs:e=>updates.push(e)});
+ const f=fixture(),updates=[];const instance=await openExperiment(definition,{host:f.host,inputs:{source:{cells:8}},record:e=>f.events.push(e),onInputsChange:e=>updates.push(e)});
  assert.equal(f.rows.size,5,'four stones and the ray target are independently registered scene objects');
- const [{root}]=f.rows.values();assert.ok(root.geometry.groups.length<=3,'one draw group per material region');root.position.set(2,3,4);const original=root.geometry.getAttribute('position').array.slice();
+ const [{root}]=f.rows.values();assert.equal(root.geometry.groups.length,0,'one shadow draw without override-material group collisions');assert.ok(!Array.isArray(root.material));root.position.set(2,3,4);const original=root.geometry.getAttribute('position').array.slice();
  const changed=await instance.invoke('source',{relief:.045});
  assert.equal(changed.source.relief,.045);assert.notDeepEqual(root.geometry.getAttribute('position').array,original);assert.deepEqual(root.position.toArray(),[2,3,4]);
  assert.equal(changed.representations.nvidia,'unimplemented');assert.equal(changed.representations.sbtf,'unimplemented');
  await assert.rejects(instance.invoke('source',{height:-1}),/Invalid masonry/);assert.equal((await instance.read()).source.relief,.045);
  const sourceData=await instance.invoke('sourceData');assert.equal(sourceData.stones.length,4);assert.equal(sourceData.stones[0].source.config.relief,.045);
- const region=await instance.invoke('display',{mode:'regions'});assert.equal(region.display,'regions');assert.ok(root.material.every(m=>m.isMeshBasicMaterial));
+ const region=await instance.invoke('display',{mode:'regions'});assert.equal(region.display,'regions');assert.ok(root.material.isMeshBasicMaterial);assert.ok(root.geometry.getAttribute('color'),'region colors live on the vertices');
  await assert.rejects(instance.invoke('display',{mode:'learned'}),/masonry view/);assert.equal((await instance.read()).display,'regions');
  assert.ok(f.events.some(e=>e.kind==='masonry.source'&&e.phase==='applied'));
  await instance.dispose();assert.deepEqual(f.scene.children,[f.borrowed]);
@@ -38,4 +38,28 @@ test('a recipe invalid for a derived stone leaves all previous source state inta
  const digest=data=>createHash('sha256').update(JSON.stringify(data.stones.map(s=>s.source))).digest('hex');
  assert.equal(digest(after),digest(before),'all existing source geometry is retained');
  await instance.dispose();
+});
+
+
+test('numeric controls mount before installing drag and release their handles',async()=>{
+ const f=fixture(),elements=[];let cleaned=0;
+ const document={activeElement:null,createElement(tag){const node={tag,children:[],style:{},attributes:{},listeners:{},append(...children){for(const c of children){c.parentNode=this;this.children.push(c);}},setAttribute(k,v){this.attributes[k]=v;},addEventListener(k,v){this.listeners[k]=v;}};elements.push(node);return node;}};
+ f.host.controls={document,installNumberDrag({input}){assert.ok(input.parentNode,'numeric drag requires an attached input');return {dispose(){cleaned++;}};}};
+ const instance=await openExperiment(definition,{host:f.host,inputs:{source:{cells:8}},record(){}});
+ await instance.mount({root:document.createElement('panel'),document});
+ const input=elements.find(e=>e.attributes['aria-label']==='Margin relief');document.activeElement=input;input.value='.3';input.listeners.change();
+ await instance.invoke('recipe');await Promise.resolve();
+ assert.equal(Number(input.value),.025,'rejected focused draft returns to the accepted value');
+ const status=elements.find(e=>e.attributes.role==='status');assert.match(status.textContent,/Invalid masonry/);
+ await instance.dispose();assert.equal(cleaned,4,'all numeric drag listeners are released');
+});
+
+test('inspection line stays in the recorded world and returns explicitly world normals',async()=>{
+ const f=fixture();const instance=await openExperiment(definition,{host:f.host,inputs:{source:{cells:8}},record(){}});
+ const [stone,,,,probe]=[...f.rows.values()].map(r=>r.root);stone.position.set(0,.14,0);stone.rotation.z=Math.PI/4;stone.scale.set(2,1,1);stone.updateMatrixWorld(true);
+ const origin=new THREE.Vector3(0,1,0).applyMatrix4(stone.matrixWorld),direction=new THREE.Vector3(0,-1,0).transformDirection(stone.matrixWorld);
+ const hit=await instance.invoke('inspect',{origin:origin.toArray(),direction:direction.toArray()});
+ assert.ok(hit.source.hit);assert.ok(Math.abs(hit.sourceWorldNormal[0]+Math.SQRT1_2)<1e-6);assert.ok(Math.abs(hit.sourceWorldNormal[1]-Math.SQRT1_2)<1e-6);
+ const line=f.scene.getObjectByProperty('isLine',true),point=()=>{line.updateWorldMatrix(true,false);return new THREE.Vector3().fromBufferAttribute(line.geometry.getAttribute('position'),0).applyMatrix4(line.matrixWorld).toArray();};
+ const before=point();probe.position.x+=.4;assert.deepEqual(point(),before,'moving the target does not move a recorded ray');await instance.dispose();
 });

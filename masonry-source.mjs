@@ -26,7 +26,11 @@ export function createMasonrySource(options={}){
   const [x,y,z]=q;
   const structure=.5+.21*Math.sin(19*x+13*y+11*z+phase[0])+.17*Math.sin(37*x-29*y+23*z+phase[1])+.12*Math.cos(71*x+41*y-53*z+phase[2]);
   const inset=relief*edge*edge*structure;
-  return {position:carrier.map((v,i)=>v-normal[i]*inset),carrier};
+  // A positive radial contraction preserves triangle winding and stays inside
+  // the convex carrier even when the authored dent exceeds the bevel radius.
+  // Bevel-normal displacement instead folds through its center of curvature.
+  const radius=Math.hypot(...carrier),factor=1-inset/radius;
+  return {position:carrier.map(v=>v*factor),carrier};
  };
  const triangles=[],counts={face:0,margin:0,corner:0};
  for(let faceId=0;faceId<faces.length;faceId++){

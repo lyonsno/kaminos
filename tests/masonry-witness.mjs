@@ -9,3 +9,9 @@ test('masonry witness rejects wrong routes, missing sources and stale display/co
  for(const change of [{schema:'other'},{stones:[]},{display:'regions'},{source:{relief:0}},{representations:{nvidia:'trained',sbtf:'unimplemented'}}])assert.throws(()=>assertMasonryWorkshopState({...valid(),...change},{display:'source',relief:.025}));
  assert.throws(()=>assertMasonryWorkshopState({...valid(),stones:[{id:'1',triangles:0,regions:{}}]},{display:'source',relief:.025}));
 });
+
+import {assertMasonryBrowserValidation} from '../masonry-workshop-witness.mjs';
+test('destroyed GPU buffers cannot count as a successful masonry browser run',()=>{
+ assert.throws(()=>assertMasonryBrowserValidation('GPUDevice: Buffer used in submit while destroyed.'),/GPU buffer/);
+ assert.doesNotThrow(()=>assertMasonryBrowserValidation('CVDisplayLinkCreateWithCGDisplay failed'));
+});
