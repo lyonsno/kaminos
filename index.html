@@ -3560,7 +3560,8 @@ import {createAppGpuHost} from './app-gpu-host.mjs';
 import {fireAtBoot,createFluidBoot} from './fire-boot.mjs';
 import {prepareAssetGeometryOffThread,snapshotAssetGeometry,prepareAssetBoundsOffThread,createAssetBoundsCache,captureAssetBoundsState,assetBoundsStateMatches} from './asset-geometry-preparation.mjs';
 import {createAuthoringPromptExpansion,installAuthoringPromptExpansion,authoringPromptWeightRoot} from './authoring-prompt-expansion.mjs';
-import {createKleinAuthoringImageGeneration,installKleinImageGeneration,createForegroundHandoff,runWithKilnHandoff,sharedDeviceHostRequirements,authoringImageWeightRoot,readPngProvenance} from './authoring-image-generation.mjs';
+import {createKleinAuthoringImageGeneration,installKleinImageGeneration,createForegroundHandoff,runWithKilnHandoff,sharedDeviceHostRequirements,readPngProvenance} from './authoring-image-generation.mjs';
+import {createAuthoringImageServingOptions} from './authoring-image-serving.mjs';
 import {createImagePreparation} from './authoring-image-preparation.mjs';
 import {sharedGpuBufferRequirements as assetGenerationBufferRequirements} from './sf3d-host-device.mjs';
 import {checkedViewportDisplay,viewportShortcut,syncSceneHelperVisibility} from './viewport-display-settings.mjs';
@@ -28305,11 +28306,9 @@ function setupAuthoringAssets(){
     if(entry.visibility?.status==='withheld'||historyReads.has(source)||authoringImageHistory.read().viewed?.provenance)return;
     historyReads.add(source);fetch(source).then(async response=>{if(!response.ok)throw Error(`Image metadata HTTP ${response.status}`);const provenance=readPngProvenance(new Uint8Array(await response.arrayBuffer()));if(provenance)authoringImageHistory.annotate(source,{provenance});}).catch(error=>console.warn('Image history metadata unavailable',error));
   };
+  const imageServing=createAuthoringImageServingOptions();
   authoringAssets=createAuthoringAssets({request,history:trellisHistoryBridge,prepareImage:createImagePreparation(),generator:generation,nameForSource:source=>workingScene.objects.find(entry=>entry.source===source)?.label,changed:state=>{syncImageHistory(state);authoringAssetsUI?.render(state);authoringImageHistoryUI?.render();authoringImageUI?.render();authoringPromptUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render(state);},
-    uploadImage:async file=>{
-      const response=await fetch('/api/ingest-image?'+new URLSearchParams({name:file.name}),{method:'POST',body:await file.arrayBuffer()});const value=await response.json();
-      if(!response.ok||value.schema!=='kaminos.asset-ingest.v0'||value.kind!=='image'||!value.entry?.source)throw Error(value.error||'Image storage failed');return value.entry;
-    },
+    uploadImage:file=>imageServing.deliver(file),
     addMesh:async entry=>{
       if(entry.kind==='surface'){
         assertSceneConstructionAvailable();const token=workingScene.generation,id=makeSceneObjectId('surface'),target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
@@ -28332,7 +28331,7 @@ function setupAuthoringAssets(){
     appHost:appGpuHost,
     // A locally mounted weight package (KAMINOS_KLEIN_WEIGHTS_ROOT) spares each port's
     // browser cache a 3 GB download; otherwise the published package is used.
-    weights:async model=>{const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};return authoringImageWeightRoot(config,model);},
+    weights:imageServing.weights,
     deliver:async (file,provenance)=>{const entry=await authoringAssets.upload(file);authoringImageHistory.record({...entry,kind:'image',provenance});authoringAssets.prepare().catch(error=>console.warn('Generated image preparation failed',error));return entry;},
     changed:()=>redraw(),
     blocked:()=>authoringPromptExpansion?.busy()?'A prompt is expanding.':compositionModule?'This scene has another inference/performance host. Use its existing generation controls.':meshBusy('trellisPage')?'TRELLIS is generating on this page.':null,
