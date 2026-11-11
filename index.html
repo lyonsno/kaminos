@@ -2988,7 +2988,6 @@ import {createRecordingSink} from './recording-mp4.mjs';
 import {installRenderOutput} from './render-output-ui.mjs';
 import { settleStartupVeil } from './startup-veil.mjs';
 import {createSceneLoadingGeometry} from './scene-loading-geometry.mjs';
-import { createEnvironmentLoader } from './scene-environment-loader.mjs';
 import {createDeviceRecovery} from './scene-device-recovery.mjs';
 import {createSceneRecoveryResourceCallbacks} from './scene-recovery-resources.mjs';
 window.kaminosStartup?.phase('Preparing application');
@@ -3014,8 +3013,6 @@ import {bloom} from './scene-bloom-node.mjs';
 import {installSceneBloomControls} from './scene-bloom-controls.mjs';
 import {installSceneReflectionControls} from './scene-reflection-controls.mjs';
 import { pass, mrt, normalView, positionViewDirection, vec2, vec3, vec4, mix, float, uniform, texture, pmremTexture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, screenUV, builtinAOContext, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix, Fn, agxToneMapping } from 'three/tsl';
-import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
-import { createSceneGI } from './scene-gi.mjs';
 import { compileSceneLighting, createLightingPreparation } from './scene-lighting-compile.mjs';
 import { createFireShadowSettings } from './fire-shadow-settings.mjs';
 import {createFireLightingHistory} from './fire-lighting-history.mjs';
@@ -3024,8 +3021,6 @@ import { installRenderingNumberControls } from './rendering-number-controls.mjs'
 import { organizeFireRenderingPanel } from './fire-rendering-panel.mjs';
 import { readFireShadowSceneSettings, fireShadowSceneRoute } from './fire-shadow-scene-settings.mjs';
 import { resolveSceneGIControlState, calibrateSceneGISettingsForBounds } from './scene-gi-settings.mjs';
-import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
-import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import {collisionVoxelInstances,createGpuCollisionVoxelMesh} from './scene-collision-debug.mjs';
 import {authorFireObjects,fireControlOwner,FIRE_DOMAIN_ID,projectFireSettingsToSchema,checkedFireSourceRecord,flameSourceInputs} from './scene-fire-domain.mjs';
 import { createFlameAuthoring, createFlameInspector, flameControlDisplayValue, portableFlamePreset, flamePresetRadius, flamePresetForLocalControls } from './flame-authoring.mjs';
@@ -3547,7 +3542,6 @@ import {createSf3dAuthoringGeneration} from './authoring-generation.mjs';
 import {createTrellisAuthoringGeneration,installMeshModelChoice,withExpressSnapshot} from './authoring-trellis-generation.mjs';
 import {createTrellisPageAuthoringGeneration,prepareImageForTrellis,describeTrellisInput} from './authoring-trellis-page.mjs';
 import {readPipelineRunStream,pipelineRunOutputArtifacts,pipelineArtifactIsLoadableMesh,pipelineRunReadUrlForPath} from './authoring-pipeline-result.mjs';
-import {applySceneEnvironmentBackground} from './scene-environment-background.mjs';
 import {readFireRendering,restoreFireRendering,checkedFireRendering} from './scene-fire-render-settings.mjs';
 import {createKilnRecipeStore} from './inference-kiln-selection.mjs';
 import {defaultKilnRecipe} from './inference-kiln-default.mjs';
@@ -3558,6 +3552,7 @@ import {installBrowseLayout} from './authoring-browse-layout.mjs';
 import {createAppFrameSource} from './app-frame-source.mjs';
 import {createSceneFrameRuntime} from './scene-frame-runtime.mjs';
 import {createSceneRenderResources} from './scene-render-resources.mjs';
+import {createSceneAppearanceResources,applySceneSpotRecord,SCENE_HDR_PRESETS} from './scene-appearance-resources.mjs';
 import {createSceneDisplayOwner} from './scene-display-owner.mjs';
 import {createSceneDrawRuntime} from './scene-draw-runtime.mjs';
 import {createSceneRenderObjects} from './scene-render-bootstrap.mjs';
@@ -10847,50 +10842,7 @@ document.getElementById('sidebar')?.addEventListener('input', saveSettings);
 document.getElementById('sidebar')?.addEventListener('change', saveSettings);
 
 // --- HDR Environments ---
-const HDR_ENVS = {
-  studio: {
-    label: 'Studio',
-    url: './assets/hdr/studio_small_09_1k.hdr',
-    previewUrl: './assets/hdr/studio_small_09_128.hdr',
-    // Noah's interim viewing defaults (2026-10-07), until the new lighting lands.
-    exposure: 1.1,
-    intensity: 0.7,
-  },
-  sunset: {
-    label: 'Sunset',
-    url: './assets/hdr/kloofendal_48d_partly_cloudy_puresky_1k.hdr',
-    previewUrl: './assets/hdr/kloofendal_48d_partly_cloudy_puresky_128.hdr',
-    exposure: 1.2,
-    intensity: 1.0,
-  },
-  warehouse: {
-    label: 'Warehouse',
-    url: './assets/hdr/empty_warehouse_01_1k.hdr',
-    previewUrl: './assets/hdr/empty_warehouse_01_128.hdr',
-    exposure: 1.4,
-    intensity: 1.2,
-  },
-  courtyard: {
-    label: 'Courtyard',
-    url: './assets/hdr/royal_esplanade_1k.hdr',
-    previewUrl: './assets/hdr/royal_esplanade_128.hdr',
-    exposure: 1.0,
-    intensity: 1.0,
-  },
-  night: {
-    label: 'Night',
-    url: './assets/hdr/moonlit_golf_1k.hdr',
-    previewUrl: './assets/hdr/moonlit_golf_128.hdr',
-    exposure: 2.0,
-    intensity: 1.5,
-  },
-  neutral: {
-    label: 'Neutral',
-    url: null, // procedural
-    exposure: 1.5,
-    intensity: 1.0,
-  },
-};
+const HDR_ENVS = SCENE_HDR_PRESETS;
 
 const sceneAO=createSceneAOState();
 let sceneAOControls=null;
@@ -10898,17 +10850,19 @@ sceneAO.subscribe(applySceneAOParameters);
 const sceneEnvironment=createSceneEnvironmentState({presets:HDR_ENVS});
 sceneEnvironment.subscribe(applyEnvironmentParameters);
 let neutralEnvironmentMap;
-const environmentLoader = createEnvironmentLoader({
-  presets: HDR_ENVS,
-  async load(url) {
-    const generator=pmremGenerator;
-    const texture = await new RGBELoader().loadAsync(url);
-    try { if(generator!==pmremGenerator||deviceRecoveryHeld())throw Error('Environment device retired');return generator.fromEquirectangular(texture).texture; }
-    finally { texture.dispose(); }
+const sceneAppearanceResources=createSceneAppearanceResources({THREE,readScene:()=>scene,readRenderer:()=>renderer,readPMREM:()=>pmremGenerator,
+  environmentState:sceneEnvironment,readEntries:()=>workingScene.objects,
+  readArrival:()=>({...arrivalLightingState,matchedFlameEv:!window.__kaminosVolumePrototype&&document.getElementById('rendering-match-flame-camera')?.checked?Number(document.getElementById('volume-physical-exposure')?.value):0}),
+  readGround:()=>({distributed:fireLightFieldRouteParams().get('volume_light_field_distributed')==='1'}),
+  readStudio:()=>({records:arrivalLightingState.plan?.lights,enabled:arrivalLightingState.studioLightsEnabled}),
+  readLighting:()=>{
+    const params=new URLSearchParams(location.search);
+    return {aoSettings:sceneAO.read(),aoIntensityValue:effectiveAOIntensity(),
+      giOptions:{reflections:{enabled:params.get('scene_reflections')==='1'},filterImplementation:params.get('lighting_filter')==='separate'?'separate':'shared',surfaceReuse:params.get('lighting_surface_reuse')!=='0',sourceComparison:params.get('experiment')==='gi-source-study'}};
   },
-  apply: map => applyEnvMap(map, readEnvironmentRecipe().intensity),
-  fallback: () => neutralEnvironmentMap ||= createProceduralEnv(),
-  placeholder: createPendingEnvironment,
+  loadHDR:url=>new RGBELoader().loadAsync(url),
+  mapApplied:map=>{currentEnvMap=map;neutralEnvironmentMap=sceneAppearanceResources.neutralMap;},
+  redraw:()=>window._kaminosDirty?.(),
   changed(state) {
     const label = HDR_ENVS[state.name]?.label || 'Environment';
     const el = document.getElementById('env-loading');
@@ -10927,6 +10881,7 @@ const environmentLoader = createEnvironmentLoader({
     }
   },
 });
+const environmentLoader=sceneAppearanceResources.environment;
 window.kaminosEnvironmentLoading = {state: environmentLoader.read, whenSettled: environmentLoader.whenSettled};
 
 let loadingTelemetryHideTimer = null;
@@ -11154,12 +11109,7 @@ async function initScene() {
     readSharedGpu:()=>sharedGpu??(samHostContext?{device:samHostContext.device,queue:samHostContext.device.queue}:null),
     readRendererOptions:()=>({exposure:sceneEnvironment.read().exposure,updateStyle:true,allowIndependentDevice:true,
       trackTimestamp:!!sharedGpu?.device&&(isFireLightFieldTimingRoute()||new URLSearchParams(location.search).get('ash_timing')==='1')}),
-    readLightingOptions:()=>{
-      const params=new URLSearchParams(location.search);
-      return {aoSettings:sceneAO.read(),aoIntensityValue:effectiveAOIntensity(),
-        giOptions:{reflections:{enabled:params.get('scene_reflections')==='1'},filterImplementation:params.get('lighting_filter')==='separate'?'separate':'shared',surfaceReuse:params.get('lighting_surface_reuse')!=='0',sourceComparison:params.get('experiment')==='gi-source-study'},
-        aoCompute,denoise,configureMaterialSideAODepth,createSceneGI};
-    },
+    readLightingOptions:()=>sceneAppearanceResources.lightingOptions,
     onConstructed(next,{replacement}){renderer=next;if(!replacement){renderer.domElement.id='kaminos-host-renderer-canvas';vp.appendChild(renderer.domElement);window.kaminosStartup?.phase('Initializing renderer');}},
   });
   const sceneRenderBootstrap=await sceneRenderResources.initializeRenderer({assertCurrent(){}});
@@ -11193,26 +11143,7 @@ async function initScene() {
   // Distributed irradiance is interpolated per vertex. The old radius-length
   // fan projects a center sample across the entire floor. Local ring cells
   // keep that receiving footprint below .3 units on the experimental route.
-  const groundGeo = fireLightFieldRouteParams().get('volume_light_field_distributed') === '1'
-    ? new THREE.RingGeometry(0, 5, 128, 40) : new THREE.CircleGeometry(5, 64);
-  const groundMat = new THREE.MeshStandardNodeMaterial({
-    color: 0x808080,
-    roughness: 0.65,
-    metalness: 0.0,
-  });
-  groundMat.transparent = false;
-  groundMat.blending = THREE.CustomBlending;
-  groundMat.blendSrc = THREE.SrcAlphaFactor;
-  groundMat.blendDst = THREE.OneMinusSrcAlphaFactor;
-  groundMat.blendSrcAlpha = THREE.OneFactor;
-  groundMat.blendDstAlpha = THREE.OneMinusSrcAlphaFactor;
-  groundMat.opacityNode = THREE.TSL.smoothstep(THREE.TSL.float(5.0), THREE.TSL.float(1.65), THREE.TSL.positionLocal.xy.length());
-  groundMat.userData = { ...groundMat.userData, kaminosCycloramaFloor: true };
-  groundPlane = new THREE.Mesh(groundGeo, groundMat);
-  groundPlane.rotation.x = -Math.PI / 2;
-  groundPlane.position.y = -0.85;
-  groundPlane.receiveShadow = true;
-  scene.add(groundPlane);
+  groundPlane=sceneAppearanceResources.initializeGround({assertCurrent(){}});
 
   // Fire-light geometry witness set: neutral primitives at the positions
   // that exercise the light field - a pillar beside the flame (vertical
@@ -12089,6 +12020,7 @@ async function initScene() {
       await sceneRadianceRouteTask.catch(()=>{});assertCurrent();
     },
     releaseRadiance:()=>releaseSceneRadianceRoute(),
+    releaseEnvironment:()=>sceneAppearanceResources.invalidateEnvironment(),
     async retireModel(){await samHostContext?.inferenceSession.close();samHostContext=null;},
     async acquireDevice(){
       const next=await requestKaminosSharedWebGpuDevice({bufferRequirements:combinedRequirements,
@@ -12333,68 +12265,11 @@ function environmentDefaults(name) {return sceneEnvironment.defaults(name);}
 function readEnvironmentRecipe() {return sceneEnvironment.recipe();}
 function applyEnvironmentRecipe(recipe) {return sceneEnvironment.patch(recipe);}
 function applyEnvironmentParameters(value=sceneEnvironment.read()) {
-  if(!renderer||!scene)return;
-  const activeDelta = typeof arrivalLightingState !== 'undefined' && arrivalLightingState?.materialTuningEnabled && arrivalLightingState?.plan?.environmentDelta
-    ? arrivalLightingState.plan.environmentDelta
-    : { exposureScale: 1, envIntensityScale: 1, envRotationOffset: 0 };
-  const matchedFlameEv = (typeof window === 'undefined' || !window.__kaminosVolumePrototype) && document.getElementById('rendering-match-flame-camera')?.checked
-    ? Number(document.getElementById('volume-physical-exposure')?.value)
-    : 0;
-  const matchedEvScale = Number.isFinite(matchedFlameEv) && matchedFlameEv !== 0 ? 2 ** matchedFlameEv : 1;
-  renderer.toneMappingExposure=value.exposure * activeDelta.exposureScale * matchedEvScale;
-  scene.environmentIntensity=value.intensity * activeDelta.envIntensityScale;
-  scene.environmentRotation=new THREE.Euler(0,value.rotation + activeDelta.envRotationOffset,0);
-  const tunedMaterials = typeof prepareArrivedMeshMaterials === 'function' && typeof arrivalLightingState !== 'undefined' && Boolean(arrivalLightingState?.materialTuningEnabled);
-  for(const {object,type} of workingScene.objects){
-    if(tunedMaterials && object && type !== 'light' && type !== 'camera'){
-      prepareArrivedMeshMaterials(object,{
-        maxAnisotropy:renderer?.capabilities?.getMaxAnisotropy?.()||16,
-        materialTuning:true,
-        materialProfile:arrivalLightingState.materialProfile,
-        baseEnvMapIntensity:value.intensity,
-      });
-    } else if (object?.traverse) {
-      object.traverse(child=>{
-        for(const material of [].concat(child.material||[]))material.envMapIntensity=scene.environmentIntensity;
-      });
-    }
-  }
-  sceneExposureControls?.sync();updateBackground();window._kaminosDirty?.();
+  if(sceneAppearanceResources.applyEnvironment(value))sceneExposureControls?.sync();
 }
 
-function createPendingEnvironment() {
-  // PMREM needs at least 16px cube faces: a 64x32 equirectangular source.
-  // Generate neutral radiance locally so even the preview download can wait.
-  const pixels = new Float32Array(64 * 32 * 4);
-  for (let i = 0; i < pixels.length; i += 4) pixels.set([.18, .18, .18, 1], i);
-  const texture = new THREE.DataTexture(pixels, 64, 32, THREE.RGBAFormat, THREE.FloatType);
-  texture.mapping = THREE.EquirectangularReflectionMapping;
-  texture.needsUpdate = true;
-  try { return pmremGenerator.fromEquirectangular(texture).texture; }
-  finally { texture.dispose(); }
-}
-
-function createProceduralEnv() {
-  // Create a simple gradient environment for fallback
-  const envScene = new THREE.Scene();
-
-  // Top hemisphere - warm white
-  const topLight = new THREE.HemisphereLight(0xffeedd, 0x222233, 2.0);
-  envScene.add(topLight);
-
-  // Add some point lights for specular highlights
-  const pl1 = new THREE.PointLight(0xffffff, 8, 10);
-  pl1.position.set(2, 3, 2);
-  envScene.add(pl1);
-  const pl2 = new THREE.PointLight(0xddeeff, 5, 10);
-  pl2.position.set(-3, 2, -1);
-  envScene.add(pl2);
-  const pl3 = new THREE.PointLight(0xffeedd, 3, 10);
-  pl3.position.set(0, -1, 3);
-  envScene.add(pl3);
-
-  return pmremGenerator.fromScene(envScene, 0.04).texture;
-}
+function createPendingEnvironment(){return sceneAppearanceResources.createPendingEnvironment();}
+function createProceduralEnv(){return sceneAppearanceResources.createNeutralEnvironment();}
 
 async function loadEnvironment(name, { remember = true } = {}) {
   if (!HDR_ENVS[name]) return;
@@ -12407,33 +12282,7 @@ async function loadEnvironment(name, { remember = true } = {}) {
   return environmentLoader.select(name);
 }
 
-function applyEnvMap(envMap, intensity) {
-  const effectiveIntensity = intensity * (typeof arrivalLightingState !== 'undefined' && arrivalLightingState?.materialTuningEnabled ? (arrivalLightingState.plan?.environmentDelta?.envIntensityScale ?? 1) : 1);
-  scene.environment = envMap;
-  scene.environmentIntensity = effectiveIntensity;
-  currentEnvMap = envMap;
-  updateBackground();
-
-  // Update all materials in scene to use envMap
-  const tunedMaterials = typeof prepareArrivedMeshMaterials === 'function' && typeof arrivalLightingState !== 'undefined' && Boolean(arrivalLightingState?.materialTuningEnabled);
-  workingScene.objects.forEach(({ object, type }) => {
-    if (tunedMaterials && object && type !== 'light' && type !== 'camera') {
-      prepareArrivedMeshMaterials(object, {
-        maxAnisotropy: typeof renderer !== 'undefined' ? (renderer?.capabilities?.getMaxAnisotropy?.() || 16) : 16,
-        materialTuning: true,
-        materialProfile: arrivalLightingState.materialProfile,
-        baseEnvMapIntensity: intensity,
-      });
-    }
-    object.traverse(child => {
-      for (const material of [].concat(child.material || [])) {
-        if (!tunedMaterials) material.envMapIntensity = effectiveIntensity;
-        material.needsUpdate = true;
-      }
-    });
-  });
-  window._kaminosDirty?.();
-}
+function applyEnvMap(envMap,intensity){return sceneAppearanceResources.applyEnvironmentMap(envMap,intensity);}
 
 // --- File Loading ---
 function createPageSceneLifecycle(){
@@ -23102,7 +22951,7 @@ installRenderingNumberControls(document.getElementById('authoring-source-environ
 const envBackdropContrast = uniform(1);
 
 function updateBackground() {
-  applySceneEnvironmentBackground(scene,sceneEnvironment.read(),currentEnvMap);
+  sceneAppearanceResources.updateBackground();
 }
 
 // --- AO Controls ---
@@ -23126,41 +22975,10 @@ const arrivalLightingState = {
   rigTransformEdited: false,
 };
 
-function applySpotRecordToThreeLight(light, record, enabled) {
-  if (!light || !record) return false;
-  const wasVisible = light.visible;
-  light.visible = Boolean(enabled && record.light.enabled);
-  light.color.set(record.light.color);
-  light.intensity = record.light.intensity;
-  light.angle = THREE.MathUtils.degToRad(record.light.angle);
-  light.penumbra = record.light.penumbra;
-  light.position.fromArray(record.transform.position);
-  const effectiveAim = Math.max(0.5, (record.light.aimDistance || 4) * (record.transform.scale?.[2] ?? 1));
-  const direction = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(...record.transform.rotation));
-  light.target.position.copy(light.position).addScaledVector(direction, effectiveAim);
-  light.target.updateMatrixWorld();
-  if (light.shadow?.camera) {
-    light.shadow.camera.near = Math.max(0.1, Math.min(0.5, effectiveAim * 0.12));
-    light.shadow.camera.far = Math.max(8, effectiveAim * 3.0);
-    light.shadow.camera.updateProjectionMatrix?.();
-  }
-  return wasVisible !== light.visible;
-}
-
+function applySpotRecordToThreeLight(light,record,enabled){return applySceneSpotRecord(THREE,light,record,enabled);}
 function installStartupStudioLights(targetScene) {
-  if (!targetScene) return;
-  const makeSpot = name => {
-    const light = new THREE.SpotLight();
-    light.name = name;
-    light.castShadow = true;
-    light.shadow.mapSize.set(2048, 2048);
-    light.shadow.bias = -0.00005;
-    light.shadow.normalBias = 0.004;
-    return light;
-  };
-  studioKeyLight = makeSpot('Startup studio key light');
-  studioRimLight = makeSpot('Startup studio rim light');
-  targetScene.add(studioKeyLight, studioKeyLight.target, studioRimLight, studioRimLight.target);
+  if(!targetScene)return;
+  ({key:studioKeyLight,rim:studioRimLight}=sceneAppearanceResources.initializeStudio({assertCurrent(){}}));
   syncArrivalStudioLighting();
 }
 

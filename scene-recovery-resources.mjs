@@ -2,11 +2,12 @@
 // live resource owner (the page uses accessors; the worker uses its local shell).
 // Acquisition, domain construction and admission remain with their owners.
 export function createSceneRecoveryResourceCallbacks({state,readInputs,acquireDevice,discardDevice,replaceRenderer,releaseRenderer,
- waitForResources,releaseRadiance,retireModel,adoptRenderer,restoreFlame,rebuildOutput,restoreEnvironment,activateFlame}){
+ waitForResources,releaseRadiance,releaseEnvironment=null,retireModel,adoptRenderer,restoreFlame,rebuildOutput,restoreEnvironment,activateFlame}){
  for(const [name,value] of Object.entries({readInputs,acquireDevice,discardDevice,replaceRenderer,releaseRenderer,waitForResources,releaseRadiance,
   retireModel,adoptRenderer,restoreFlame,rebuildOutput,restoreEnvironment,activateFlame})){
   if(typeof value!=='function')throw Error(`Scene recovery requires ${name}`);
  }
+ if(releaseEnvironment!==null&&typeof releaseEnvironment!=='function')throw Error('Scene recovery releaseEnvironment must be callable');
  let snapshot=null,failedCandidate=null;
  async function releaseFailedCandidate(){
   if(!failedCandidate)return;
@@ -47,7 +48,8 @@ export function createSceneRecoveryResourceCallbacks({state,readInputs,acquireDe
    for(const graph of state.giOutputGraphs.values())graph.fireLightFieldPass?.dispose();
    state.giOutputGraphs.clear();state.fireLightFieldPass=null;
    state.sceneFlameHDR?.dispose();state.sceneFlameHDR=null;state.sceneBloom.dispose();
-   state.neutralEnvironmentMap?.dispose();state.neutralEnvironmentMap=null;
+   if(releaseEnvironment)await releaseEnvironment(context);
+   else{state.neutralEnvironmentMap?.dispose();state.neutralEnvironmentMap=null;}
    state.scene.environment=null;state.scene.background=null;
    // Failed cleanup retains its candidate. Finish that release before a new
    // acquisition can overwrite the caller's live device handle.

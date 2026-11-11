@@ -5,6 +5,8 @@ import vm from 'node:vm';
 import * as THREE from '../lib/three.webgpu.js';
 import { test } from 'node:test';
 import {createEnvironmentLoader} from '../scene-environment-loader.mjs';
+import {loadSceneAppearance} from './helpers/load-scene-appearance.mjs';
+const {createSceneAppearanceResources}=await loadSceneAppearance();
 import {bindSceneExposureControls,createSceneEmissiveCamera} from '../scene-emissive-camera.mjs';
 import {createSceneDisplayGraph,prepareSceneEmissionSource} from '../scene-display-graph.mjs';
 import {resolveStartupSceneDefaults} from '../user-preferences.mjs';
@@ -34,8 +36,12 @@ function environmentContext({ storage = new Map(), startup = false, load = async
     localStorage: { getItem: key => storage.get(key) || null, setItem: (key,value) => storage.set(key,value) },
   });
   context.sceneEnvironment=createSceneEnvironmentState({presets:context.HDR_ENVS});
+  context.sceneAppearanceResources=createSceneAppearanceResources({THREE,readScene:()=>scene,readRenderer:()=>context.renderer,readPMREM:()=>null,
+    environmentState:context.sceneEnvironment,readEntries:()=>context.workingScene.objects,readStudio:()=>null,readLighting:()=>({}),
+    readArrival:()=>({matchedFlameEv:!context.window.__kaminosVolumePrototype&&document.getElementById('rendering-match-flame-camera').checked?Number(document.getElementById('volume-physical-exposure').value):0}),
+    mapApplied:map=>{context.currentEnvMap=map;}});
   vm.runInContext(between('// --- Environment Loading ---', '// --- File Loading ---'), context);
-  context.environmentLoader=createEnvironmentLoader({presets:context.HDR_ENVS,load,apply:map=>context.applyEnvMap(map,context.readEnvironmentRecipe().intensity),fallback:()=>({name:'neutral'})});
+  context.environmentLoader=createEnvironmentLoader({presets:context.HDR_ENVS,load:async url=>Object.assign(new THREE.Texture(),await load(url)),apply:map=>context.applyEnvMap(map,context.readEnvironmentRecipe().intensity),fallback:()=>({name:'neutral'})});
   context.environmentLoader.releaseFull();
   const flame=document.getElementById('volume-physical-exposure');flame.min='-8';flame.max='8';flame.ownerDocument={defaultView:{Event}};
   context.sceneExposureControls=bindSceneExposureControls({exposure:document.getElementById('exposure-slider'),flame,match:document.getElementById('rendering-match-flame-camera'),label:document.getElementById('scene-exposure-label'),output:document.getElementById('exposure-val'),readIndependent:()=>context.sceneEnvironment.read().exposure,writeIndependent:exposure=>context.sceneEnvironment.patch({exposure}),redraw(){}});
