@@ -7,19 +7,22 @@ const norm=a=>{const l=Math.hypot(...a);return a.map(v=>v/(l||1));};
 const key=(x,y,z)=>`${x},${y},${z}`;
 export function createEarthField(input){
  const snapshot=checkedEarthSnapshot(input),spacing=snapshot.config.width/snapshot.config.columns,h=spacing*1.32,half=snapshot.config.width/2;
+ // A resampled bed keeps its physical depth. Horizontal decimation must not
+ // enlarge vertical reconstruction support or add extra apparent earth above it.
+ const vertical=snapshot.design?snapshot.design.bed.depth/snapshot.config.layers/(spacing*.82):1,hy=h*vertical;
  const fragments=earthFragments(snapshot),bins=new Map(),adjacency=Array.from(snapshot.particles,()=>[]),damaged=new Uint8Array(snapshot.particles.length);
  for(const b of snapshot.bonds){if(b.active){adjacency[b.a].push(b.b);adjacency[b.b].push(b.a);}else{damaged[b.a]=1;damaged[b.b]=1;}}
  for(const [i,p]of snapshot.particles.entries()){
-  const k=key(...p.position.map(v=>Math.floor(v/h)));if(!bins.has(k))bins.set(k,[]);bins.get(k).push({...p,index:i});
+  const k=key(...p.position.map((v,k)=>Math.floor(v/(k===1?hy:h))));if(!bins.has(k))bins.set(k,[]);bins.get(k).push({...p,index:i});
  }
  const weights=new Float64Array(snapshot.particles.length),sums=new Float64Array(snapshot.particles.length),parent=new Int32Array(snapshot.particles.length),present=new Uint8Array(snapshot.particles.length),local=[];
  let winner=-1;
  const find=i=>{while(parent[i]!==i){parent[i]=parent[parent[i]];i=parent[i];}return i;};
  const value=(x,y,z)=>{
   for(const i of local)present[i]=0;local.length=0;
-  const ix=Math.floor(x/h),iy=Math.floor(y/h),iz=Math.floor(z/h);let affected=false,total=0;
+  const ix=Math.floor(x/h),iy=Math.floor(y/hy),iz=Math.floor(z/h);let affected=false,total=0;
   for(let dz=-1;dz<=1;dz++)for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
-   for(const p of bins.get(key(ix+dx,iy+dy,iz+dz))??[]){const q=1-((x-p.position[0])**2+(y-p.position[1])**2+(z-p.position[2])**2)/(h*h);if(q>0){const i=p.index;local.push(i);present[i]=1;parent[i]=i;weights[i]=q*q*q*(p.clodId>0?2:1);sums[i]=0;total+=weights[i];affected=affected||!!damaged[i];}}
+   for(const p of bins.get(key(ix+dx,iy+dy,iz+dz))??[]){const q=1-((x-p.position[0])**2+(z-p.position[2])**2)/(h*h)-(y-p.position[1])**2/(hy*hy);if(q>0){const i=p.index;local.push(i);present[i]=1;parent[i]=i;weights[i]=q*q*q*(p.clodId>0?2:1);sums[i]=0;total+=weights[i];affected=affected||!!damaged[i];}}
   }
   // Aggregate support is fuller than the surrounding fine matrix. This retained
   // ancestry changes intact relief as well as broken-fragment geometry; it does
@@ -37,7 +40,7 @@ export function createEarthField(input){
  };
  const sample=(x,y,z)=>{const result=value(x,y,z),clodId=snapshot.particles[winner]?.clodId??0;return {value:result,fragmentId:winner<0?0:fragments[winner],clodId,region:clodId?'clod':'matrix',materialIndex:clodId?4+(clodId%2):0};};
  const normal=(x,y,z)=>{const e=spacing*.012;return norm([value(x-e,y,z)-value(x+e,y,z),value(x,y-e,z)-value(x,y+e,z),value(x,y,z-e)-value(x,y,z+e)]);};
- return {value,sample,normal,spacing,snapshot,bounds:{min:[-half-spacing,-spacing,-half-spacing],max:[half+spacing,Math.max(...snapshot.particles.map(p=>p.position[1]))+h+spacing,half+spacing]}};
+ return {value,sample,normal,spacing,snapshot,support:[h,hy,h],bounds:{min:[-half-spacing,-spacing,-half-spacing],max:[half+spacing,Math.max(...snapshot.particles.map(p=>p.position[1]))+hy+spacing,half+spacing]}};
 }
 // Six consistent tetrahedra per voxel. Extraction is a display/capture operation:
 // changing resolution never modifies the retained physical specimen.
@@ -90,5 +93,5 @@ export function createEarthTeacherSource({snapshot,resolution=40,halo=0,maxTrian
  const samplingPlaneHeight=projected?heightMoment/projected:0;
  for(let z=-halo;z<=halo;z++)for(let x=-halo;x<=halo;x++)if(x||z)for(const t of central){const shift=p=>[p[0]+width*x,p[1],p[2]+width*z];triangles.push({...t,a:shift(t.a),b:shift(t.b),c:shift(t.c),identity:`${t.identity}@${x},${z}`});}
  return {schema:'kaminos.earth-teacher.v1',config:{kind:'earth-specimen',tileSize:width,resolution,halo,snapshot:field.snapshot},samplingPlaneHeight,materials:structuredClone(EARTH_MATERIALS),triangles,referenceHeight:central.reduce((height,t)=>Math.max(height,t.a[1],t.b[1],t.c[1]),-Infinity)+.002,
-  boundary:'Bounded formed specimen; finite repeated halo when requested. Seamless periodic material is not established.',reconstruction:{kind:'compact particle density isosurface, marching tetrahedra',resolution,matrixTriangles:central.filter(t=>t.kind==='matrix').length,clodTriangles:central.filter(t=>t.region==='clod').length},unit:'metres'};
+  boundary:'Bounded formed specimen; finite repeated halo when requested. Seamless periodic material is not established.',reconstruction:{kind:'compact particle density isosurface, marching tetrahedra',support:field.support,resolution,matrixTriangles:central.filter(t=>t.kind==='matrix').length,clodTriangles:central.filter(t=>t.region==='clod').length},unit:'metres'};
 }

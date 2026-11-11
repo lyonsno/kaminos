@@ -53,6 +53,7 @@ export function checkedEarthSnapshot(s){
 // that coarse and fine cohesive particle solves are mechanically equivalent.
 export function createEarthDesign(snapshot){
  const s=checkedEarthSnapshot(snapshot);if(s.time!==0||s.steps!==0)throw Error('A common specimen design requires an unworked initial bed');
+ if(s.design)return checkedEarthDesign(s.design);
  const spacing=s.config.width/s.config.columns;
  return checkedEarthDesign({schema:EARTH_DESIGN_SCHEMA,reference:{...s.config},bed:{bottom:spacing*(.34-.41),depth:s.config.layers*spacing*.82,hillAmplitude:spacing*.55,hillCenter:[-.065,.03],hillWidth:.018},matrixMass:s.particles.reduce((n,p)=>n+p.mass,0),clods:(s.structure?.clods??[]).map(c=>({id:c.id,center:[...s.particles[c.seedParticle].position],radii:[...c.radii]})),grit:s.grit});
 }
@@ -64,6 +65,10 @@ export function checkedEarthDesign(d){
  for(const g of d.grit){vector(g.position,3,'grit position');vector(g.radii,3,'grit radii').forEach(r=>finite(r,'grit radius',Number.MIN_VALUE));vector(g.quaternion,4,'grit orientation');if(Math.abs(Math.hypot(...g.quaternion)-1)>1e-5)throw Error('Invalid grit orientation');for(const key of ['velocity','angularVelocity'])vector(g[key],3,key);finite(g.mass,'grit mass',Number.MIN_VALUE);integer(g.materialIndex,'grit material',1);if(g.materialIndex>3)throw Error('Invalid grit material');}
  return structuredClone({...d,reference:c});
 }
+export function checkedEarthQuality(design,quality={}){
+ if(!quality||typeof quality!=='object'||Array.isArray(quality)||Object.keys(quality).some(k=>!['columns','layers','iterations','dt'].includes(k)))throw Error('Invalid physical quality setting');
+ const c=configuration({...design.reference,...quality});return {columns:c.columns,layers:c.layers,iterations:c.iterations,dt:c.dt};
+}
 function initialSnapshot(c,design=null){
  let state=c.seed>>>0;const rand=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return(state+.5)/4294967296;};
  const spacing=c.width/c.columns,radius=Math.min(spacing,design?design.bed.depth/c.layers/.82:spacing)*.34;
@@ -72,7 +77,7 @@ function initialSnapshot(c,design=null){
  for(let y=0;y<c.layers;y++)for(let z=0;z<c.columns;z++)for(let x=0;x<c.columns;x++){
   const px=(x+.5-c.columns/2)*spacing,pz=(z+.5-c.columns/2)*spacing;
   const bed=design?.bed;const hill=bed?bed.hillAmplitude*Math.exp(-((px-bed.hillCenter[0])**2+(pz-bed.hillCenter[1])**2)/bed.hillWidth):spacing*.55*Math.exp(-((px+.065)**2+(pz-.03)**2)/.018);
-  particles.push({...body([px+(rand()-.5)*spacing*.17,(design?design.bed.bottom+(y+.5)*design.bed.depth/c.layers:radius+y*spacing*.82)+hill+(rand()-.5)*Math.min(spacing,design?design.bed.depth/c.layers:spacing)*.13,pz+(rand()-.5)*spacing*.17],(design?design.matrixMass/(c.columns*c.columns*c.layers):c.density*spacing**3*.58)),radius});
+  particles.push({...body([px+(rand()-.5)*spacing*.17,(design?design.bed.bottom+(y+.5)*design.bed.depth/c.layers:radius+y*spacing*.82)+hill+(rand()-.5)*Math.min(spacing,design?design.bed.depth/c.layers/.82:spacing)*.13,pz+(rand()-.5)*spacing*.17],(design?design.matrixMass/(c.columns*c.columns*c.layers):c.density*spacing**3*.58)),radius});
  }
  const index=(x,y,z)=>(y*c.columns+z)*c.columns+x;
  const offsets=[[1,0,0],[0,1,0],[0,0,1],[1,1,0],[-1,1,0],[0,1,1],[0,1,-1],[1,0,1],[-1,0,1]];
@@ -119,8 +124,8 @@ export class EarthSpecimen {
   this.tool=new CANNON.Body({type:CANNON.Body.KINEMATIC,mass:0});this.tool.addShape(new CANNON.Sphere(.08));this.tool.collisionResponse=false;this.tool.position.y=10;w.addBody(this.tool);
  }
  static fromDesign(input,quality={}){
-  const design=checkedEarthDesign(input);if(!quality||Object.keys(quality).some(k=>!['columns','layers','iterations','dt'].includes(k)))throw Error('Invalid physical quality setting');
-  const c=configuration({...design.reference,...quality});return EarthSpecimen.fromSnapshot(initialSnapshot(c,design));
+  const design=checkedEarthDesign(input),checked=checkedEarthQuality(design,quality);
+  const c=configuration({...design.reference,...checked});return EarthSpecimen.fromSnapshot(initialSnapshot(c,design));
  }
  static fromSnapshot(snapshot){return new EarthSpecimen({},snapshot);}
  advance(seconds,{tool=null,report=true}={}){

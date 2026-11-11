@@ -31,3 +31,14 @@ test('resampled cohesive links retain reference stress through cell cross-sectio
  const base=new earth.EarthSpecimen({columns:6,layers:3,grains:0,clodCount:0}),design=earth.createEarthDesign(base.snapshot());base.dispose();const coarse=earth.EarthSpecimen.fromDesign(design,{columns:3,layers:2});
  try{const horizontal=coarse.bonds.find(b=>b.a===0&&b.b===1),vertical=coarse.bonds.find(b=>b.a===0&&b.b===9);assert.ok(Math.abs(horizontal.forceScale-3)<1e-12,'horizontal force follows cell volume / link length');assert.ok(Math.abs(vertical.forceScale-4)<1e-12,'vertical force uses the retained bed depth');assert.equal(horizontal.constraint.equations[0].maxForce,design.reference.cohesion*3);coarse.setMaterial({cohesion:5});assert.equal(horizontal.constraint.equations[0].maxForce,15);}finally{coarse.dispose();}
 });
+
+test('reference discretization preserves its original physical seed and design recapture is idempotent',()=>{
+ const seed=new earth.EarthSpecimen({columns:4,layers:2,grains:2,clodCount:1}),original=seed.snapshot(),design=earth.createEarthDesign(original),same=earth.EarthSpecimen.fromDesign(design,{columns:4,layers:2}),coarse=earth.EarthSpecimen.fromDesign(design,{columns:3,layers:2});
+ try{const s=same.snapshot();assert.deepEqual(s.particles.map(p=>p.position),original.particles.map(p=>p.position));assert.deepEqual(s.bonds.map(b=>b.rest),original.bonds.map(b=>b.rest));assert.deepEqual(earth.createEarthDesign(coarse.snapshot()),design);}finally{seed.dispose();same.dispose();coarse.dispose();}
+});
+
+test('density reconstruction keeps vertical material support fixed when only horizontal discretization changes',async()=>{
+ const {createEarthField}=await import('../earth-surface.mjs');const seed=new earth.EarthSpecimen({columns:4,layers:2,grains:0,clodCount:0}),design=earth.createEarthDesign(seed.snapshot());seed.dispose();const values=[];
+ for(const columns of [3,4]){const model=earth.EarthSpecimen.fromDesign(design,{columns,layers:2}),s=model.snapshot();model.dispose();for(const [i,p]of s.particles.entries())p.position=i===0?[0,.1,0]:[10+i,10,10];const f=createEarthField(s);values.push([.11,.14,.17].map(y=>f.value(0,y,0)));}
+ for(let i=0;i<3;i++)assert.ok(Math.abs(values[0][i]-values[1][i])<1e-12,'equal layer spacing must give equal vertical density response');
+});

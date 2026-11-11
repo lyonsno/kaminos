@@ -170,3 +170,38 @@ test('finer result has a normal viewport and teacher export while live geometry 
  const {host,roots}=fakeHost(),app=await workshop.create({host,admitReplay:async(options,run)=>({result:await run({status:'test-admission'}),lease:{status:'test-admission'}}),inputs:{config:{columns:3,layers:2,grains:1},settings:{previewResolution:8,captureResolution:10}},record:()=>{}});
  try{await app.operations.live(false);await app.operations.advance({seconds:.01});const before=await app.operations.snapshot();await app.operations.replay({columns:4,layers:3});await app.operations.viewReplay();assert.equal(app.read().replay.viewing,true);assert.equal(roots[1].visible,false);assert.equal(app.operations.source().config.snapshot.particles.length,48);const teacher=await app.operations.freeze();assert.equal(teacher.source.snapshot.particles.length,48);assert.equal(teacher.source.halo,1);assert.deepEqual(teacher.replay.program,before.forming.program);await app.operations.returnToLive();assert.equal(roots[1].visible,true);assert.equal(app.read().replay.viewing,false);assert.deepEqual((await app.operations.snapshot()).snapshot,before.snapshot);assert.equal(app.operations.source().config.snapshot.particles.length,18);}finally{await app.dispose();}
 });
+
+test('cancelled replay surfaces handback failure instead of declaring clean cancellation',async()=>{
+ const {host}=fakeHost();let app;app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8}},record:()=>{},admitReplay:async(options,run)=>{queueMicrotask(()=>app.operations.replayCancel());return {result:await run({status:'test-admission'}),lease:{releaseError:'injected release failed'}};}});
+ try{await assert.rejects(app.operations.replay(),/handback failed/);assert.equal(app.read().replay.status,'failed');assert.match(app.read().replay.error,/release failed/);}finally{await app.dispose();}
+});
+test('invalid replay quality is rejected before admission and before pausing the live bed',async()=>{
+ const {host}=fakeHost();let admitted=0;const app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8}},record:()=>{},admitReplay:async(options,run)=>{admitted++;return {result:await run({status:'test'}),lease:{}};}});
+ try{const before=await app.operations.snapshot();await assert.rejects(app.operations.replay({iterations:0}),/Invalid/);assert.equal(admitted,0);assert.deepEqual(await app.operations.snapshot(),before);}finally{await app.dispose();}
+});
+test('a new specimen clears former replay status and quality',async()=>{
+ const {host}=fakeHost(),app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8}},record:()=>{},admitReplay:async(options,run)=>({result:await run({status:'test'}),lease:{}})});
+ try{await app.operations.replay();assert.equal(app.read().replay.status,'complete');await app.operations.reset();assert.equal(app.read().replay.status,'idle');assert.equal(app.read().replay.quality,null);}finally{await app.dispose();}
+});
+test('finer rendering during an in-flight live edit rejects as outdated without a null dereference',async()=>{
+ const Saved=globalThis.Worker,Worker=simulatedWorker();globalThis.Worker=Worker;const {host,roots,frame}=fakeHost();let app;
+ try{app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8,captureResolution:10}},record:()=>{},admitReplay:async(options,run)=>({result:await run({status:'test'}),lease:{}})});await app.operations.replay();await app.operations.live(true);roots[1].position.y=.04;frame(.01);await assert.rejects(app.operations.render({replay:true,paused:true}),e=>!(e instanceof TypeError)&&/outdated|current.*replay/i.test(e.message));await app.operations.snapshot();}finally{await app?.dispose();globalThis.Worker=Saved;}
+});
+
+test('finer viewing allows surface detail edits and enabled finer teacher export without returning to live',async()=>{
+ const {host,doc}=fakeHost(),app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8,captureResolution:10}},record:()=>{},admitReplay:async(options,run)=>({result:await run({status:'test'}),lease:{}})});const walk=node=>[node,...(node.children??[]).flatMap(walk)];
+ try{app.mount({document:doc,invoke:(name,value)=>app.operations[name](value)});await app.operations.replay({columns:4,layers:3});await app.operations.viewReplay();await app.operations.configure({previewResolution:10,captureResolution:12});assert.equal(app.read().replay.viewing,true);assert.equal(app.read().surface.resolution,10);const button=walk(doc.getElementById('viewport')).find(n=>n.textContent==='Export finer teacher');assert.equal(button.disabled,false);assert.equal((await app.operations.freeze()).source.resolution,12);}finally{await app.dispose();}
+});
+test('failed queued withdrawal remains visible after cancel and loses the stale queue position',async()=>{
+ const {host}=fakeHost(),app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8}},record:()=>{},admitReplay:async(options)=>{options.onWait({position:3,jobId:'fixture-pending'});await new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(Object.assign(Error('injected withdrawal failure'),{greenroomHandback:{state:'withdrawal-failed',runId:options.runId}})),{once:true}));}});
+ try{const pending=app.operations.replay();for(let i=0;i<20&&app.read().replay.status!=='waiting';i++)await new Promise(r=>setTimeout(r,5));const saved=await app.operations.snapshot();assert.ok(saved.forming.program);app.operations.replayCancel();await assert.rejects(pending,/withdrawal failure/);assert.equal(app.read().replay.status,'failed');assert.equal(app.read().replay.queuePosition,null);assert.equal(app.read().replay.handback.state,'withdrawal-failed');}finally{await app.dispose();}
+});
+
+test('explicit live teacher export keeps the displayed finer mesh, and replacement may leave finer view directly',async()=>{
+ const {host,roots}=fakeHost(),app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:10,captureResolution:8}},record:()=>{},admitReplay:async(options,run)=>({result:await run({status:'test'}),lease:{}})});
+ try{await app.operations.replay({columns:4,layers:3});await app.operations.viewReplay();const live=await app.operations.freeze({replay:false});assert.equal(live.source.snapshot.particles.length,18);await new Promise(r=>setTimeout(r,30));assert.equal(app.read().replay.viewing,true);assert.equal(app.operations.source().config.snapshot.particles.length,48);await app.operations.reset();assert.equal(app.read().replay.viewing,false);assert.equal(roots[1].visible,true);assert.equal(app.read().replay.status,'idle');}finally{await app.dispose();}
+});
+test('temporary finer inspection pause preserves saved live intent and restores it on return',async()=>{
+ const {host}=fakeHost(),app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8}},record:()=>{},admitReplay:async(options,run)=>({result:await run({status:'test'}),lease:{}})});
+ try{assert.equal(app.read().live.enabled,true);await app.operations.replay();await app.operations.viewReplay();assert.equal((await app.operations.snapshot()).live,true);await app.operations.returnToLive();assert.equal(app.read().live.enabled,true);}finally{await app.dispose();}
+});

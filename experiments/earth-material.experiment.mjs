@@ -1,5 +1,5 @@
 import * as THREE from '../lib/three.webgpu.js';
-import {EARTH_MATERIALS,checkedEarthSnapshot,EarthSpecimen,createEarthDesign} from '../earth-specimen.mjs';
+import {EARTH_MATERIALS,checkedEarthSnapshot,EarthSpecimen,createEarthDesign,checkedEarthQuality} from '../earth-specimen.mjs';
 import {createEarthSurfaceTask,planEarthSurface,rememberEarthSurface} from '../earth-surface-task.mjs';
 import {withGreenroomLease} from '../greenroom-lease.mjs';
 import {checkedEarthProgram,createEarthReplay,EARTH_PROGRAM_SCHEMA} from '../earth-replay.mjs';
@@ -36,13 +36,15 @@ export default {
   restore(root,inputs.pose);restore(tool,inputs.tool);
   let asset,toolAsset,liveEnabled=inputs.live!==false,lastTool=null,liveFlight=null,previewFlight=null,refineTimer=null,stopFrames=()=>{},revision=0,surfaceRevision=0,epoch=0,settling=0,physicsError=null,visibilityReset=false;
   let renderPreview=null,renderReturn=null,renderTransition=null,renderOpening=null,renderClosing=null,uiContext=null;
-  let viewingReplay=false,replayToolVisible=true;
+  let viewingReplay=false,replayToolVisible=true,replayReturnLive=null;
   let replay=null,replayState=null,replayResult=null,replayPending=false,replayAbort=null,replayFlight=null;
   let previewFailure=null;const samples=[],history=acceptedHistory??{initial:model.snapshot(),samples:[],...(initialDesign?{program:{schema:EARTH_PROGRAM_SCHEMA,design:initialDesign,actions:[]}}:{})};
+  const currentReplay=()=>{if(!replayResult||liveFlight||samples.length)throw Error('No current finer replay; it is missing or outdated by a live edit');return replayResult;};
+  const clearReplay=()=>{replay=null;replayState=null;replayResult=null;replayAbort=null;replayReturnLive=null;};
   const rememberAction=action=>{history.program?.actions.push(structuredClone(action));if(replayResult)replayState={...replayState,status:'outdated'};replayResult=null;};
   const frame=()=>session.setView({position:[.63,.48,.69],target:[0,.065,0],fov:40});
-  const read=()=>({schema:'kaminos.earth-authoring.v1',objectId:asset?.id,toolId:toolAsset?.id,physics:model.state(),physicsWidth:model.config.width,material:{cohesion:model.config.cohesion,friction:model.config.friction,plasticYield:model.config.plasticYield,clodStrength:model.config.clodStrength,interfaceStrength:model.config.interfaceStrength,gritBinding:model.config.gritBinding},ingredients:{clodCount:model.config.clodCount,maxClods:model.config.columns**2*(model.config.layers-Math.floor(model.config.layers/2))},settings:{...config},busy,failure,replay:{viewing:viewingReplay,available:!!history.program,status:replayState?.status??'idle',completed:replayState?.completed??0,total:replayState?.total??0,quality:replayState?.quality??null,error:replayState?.error??null,queuePosition:replayState?.position??null,jobId:replayState?.jobId??null,hasResult:!!replayResult,liveQuality:{columns:model.config.columns,layers:model.config.layers},referenceQuality:history.program?{columns:history.program.design.reference.columns,layers:history.program.design.reference.layers}:null},renderPreview:{active:!!renderPreview||renderTransition==='opening',transition:renderTransition,state:renderTransition?null:renderPreview?.read()??null},live:{enabled:liveEnabled,pendingSamples:samples.length,inFlight:!!liveFlight,revision,surfaceRevision,previewDetail:Math.min(config.liveResolution,config.previewResolution),previewFailure,recordedSamples:history.samples.length,settlingSeconds:settling},surface:source?{resolution:source.reconstruction.resolution,triangles:source.triangles.length,matrixTriangles:source.reconstruction.matrixTriangles,clodTriangles:source.reconstruction.clodTriangles,boundary:source.boundary}:null,view:session.readView(),pose:pose(root),tool:pose(tool),snapshotContinuation:'cold contact reconstruction; retained physical values, not solver contact caches'});
-  const recipe=()=>({snapshot:model.snapshot(),live:renderReturn?.live??liveEnabled,forming:structuredClone(history),settings:{...config},pose:pose(root),tool:pose(tool),view:session.readView()});
+  const read=()=>({schema:'kaminos.earth-authoring.v1',objectId:asset?.id,toolId:toolAsset?.id,physics:model.state(),physicsWidth:model.config.width,material:{cohesion:model.config.cohesion,friction:model.config.friction,plasticYield:model.config.plasticYield,clodStrength:model.config.clodStrength,interfaceStrength:model.config.interfaceStrength,gritBinding:model.config.gritBinding},ingredients:{clodCount:model.config.clodCount,maxClods:model.config.columns**2*(model.config.layers-Math.floor(model.config.layers/2))},settings:{...config},busy,failure,replay:{pending:replayPending,viewing:viewingReplay,available:!!history.program,status:replayState?.status??'idle',completed:replayState?.completed??0,total:replayState?.total??0,quality:replayState?.quality??null,error:replayState?.error??null,handback:replayState?.handback??null,queuePosition:replayState?.position??null,jobId:replayState?.jobId??null,hasResult:!!replayResult&&!liveFlight&&!samples.length,liveQuality:{columns:model.config.columns,layers:model.config.layers},referenceQuality:history.program?{columns:history.program.design.reference.columns,layers:history.program.design.reference.layers}:null},renderPreview:{active:!!renderPreview||renderTransition==='opening',transition:renderTransition,state:renderTransition?null:renderPreview?.read()??null},live:{enabled:liveEnabled,pendingSamples:samples.length,inFlight:!!liveFlight,revision,surfaceRevision,previewDetail:Math.min(config.liveResolution,config.previewResolution),previewFailure,recordedSamples:history.samples.length,settlingSeconds:settling},surface:source?{resolution:source.reconstruction.resolution,triangles:source.triangles.length,matrixTriangles:source.reconstruction.matrixTriangles,clodTriangles:source.reconstruction.clodTriangles,boundary:source.boundary}:null,view:session.readView(),pose:pose(root),tool:pose(tool),snapshotContinuation:'cold contact reconstruction; retained physical values, not solver contact caches'});
+  const recipe=()=>({snapshot:model.snapshot(),live:replayReturnLive??renderReturn?.live??liveEnabled,forming:structuredClone(history),settings:{...config},pose:pose(root),tool:pose(tool),view:session.readView()});
   const show=()=>{if(!disposed)ui?.refresh?.();};
   const sync=()=>show();
   const update=()=>{updateInputs(recipe());show();};
@@ -55,7 +57,7 @@ export default {
   const rebuild=async(resolution=config.previewResolution)=>install(await prepare(model.snapshot(),resolution));
   const replaceModel=async(next,nextSettings,value={})=>{
    let prepared,installed=false;
-   try{planEarthSurface(next.snapshot(),nextSettings.captureResolution,limits());prepared=await prepare(next.snapshot(),nextSettings.previewResolution);if(value.view)session.setView(value.view);restore(root,value.pose);restore(tool,value.tool);const old=model;model=next;revision++;epoch++;config=nextSettings;install(prepared);installed=true;old.dispose();}
+   try{planEarthSurface(next.snapshot(),nextSettings.captureResolution,limits());prepared=await prepare(next.snapshot(),nextSettings.previewResolution);if(value.view)session.setView(value.view);restore(root,value.pose);restore(tool,value.tool);const old=model;model=next;revision++;epoch++;config=nextSettings;if(viewingReplay){viewingReplay=false;tool.visible=replayToolVisible;}install(prepared);installed=true;old.dispose();}
    finally{if(!installed){next.dispose();for(const g of prepared?.geometries??[])g.dispose();}}
   };
   const toolQuery=()=>{
@@ -65,9 +67,9 @@ export default {
    return {position:root.worldToLocal(tool.getWorldPosition(new THREE.Vector3())).toArray(),radius:s.x/rootScale.x};
   };
   const work=async(action,reconstruct=true,{replace=false,inspection=false}={})=>{
-   if(viewingReplay&&!inspection)throw Error('Return to the live bed before changing the specimen');if(replayPending)throw Error('Pause and cancel the finer replay before changing the live bed');if((renderPreview||renderTransition)&&!inspection)throw Error('Return to earth before changing the specimen');if(busy)throw Error('Earth is already being worked');busy=true;settling=0;clearTimeout(refineTimer);builder.cancel();liveBuilder.cancel();stopRequested=replace;failure=null;show();
+   if(viewingReplay&&!inspection&&!replace)throw Error('Return to the live bed before changing the specimen');if(replayPending)throw Error('Pause and cancel the finer replay before changing the live bed');if((renderPreview||renderTransition)&&!inspection)throw Error('Return to earth before changing the specimen');if(busy)throw Error('Earth is already being worked');busy=true;settling=0;clearTimeout(refineTimer);builder.cancel();liveBuilder.cancel();stopRequested=replace;failure=null;show();
    try{if(replace)await liveFlight;else await settleInput();if(disposed||(!replace&&stopRequested))throw Error('Stopped before the next operation');stopRequested=false;await action();if(disposed)throw Error('Earth workshop disposed');if(reconstruct)await rebuild();update();return read();}
-   catch(error){failure=error.message;show();throw error;}finally{busy=false;if(!disposed&&!renderPreview&&!renderTransition&&!stopRequested&&!physicsError&&samples.length)pump();if(!disposed&&!renderPreview&&!renderTransition&&!stopRequested&&!physicsError&&(surfaceRevision!==revision||source?.reconstruction.resolution<config.previewResolution)){if(surfaceRevision<revision)coarse();scheduleRefinement();}show();}
+   catch(error){failure=error.message;show();throw error;}finally{busy=false;if(!disposed&&!renderPreview&&!renderTransition&&!viewingReplay&&!stopRequested&&!physicsError&&samples.length)pump();if(!disposed&&!renderPreview&&!renderTransition&&!viewingReplay&&!stopRequested&&!physicsError&&(surfaceRevision!==revision||source?.reconstruction.resolution<config.previewResolution)){if(surfaceRevision<revision)coarse();scheduleRefinement();}show();}
   };
   const yieldFrame=()=>new Promise(resolve=>setTimeout(resolve,0));
   const evolve=async(seconds,contact)=>{let remaining=seconds;while(remaining>1e-9){if(disposed)throw Error('Earth workshop disposed');if(stopRequested)throw Error('Stopped; last completed surface retained');const dt=Math.min(remaining,.025);const appliedTool=contact?.()??null;await model.advance(dt,{tool:appliedTool});rememberAction({kind:'advance',seconds:dt,...(appliedTool?{tool:appliedTool}:{})});revision++;remaining-=dt;await yieldFrame();}};
@@ -77,21 +79,21 @@ export default {
   const sameTool=(a,b)=>a&&a.radius===b.radius&&a.position.every((v,k)=>v===b.position[k]);
   const disposePrepared=p=>{for(const g of p.geometries)g.dispose();};
   const coarse=()=>{
-   if(disposed||renderPreview||renderTransition||previewFlight)return;
+   if(disposed||viewingReplay||renderPreview||renderTransition||previewFlight)return;
    const atEpoch=epoch,atRevision=revision,snapshot=model.snapshot(),resolution=Math.min(config.liveResolution,config.previewResolution);
    previewFlight=liveBuilder.build(snapshot,resolution).then(next=>{
-    if(disposed||renderPreview||renderTransition||busy||atEpoch!==epoch||atRevision<surfaceRevision||(atRevision===surfaceRevision&&source?.reconstruction.resolution>=resolution))return;
+    if(disposed||viewingReplay||renderPreview||renderTransition||busy||atEpoch!==epoch||atRevision<surfaceRevision||(atRevision===surfaceRevision&&source?.reconstruction.resolution>=resolution))return;
     const geometries=materials.map((_,i)=>meshGeometry(next.triangles.filter(t=>t.materialIndex===i)));
     install({next,geometries},atRevision);previewFailure=null;
-   }).catch(e=>{if(!disposed&&e.name!=='AbortError')previewFailure=e.message;}).finally(()=>{previewFlight=null;show();if(!disposed&&!renderPreview&&!renderTransition&&!busy&&atRevision<revision)coarse();});
+   }).catch(e=>{if(!disposed&&e.name!=='AbortError')previewFailure=e.message;}).finally(()=>{previewFlight=null;show();if(!disposed&&!renderPreview&&!renderTransition&&!viewingReplay&&!busy&&atRevision<revision)coarse();});
   };
   const scheduleRefinement=()=>{
    clearTimeout(refineTimer);
    refineTimer=setTimeout(async()=>{
-    if(disposed||renderPreview||renderTransition||busy||liveFlight||samples.length||settling>1e-9)return;
+    if(disposed||viewingReplay||renderPreview||renderTransition||busy||liveFlight||samples.length||settling>1e-9)return;
     const atEpoch=epoch,atRevision=revision;
     try{const prepared=await prepare(model.snapshot(),config.previewResolution);
-     if(disposed||renderPreview||renderTransition||busy||atEpoch!==epoch||atRevision!==revision||samples.length||liveFlight){disposePrepared(prepared);return;}
+     if(disposed||viewingReplay||renderPreview||renderTransition||busy||atEpoch!==epoch||atRevision!==revision||samples.length||liveFlight){disposePrepared(prepared);return;}
      install(prepared,atRevision);previewFailure=null;update();
     }catch(e){if(!disposed&&e.name!=='AbortError')previewFailure=e.message;}show();
    },0);
@@ -106,7 +108,7 @@ export default {
   };
   const settleInput=async()=>{while(liveFlight||samples.length){if(physicsError)throw physicsError;if(!liveFlight)pump();await liveFlight;}};
   const liveFrame=({deltaSeconds=1/60}={})=>{
-   if(disposed||busy||!liveEnabled||replayPending)return;
+   if(disposed||viewingReplay||busy||!liveEnabled||replayPending)return;
    if(host.controls.document?.hidden){visibilityReset=true;return;}
    if(visibilityReset){visibilityReset=false;lastTool=toolQuery();return;}
    try{const next=toolQuery(),moved=!sameTool(lastTool,next);if(moved||(settling>0&&!liveFlight&&!samples.length)){
@@ -133,17 +135,17 @@ export default {
   };
   const inspectRender=async(values={})=>{
    if(disposed)throw Error('Earth workshop disposed');
-   if(busy)throw Error('Earth is already being worked');
+   if(busy||replayPending)throw Error('Earth is already being worked');
    if(renderTransition)throw Error('Wait for render preview transition');
    if(renderPreview)return renderPreview.read();
    if(!values||typeof values!=='object'||Array.isArray(values)||Object.keys(values).some(k=>!['scale','bounces','environment','reconstruction','paused','replay'].includes(k)))throw Error('Invalid render preview setting');
-   if((values.replay??viewingReplay)&&!replayResult)throw Error('No current completed finer replay to render');
+   if(values.replay??viewingReplay)currentReplay();
    const {replay:requestedReplay,...renderValues}=values,useReplay=requestedReplay??viewingReplay;
    const previous={view:session.readView(),live:liveEnabled,rootVisible:root.visible,toolVisible:tool.visible};
    renderTransition='opening';renderReturn=previous;liveEnabled=false;let preview,captured;
    try{
     // Capture gets its own mesh; the cheap authoring surface stays resident.
-    await work(async()=>{captured=rememberEarthSurface(await builder.build(useReplay?replayResult.snapshot:model.snapshot(),config.captureResolution));},false,{inspection:true});
+    await work(async()=>{captured=rememberEarthSurface(await builder.build(useReplay?currentReplay().snapshot:model.snapshot(),config.captureResolution));},false,{inspection:true});
     if(disposed)throw Error('Earth workshop disposed');
     preview=await createEarthTransport({host,record,inputs:{source:{...captured.config,halo:0},pose:pose(root),view:previous.view,scale:.3,bounces:3,environment:.15,...renderValues},updateInputs:()=>{}});
     if(disposed)throw Error('Earth workshop disposed');
@@ -157,7 +159,7 @@ export default {
   };
   const returnToLive=async()=>{
    if(renderPreview||renderTransition)throw Error('Close rendered inspection before returning to live earth');
-   if(!viewingReplay)return read();return work(async()=>{const prepared=await prepare(model.snapshot(),config.previewResolution);install(prepared);viewingReplay=false;tool.visible=replayToolVisible;lastTool=toolQuery();},false,{inspection:true});
+   if(!viewingReplay)return read();return work(async()=>{const prepared=await prepare(model.snapshot(),config.previewResolution);install(prepared);viewingReplay=false;tool.visible=replayToolVisible;lastTool=toolQuery();liveEnabled=replayReturnLive??liveEnabled;replayReturnLive=null;},false,{inspection:true});
   };
   const openRender=values=>{if(renderTransition)return Promise.reject(Error('Wait for render preview transition'));if(renderPreview)return Promise.resolve(renderPreview.read());const flight=inspectRender(values);renderOpening=flight;const clear=()=>{if(renderOpening===flight)renderOpening=null;};flight.then(clear,clear);return flight;};
   const halt=()=>{replayAbort?.abort();replay?.cancel();stopRequested=true;liveEnabled=false;settling=0;clearTimeout(refineTimer);for(const sample of samples)sample.disposition='stopped';samples.length=0;builder.cancel();liveBuilder.cancel();record({kind:'earth.stop',phase:'applied',effective:{revision,pendingSamples:0}});show();};
@@ -169,38 +171,36 @@ export default {
    return {read,operations:{
     frame,
     async viewReplay(){
-     if(!replayResult)throw Error('No current completed finer replay');if(viewingReplay)return read();
-     return work(async()=>{const prepared=await prepare(replayResult.snapshot,config.previewResolution);liveEnabled=false;viewingReplay=true;replayToolVisible=tool.visible;tool.visible=false;install(prepared);},false);
+     currentReplay();if(viewingReplay)return read();
+     return work(async()=>{const prepared=await prepare(currentReplay().snapshot,config.previewResolution);liveEnabled=false;viewingReplay=true;replayToolVisible=tool.visible;tool.visible=false;install(prepared);},false);
     },
     returnToLive,
     async replay(values={}){
      if(renderPreview||renderTransition)throw Error('Return to earth before resimulating');if(busy||replayPending)throw Error('Earth is already being worked');
      if(!history.program)throw Error('This older specimen has no complete replay program; create a new specimen to record one');
-     await work(async()=>{},false);const quality={columns:history.program.design.reference.columns,layers:history.program.design.reference.layers,...values};
-     // Validate dimensions before opening a worker. The retained live specimen
-     // remains untouched even when initialization or an offline chunk fails.
-     for(const [key,min]of [['columns',3],['layers',2]])if(!Number.isSafeInteger(quality[key])||quality[key]<min)throw Error(`Invalid replay ${key}`);
-     liveEnabled=false;lastTool=toolQuery();replayResult=null;replay=null;replayPending=true;replayAbort=new AbortController();
+     const quality=checkedEarthQuality(history.program.design,values);
+     await work(async()=>{},false);
+     replayReturnLive=liveEnabled;liveEnabled=false;lastTool=toolQuery();replayResult=null;replay=null;replayPending=true;replayAbort=new AbortController();
      const program=checkedEarthProgram(history.program),runId=`earth-replay-${globalThis.crypto.randomUUID()}`;
      replayState={status:'waiting',completed:0,total:program.actions.length,quality};show();
      const post=async body=>{const response=await fetch('/api/gpu-lease',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const value=await response.json();if(!response.ok||value.status==='unconfigured')throw Error(value.error??'Earth replay requires configured Greenroom admission');return value;};
      replayFlight=admitReplay({post,runId,route:'earth-material/cannon-cpu-finer-replay',admission:'queue',signal:replayAbort.signal,onWait:wait=>{replayState={...replayState,status:'waiting',position:wait.position,jobId:wait.jobId};show();}},async lease=>{
-      replay=createEarthReplay(program,quality,{onProgress:value=>{replayState={...value,admission:lease};show();}});return replay.finished;
+      replay=createEarthReplay(program,quality,{onProgress:value=>{replayState={...value,status:replayAbort.signal.aborted?'cancelling':value.status,admission:lease};show();}});return replay.finished;
      });
-     try{const {result,lease}=await replayFlight;if(lease.releaseError)throw Error(`Finer replay handback failed: ${lease.releaseError}`);if(result.status==='complete')replayResult={snapshot:result.snapshot,program,quality:result.quality,admission:lease};if(!disposed)update();return read();}
-     catch(error){replayState={...replayState,status:replayAbort.signal.aborted?'cancelled':'failed',error:replayAbort.signal.aborted?null:error.message};if(!replayAbort.signal.aborted)throw error;return read();}
+     try{const {result,lease}=await replayFlight;if(lease.releaseError)throw Object.assign(Error(`Finer replay handback failed: ${lease.releaseError}`),{greenroomHandback:{...lease,state:lease.state??'release-failed'}});replayState={...replayState,status:result.status,position:null};if(result.status==='complete')replayResult={snapshot:result.snapshot,program,quality:result.quality,admission:lease};if(!disposed)update();return read();}
+     catch(error){const handback=error.greenroomHandback??null,cancelled=replayAbort.signal.aborted&&!handback;replayState={...replayState,status:cancelled?'cancelled':'failed',position:null,error:cancelled?null:error.message,handback};if(!cancelled)throw error;return read();}
      finally{replayPending=false;replayFlight=null;if(!disposed)show();}
     },
     replayPause(value=true){if(!replay)throw Error('No finer replay');replay.pause(value);return read();},
-    replayCancel(){replayAbort?.abort();replay?.cancel();return read();},
-    replayResult(){if(!replayResult)throw Error('No current completed finer replay');return structuredClone(replayResult);},
+    replayCancel(){replayAbort?.abort();if(replayPending)replayState={...replayState,status:'cancelling'};replay?.cancel();show();return read();},
+    replayResult(){return structuredClone(currentReplay());},
     render:openRender,returnToEarth,
     renderSettings(values){if(!renderPreview||renderTransition)throw Error('Open the rendered surface first and wait for its transition');return renderPreview.operations.configure(values);},
     renderCapture(values){if(!renderPreview||renderTransition)throw Error('Open the rendered surface first and wait for its transition');return renderPreview.operations.capture(values);},
     stop(){halt();return read();},
     async snapshot(){if(replayPending)return recipe();await work(async()=>{},false,{inspection:true});return recipe();},
-    async live(value){if(replayPending)throw Error('Cancel the finer replay before resuming live physics');if(renderPreview||renderTransition)throw Error('Return to earth before changing live physics');if(typeof value!=='boolean')throw Error('Live physics expects a boolean');if(value&&viewingReplay)await returnToLive();liveEnabled=value;settling=0;if(value){if(physicsError)throw physicsError;stopRequested=false;if(surfaceRevision!==revision)coarse();scheduleRefinement();}if(!value)await settleInput();lastTool=toolQuery();show();return read();},
-    async configure(patch){if(viewingReplay)throw Error('Return to the live bed before changing surface detail');if(renderPreview||renderTransition)throw Error('Return to earth before changing surface detail');const next=settings({...config,...patch});if(busy)throw Error('Wait for forming to finish');planEarthSurface(model.snapshot(),next.liveResolution,limits());planEarthSurface(model.snapshot(),next.previewResolution,limits());planEarthSurface(model.snapshot(),next.captureResolution,limits());if(next.previewResolution!==config.previewResolution)return work(async()=>{await rebuild(next.previewResolution);config=next;},false);config=next;failure=null;sync();update();return read();},
+    async live(value){if(replayPending)throw Error('Cancel the finer replay before resuming live physics');if(renderPreview||renderTransition)throw Error('Return to earth before changing live physics');if(typeof value!=='boolean')throw Error('Live physics expects a boolean');if(value&&viewingReplay)await returnToLive();replayReturnLive=null;liveEnabled=value;settling=0;if(value){if(physicsError)throw physicsError;stopRequested=false;if(surfaceRevision!==revision)coarse();scheduleRefinement();}if(!value)await settleInput();lastTool=toolQuery();show();return read();},
+    async configure(patch){if(viewingReplay){if(!patch||Object.keys(patch).some(k=>!['liveResolution','previewResolution','captureResolution'].includes(k)))throw Error('Return to the live bed before changing forming settings');if(renderPreview||renderTransition)throw Error('Close rendered inspection before changing surface detail');const next=settings({...config,...patch}),snapshot=currentReplay().snapshot;for(const key of ['liveResolution','previewResolution','captureResolution'])planEarthSurface(snapshot,next[key],limits());return work(async()=>{if(next.previewResolution!==config.previewResolution)install(await prepare(snapshot,next.previewResolution));config=next;},false,{inspection:true});}if(renderPreview||renderTransition)throw Error('Return to earth before changing surface detail');const next=settings({...config,...patch});if(busy)throw Error('Wait for forming to finish');planEarthSurface(model.snapshot(),next.liveResolution,limits());planEarthSurface(model.snapshot(),next.previewResolution,limits());planEarthSurface(model.snapshot(),next.captureResolution,limits());if(next.previewResolution!==config.previewResolution)return work(async()=>{await rebuild(next.previewResolution);config=next;},false);config=next;failure=null;sync();update();return read();},
     async material(values){return work(async()=>{await model.setMaterial(values);rememberAction({kind:'material',values});record({kind:'earth.material',phase:'applied',effective:model.config});},false);},
     async advance({seconds=config.advanceSeconds}={}){if(!Number.isFinite(seconds)||seconds<=0)throw Error('Invalid advance duration');return work(async()=>{await evolve(seconds);record({kind:'earth.advance',phase:'applied',effective:{seconds,state:model.state()}});});},
     async press(){
@@ -215,11 +215,12 @@ export default {
      await evolve(config.releaseSeconds);
      record({kind:'earth.press',phase:'applied',effective:{tool:query,depth:config.pressDepth,seconds:config.pressSeconds,releaseSeconds:config.releaseSeconds,state:model.state()}});});
     },
-    async reset({clodCount=model.config.clodCount}={}){return work(async()=>{const reference=history.program?.design.reference??model.config;const seed=new EarthSpecimen({...model.config,columns:reference.columns,layers:reference.layers,clodCount});let design;try{design=createEarthDesign(seed.snapshot());}finally{seed.dispose();}await replaceModel(await createEarthDynamics({design,config:{columns:model.config.columns,layers:model.config.layers}}),config);samples.length=0;physicsError=null;liveEnabled=true;history.initial=model.snapshot();history.samples=[];history.program={schema:EARTH_PROGRAM_SCHEMA,design,actions:[]};replayResult=null;lastTool=toolQuery();record({kind:'earth.reset',phase:'applied',effective:model.config});},false,{replace:true});},
-    async load(value){if(busy)throw Error('Wait for forming to finish');checkedPose(value.pose);checkedPose(value.tool);const nextSettings=settings(value.settings),nextHistory=value.forming===undefined?null:checkedForming(value.forming);return work(async()=>{const next=await createEarthDynamics({snapshot:value.snapshot});if(next.config.width!==model.config.width){next.dispose();throw Error('Load a different tray width by reopening the specimen setup');}await replaceModel(next,nextSettings,value);physicsError=null;history.initial=structuredClone(nextHistory?.initial??value.snapshot);history.samples=structuredClone(nextHistory?.samples??[]);history.program=nextHistory?.program?structuredClone(nextHistory.program):undefined;replayResult=null;samples.length=0;lastTool=toolQuery();liveEnabled=value.live!==false;host.scene.refreshPresentation(asset);host.scene.refreshPresentation(toolAsset);sync();},false,{replace:true});},
+    async reset({clodCount=model.config.clodCount}={}){return work(async()=>{const reference=history.program?.design.reference??model.config;const seed=new EarthSpecimen({...model.config,columns:reference.columns,layers:reference.layers,clodCount});let design;try{design=createEarthDesign(seed.snapshot());}finally{seed.dispose();}await replaceModel(await createEarthDynamics({design,config:{columns:model.config.columns,layers:model.config.layers}}),config);samples.length=0;physicsError=null;liveEnabled=true;history.initial=model.snapshot();history.samples=[];history.program={schema:EARTH_PROGRAM_SCHEMA,design,actions:[]};clearReplay();lastTool=toolQuery();record({kind:'earth.reset',phase:'applied',effective:model.config});},false,{replace:true});},
+    async load(value){if(busy)throw Error('Wait for forming to finish');checkedPose(value.pose);checkedPose(value.tool);const nextSettings=settings(value.settings),nextHistory=value.forming===undefined?null:checkedForming(value.forming);return work(async()=>{const next=await createEarthDynamics({snapshot:value.snapshot});if(next.config.width!==model.config.width){next.dispose();throw Error('Load a different tray width by reopening the specimen setup');}await replaceModel(next,nextSettings,value);physicsError=null;history.initial=structuredClone(nextHistory?.initial??value.snapshot);history.samples=structuredClone(nextHistory?.samples??[]);history.program=nextHistory?.program?structuredClone(nextHistory.program):undefined;clearReplay();samples.length=0;lastTool=toolQuery();liveEnabled=value.live!==false;host.scene.refreshPresentation(asset);host.scene.refreshPresentation(toolAsset);sync();},false,{replace:true});},
     async freeze({replay:useReplay=viewingReplay}={}){
-     if(useReplay&&!replayResult)throw Error('No current completed finer replay');await settleInput();if(busy)throw Error('Wait for forming to finish');
-     if(useReplay){let captured;await work(async()=>{captured=rememberEarthSurface(await builder.build(replayResult.snapshot,config.captureResolution));},false,{inspection:true});record({kind:'earth.freeze-replay',phase:'applied',effective:{quality:replayResult.quality,resolution:config.captureResolution,triangles:captured.triangles.length}});return {source:{...captured.config,halo:1},authoring:recipe(),replay:structuredClone(replayResult),surface:{resolution:captured.reconstruction.resolution,triangles:captured.triangles.length,captureHalo:1}};}
+     if(useReplay)currentReplay();await settleInput();if(busy)throw Error('Wait for forming to finish');
+     if(useReplay){let captured;await work(async()=>{captured=rememberEarthSurface(await builder.build(currentReplay().snapshot,config.captureResolution));},false,{inspection:true});record({kind:'earth.freeze-replay',phase:'applied',effective:{quality:replayResult.quality,resolution:config.captureResolution,triangles:captured.triangles.length}});return {source:{...captured.config,halo:1},authoring:recipe(),replay:structuredClone(replayResult),surface:{resolution:captured.reconstruction.resolution,triangles:captured.triangles.length,captureHalo:1}};}
+     if(viewingReplay){let captured;await work(async()=>{captured=rememberEarthSurface(await builder.build(model.snapshot(),config.captureResolution));},false,{inspection:true});return {source:{...captured.config,halo:1},authoring:recipe(),surface:{resolution:captured.reconstruction.resolution,triangles:captured.triangles.length,captureHalo:1}};}
      await work(()=>rebuild(config.captureResolution),false);update();record({kind:'earth.freeze',phase:'applied',effective:{state:model.state(),resolution:config.captureResolution,triangles:source.triangles.length}});return {source:{...source.config,halo:1},authoring:recipe(),surface:{...read().surface,captureHalo:1}};
     },
     source(){if(busy||liveFlight||samples.length||settling>1e-9||surfaceRevision!==revision||source?.reconstruction.resolution<config.previewResolution)throw Error('The displayed surface is behind the physical state; freeze the current specimen first');return structuredClone(source);},

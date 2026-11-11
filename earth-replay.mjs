@@ -23,7 +23,7 @@ export function createEarthReplay(input,quality,{onProgress=()=>{},WorkerType=gl
  const publish=()=>onProgress(read());
  const finished=(async()=>{
   try{
-   model=await createEarthDynamics({design:program.design,config:quality,WorkerType});snapshot=model.snapshot();publish();
+   model=await createEarthDynamics({design:program.design,config:quality,WorkerType});if(cancelled){status='cancelled';return read(true);}snapshot=model.snapshot();publish();
    for(const action of program.actions){
     while(paused&&!cancelled)await new Promise(resolve=>{wake=resolve;});
     if(cancelled)break;
@@ -37,5 +37,5 @@ export function createEarthReplay(input,quality,{onProgress=()=>{},WorkerType=gl
   }catch(e){status=cancelled?'cancelled':'failed';error=cancelled?null:e.message;publish();if(!cancelled)throw e;return read(true);}
   finally{model?.dispose();}
  })();
- return {read,finished,pause(value=true){if(!['running','paused'].includes(status))return read();paused=!!value;status=paused?'paused':'running';if(!paused){wake?.();wake=null;}publish();return read(true);},cancel(){cancelled=true;wake?.();wake=null;model?.dispose();return read();}};
+ return {read,finished,pause(value=true){if(!['running','paused'].includes(status))return read();paused=!!value;status=paused?'paused':'running';if(!paused){wake?.();wake=null;}publish();return read(true);},cancel(){cancelled=true;status='cancelled';wake?.();wake=null;model?.dispose();publish();return read();}};
 }
