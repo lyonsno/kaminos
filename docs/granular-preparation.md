@@ -11,14 +11,19 @@ not a port of Particula's Unity/PhysX code or a calibrated soil model.
 The physical specimen uses metres. Its default scene display is magnified ten
 fold so that millimetre grains remain accessible through ordinary camera
 controls. Native selection/transforms move the displayed chamber; they do not
-change the physical recipe. **Inspect integral** frames the grains and opens
-actual triangle transport under the normal scene lights. **Back to earth**
-returns to the retained physical specimen. The chamber is a first functional
+change the physical recipe. **Inspect integral** toggles actual triangle transport in the same camera
+view under the normal scene lights. Preparation controls, source registration
+and selection remain in place. The integral follows completed worker states,
+including subsequent pours; toggle it again to return to raster shading. The chamber is a first functional
 tray/window/platen, not the finished material-authoring apparatus.
 
 Mixture controls are visible in the viewport. Radius, size spread, proportions,
-friction, angularity, count and seed describe the next specimen; **New mixture**
-constructs it explicitly. Count and seed are typed and committed with Enter.
+friction, angularity and seed describe the next specimen; **New mixture**
+constructs it explicitly. **Grains per pour** sets how many additional grains
+Pour adds to the current packing. Type a quantity and press Pour; Enter is
+optional. Typed quantity and seed drafts remain visible until accepted or
+cancelled with Escape. Costly counts have no drag control. Existing grain
+identities, shapes and physical state are retained when reserving another batch.
 A transient-storage estimate rejects requests exceeding exposed available heap;
 it never lowers grain count. This estimate is not a benchmark of solver capacity.
 Dense contact work can still be expensive; the worker keeps host frames separate.

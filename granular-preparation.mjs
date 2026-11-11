@@ -74,7 +74,7 @@ function validateIngredients(all,c){
 }
 function validatePhysicalState({time,lidHeight,containerX,phase,history,grains},all){
  positive(time,'time',true);positive(lidHeight,'lid height');if(!Number.isFinite(containerX))throw Error('Invalid container position');
- if(!Array.isArray(history)||history.some((h,i)=>!h||typeof h!=='object'||!Number.isFinite(h.started)||(h.completed!==undefined&&!Number.isFinite(h.completed))||(h.completed===undefined&&(!phase||i!==history.length-1))))throw Error('Invalid preparation history');if(phase){if(!history.length||history.at(-1)?.kind!==phase.kind||history.at(-1)?.completed!==undefined)throw Error('Invalid active preparation history');if(!['pour','settle','shake','compress','unload'].includes(phase.kind))throw Error('Invalid saved phase');positive(phase.seconds,'phase duration');positive(phase.elapsed,'phase elapsed',true);if(phase.elapsed>=phase.seconds||!Number.isFinite(phase.from)||!Number.isFinite(phase.target)||!Number.isFinite(phase.amplitude)||!Number.isFinite(phase.frequency)||!Number.isSafeInteger(phase.initialCount)||phase.initialCount<0||phase.initialCount>all.length)throw Error('Invalid saved phase');}
+ if(!Array.isArray(history)||history.some((h,i)=>!h||typeof h!=='object'||!Number.isFinite(h.started)||(h.completed!==undefined&&!Number.isFinite(h.completed))||(h.completed===undefined&&(!phase||i!==history.length-1))))throw Error('Invalid preparation history');if(phase){if(!history.length||history.at(-1)?.kind!==phase.kind||history.at(-1)?.completed!==undefined)throw Error('Invalid active preparation history');if(!['pour','settle','shake','compress','unload'].includes(phase.kind))throw Error('Invalid saved phase');positive(phase.seconds,'phase duration');positive(phase.elapsed,'phase elapsed',true);if(phase.pourTarget!==undefined&&(phase.kind!=='pour'||!Number.isSafeInteger(phase.pourTarget)||phase.pourTarget<=phase.initialCount||phase.pourTarget>all.length))throw Error('Invalid saved pour target');if(phase.elapsed>=phase.seconds||!Number.isFinite(phase.from)||!Number.isFinite(phase.target)||!Number.isFinite(phase.amplitude)||!Number.isFinite(phase.frequency)||!Number.isSafeInteger(phase.initialCount)||phase.initialCount<0||phase.initialCount>all.length)throw Error('Invalid saved phase');}
  if(!Array.isArray(grains)||grains.length>all.length)throw Error('Invalid deposited inventory');for(const [i,row]of grains.entries()){if(!row||row.id!==i)throw Error('Invalid deposited identity');vector(row.position,3);vector(row.velocity,3);vector(row.angularVelocity,3);vector(row.quaternion,4);if(Math.abs(Math.hypot(...row.quaternion)-1)>1e-5)throw Error('Invalid grain orientation');}
 }
 function checkpointRecipe(saved){
@@ -115,15 +115,17 @@ export function createGranularPreparation(input={},saved=null){
  function start(kind,options={}){
   if(disposed)throw Error('Preparation disposed');if(phase)throw Error('Preparation already running');
   if(!['pour','settle','shake','compress','unload'].includes(kind))throw Error('Unknown preparation operation');
-  if(kind==='pour'&&grains.length===all.length)throw Error('All ingredients have been poured');
-  const seconds=options.seconds??(kind==='pour'?(all.length-grains.length)/c.pourRate:kind==='settle'?.8:kind==='unload'?.4:1);positive(seconds,'duration');
+  const count=options.count;if(kind==='pour'&&count!==undefined&&(!Number.isSafeInteger(count)||count<1))throw Error('Invalid pour count');
+  const pourTarget=kind==='pour'?(count===undefined?all.length:grains.length+count):undefined;if(kind==='pour'&&(!Number.isSafeInteger(pourTarget)||pourTarget<=grains.length))throw Error('All ingredients have been poured or invalid pour count');
+  const seconds=options.seconds??(kind==='pour'?(pourTarget-grains.length)/c.pourRate:kind==='settle'?.8:kind==='unload'?.4:1);positive(seconds,'duration');
   const strain=options.strain??.25,amplitude=options.amplitude??c.width*.025,frequency=options.frequency??9;
   if(kind==='compress'&&(!Number.isFinite(strain)||strain<=0||strain>=1))throw Error('Compression strain must be between zero and one');
   if(kind==='shake'){positive(amplitude,'shake amplitude',true);positive(frequency,'shake frequency');}
   if(kind!=='pour'&&!grains.length)throw Error('Pour the mixture first');
   const target=kind==='compress'?Math.max(c.radius,top()*(1-strain)):kind==='unload'?Math.max(c.width*1.5,top()+c.width*.3):lidHeight;
-  lid.collisionResponse=kind!=='pour';phase={kind,elapsed:0,seconds,from:lidHeight,target,strain,amplitude,frequency,initialCount:grains.length};
-  for(const g of grains)g.body.wakeUp();history.push({kind,options:{seconds,strain,amplitude,frequency},started:time});return read();
+  if(kind==='pour'&&pourTarget>all.length){const next=preparationRecipe({...c,count:pourTarget});planPreparation(next,{availableBytes:globalThis.performance?.memory?performance.memory.jsHeapSizeLimit-performance.memory.usedJSHeapSize:Infinity});const additions=ingredients(next).slice(all.length),inventory=[...all,...additions];validateIngredients(inventory,next);all.push(...additions);c.count=next.count;}
+  lid.collisionResponse=kind!=='pour';phase={kind,elapsed:0,seconds,from:lidHeight,target,strain,amplitude,frequency,initialCount:grains.length,...(kind==='pour'?{pourTarget}:{})};
+  for(const g of grains)g.body.wakeUp();history.push({kind,options:{seconds,strain,amplitude,frequency,...(kind==='pour'?{count:pourTarget-grains.length}:{})},started:time});return read();
  }
  function advance(seconds){
   if(disposed)throw Error('Preparation disposed');positive(seconds,'duration');
@@ -131,7 +133,7 @@ export function createGranularPreparation(input={},saved=null){
   for(let i=0;i<n&&phase;i++){
    const next=Math.min(phase.seconds,phase.elapsed+dt),step=next-phase.elapsed;
    if(phase.kind==='pour'){
-    const due=Math.min(all.length,phase.initialCount+Math.ceil((all.length-phase.initialCount)*next/phase.seconds));
+    const targetCount=phase.pourTarget??all.length,due=Math.min(targetCount,phase.initialCount+Math.ceil((targetCount-phase.initialCount)*next/phase.seconds));
     while(grains.length<due)add(all[grains.length]);
    }
    const t=next/phase.seconds,eased=t*t*(3-2*t),nextLid=['compress','unload'].includes(phase.kind)?phase.from+(phase.target-phase.from)*eased:lidHeight;
@@ -148,7 +150,7 @@ export function createGranularPreparation(input={},saved=null){
 function transform(p,row){const q=row.quaternion,v=cross(q.slice(0,3),p),vv=cross(q.slice(0,3),v);return p.map((x,k)=>x+2*q[3]*v[k]+2*vv[k]+row.position[k]);}
 export function preparationSource(snapshot,{container=false}={}){
  if(snapshot?.schema!==PREPARATION_SCHEMA)throw Error('Explicit preparation snapshot required');
- if(!snapshot.recipe||!Array.isArray(snapshot.ingredients)||!Array.isArray(snapshot.grains))throw Error('Incomplete preparation snapshot inventory');if(!snapshot.grains.length)throw Error('No poured grains in material source');
+ if(!snapshot.recipe||!Array.isArray(snapshot.ingredients)||!Array.isArray(snapshot.grains))throw Error('Incomplete preparation snapshot inventory');if(!snapshot.grains.length&&!container)throw Error('No poured grains in material source');
  const c=checkpointRecipe(snapshot);validateIngredients(snapshot.ingredients,c);validatePhysicalState(snapshot,snapshot.ingredients);
  const triangles=[],all=snapshot.ingredients;
  const rows=snapshot.grains;

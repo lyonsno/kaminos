@@ -17,9 +17,9 @@ function checkedPose(value){
 
 export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,boundary,initialView,sourceControls,defaultMaterials,readSchema='kaminos.surface-teacher-experiment.v1'}){return {
  id,title,
- async create({host,inputs={},record,updateInputs=()=>{}}){
+ async create({host,inputs={},record,updateInputs=()=>{},sourceObject}){
   if(!inputs||typeof inputs!=='object'||Array.isArray(inputs))throw Error('Teacher inputs must be an object');
-  const sourcePose=checkedPose(inputs.pose);
+  const sourcePose=checkedPose(inputs.pose);if(sourceObject&&(!sourceObject.root?.isObject3D||typeof sourceObject.id!=='string'))throw Error('Integral view requires a registered source object');
   let configuration=checkedConfiguration({scale:inputs.scale??.5,bounces:inputs.bounces??3,environment:inputs.environment??.15,reconstruction:inputs.reconstruction??true,paused:inputs.paused??false});
   let source=await createSource(inputs.source),engine,texture,screenMaterial,screen,asset,stop;
   const session=await host.scene.open();let context;
@@ -27,6 +27,7 @@ export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,
   const {renderer,scene,camera}=context;
   const sourceMaterials=(source.materials??defaultMaterials).map(m=>new THREE.MeshStandardMaterial({color:new THREE.Color(...m.color),roughness:m.roughness,metalness:m.metalness,side:THREE.DoubleSide,colorWrite:false,depthWrite:false}));
   const root=new THREE.Mesh(new THREE.BufferGeometry(),sourceMaterials);root.name=label;root.castShadow=false;root.receiveShadow=false;if(sourcePose){root.position.fromArray(sourcePose.position);root.quaternion.fromArray(sourcePose.quaternion);root.scale.fromArray(sourcePose.scale);}
+  const poseRoot=sourceObject?.root??root;
   let sceneKey='',failure=null,capturing=false,disposed=false,status,pending=null,fieldDocument;
   const fields=[];
   const syncControls=()=>{for(const {input,group,key}of fields){if(fieldDocument.activeElement===input)continue;const value=group==='source'?source.config[key]:configuration[key];if(input.type==='checkbox')input.checked=value;else input.value=String(value);}};
@@ -34,7 +35,7 @@ export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,
   const gpuFailure=event=>{failure=event.error?.message??String(event.error);showStatus();};
   const replaceGeometry=()=>{
    const positions=new Float32Array(source.triangles.flatMap(t=>[...t.a,...t.b,...t.c]));
-   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));let start=0;for(let i=1;i<=source.triangles.length;i++){if(i===source.triangles.length||source.triangles[i].materialIndex!==source.triangles[start].materialIndex){geometry.addGroup(start*3,(i-start)*3,source.triangles[start].materialIndex);start=i;}}geometry.computeVertexNormals();geometry.computeBoundingSphere();const old=root.geometry;root.geometry=geometry;old.dispose();sceneKey='';if(asset){host.scene.refreshPresentation(asset);void prepareNavigationGeometry(root);}
+   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));let start=0;for(let i=1;i<=source.triangles.length;i++){if(i===source.triangles.length||source.triangles[i].materialIndex!==source.triangles[start].materialIndex){geometry.addGroup(start*3,(i-start)*3,source.triangles[start].materialIndex);start=i;}}geometry.computeVertexNormals();geometry.computeBoundingSphere();const old=root.geometry;root.geometry=geometry;old.dispose();sceneKey='';if(asset&&!sourceObject){host.scene.refreshPresentation(asset);void prepareNavigationGeometry(root);}
   };
   const nativeLights=()=>{
    const lights=[];scene.updateMatrixWorld(true);
@@ -49,18 +50,18 @@ export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,
    });return lights;
   };
   const syncScene=()=>{
-   const lights=nativeLights();root.updateWorldMatrix(true,false);
+   const lights=nativeLights();poseRoot.updateWorldMatrix(true,false);
    const materials=sourceMaterials.map(m=>({color:m.color.toArray(),roughness:m.roughness,metalness:m.metalness}));
-   const next=JSON.stringify([root.matrixWorld.elements,materials,lights,root.visible]);
+   const next=JSON.stringify([poseRoot.matrixWorld.elements,materials,lights,poseRoot.visible]);
    if(next!==sceneKey){
-    const v=p=>new THREE.Vector3(...p).applyMatrix4(root.matrixWorld).toArray();
+    const v=p=>new THREE.Vector3(...p).applyMatrix4(poseRoot.matrixWorld).toArray();
     const triangles=source.triangles.map(t=>({...t,a:v(t.a),b:v(t.b),c:v(t.c)}));
-    if(!root.visible||!host.scene.isVisible(asset.id))throw Error('Teacher source is hidden; restore its visibility to capture');
+    if(!poseRoot.visible||!host.scene.isVisible(asset.id))throw Error('Teacher source is hidden; restore its visibility to capture');
     if(engine)engine.setScene({triangles,materials,lights});else engine=new SurfaceTeacher(renderer.backend.device,{triangles,materials,lights,...configuration});sceneKey=next;
    }
    engine.setTransport(configuration);
   };
-  const read=()=>({schema:readSchema,sourceSchema:source.schema,objectId:asset?.id,pose:{position:root.position.toArray(),quaternion:root.quaternion.toArray(),scale:root.scale.toArray()},source:source.config,configuration:{...configuration},effective:engine?.state()??null,view:session.readView(),cameraFrame:cameraFrame(),failure,capturing,display:'shared Kaminos scene and camera; native selection/gizmos',displaySourceVisible:!!root.parent&&host.scene.isVisible(asset?.id),presentationLighting:screenMaterial?.lights===false?'lighting bypassed':'unverified',navigationIndexReady:!!root.geometry.boundsTree,supportedLights:'native directional, inverse-square point and spot; constant environment',boundary,deviceOwnership:'borrowed'});
+  const read=()=>({schema:readSchema,sourceSchema:source.schema,objectId:asset?.id,pose:{position:poseRoot.position.toArray(),quaternion:poseRoot.quaternion.toArray(),scale:poseRoot.scale.toArray()},source:source.config,configuration:{...configuration},effective:engine?.state()??null,view:session.readView(),cameraFrame:cameraFrame(),failure,capturing,display:'shared Kaminos scene and camera; native selection/gizmos',displaySourceVisible:!!poseRoot.parent&&host.scene.isVisible(asset?.id),presentationLighting:screenMaterial?.lights===false?'lighting bypassed':'unverified',navigationIndexReady:!!root.geometry.boundsTree,supportedLights:'native directional, inverse-square point and spot; constant environment',boundary,deviceOwnership:'borrowed'});
   const showStatus=()=>{if(status)status.textContent=failure?`Stopped: ${failure}`:capturing?'Capturing raw reference…':`${configuration.paused?'Paused · ':''}${engine?.samples??0} samples · ${engine?.width??0} × ${engine?.height??0} · ${configuration.bounces} bounces`;};
   const render=({width,height,filter=configuration.reconstruction}={})=>{
    if(disposed)return;
@@ -76,13 +77,13 @@ export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,
   };
   try{
    renderer.backend.device.addEventListener('uncapturederror',gpuFailure);
-   replaceGeometry();asset=await session.attach(root,{owned:true,metadata:{label:root.name,source:sourceURL,type:'experiment'}});
+   replaceGeometry();asset=sourceObject?await session.attach(sourceObject.root,{owned:false}):await session.attach(root,{owned:true,metadata:{label:root.name,source:sourceURL,type:'experiment'}});if(sourceObject&&asset.id!==sourceObject.id)throw Error('Integral source registration changed');
    screenMaterial=new THREE.MeshBasicNodeMaterial({depthTest:false,depthWrite:false});screenMaterial.lights=false;screenMaterial.vertexNode=THREE.TSL.vec4(THREE.TSL.positionGeometry.xy,0,1);
    screen=new THREE.Mesh(new THREE.PlaneGeometry(2,2),screenMaterial);screen.name='Surface teacher presentation';screen.frustumCulled=false;screen.renderOrder=900;screen.raycast=()=>{};screen.userData.kaminosSurfaceTeacherPresentation=true;screen.userData.kaminosAODepthUnsupported=true;
    await session.attach(screen,{owned:true,presentation:true,metadata:{source:'surface-teacher-presentation'}});
-   session.setView(inputs.view??initialView);
+   if(!sourceObject)session.setView(inputs.view??initialView);
    stop=session.onFrame(()=>{
-    if(!root.parent||!root.visible||!host.scene.isVisible(asset.id)||!camera.isPerspectiveCamera){screen.visible=false;return;}screen.visible=true;
+    if(!poseRoot.parent||!poseRoot.visible||!host.scene.isVisible(asset.id)||!camera.isPerspectiveCamera){screen.visible=false;return;}screen.visible=true;
     if(configuration.paused||capturing||failure||document.hidden||pending)return;
     try{render();pending=engine.device.queue.onSubmittedWorkDone().catch(error=>{failure=error.message;showStatus();}).finally(()=>{pending=null;});}catch(error){failure=error.message;showStatus();}
    });
@@ -107,7 +108,7 @@ export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,
        await new Promise(resolve=>setTimeout(resolve,0));
       }
       const pixels=await engine.readLinear();result={...read(),width,height,samples,pixels:Array.from(pixels)};return result;
-     }finally{capturing=false;if(!disposed&&!failure&&root.parent&&host.scene.isVisible(asset.id)){try{render();}catch(error){failure=error.message;}}showStatus();session.redraw();}
+     }finally{capturing=false;if(!disposed&&!failure&&poseRoot.parent&&host.scene.isVisible(asset.id)){try{render();}catch(error){failure=error.message;}}showStatus();session.redraw();}
     },
     async query({rays,sample=0}){syncScene();return engine.evaluate(rays,{sample});},
    };

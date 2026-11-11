@@ -57,3 +57,13 @@ const interrupted=createGranularPreparation({count:1,grainDetail:0,width:.04,dt:
 const lostPhase=JSON.parse(JSON.stringify(interrupted.snapshot()));delete lostPhase.phase;
 assert.throws(()=>createGranularPreparation(null,lostPhase),/phase/i);assert.throws(()=>preparationSource(lostPhase),/phase/i);
 lostPhase.phase=null;assert.throws(()=>createGranularPreparation(null,lostPhase),/history/i);assert.throws(()=>preparationSource(lostPhase),/history/i);interrupted.dispose();
+const refill=createGranularPreparation({count:2,grainDetail:0,width:.04});refill.start('pour');while(refill.read().phase)refill.advance(.025);
+const original=refill.snapshot();refill.start('pour',{count:4,seconds:.1});
+assert.equal(refill.read().total,6,'a new pour reserves additional grains without replacing the existing packing');
+assert.deepEqual(refill.snapshot().grains,original.grains,'starting the next pour preserves existing physical state');
+assert.deepEqual(refill.snapshot().ingredients.slice(0,2),original.ingredients,'existing grains retain exact shapes and identity');
+refill.advance(.025);const midPour=refill.snapshot(),refillRestore=createGranularPreparation(null,JSON.parse(JSON.stringify(midPour)));
+while(refillRestore.read().phase)refillRestore.advance(.025);
+assert.equal(refillRestore.read().deposited,6,'saved partial pour remembers its exact batch target');
+const full=refillRestore.snapshot();assert.throws(()=>refillRestore.start('pour',{count:1.5}),/count/i);assert.deepEqual(refillRestore.snapshot(),full);
+refill.dispose();refillRestore.dispose();
