@@ -7,7 +7,7 @@ async function responseJSON(request,url,options){
 }
 // Load and Generate browse the same local and other-server stores. Importing
 // retains the source and gives this server its own ordinary scene document.
-export async function chooseSavedSceneFromLibrary({grFetchApi,pickSavedScene,request=fetch,browseFile}){
+export async function chooseSavedSceneFromLibrary({grFetchApi,pickSavedScene,request=fetch,browseFile,resolveDocument=true}){
  const discovery = new AbortController();
  const discover = (url, options) => request(url, {...options, signal: discovery.signal});
  async function* localScenes(){
@@ -35,6 +35,7 @@ export async function chooseSavedSceneFromLibrary({grFetchApi,pickSavedScene,req
  try {choice=await pickSavedScene({scenes:[],local:localScenes(),more,moreDetails});}
  finally {discovery.abort();}
  if(!choice)return null;
+ if(!resolveDocument)return choice;
  if(choice==='browse'){
   if(!browseFile)return choice;
   const file=await browseFile();if(!file)return null;

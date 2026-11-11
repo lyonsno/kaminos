@@ -47,8 +47,8 @@ export function mountSceneWorkerEditor({document,window,page,readCamera,readUi,r
   }catch(error){report('Save failed: '+error.message);return result?{ok:false,error:error.message}:false;}
  }
  async function load(file,{sceneFile=null}={}){
-  const data=typeof file.json==='function'?await file.json():JSON.parse(await file.text());
-  const result=await call('scene.applyDocument',{document:data,sceneFile,emptySettings:true});
+  if(!(file instanceof window.Blob))throw Error('Choose a scene file');
+  const result=await call('scene.loadFile',{file,sceneFile});
   if(sceneFile)window.history.replaceState(window.history.state,'',savedSceneLocation(window.location.href,sceneFile));
   report('Loaded: '+(sceneFile??file.name??'scene'));return {ok:true,...result};
  }
@@ -59,5 +59,5 @@ export function mountSceneWorkerEditor({document,window,page,readCamera,readUi,r
   if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='z'){event.preventDefault();event.stopImmediatePropagation();void run(()=>call(event.shiftKey?'scene.redo':'scene.undo'));}
  },true);
  render(null);
- return Object.freeze({render,save,load,select:ids=>call('scene.select',{ids,activeId:ids.at(-1)??null}),edits:Object.freeze({state:()=>readUi()?.history??{active:null,replaying:false,undoCount:0,redoCount:0},subscribe:listener=>{historyListeners.add(listener);return()=>historyListeners.delete(listener);},undo:()=>run(()=>call('scene.undo')),redo:()=>run(()=>call('scene.redo'))}),dispose(){closed=true;for(const stop of stops)stop();if(window.saveScene===saveScene)window.saveScene=previous.saveScene;if(window.saveSceneAs===saveSceneAs)window.saveSceneAs=previous.saveSceneAs;}});
+ return Object.freeze({render,save,load,async openSaved(choice){const result=await call('scene.openSaved',choice);window.history.replaceState(window.history.state,'',result.url);report('Loaded: '+result.filename);return {ok:true,...result};},select:ids=>call('scene.select',{ids,activeId:ids.at(-1)??null}),edits:Object.freeze({state:()=>readUi()?.history??{active:null,replaying:false,undoCount:0,redoCount:0},subscribe:listener=>{historyListeners.add(listener);return()=>historyListeners.delete(listener);},undo:()=>run(()=>call('scene.undo')),redo:()=>run(()=>call('scene.redo'))}),dispose(){closed=true;for(const stop of stops)stop();if(window.saveScene===saveScene)window.saveScene=previous.saveScene;if(window.saveSceneAs===saveSceneAs)window.saveSceneAs=previous.saveSceneAs;}});
 }

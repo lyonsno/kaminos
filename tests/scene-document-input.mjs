@@ -51,9 +51,9 @@ test('the production startup-to-document adapter parses saved bytes once while k
  const restore=section('  const startupSceneRestore = startupSceneAdmission.then(', '  startupSceneRestore.then(');
  const load=section('async function loadSceneFile(', 'async function applySceneDocument(');
  let parses=0;const json={parse(value){if(value===text)parses++;return JSON.parse(value);}};
- const c=vm.createContext({JSON:json,window:{},startupSceneText:Promise.resolve(text),startupSceneFile:'saved.kaminos.json',
+ const c=vm.createContext({JSON:json,window:{},location:{search:''},startupSceneText:Promise.resolve(text),startupSceneFile:'saved.kaminos.json',
   startupSceneHash:new URLSearchParams('scene=saved.kaminos.json'),startupSceneRedirect:Symbol('redirect'),sceneDocument:f.session,planSceneRestore:f.plan,
-  environmentLoaded:Promise.resolve(),volumeLoaded:Promise.resolve(),authoringBusy:false,vantageCaptureHeld:false,scenePlacementTools:null,
+  environmentLoaded:Promise.resolve(),volumeLoaded:Promise.resolve(),authoringBusy:false,vantageCaptureHeld:false,scenePlacementTools:null,sceneWorkerRequested:false,
   environmentLoader:{holdFull:()=>()=>{}},requestAnimationFrame:callback=>callback(),setTimeout:callback=>callback(),setInfo(){},URLSearchParams});
  // Count the document owner's parser too, using an invocation-local wrapper.
  const parse=JSON.parse;JSON.parse=(value,...args)=>{if(value===text)parses++;return parse(value,...args);};

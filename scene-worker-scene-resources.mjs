@@ -173,7 +173,7 @@ export function createSceneWorkerSceneResources(context){
      async beforeReplace(data,plan,meta){authoring?.clear();applySettings(data,meta.context);return domains.document.beforeReplace(data,plan,meta);},
      async afterReplace(data,plan,meta){materials.write(plan.materialLibrary??{recipes:[],bindings:[]});await giProxies.whenIdle();await domains.document.afterReplace(data,plan,meta);appearance.applyEnvironment();documentTemplate=structuredClone(data);},
      documentServices:{post:services.postSceneDocument??(body=>fetch('/api/save-scene',{method:'POST',headers:{'Content-Type':'application/json'},body})),restoreUrl:(_data,filename,address)=>savedSceneLocation(address.href,filename),readAddress:()=>{const url=new URL(payload.location?.href??payload.location);return {href:url.href,origin:url.origin,search:url.search,hash:url.hash};},...domains.documentServices}});
-    authoring=createSceneWorkerAuthoring({THREE,ordinary,fields:()=>domains.authoring?.fields?.()??[],checkTransform:(row,pose)=>{if(!domains.authoring?.checkTransform)throw Error('Transform owner is not mounted: '+row.type);domains.authoring.checkTransform(row,pose);},changed:()=>document.session.authoringChanged()});
+    authoring=createSceneWorkerAuthoring({THREE,ordinary,fields:()=>domains.authoring?.fields?.()??[],checkTransform:(row,pose)=>{if(!domains.authoring?.checkTransform)throw Error('Transform owner is not mounted: '+row.type);domains.authoring.checkTransform(row,pose);}});
     await domains.initialize(ctx);current(ctx);
     if(startup.startupDefaults.defaults){assertOrdinarySupport(startup.startupDefaults.defaults,{});applySettings(startup.startupDefaults.defaults,ctx);await domains.applyPreferences?.(startup,ctx);}
     replanAppearance();await appearance.initialize(ctx);current(ctx);
@@ -204,6 +204,14 @@ export function createSceneWorkerSceneResources(context){
      onCameraStatus:value=>report(frameContext,{cameraStatus:value}),onWaterFrame:value=>domains.onWaterFrame?.(value),onWaterError:(error,fallback)=>required(domains.onWaterError,'water failure handling')(error,fallback),
      afterDraw:(receipt,now)=>{frameCount++;domains.afterDraw?.(receipt,now);}});
     commandMap=mergeCommands({...document.commands,
+     async 'scene.loadFile'({file,sceneFile=null}={},ctx){current(ctx);if(!(file instanceof Blob))throw Error('Scene file must be a Blob');const data=JSON.parse(await file.text());current(ctx);return commandMap['scene.applyDocument']({document:data,sceneFile,emptySettings:true},ctx);},
+     async 'scene.openSaved'({name,store=null}={},ctx){current(ctx);savedSceneLocation(payload.location.href,name);
+      const request=services.fetchSceneDocument??fetch;
+      const response=store?await request('/api/scene-library-import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({store:store.id,name}),signal:ctx.signal}):await request('/api/read?root=scenes&path='+encodeURIComponent(name)+'&raw=1',{cache:'no-store',signal:ctx.signal});
+      const value=await response.json();current(ctx);if(!response.ok)throw Error(value?.error??'Scene read failed');
+      const data=store?value.document:value,filename=store?value.saved:name;savedSceneLocation(payload.location.href,filename);if(!data)throw Error('Scene import did not return its document');
+      const result=await commandMap['scene.applyDocument']({document:data,sceneFile:filename,emptySettings:true},ctx);return {...result,filename,url:savedSceneLocation(payload.location.href,filename),dependencies:store?value.dependencies??[]:[]};
+     },
      'scene.captureDocument'(input,ctx){current(ctx);return {document:captureDocument(input)};},
      async 'scene.save'(input={},ctx){current(ctx);const data=captureDocument(input);const result=await document.session.save(data,input.saveAs?null:document.session.state().filename,{result:true,saveAsName:input.name??null,overwrite:input.overwrite===true});current(ctx);return {...result,ui:{document:document.session.state()}};},
      async 'scene.applyDocument'(input,context){
@@ -252,7 +260,7 @@ export function createSceneWorkerSceneResources(context){
   const view=checkedCameraView(input.camera);
   const captured=buildSceneDocument({...domain,objects:snapshot.objects,groups:snapshot.groups,materialLibrary:materials.document(),
    activeObjectId:workingScene.activeObjectId,activeGroupId:workingScene.activeGroupId,activeFieldId:workingScene.activeFieldId,selectionIds:[...snapshot.selection.ids],
-   provenance:documentTemplate?.provenance??null,camera:view,cameraViews:documentTemplate?.cameraViews,sceneCamera:documentTemplate?.sceneCamera,viewport:documentTemplate?.viewport,
+   provenance:documentTemplate?.provenance??null,capture:documentTemplate?.capture??null,camera:view,cameraViews:documentTemplate?.cameraViews,sceneCamera:documentTemplate?.sceneCamera,viewport:documentTemplate?.viewport,
    environment:{...state.environment,ground:state.ground},editorDisplay:state.editorDisplay,
    postprocessing:{...documentTemplate?.postprocessing,ao:state.ao,sceneGI:state.gi,reflections:state.reflections,bloom:{...sceneBloom.read().settings},...domain.postprocessing}});
   return {...structuredClone(documentTemplate??{}),...captured};

@@ -27620,9 +27620,10 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
 window.openSavedScene = async function() {
   if (document.querySelector('.scene-load-picker')) return;
   try {
-    const choice=await chooseSavedSceneFromLibrary({grFetchApi,pickSavedScene,request:fetch});
+    const choice=await chooseSavedSceneFromLibrary({grFetchApi,pickSavedScene,request:fetch,resolveDocument:!sceneWorkerRequested});
     if(choice==='browse'){document.getElementById('scene-file-input').click();return;}
     if(!choice)return;
+    if(sceneWorkerRequested){await sceneWorkerPresentation.editor.openSaved(choice);return;}
     await loadSceneFile(new File([JSON.stringify(choice.document)],choice.name,{type:'application/json'}),{sceneFile:choice.name});
     const missing=choice.dependencies.filter(dependency=>dependency.status==='missing');
     if(missing.length){
@@ -27717,6 +27718,7 @@ function assertLegacyPageGpuOwner() {
   if (sceneWorkerRequested) throw Error('This action requires its scene worker command; page GPU construction is disabled on the worker route');
 }
 async function initSceneWorkerPage(admission) {
+  document.body.classList.add('scene-worker-page');
   window.kaminosStartup?.phase('Starting scene worker');
   await startupPreferencesLoaded;
   const {mountSceneWorkerPage} = await import('./scene-worker-page-bootstrap.mjs');

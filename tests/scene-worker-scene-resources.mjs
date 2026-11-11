@@ -249,3 +249,29 @@ test('worker capture uses edited roots, current selection, actual appearance and
  assert.deepEqual(result.document.objects[0].transform.position,[9,8,3]);await f.shell.commands['scene.applyDocument']({document:result.document,sceneFile:result.filename},f.ctx);assert.deepEqual(f.shell.ordinary.workingScene.find('mesh').object.position.toArray(),[9,8,3]);
  }finally{await f.shell.retire(f.ctx);delete globalThis.self;}
 });
+
+test('selection and empty history never release the save hold left by failed document application',async()=>{
+ globalThis.self=globalThis;let fail=false,posts=0;const f=fixture({document:saved(),domainOverrides:{document:{assertSupported(){},prepareDocument(){},beforeReplace(){},afterReplace(){if(fail)throw Error('afterReplace failed');}}},postSceneDocument:async()=>{posts++;return {ok:true,json:async()=>({saved:'partial.kaminos.json'})};}});
+ try{await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},context:f.ctx});fail=true;await assert.rejects(f.shell.commands['scene.applyDocument']({document:saved()},f.ctx),/afterReplace failed/);assert.equal(f.shell.ordinary.document.session.state().blocked,true);
+ f.shell.foregroundCommands['scene.select']({ids:['mesh']},f.ctx);f.shell.foregroundCommands['scene.undo'](null,f.ctx);f.shell.foregroundCommands['scene.redo'](null,f.ctx);
+ assert.equal(f.shell.ordinary.document.session.state().blocked,true,'projection/history cannot certify a partial scene');
+ await assert.rejects(f.shell.commands['scene.save']({camera:{position:[3,4,5],target:[0,0,0],up:[0,1,0],near:.01,far:100,fov:40}},f.ctx),/save blocked/);assert.equal(posts,0);
+ fail=false;await f.shell.commands['scene.applyDocument']({document:saved()},f.ctx);assert.equal(f.shell.ordinary.document.session.state().blocked,false);
+ }finally{await f.shell.retire(f.ctx);delete globalThis.self;}
+});
+test('serialized scene files are parsed and admitted by the actual worker before replacing roots',async()=>{
+ globalThis.self=globalThis;const f=fixture({document:saved()});try{await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},context:f.ctx});
+ assert.equal(typeof f.shell.commands['scene.loadFile'],'function','worker must own file parsing');const root=f.shell.ordinary.workingScene.find('mesh').object;
+ await assert.rejects(f.shell.commands['scene.loadFile']({file:new Blob(['{bad'])},f.ctx),/JSON|scene file/i);assert.equal(f.shell.ordinary.workingScene.find('mesh').object,root);
+ const loaded=await f.shell.commands['scene.loadFile']({file:new Blob([JSON.stringify(saved('loaded'))]),sceneFile:'loaded.kaminos.json'},f.ctx);assert.deepEqual(loaded.ui.objects.map(o=>o.id),['loaded']);assert.equal(loaded.ui.document.filename,'loaded.kaminos.json');assert.equal(root.parent,null);
+ }finally{await f.shell.retire(f.ctx);delete globalThis.self;}
+});
+
+test('an untouched saved capture survives worker capture, Save bytes and Load',async()=>{
+ globalThis.self=globalThis;const capture={label:'Existing view',image:'data:image/png;base64,AAAA',width:1,height:1,capturedAt:'2026-11-11T18:00:00Z'},data={...saved(),capture},bodies=[];
+ const f=fixture({document:data,postSceneDocument:async body=>{bodies.push(JSON.parse(body));return {ok:true,json:async()=>({saved:'capture.kaminos.json'})};}});
+ try{await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},context:f.ctx});const camera={position:[3,4,5],target:[0,0,0],up:[0,1,0],near:.01,far:100,fov:40};
+ assert.deepEqual((await f.shell.commands['scene.captureDocument']({camera},f.ctx)).document.capture,capture);
+ const result=await f.shell.commands['scene.save']({camera},f.ctx);assert.equal(result.ok,true);assert.deepEqual(bodies[0].capture,capture);await f.shell.commands['scene.applyDocument']({document:result.document},f.ctx);assert.deepEqual((await f.shell.commands['scene.captureDocument']({camera},f.ctx)).document.capture,capture);
+ }finally{await f.shell.retire(f.ctx);delete globalThis.self;}
+});

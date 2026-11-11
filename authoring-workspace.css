@@ -544,3 +544,7 @@ body[data-workspace=authoring].has-assets-panel:has(#asset-generate[data-image-e
 #authoring-material-properties input[type=color] { width:100%; height:28px; padding:2px; }
 
 #authoring-material-properties .material-users { overflow-wrap:anywhere; }
+
+/* The worker editor mounts the same inspector without an experiment owner. */
+body.scene-worker-page.has-workbench-inspector[data-workspace=workbench] { --authoring-right:340px; grid-template-columns:380px minmax(0,1fr) var(--authoring-right); }
+body.scene-worker-page.has-workbench-inspector[data-workspace=workbench] #authoring-right { display:flex; grid-column:3; grid-row:2; border-left:1px solid #303134; }
