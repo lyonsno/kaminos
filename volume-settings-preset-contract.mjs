@@ -480,8 +480,13 @@ export function validateVolumeSettingsPresetTarget(receipt, params) {
   if (params.get('settings_preset_authority') !== receipt.sourcePresetAuthority) {
     throw new Error('target settings preset authority mismatch');
   }
+  // A verified older document can acquire additive defaults before its saved
+  // URL knows those fields. Only that migration permits an absent parameter;
+  // explicit values and every originally authored field remain exact.
+  const addedDefaults = new Set(receipt.retirementMigration?.addedRouteParams || []);
   for (const [key, value] of receipt.routeEntries) {
     const values = params.getAll(key);
+    if (values.length === 0 && addedDefaults.has(key)) continue;
     if (values.length !== 1 || values[0] !== value) throw new Error(`target settings route mismatch for ${key}`);
   }
   const requestedPresentationModes = params.getAll('volume_presentation');
