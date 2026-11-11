@@ -14,23 +14,27 @@ const context=()=>{const signal=new AbortController().signal;return {signal,asse
 const source='demos/material-recipes/two-finishes.glb',bytes=readFileSync(new URL('../'+source,import.meta.url));
 const saved=(id='mesh')=>({version:8,objects:[{id,type:'glb',source,transform:{position:[1,2,3],rotation:[0,.4,0],scale:[2,1,1]},materials:{side:THREE.DoubleSide,transparent:true,opacity:.6}}],groups:[],activeObjectId:id,selectionIds:[id],
  environment:{name:'neutral',exposure:2,intensity:.7,showBackground:true,ground:{height:-2,color:'#123456'}},postprocessing:{sceneGI:{gain:3,radius:7}}});
-function fixture({document=null,failInit=false,failRetire=false,domainOverrides={}}={}){
+function fixture({document=null,failInit=false,failRetire=false,domainOverrides={},liveShared=true}={}){
  assert.equal(typeof api.createSceneWorkerSceneResources,'function','actual ordinary scene constructor is required');
  const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(50,2,.1,200),events=[],targets=[];
  const renderer={toneMappingExposure:1,capabilities:{getMaxAnisotropy:()=>8},isWebGPURenderer:true,hasFeature:()=>false,getDrawingBufferSize:v=>v.set(64,32),library:{fromMaterial:material=>material},backend:{get:()=>({texture:'actual-recorded-depth'})}};
  const pmremGenerator={fromEquirectangular:target,fromScene:target};const retained=[];
- function target(){const t={texture:new THREE.Texture(),dispose(){events.push('map.dispose');}};targets.push(t);return t;}
- const renderResources={renderer,pmremGenerator,lighting:null,async initializeRenderer(){events.push('renderer.initialize');},resize(){},async retire(){while(retained.length){await retained.at(-1).dispose?.();retained.pop();}events.push('renderer.retire');},initializeLighting(){events.push('lighting');this.lighting=createSceneLightingGraph({...shell.lightingOptions,THREE,scene,camera,renderer,retain:resource=>retained.push(resource)});this.lighting.renderPipeline.render=()=>events.push('draw');return this.lighting;}};
+ function target(){const t={texture:new THREE.Texture(),releases:0,dispose(){this.releases++;events.push('map.dispose');}};targets.push(t);return t;}
+ const renderResources={renderer,pmremGenerator,lighting:null,async initializeRenderer(){events.push('renderer.initialize');},resize(){},
+  async retireLighting(){while(retained.length){await retained.at(-1).dispose?.();retained.pop();}this.lighting=null;},
+  async retire(){await this.retireLighting();events.push('renderer.retire');},
+  initializeLighting(){events.push('lighting');this.lighting=createSceneLightingGraph({...shell.lightingOptions,THREE,scene,camera,renderer:this.renderer,retain:resource=>retained.push(resource)});this.lighting.renderPipeline.render=()=>events.push('draw');return this.lighting;}};
  const device={queue:{submit(){},onSubmittedWorkDone:async()=>events.push('settle')},destroy(){events.push('device.destroy');}},ctx=context();let ordinary,cleanups=0,inputs=[];
- const domain={initialize(){events.push('domain.initialize');if(failInit)throw Error('domain construction denied');},prepareVolume(){events.push('domain.prepareVolume');},attachVolume(){events.push('domain.attachVolume');},retire(){events.push('domain.retire');if(failRetire&&cleanups++===0)throw Error('domain cleanup held');},
+ const domain={initialize(){events.push('domain.initialize');if(failInit)throw Error('domain construction denied');},prepareVolume(){events.push('domain.prepareVolume');},attachVolume(){events.push('domain.attachVolume');},reattachVolume(){events.push('domain.reattachVolume');},retire(){events.push('domain.retire');if(failRetire&&cleanups++===0)throw Error('domain cleanup held');},
   readFrameState:()=>({simInputs:{flame:{active:false},water:{active:false},ash:{active:false}},radianceReady:true,transportRequired:false}),
   readDrawSettings:()=>({waterVisible:true,flameHDRActive:false}),readDrawResources:()=>({waterFeature:{host:null}}),drawOperations:{beforeDraw(){},syncProxies(){}},
-  document:{assertSupported(){},prepareDocument(){},beforeReplace(){},afterReplace(){}},assertRecordSupported:record=>{throw Error('No domain mount for '+record.type);},
+  document:{assertSupported(){},prepareDocument(){events.push('document.prepare');},beforeReplace(){},afterReplace(){}},assertRecordSupported:record=>{throw Error('No domain mount for '+record.type);},
   applyFrameInputs(input){inputs.push(input);},...domainOverrides};
  const payload={viewport:{width:64,height:32,pixelRatio:1},flameControls:{},preferences:null,location:{href:'http://localhost/?scene_worker=1'},admission:document?{data:document,plan:{}}:null};
- const shell=api.createSceneWorkerSceneResources({THREE,scene,camera,renderer,pmremGenerator,renderResources,sharedGpu:{device,queue:device.queue},payload,viewport:()=>payload.viewport,lifecycle:{},readFlameControls:()=>({}),applyFlameControls(){},readAppHost:()=>null,
+ let shared={device,queue:device.queue};
+ const shell=api.createSceneWorkerSceneResources({THREE,scene,camera,renderer,pmremGenerator,renderResources,sharedGpu:shared,...(liveShared?{readSharedGpu:()=>shared}:{}),payload,viewport:()=>payload.viewport,lifecycle:{},readFlameControls:()=>({}),applyFlameControls(){},readAppHost:()=>null,
   createDomains(value){events.push('domain.shell');ordinary=value.ordinary;return domain;},services:{loadHDR:async()=>new THREE.Texture(),readAssetBytes:async()=>bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength)}});
- return {shell,scene,camera,events,targets,ctx,domain,renderer,renderResources,payload,device,ordinary:()=>ordinary,inputs};
+ return {shell,scene,camera,events,targets,ctx,domain,renderer,renderResources,payload,device,ordinary:()=>ordinary,inputs,setShared:value=>{shared=value;}};
 }
 test('retained shell builds actual appearance, SSGI, display and ordinary frames without a page owner',async()=>{
  const f=fixture();assert.deepEqual(f.events,[]);assert.equal(f.scene.children.length,0);
@@ -205,5 +209,118 @@ test('legacy document camera omissions preserve the ordinary page lens and defau
  globalThis.self=globalThis;const f=fixture();try{await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},appHost:{},context:f.ctx});
  const document=saved();document.camera={position:[4,5,6],target:[0,0,0]};const result=await f.shell.commands['scene.applyDocument']({document},f.ctx);
  assert.deepEqual(result.ui.camera,{...document.camera,up:[0,1,0],fov:50,near:.1,far:200});await f.shell.retire(f.ctx);
+ }finally{delete globalThis.self;}
+});
+
+test('ordinary device readers use the live owner and never revive a null device',()=>{
+ const f=fixture(),next={device:{queue:{onSubmittedWorkDone:async()=>{}}}};next.queue=next.device.queue;
+ f.setShared(next);assert.equal(f.shell.ordinary.sharedGpu,next);
+ f.setShared(null);assert.equal(f.shell.ordinary.sharedGpu,null,'an explicit missing current device cannot fall back to the original');
+ const legacy=fixture({liveShared:false});assert.equal(legacy.shell.ordinary.sharedGpu.device,legacy.device);
+});
+
+test('presentation replacement preserves unsaved authored identity and reattaches without replaying startup',async()=>{
+ globalThis.self=globalThis;const f=fixture({document:saved()});try{
+ await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},appHost:{},context:f.ctx});
+ const ordinary=f.shell.ordinary,authored=ordinary.authored,entry=ordinary.workingScene.find('mesh'),object=entry.object,appearance=ordinary.appearance;
+ object.position.set(9,8,7);ordinary.workingScene.select(['mesh'],'mesh');
+ ordinary.applySettings({...saved(),postprocessing:{sceneGI:{gain:5,radius:9},bloom:{enabled:true,radius:.3,strength:.2}}},f.ctx);
+ ordinary.bloom.set({strength:.73});const bloomBefore=structuredClone(ordinary.bloom.read().settings),settingsBefore=ordinary.readSettings();
+ let authoredDisposals=0;object.traverse(n=>{n.geometry?.addEventListener('dispose',()=>authoredDisposals++);for(const m of [].concat(n.material??[]))m.addEventListener('dispose',()=>authoredDisposals++);});
+ const oldLighting=f.renderResources.lighting,oldMap=f.scene.environment;
+ assert.equal(typeof f.shell.stopRendererResources,'function');assert.doesNotThrow(()=>f.shell.stopRendererResources());
+ assert.equal(f.shell.readUi().surfaces.scene.active,false);f.shell.frames.setForegroundServiceActive(true);
+ assert.equal(f.shell.frames.runForegroundFrame(()=>({})).sceneDrawn,false);
+ await f.shell.releaseRendererPresentation(f.ctx);assert.equal(f.renderResources.lighting,null);
+ assert.equal(ordinary.authored,authored);assert.equal(ordinary.workingScene.find('mesh').object,object);assert.equal(object.parent,f.scene);assert.equal(authoredDisposals,0);
+ const next={device:{queue:{onSubmittedWorkDone:async()=>{}}}};next.queue=next.device.queue;f.setShared(next);
+ const replacement={...f.renderer,toneMappingExposure:1};f.renderResources.renderer=replacement;f.renderResources.pmremGenerator={...f.renderResources.pmremGenerator};
+ await f.shell.restoreRendererPresentation(f.ctx);
+ assert.notEqual(f.renderResources.lighting,oldLighting);assert.equal(f.renderResources.lighting.renderPipeline.renderer,replacement);
+ assert.equal(ordinary.appearance,appearance);assert.notEqual(f.scene.environment,oldMap);assert.equal(replacement.toneMappingExposure,settingsBefore.environment.exposure);
+ assert.deepEqual(ordinary.readSettings(),settingsBefore);assert.deepEqual(ordinary.bloom.read().settings,bloomBefore);
+ assert.equal(f.shell.readUi().surfaces.scene.active,false,'restoring presentation alone cannot claim domain attachment');
+ await f.shell.prepareVolume({volume:{},context:f.ctx});await f.shell.reattachVolume({volume:{},appHost:{},context:f.ctx});
+ assert.deepEqual(object.position.toArray(),[9,8,7]);assert.deepEqual(ordinary.workingScene.selection.ids,['mesh']);assert.equal(authoredDisposals,0);
+ assert.equal(f.events.filter(e=>e==='document.prepare').length,1,'recovery cannot reapply the initial saved document');
+ assert.equal(f.ctx.reports.filter(r=>r.ui?.initialization?.sceneApplied).length,1,'recovery is not a second startup');
+ assert.equal(f.events.filter(e=>e==='domain.attachVolume').length,1);assert.equal(f.events.filter(e=>e==='domain.reattachVolume').length,1);
+ assert.equal(f.shell.readUi().surfaces.scene.active,true);assert.equal(f.shell.frames.runForegroundFrame(()=>({})).sceneDrawn,true);
+ await f.shell.retire(f.ctx);await f.renderResources.retire();
+ }finally{delete globalThis.self;}
+});
+
+test('failed presentation cleanup retains targets for Retry without clearing authored roots',async()=>{
+ globalThis.self=globalThis;const f=fixture({document:saved()});try{
+ await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},appHost:{},context:f.ctx});await f.shell.ordinary.appearance.environment.whenSettled();
+ const object=f.shell.ordinary.workingScene.find('mesh').object,last=f.targets.at(-1),release=last.dispose;let denied=true;
+ last.dispose=function(){if(denied)throw Error('presentation target cleanup denied');return release.call(this);};
+ f.shell.stopRendererResources();await assert.rejects(f.shell.releaseRendererPresentation(f.ctx),/cleanup denied/);
+ assert.equal(f.shell.ordinary.workingScene.find('mesh').object,object);assert.equal(f.events.includes('domain.retire'),false);
+ await assert.rejects(f.shell.restoreRendererPresentation(f.ctx),/release|retained/);
+ denied=false;await f.shell.releaseRendererPresentation(f.ctx);assert(f.targets.every(t=>t.releases===1));
+ await f.shell.retire(f.ctx);await f.renderResources.retire();
+ }finally{delete globalThis.self;}
+});
+
+test('superseded presentation restore stays held and retains partial allocations until cleanup',async()=>{
+ const f=fixture();await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},appHost:{},context:f.ctx});
+ f.shell.stopRendererResources();await f.shell.releaseRendererPresentation(f.ctx);
+ const controller=new AbortController(),stale={...f.ctx,assertCurrent(){controller.signal.throwIfAborted();}},initialize=f.renderResources.initializeLighting;
+ f.renderResources.initializeLighting=function(){const value=initialize.call(this);controller.abort(Error('superseded device generation'));return value;};
+ await assert.rejects(f.shell.restoreRendererPresentation(stale),/superseded device generation/);
+ assert(f.renderResources.lighting,'partial new graph must remain reachable for cleanup');assert.equal(f.shell.readUi().surfaces.scene.active,false);
+ await assert.rejects(f.shell.restoreRendererPresentation(f.ctx),/release|retained/);
+ await f.shell.releaseRendererPresentation(f.ctx);assert.equal(f.renderResources.lighting,null);
+ f.renderResources.initializeLighting=initialize;await f.shell.restoreRendererPresentation(f.ctx);await f.shell.reattachVolume({volume:{},appHost:{},context:f.ctx});
+ assert.equal(f.shell.readUi().surfaces.scene.active,true);await f.shell.retire(f.ctx);await f.renderResources.retire();
+});
+
+
+test('recovery domain can prepare fresh lighting while ordinary drawing remains held',async()=>{
+ const f=fixture();await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},appHost:{},context:f.ctx});
+ f.shell.stopRendererResources();await f.shell.releaseRendererPresentation(f.ctx);await f.shell.restoreRendererPresentation(f.ctx);
+ Object.assign(f.renderer,{contextNode:THREE.TSL.context({}),getRenderTarget:()=>null,getMRT:()=>null,setRenderTarget(){},setMRT(){},async compileAsync(){f.events.push('recovery.compile');}});
+ let changed=false;
+ f.domain.reattachVolume=async()=>{
+  assert.equal(f.shell.readUi().surfaces.scene.active,false);const preparation=f.shell.ordinary.lightingPreparation;
+  await preparation.setExternalHold(true);
+  try{await preparation.request(()=>{changed=true;});}finally{await preparation.setExternalHold(false);}
+  assert.equal(f.shell.readUi().surfaces.scene.active,false);
+ };
+ await f.shell.reattachVolume({volume:{},appHost:{},context:f.ctx});
+ assert.equal(changed,true);assert.equal(f.events.filter(e=>e==='recovery.compile').length,2);
+ assert.equal(f.shell.readUi().surfaces.scene.active,true);await f.shell.retire(f.ctx);await f.renderResources.retire();
+});
+
+
+test('recovery releases volume presentation through its domain without retiring authored state',async()=>{
+ const f=fixture();await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},appHost:{},context:f.ctx});
+ const authored=f.shell.ordinary.authored,working=f.shell.ordinary.workingScene;let attempts=0;
+ f.domain.releaseVolume=async input=>{assert.equal(input.context,f.ctx);if(++attempts===1)throw Error('domain GPU release denied');return {released:true};};
+ f.shell.stopRendererResources();assert.equal(typeof f.shell.releaseVolume,'function');
+ await assert.rejects(f.shell.releaseVolume({context:f.ctx}),/domain GPU release denied/);
+ assert.equal(f.shell.ordinary.authored,authored);assert.equal(f.shell.ordinary.workingScene,working);assert.equal(f.events.includes('domain.retire'),false);
+ assert.deepEqual(await f.shell.releaseVolume({context:f.ctx}),{released:true});assert.equal(attempts,2);
+ delete f.domain.releaseVolume;await assert.rejects(f.shell.releaseVolume({context:f.ctx}),/domains.releaseVolume/);
+ await f.shell.releaseRendererPresentation(f.ctx);await f.shell.restoreRendererPresentation(f.ctx);
+ delete f.domain.reattachVolume;await assert.rejects(f.shell.reattachVolume({volume:{},context:f.ctx}),/domains.reattachVolume/);
+ assert.equal(f.shell.readUi().surfaces.scene.active,false);assert.equal(f.events.filter(e=>e==='domain.attachVolume').length,1);
+ await f.shell.retire(f.ctx);await f.renderResources.retire();
+});
+
+
+test('retained beauty proxy roots register on the new surface-lighting owner and keep releasable identities',async()=>{
+ globalThis.self=globalThis;const f=fixture({document:saved()});try{
+ await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},appHost:{},context:f.ctx});
+ const {seedInitialBeautyLevels}=await import('../scene-lod-budget.mjs'),ordinary=f.shell.ordinary,root=ordinary.workingScene.find('mesh').object;
+ const rung=new THREE.Group();rung.add(new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshStandardNodeMaterial()));
+ seedInitialBeautyLevels(root,[{sha:'retained-rung',faces:12,root:rung}]);ordinary.beautyLods.update(f.camera,{viewportHeight:32});
+ const old=ordinary.surfaceLighting;assert(old.proxyRoots.has(rung));assert(ordinary.beautyLods.materialRoots(root).includes(rung));
+ f.shell.stopRendererResources();await f.shell.releaseRendererPresentation(f.ctx);assert.equal(old.proxyRoots.has(rung),false);
+ await f.shell.restoreRendererPresentation(f.ctx);const next=ordinary.surfaceLighting;
+ assert.notEqual(next,old);assert(next.proxyRoots.has(rung));assert(ordinary.beautyLods.materialRoots(root).includes(rung));
+ ordinary.beautyLods.release(root);assert.equal(next.proxyRoots.has(rung),false,'original LOD release callback must unregister from the current owner');
+ await f.shell.retire(f.ctx);await f.renderResources.retire();
  }finally{delete globalThis.self;}
 });

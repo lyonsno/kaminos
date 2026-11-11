@@ -48,10 +48,13 @@ export function createSceneWorkerSceneResources(context){
  let appearance=null,authored=null,document=null,domains=null,frames=null,display=null,sceneBloom=null,selection=null,materials=null,beautyLods=null,giProxies=null;
  let started=false,retiring=false,attached=false,frameCount=0,draw=null,output=null,shading=null,domainRetired=false,rootsRetired=false;
  let lightingPreparation=null,volume=null,lightingHeld=false,documentHolds=0;
+ let presentationHeld=false,presentationReleased=false,presentationRestored=false;
  let gi=resolveSceneGIControlState(),reflections=resolveReflectionSettings(),bloomSettings=checkedSceneBloom({enabled:paramsFor(payload).get('scene_bloom')==='1',composeFlame:paramsFor(payload).get('scene_bloom')==='1'}),ground={},editorDisplay=checkedViewportDisplay(),startup=null;
  let arrival={sceneKind:'static-asset',lookId:DEFAULT_STUDIO_LOOK_ID,studioLightsEnabled:true,materialTuningEnabled:false,bounds:null,materialProfile:inspectArrivalMaterialProfile([]),plan:null};
- const graphs=new Map(),wireMaterials=[],pendingRoots=new Set(),stops=[];
+ const graphs=new Map(),wireMaterials=[],pendingRoots=new Set(),stops=[],lightingProxyRoots=new Map();
  const renderer=()=>renderResources.renderer,lighting=()=>renderResources.lighting;
+ const readSharedGpu=typeof context.readSharedGpu==='function'?()=>context.readSharedGpu():()=>sharedGpu;
+ const queue=()=>readSharedGpu()?.device?.queue;
  const params=new URL(payload.location?.href??payload.location??'http://localhost/').searchParams;
  const current=ctx=>{required(ctx?.assertCurrent,'current command context');ctx.assertCurrent();if(retiring)throw Error('Ordinary scene is retiring');};
  const report=(ctx,ui)=>ctx?.report?.({ui});
@@ -111,7 +114,48 @@ export function createSceneWorkerSceneResources(context){
   if(supported&&typeof supported.then==='function'){Promise.resolve(supported).catch(()=>{});throw Error('Scene document support must be synchronous');}
   if(supported===false)throw Error('Scene document support refused');return supported;
  }
- const ordinary=Object.freeze({scene,camera,renderResources,sharedGpu,workingScene,viewport,
+ function registerLightingProxy(root){
+  if(lightingProxyRoots.has(root))throw Error('Lighting proxy is already registered');
+  const entry={release:lighting()?.sceneGI.surfaceLighting.registerProxyRoot(root)??null};lightingProxyRoots.set(root,entry);
+  return()=>{entry.release?.();lightingProxyRoots.delete(root);entry.release=null;};
+ }
+ function buildPresentation(ctx){
+    renderResources.initializeLighting(ctx);current(ctx);
+    for(const [root,entry]of lightingProxyRoots)entry.release=lighting().sceneGI.surfaceLighting.registerProxyRoot(root);
+    syncLighting();lighting().sceneGI.setOpticalFinish(resolveStudioLook(arrival.lookId).opticalFinish);
+    const preparePasses=()=>gi.mode==='combined'?[lighting().sceneGI.source,lighting().sceneGI.beauty]:[lighting().prePass,lighting().scenePass];
+    const frameOptions=()=>({viewportHeight:viewport().height*viewport().pixelRatio,pinnedObjects:new Set(workingScene.selection.ids)});
+    const preparation=createLightingPreparation({
+     hold(value){lightingHeld=value;return syncVolumeHold();},
+     compile:()=>withViewportVisibilityAsync(workingScene.objects,visible,async()=>{await beautyLods.whenIdle();return compileSceneLighting(renderer(),preparePasses(),{visibility:()=>beautyLods.borrowFrame(camera,frameOptions())});}),
+     liveCompile:({isCurrent})=>compileSceneLighting(renderer(),preparePasses(),{live:true,isCurrent,visibility:()=>{const restoreVisibility=borrowViewportVisibility(workingScene.objects,visible),restoreBeauty=beautyLods.borrowFrame(camera,frameOptions());return()=>{restoreBeauty();restoreVisibility();};}}),
+     onStatus:value=>report(activeContext,{lightingPreparation:value})});
+    const owner=Object.freeze({...preparation,request(change){if(retiring||lightingPreparation!==owner||(presentationHeld&&!presentationRestored))throw Error('Ordinary scene presentation is held');return preparation.request(change);}});
+    lightingPreparation=owner;
+    selection=createSelectionFeedback(camera);selection.setStyle({width:editorDisplay.outlineWidth,opacity:editorDisplay.outlineOpacity});
+    shading=createViewportShading({createWireMaterial:()=>{const material=new THREE.MeshBasicNodeMaterial({color:0x15181c,wireframe:true,transparent:true,opacity:.42,depthWrite:false,side:THREE.DoubleSide});wireMaterials.push(material);return material;}});
+    sceneBloom=createSceneBloom({bloom,convertToTexture:THREE.TSL.convertToTexture,vec4:THREE.TSL.vec4,rebuild:()=>display?.rebuild(),redraw(){},initial:bloomSettings});
+    display=createSceneDisplayOwner({THREE,graphs,readSettings:()=>({...frameState(),...gi,sharedDeviceAvailable:!!readSharedGpu()?.device}),
+     readResources:()=>({...lighting(),sceneBloom,selectionFeedback:selection}),createFireLightFieldReceiverPass:(...args)=>required(domains.createFireLightFieldReceiverPass??domains.createFireLightReceiver,'fire light-field receiver')(...args),createSceneEmissiveCamera,onOutput:value=>{output=value;}});
+    display.rebuild();
+    current(ctx);
+ }
+ async function releasePresentation(ctx){
+  // Each successful release drops its handle; a throwing release remains owned
+  // for Retry. Authored roots, material recipes and LOD/proxy registries survive.
+  ctx.assertCurrent();
+  if(lightingPreparation){try{await lightingPreparation.whenIdle();}catch(error){if(!lightingPreparation.state().error)throw error;}ctx.assertCurrent();}
+  appearance?.invalidateEnvironment();ctx.assertCurrent();
+  for(const entry of lightingProxyRoots.values()){entry.release?.();entry.release=null;}ctx.assertCurrent();
+  for(const [key,graph]of graphs){await graph.sceneEmissiveCamera?.dispose?.();graphs.delete(key);ctx.assertCurrent();}
+  if(selection){await selection.dispose();selection=null;ctx.assertCurrent();}
+  while(wireMaterials.length){await wireMaterials.at(-1).dispose();wireMaterials.pop();ctx.assertCurrent();}shading=null;
+  if(sceneBloom){bloomSettings=sceneBloom.read().settings;await sceneBloom.dispose();sceneBloom=null;ctx.assertCurrent();}
+  await renderResources.retireLighting(ctx);ctx.assertCurrent();
+  lightingPreparation=null;lightingHeld=false;display=null;output=null;presentationReleased=true;presentationRestored=false;
+ }
+ const ordinary=Object.freeze({scene,camera,renderResources,workingScene,viewport,
+  get sharedGpu(){return readSharedGpu();},
   get appearance(){return appearance;},get lighting(){return lighting();},get display(){return display;},get frames(){return frames;},get authored(){return authored;},get document(){return document;},get materials(){return materials;},get beautyLods(){return beautyLods;},get giProxies(){return giProxies;},
   get bloom(){return sceneBloom;},decorateOutput:node=>selection.output(node),
   get lightingPreparation(){return lightingPreparation;},get surfaceLighting(){return lighting()?.sceneGI.surfaceLighting;},
@@ -125,7 +169,7 @@ export function createSceneWorkerSceneResources(context){
  const shell={ordinary,
   readUi(){const contributed=domains?.readUi?.()??{};return {...contributed,
    environmentLoading:appearance?.environment.read()??null,lightingPreparation:lightingPreparation?.state()??null,loading:telemetry.read(),
-   surfaces:{...contributed.surfaces,scene:{active:attached,...contributed.surfaces?.scene}},
+   surfaces:{...contributed.surfaces,scene:{...contributed.surfaces?.scene,active:attached&&!presentationHeld}},
   };},
   get lightingOptions(){return appearance?.lightingOptions;},get frames(){return frames;},
   get initialVolumeActive(){return domains?.initialVolumeActive;},get volumeOptions(){return domains?.volumeOptions;},get commands(){return commandMap;},get foregroundCommands(){return domains?.foregroundCommands;},
@@ -149,12 +193,12 @@ export function createSceneWorkerSceneResources(context){
     const parseGlb=async bytes=>(await new GLTFLoader().parseAsync(bytes,'')).scene;
     giProxies=createGiProxyRegistry({THREE,parseGlb,...services.proxyOptions});
     beautyLods=createSceneBeautyLodController({THREE,scene,giProxies,parseGlb,
-     surfaceLighting:{registerProxyRoot:root=>lighting()?.sceneGI.surfaceLighting.registerProxyRoot(root)},
+     surfaceLighting:{registerProxyRoot:registerLightingProxy},
      onRungLoaded:()=>materials.sync(),onRepresentationChanged:()=>materials.sync(),onRepresentationReleased:(_root,representation)=>materials.releaseObject(representation),canDisplayRung:(...args)=>materials.canDisplay(...args)});
     materials=createSceneMaterials({entries:()=>[...workingScene.objects,...workingScene.suspendedObjects()],retainedEntries:()=>workingScene.retainedObjects(),definitions:sceneMaterialPrograms,representations:entry=>beautyLods.materialRoots(entry.object)});
     authored=createAuthoredSceneRuntime({scene,workingScene,readers:{transform:sceneObjectTransformState,materials:getMaterialStateForObject,...domains.recordReaders},
      roots:{...domains.roots,prepare(entry){if(entry.giProxy){const task=entry.giProxy.enabled?giProxies.select(entry.object,entry.giProxy.selection):giProxies.disable(entry.object,{retainLevels:true});Promise.resolve(task).catch(()=>{});}domains.roots?.prepare?.(entry);},restore(entry,record){restoreAuthoredSceneRecord(entry,record,{transform:applySceneObjectTransformState,materials:applyMaterialStateToObject,...domains.restoreOperations});domains.roots?.restore?.(entry,record);},dispose(root){domains.roots?.dispose?.(root);disposeRoot(root);}},
-     membership:domains.membership,replacement:{...domains.replacement,context:{...domains.replacement?.context,retire:async()=>{await sharedGpu.device.queue.onSubmittedWorkDone();await domains.replacement?.context?.retire?.();}}},
+     membership:domains.membership,replacement:{...domains.replacement,context:{...domains.replacement?.context,retire:async()=>{await queue()?.onSubmittedWorkDone();await domains.replacement?.context?.retire?.();}}},
      assertRecordSupported(record,loaders){if(record.type==='glb')return;return domains.assertRecordSupported(record,loaders);},
      createLoaders({registerSceneObject}){
       const show=createSceneGlbLoader({GLTFLoader,workingScene,readScene:()=>scene,readAssetBytes:services.readAssetBytes??readAssetBytes,
@@ -173,26 +217,12 @@ export function createSceneWorkerSceneResources(context){
     await domains.initialize(ctx);current(ctx);
     if(startup.startupDefaults.defaults){assertOrdinarySupport(startup.startupDefaults.defaults,{});applySettings(startup.startupDefaults.defaults,ctx);await domains.applyPreferences?.(startup,ctx);}
     replanAppearance();await appearance.initialize(ctx);current(ctx);
-    renderResources.initializeLighting(ctx);syncLighting();
-    const preparePasses=()=>gi.mode==='combined'?[lighting().sceneGI.source,lighting().sceneGI.beauty]:[lighting().prePass,lighting().scenePass];
-    const frameOptions=()=>({viewportHeight:viewport().height*viewport().pixelRatio,pinnedObjects:new Set(workingScene.selection.ids)});
-    const preparation=createLightingPreparation({
-     hold(value){lightingHeld=value;return syncVolumeHold();},
-     compile:()=>withViewportVisibilityAsync(workingScene.objects,visible,async()=>{await beautyLods.whenIdle();return compileSceneLighting(renderer(),preparePasses(),{visibility:()=>beautyLods.borrowFrame(camera,frameOptions())});}),
-     liveCompile:({isCurrent})=>compileSceneLighting(renderer(),preparePasses(),{live:true,isCurrent,visibility:()=>{const restoreVisibility=borrowViewportVisibility(workingScene.objects,visible),restoreBeauty=beautyLods.borrowFrame(camera,frameOptions());return()=>{restoreBeauty();restoreVisibility();};}}),
-     onStatus:value=>report(activeContext,{lightingPreparation:value})});
-    lightingPreparation=Object.freeze({...preparation,request(change){if(retiring)throw Error('Ordinary scene is retiring');return preparation.request(change);}});
-    selection=createSelectionFeedback(camera);selection.setStyle({width:editorDisplay.outlineWidth,opacity:editorDisplay.outlineOpacity});
-    shading=createViewportShading({createWireMaterial:()=>{const material=new THREE.MeshBasicNodeMaterial({color:0x15181c,wireframe:true,transparent:true,opacity:.42,depthWrite:false,side:THREE.DoubleSide});wireMaterials.push(material);return material;}});
-    sceneBloom=createSceneBloom({bloom,convertToTexture:THREE.TSL.convertToTexture,vec4:THREE.TSL.vec4,rebuild:()=>display?.rebuild(),redraw(){},initial:bloomSettings});
-    display=createSceneDisplayOwner({THREE,graphs,readSettings:()=>({...frameState(),...gi,sharedDeviceAvailable:!!sharedGpu.device}),
-     readResources:()=>({...lighting(),sceneBloom,selectionFeedback:selection}),createFireLightFieldReceiverPass:(...args)=>required(domains.createFireLightFieldReceiverPass??domains.createFireLightReceiver,'fire light-field receiver')(...args),createSceneEmissiveCamera,onOutput:value=>{output=value;}});
-    display.rebuild();
-    frames=createSceneFrameRuntime({readInputs:()=>{const state=frameState();return {...state,lightingHeld:retiring||lightingHeld||documentHolds>0||document.session.state().phase==='applying'||state.lightingHeld===true};},draw:()=>draw(),frameCount:()=>frameCount,
-     prepare:()=>{camera.updateMatrixWorld();const result=domains.prepareFrame?.();if(result&&typeof result.then==='function'){Promise.resolve(result).catch(()=>{});throw Error('Scene frame preparation must be synchronous');}output.fireLightFieldPass?.update();},readDepth:()=>renderer().backend.get(output.activeSceneDepth.value).texture,readSharedDevice:()=>sharedGpu.device,readCamera:()=>camera,
+    buildPresentation(ctx);
+    frames=createSceneFrameRuntime({readInputs:()=>{const state=frameState();return {...state,lightingHeld:retiring||presentationHeld||!attached||lightingHeld||documentHolds>0||document.session.state().phase==='applying'||state.lightingHeld===true};},draw:()=>draw(),frameCount:()=>frameCount,
+     prepare:()=>{if(presentationHeld||!attached)return;camera.updateMatrixWorld();const result=domains.prepareFrame?.();if(result&&typeof result.then==='function'){Promise.resolve(result).catch(()=>{});throw Error('Scene frame preparation must be synchronous');}output.fireLightFieldPass?.update();},readDepth:()=>renderer().backend.get(output.activeSceneDepth.value).texture,readSharedDevice:()=>readSharedGpu()?.device,readCamera:()=>camera,
      coordinator,readSimInputs:now=>frameState(now).simInputs});
-    draw=createSceneDrawRuntime({THREE,readSettings:()=>({held:retiring,customToneMapping:false,giMode:gi.mode,giView:gi.view,matchFlameCamera:false,assetPreparationActive:false,capturing:false,
-      beautyFrameOptions:{viewportHeight:viewport().height*viewport().pixelRatio,pinnedObjects:new Set(workingScene.selection.ids)},...domains.readDrawSettings()}),
+    draw=createSceneDrawRuntime({THREE,readSettings:()=>({customToneMapping:false,giMode:gi.mode,giView:gi.view,matchFlameCamera:false,assetPreparationActive:false,capturing:false,
+      beautyFrameOptions:{viewportHeight:viewport().height*viewport().pixelRatio,pinnedObjects:new Set(workingScene.selection.ids)},...domains.readDrawSettings(),held:retiring||presentationHeld||!attached}),
      readResources:()=>({...domains.readDrawResources(),...output,renderer:renderer(),renderPipeline:lighting().renderPipeline,sceneBeautyLods:beautyLods,transportFrame:frames.composition.transportFrame}),
      operations:{...domains.drawOperations,beforeDraw:t=>{selection.suspend(!editorDisplay.overlays||!editorDisplay.outlines);selection.update(workingScene.objects.filter(e=>workingScene.selection.ids.includes(e.id)&&visible(e.id)),[workingScene.selection.activeId]);domains.drawOperations.beforeDraw(t);},
       readPhysicalCamera:()=>domains.drawOperations.readPhysicalCamera?.(),applyCamera:applySceneEmissiveCamera,planFrame:now=>frames.planFrame(now),
@@ -208,6 +238,33 @@ export function createSceneWorkerSceneResources(context){
     current(ctx);return shell;
    }finally{activeContext=null;}
   },
+  stopRendererResources(){
+   // Synchronous loss fence only. The root retires volume/model/device owners.
+   presentationHeld=true;presentationRestored=false;attached=false;volume=null;
+   appearance?.environment.invalidateResources();frames?.setForegroundServiceActive(false);
+  },
+  async releaseRendererPresentation(ctx){
+   current(ctx);if(!presentationHeld)shell.stopRendererResources();
+   if(!presentationReleased)await releasePresentation(ctx);
+   return {released:true};
+  },
+  async restoreRendererPresentation(ctx){
+   current(ctx);if(!presentationHeld||!presentationReleased)throw Error('Release retained presentation before restoring it');
+   if(!readSharedGpu()?.device||!renderer())throw Error('Ordinary presentation requires the current supplied renderer/device');
+   // Mark before allocation: failed/superseded builds must pass through release.
+   presentationReleased=false;activeContext=ctx;
+   try{buildPresentation(ctx);appearance.applyEnvironment();appearance.environment.select(environment.read().name??'studio');current(ctx);presentationRestored=true;return {restored:true};}
+   finally{activeContext=null;}
+  },
+  async releaseVolume(input){
+   current(input.context);if(!presentationHeld)throw Error('Stop presentation before releasing its volume');
+   const result=await required(domains.releaseVolume,'domains.releaseVolume')(input);current(input.context);return result;
+  },
+  async reattachVolume(input){
+   current(input.context);if(!presentationHeld||!presentationRestored)throw Error('Restore presentation before reattaching its volume');
+   await required(domains.reattachVolume,'domains.reattachVolume')(input);current(input.context);
+   attached=true;presentationHeld=false;appearance.environment.releaseFull();return {attached:true};
+  },
   async prepareVolume(input){current(input.context);volume=input.volume;await domains.prepareVolume(input);current(input.context);},
   async attachVolume(input){
    current(input.context);await domains.attachVolume(input);current(input.context);activeContext=input.context;
@@ -215,29 +272,24 @@ export function createSceneWorkerSceneResources(context){
     current(input.context);attached=true;appearance.environment.releaseFull();report(input.context,{...(applied?.ui??projection()),initialization:{sceneApplied:true,preferencesApplied:true}});
    }finally{activeContext=null;}
   },
-  applyFrameInputs(input,ctx){current(ctx);if(!attached)throw Error('Ordinary scene is not attached');frameContext=ctx;domains.applyFrameInputs?.(input,ctx);},
+  applyFrameInputs(input,ctx){current(ctx);if(!attached||presentationHeld)throw Error('Ordinary scene is not attached');frameContext=ctx;domains.applyFrameInputs?.(input,ctx);},
   async retire(ctx){
    required(ctx?.assertCurrent,'retirement context');ctx.assertCurrent();retiring=true;attached=false;
    if(domains&&!domainRetired){await domains.retire(ctx);domainRetired=true;}
-   if(lightingPreparation){try{await lightingPreparation.whenIdle();}catch(error){if(!lightingPreparation.state().error)throw error;}await sharedGpu.device.queue.onSubmittedWorkDone();}
+   if(lightingPreparation){try{await lightingPreparation.whenIdle();}catch(error){if(!lightingPreparation.state().error)throw error;}await queue()?.onSubmittedWorkDone();}
    if(!rootsRetired){
     materials?.clear();beautyLods?.dispose();giProxies?.clear();
     if(authored)await authored.lifecycle.clear();for(const root of pendingRoots){root.removeFromParent();disposeRoot(root);}rootsRetired=true;
    }
    while(stops.length){await stops.at(-1)();stops.pop();}
-   if(selection){await selection.dispose();selection=null;}
-   while(wireMaterials.length){await wireMaterials.at(-1).dispose();wireMaterials.pop();}shading=null;
-   // Root domains retain fire receivers, including partial construction. The
-   // ordinary cache borrows them; renderResources separately owns AO/GI.
-   for(const [key,graph]of graphs){await graph.sceneEmissiveCamera?.dispose?.();graphs.delete(key);}
-   if(sceneBloom){await sceneBloom.dispose();sceneBloom=null;}
+   await releasePresentation(ctx);
    if(appearance){await appearance.retire(ctx);appearance=null;}
    authored?.membership.dispose();frames=null;draw=null;display=null;output=null;commandMap=null;
    return {retired:true};
   },
  };
  let frameContext=null,commandMap=null;
- function syncVolumeHold(){if(volume&&typeof volume.setSceneLightingRebuildPending==='function')return volume.setSceneLightingRebuildPending(lightingHeld||documentHolds>0);if(lightingHeld||documentHolds)return sharedGpu.device.queue.onSubmittedWorkDone();}
+ function syncVolumeHold(){if(volume&&typeof volume.setSceneLightingRebuildPending==='function')return volume.setSceneLightingRebuildPending(lightingHeld||documentHolds>0);if(lightingHeld||documentHolds)return queue()?.onSubmittedWorkDone();}
  function projection(){return {bounds:ordinary.readBounds(),selection:structuredClone(workingScene.selection),objects:authored?.snapshot().objects??[]};}
  return shell;
 }

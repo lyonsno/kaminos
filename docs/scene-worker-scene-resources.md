@@ -4,7 +4,10 @@
 returns a retained shell before resource allocation. The common runtime supplies
 its actual `THREE`, `scene`, `camera`, `renderResources`, `sharedGpu`, `payload`,
 `lifecycle`, `viewport`, `readFlameControls`, `applyFlameControls`, and
-`readAppHost`. Renderer and PMREM readers always use `renderResources`.
+`readAppHost`. Renderer and PMREM readers always use `renderResources`. The optional live
+`readSharedGpu()` supplies the current device/queue; static `sharedGpu` is used
+only when that reader is absent. A live reader returning null never revives the
+startup device.
 
 The shell owns ordinary appearance, accepted AO/GI/environment settings, display
 and bloom graphs, selection feedback, actual registry/document composition,
@@ -126,6 +129,47 @@ maps retain their progressive loading status independently of recipe admission.
 use the actual loaders and one vendored Three namespace. The GLB registry loader
 restores saved placement (`normalize:false`); fresh asset arrival needs the
 actual geometry-arrival service, not successful unplaced publication.
+
+## Renderer replacement without document replacement
+
+The root's existing recovery controller owns device-loss admission, fresh command
+contexts, replacement-device acquisition/discard, domain/model/volume lifetime,
+and final activation. The ordinary shell supplies these presentation operations:
+
+- `stopRendererResources()` synchronously fences scene drawing, pending
+  environment publication and new lighting preparation. It detaches the local
+  volume reference; GPU disposal is deferred to the release operations.
+- `releaseVolume({context, ...input})` delegates to the root's explicit
+  `domains.releaseVolume(input)` while presentation is held. The root releases
+  radiance/HDR/receiver resources without retiring its authored plan. Ordinary
+  display caches borrow those resources and do not dispose them.
+- `releaseRendererPresentation(context)` waits for existing lighting preparation,
+  releases owned environment targets, selection/wire/bloom/display resources and
+  calls the retained render owner's `retireLighting(context)`. Successful releases
+  drop their handles individually; a failed release remains owned for Retry.
+- `restoreRendererPresentation(context)` requires completed presentation release
+  and the root's current supplied renderer/device. It reconstructs actual
+  AO/GI/reflection/display/bloom resources, re-registers retained LOD roots with
+  the new surface-lighting owner and restores the accepted environment recipe.
+  Failed or superseded allocations stay reachable for release before another
+  restore. New lighting preparation is admitted after successful restoration;
+  ordinary drawing remains held.
+- `reattachVolume(input)` requires the root's explicit
+  `domains.reattachVolume(input)` and a restored presentation. That domain hook
+  joins the newly prepared volume and may compile its lighting. Only successful
+  current completion releases the ordinary drawing hold. It never calls startup
+  `attachVolume` or replays `payload.admission.data`.
+
+The root orders stop, volume/model/frame quiescence and domain presentation
+release before ordinary presentation release and renderer replacement. It then
+restores ordinary presentation, prepares/reattaches the replacement volume and
+activates its fresh command context. The root determines the volume's activation
+order and keeps its existing recovery policy and simulation exclusions.
+
+These operations retain `workingScene`, authored/document owners, object and
+material identities, unsaved transforms, selection, accepted settings, material
+recipes and LOD/proxy registries. Full `retire(context)` remains the separate
+operation that clears authored objects and destroys the entire scene shell.
 
 ## Evidence
 

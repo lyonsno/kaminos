@@ -76,6 +76,7 @@ export function createSceneRenderResources({THREE,scene,camera,canvas,readViewpo
    lighting?.setRenderer(renderer);return resources();
   },
   resize(){if(!rendererReady)throw Error('Scene renderer resources are not initialized');const viewport=rendererRuntime.resize(readViewport());lighting?.resizeDepth();return viewport;},
+  async retireLighting(ctx){current(ctx);await retireLighting();current(ctx);},
   retireRenderer,
   async retire(){await retireLighting();await retireRenderer();},
  };
