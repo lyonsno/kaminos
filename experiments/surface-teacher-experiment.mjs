@@ -17,8 +17,8 @@ export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,
   try{context=host.scene.rendering();const size=context.renderer.getDrawingBufferSize(new THREE.Vector2()),limit=context.renderer.backend.device.limits.maxTextureDimension2D;if(Math.round(size.x*configuration.scale)>limit||Math.round(size.y*configuration.scale)>limit)throw Error('Image scale exceeds active device capacity');}catch(error){await session.dispose();throw error;}
   const {renderer,scene,camera}=context;
   const sourceMaterials=(source.materials??defaultMaterials).map(m=>new THREE.MeshStandardMaterial({color:new THREE.Color(...m.color),roughness:m.roughness,metalness:m.metalness,side:THREE.DoubleSide,colorWrite:!configuration.tracing,depthWrite:!configuration.tracing}));
-  const root=new THREE.Mesh(new THREE.BufferGeometry(),sourceMaterials);root.name=label;root.castShadow=!configuration.tracing;root.receiveShadow=!configuration.tracing;
-  const presentationMode=()=>{root.castShadow=!configuration.tracing;root.receiveShadow=!configuration.tracing;for(const material of sourceMaterials){if(material.colorWrite!==!configuration.tracing){material.colorWrite=!configuration.tracing;material.depthWrite=!configuration.tracing;material.needsUpdate=true;}}if(screen)screen.visible=configuration.tracing;};
+  const root=new THREE.Mesh(new THREE.BufferGeometry(),sourceMaterials);root.name=label;root.castShadow=false;root.receiveShadow=false;
+  const presentationMode=()=>{for(const material of sourceMaterials){if(material.colorWrite!==!configuration.tracing){material.colorWrite=!configuration.tracing;material.depthWrite=!configuration.tracing;material.needsUpdate=true;}}if(screen)screen.visible=configuration.tracing;};
   let sceneKey='',failure=null,capturing=false,disposed=false,status,pending=null,fieldDocument;
   const fields=[];
   const syncControls=()=>{for(const {input,group,key}of fields){if(fieldDocument.activeElement===input&&input.type!=='checkbox')continue;const value=group==='source'?source.config[key]:configuration[key];if(input.type==='checkbox')input.checked=value;else input.value=String(value);}};
