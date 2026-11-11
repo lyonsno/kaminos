@@ -15,8 +15,8 @@ export function transformerKiln(){
   lengths.forEach((length,i)=>{const id=recipe.nodes.length;recipe.nodes.push({parent:i?ids[i-1]:anchor,length,angles:[rad(a[i]),rad(b[i])],layer,label:`${name} · ${i+1}`,bodyDynamics:{mass:kind==='hatch'?2:kind==='tray'?1.5:.35}});ids.push(id);parts.push({id,kind,width,layer,length});});banks.push({name,anchor,ids,layer});return ids;
  };
  addBank('Crown-folding hatch',[0,3.6],Array(4).fill(.695),[-90,0,0,0],[15,135,30,0],.22,'hatch',2.36);
- addBank('Crucible jaw',[0,.72],[.6,.5,.5,.5],[90,-100,-90,0],[-12,12,0,0],.28,'tray',2.1);
- for(let i=0;i<4;i++)addBank(`Refractory gill ${i+1}`,[-.22-i*.55,3.15],Array(4).fill(.53),[-90,0,0,0],[-145+i*5,15,10,-15],.42+i*.06,'gill',.27);
+ addBank('Crucible jaw',[0,.72],[.6,.5,.5,.5],[90,-120,120,-120],[-12,12,0,0],.28,'tray',2.1);
+ for(let i=0;i<4;i++)addBank(`Refractory gill ${i+1}`,[-.22-i*.55,3.15],Array(4).fill(.53),[-90,0,0,0],[-205+i*35,15,10,-15],.42+i*.12,'gill',.27);
  for(let i=0;i<4;i++)addBank(`Crown armor ${i+1}`,[-.18-i*.61,3.52],[.63],[180],[108+i*4],.10,'crown',2.55);
  for(let i=0;i<8;i++)addBank(`Rear damper ${i+1}`,[-2.64,1.03+i*.285],[.265],[90],[180],.13,'damper',2.25);
  for(let i=0;i<4;i++)addBank(`Deploying brace ${i+1}`,[i%2?-.35:-2.17,.75],[.75],[i%2?-45:-135],[-90],i<2?.52:-3.12,'brace',.18);
