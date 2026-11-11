@@ -16,9 +16,15 @@ function fixture({failInitialize=false,failCleanup=false}={}){
   applyFrameInputs(payload){calls.push(['input',payload]);},
   async retire(){calls.push('scene.dispose');if(cleanupFails){cleanupFails=false;throw Error('resource retirement failed');}}};
  const renderer={dispose:()=>calls.push('renderer.dispose')};
- const options={THREE:{},createSceneResources:input=>{assert.equal(input.sharedGpu,shared);calls.push('scene.shell');return sceneResources;},imageOptions:null,
-  services:{requestDevice:async()=>{calls.push('acquire');return shared;},kit:{createWebGpuForegroundService},
-   createRenderObjects:()=>({scene:{},camera:{}}),createRenderer:async input=>{assert.equal(input.sharedGpu,shared);input.onConstructed(renderer);return {renderer,pmremGenerator:{dispose:()=>calls.push('pmrem.dispose')}};},
+ const renderResources={renderer,pmremGenerator:{dispose:()=>calls.push('pmrem.dispose')},lighting:null,
+  async initializeRenderer(){calls.push('renderer.initialize');},
+  initializeLighting(){calls.push('lighting.initialize');this.lighting={};},
+  async retire(){if(this.lighting){calls.push('lighting.dispose');this.lighting=null;}this.pmremGenerator.dispose();renderer.dispose();},
+ };
+ const initializeScene=sceneResources.initialize;sceneResources.initialize=async function(ctx){await initializeScene.call(this,ctx);renderResources.initializeLighting(ctx);};
+ const options={THREE:{},createSceneResources:input=>{assert.equal(input.sharedGpu,shared);assert.equal(input.renderResources,renderResources,'retain the actual renderer resource owner before domain initialization');calls.push('scene.shell');return sceneResources;},imageOptions:null,
+  services:{createRenderResources:input=>{assert.equal(input.readSharedGpu(),shared);calls.push('render.shell');return renderResources;},requestDevice:async()=>{calls.push('acquire');return shared;},kit:{createWebGpuForegroundService},
+   createRenderObjects:()=>({scene:{},camera:{}}),
    createVolume:input=>{volumeOptions=input;owner={setActive:async active=>{input.presentationSurface.setActive(active);calls.push(['volume.active',active]);},setControls:input=>{calls.push(['controls',input]);if(input.resolution===0)throw Error('invalid grid');},dispose:()=>calls.push('volume.dispose'),
     foregroundGpuContext:()=>({device,queue:device.queue,renderer:'ordinary-volume',productFrameOwner:'prototype'}),
     renderSharedFrame:({service})=>{assert.equal(service.device,device);calls.push('volume.frame');return {flameDrawn:true};}};return owner;},
@@ -36,7 +42,7 @@ test('factory retains a shell before any allocation and composes one admitted or
  assert.deepEqual(f.calls.filter(Array.isArray).at(-1),['input',payload]);
  const mutation=await runtime.requestMutation('scene.move',{},f.context,()=>runtime.foregroundCommands['scene.move']());
  assert.equal(mutation.mutationApplied,true);assert.equal(runtime.commands['scene.read']().registered,true);
- await runtime.retire(f.context);assert.deepEqual(f.calls.slice(-5),['scene.dispose','volume.dispose','pmrem.dispose','renderer.dispose','device.dispose']);
+ await runtime.retire(f.context);assert.deepEqual(f.calls.slice(-6),['scene.dispose','volume.dispose','lighting.dispose','pmrem.dispose','renderer.dispose','device.dispose']);
 });
 test('failed scene initialization retains exact resources and retries only failed cleanup',async()=>{
  const f=fixture({failInitialize:true,failCleanup:true}),runtime=factory(f.options)({payload:f.payload,lifecycle:{}});

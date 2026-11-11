@@ -1,4 +1,5 @@
-import {createSceneRenderObjects,createSceneRenderer} from './scene-render-bootstrap.mjs';
+import {createSceneRenderObjects} from './scene-render-bootstrap.mjs';
+import {createSceneRenderResources} from './scene-render-resources.mjs';
 import {createOffscreenVolumeSurface} from './volume-runtime-surface.mjs';
 import {createAppGpuHost} from './app-gpu-host.mjs';
 import {createVolumeWorkerFrameBinding} from './volume-worker-frame-binding.mjs';
@@ -25,7 +26,7 @@ function register(...maps){
 export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imageOptions=null,samRequirements=null,services={}}={}){
  if(!THREE||typeof createSceneResources!=='function')throw Error('scene worker needs its Three namespace and actual scene resource constructor');
  return ({payload,lifecycle})=>{
-  let shared=null,renderer=null,pmrem=null,sceneResources=null,volume=null,appHost=null,frames=null,mutations=null,image=null;
+  let shared=null,renderResources=null,sceneResources=null,volume=null,appHost=null,frames=null,mutations=null,image=null;
   let commands=null,foregroundCommands=null,started=false,queueSettled=false,appRetired=false;
   let appliedViewport={...payload.viewport},appliedControls=structuredClone(payload.flameControls);
   const surfaceState={active:false,transparent:false};
@@ -50,21 +51,20 @@ export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imag
     ctx.assertCurrent();
     if(!shared?.device||shared.queue&&shared.queue!==shared.device.queue)throw Error('scene worker acquisition did not return one shared device and queue');
     const objects=(services.createRenderObjects??createSceneRenderObjects)({THREE,viewport});
-    try{
-     const built=await (services.createRenderer??createSceneRenderer)({THREE,...objects,sharedGpu:shared,canvas:payload.sceneCanvas,viewport,
-      exposure:payload.exposure??1,onConstructed:value=>{renderer=value;}});
-     renderer=built.renderer;pmrem=built.pmremGenerator;
-    }catch(error){
-     // The bootstrap already disposes its early renderer on a clean failure.
-     // If that disposal failed, keep the onConstructed handle for retry.
-     if(!error.cleanupError)renderer=null;
-     throw error;
-    }
+    renderResources=(services.createRenderResources??createSceneRenderResources)({THREE,...objects,canvas:payload.sceneCanvas,
+     readViewport:viewport,readSharedGpu:()=>shared,readRendererOptions:()=>({exposure:payload.exposure??1}),
+     // Domain state exists before lighting is constructed; the shell retains
+     // each actual allocation even if construction of that graph fails.
+     readLightingOptions:()=>sceneResources.lightingOptions});
+    if(typeof renderResources?.initializeRenderer!=='function'||typeof renderResources?.retire!=='function')throw Error('scene worker requires its retained renderer resource owner');
+    await renderResources.initializeRenderer(ctx);
     ctx.assertCurrent();
-    sceneResources=createSceneResources({...objects,THREE,renderer,pmremGenerator:pmrem,sharedGpu:shared,payload,lifecycle,viewport,
+    sceneResources=createSceneResources({...objects,THREE,renderer:renderResources.renderer,pmremGenerator:renderResources.pmremGenerator,
+     renderResources,sharedGpu:shared,payload,lifecycle,viewport,
      readFlameControls:()=>appliedControls,readAppHost:()=>appHost});
     if(typeof sceneResources?.retire!=='function'||typeof sceneResources?.initialize!=='function')throw Error('scene resource shell requires initialize and retire');
     await sceneResources.initialize(ctx);ctx.assertCurrent();
+    if(!renderResources.lighting)throw Error('scene worker requires the actual initialized lighting graph');
     const sceneFrames=sceneResources.frames;
     if(typeof sceneFrames?.runForegroundFrame!=='function'||typeof sceneFrames?.setForegroundServiceActive!=='function')throw Error('scene worker requires the actual ordinary scene frame runtime');
     if(typeof sceneResources.applyFrameInputs!=='function')throw Error('scene worker requires the actual frame input consumer');
@@ -116,8 +116,7 @@ export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imag
     if(shared&&!queueSettled){await shared.device.queue.onSubmittedWorkDone();queueSettled=true;}
     if(sceneResources){await sceneResources.retire(ctx);sceneResources=null;}
     if(volume){await volume.dispose();volume=null;}
-    if(pmrem){await pmrem.dispose();pmrem=null;}
-    if(renderer){await renderer.dispose();renderer=null;}
+    if(renderResources){await renderResources.retire();renderResources=null;}
     if(shared){shared.device.destroy();shared=null;}
     appHost=null;frames=null;mutations=null;commands=null;foregroundCommands=null;
     return {retired:true};

@@ -455,3 +455,15 @@ Settings are not reapplied on every RAF; a frame carrying `flameControls` is
 rejected with the named command to use. `createSceneResources` also receives
 `readFlameControls()` for current source/lighting guides. Neither applied store
 mutates the initialization invocation payload.
+
+The factory now retains `createSceneRenderResources` before awaiting
+`initializeRenderer(context)`. It passes that exact `renderResources` shell,
+alongside its current renderer/PMREM, to the domain constructor. The domain shell
+supplies actual `lightingOptions` and calls
+`renderResources.initializeLighting(context)` during its initialization after
+seating domain state. The factory refuses initialization without that lighting
+graph. This preserves the page's staged renderer → domain setup → lighting
+construction order. Domain `retire` releases domain/display/radiance resources;
+the separate retained render owner releases AO/GI targets, PMREM and renderer
+once. Device acquisition/destruction remains with the common factory. This
+replaces its interim direct renderer/PMREM allocation and disposal.
