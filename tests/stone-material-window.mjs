@@ -48,5 +48,13 @@ test('actual fit command captures the requested physical window without rescalin
   assert.equal(observed.source.config.width,2.8,'window rescaled the actual stones');
   assert.deepEqual(observed.source.window.worldCenter,[0,0,-.7]);
   assert.ok(observed.source.triangles.some(t=>t.a[2]>1.4),'surrounding source context was discarded');
+  const invalidOut=path.join(dir,'invalid-comparison');
+  const invalid=JSON.parse(await fs.readFile(config,'utf8'));invalid.comparisonSize=0;
+  await fs.writeFile(config,JSON.stringify(invalid));await fs.rm(probe);
+  await assert.rejects(run(process.execPath,['--loader',loader,'tools/ground-material-fit.mjs',config,invalidOut],{cwd:process.cwd(),env:{...process.env,GREENROOM_JOB_ID:'configuration-fixture-only',STONE_WINDOW_PROBE:probe}}));
+  const failure=JSON.parse(await fs.readFile(path.join(invalidOut,'report.json'),'utf8'));
+  assert.equal(failure.phase,'configuration','invalid comparison size reached the accelerator route');
+  assert.match(failure.error,/comparison size/i);
+  await assert.rejects(fs.access(probe));
  }finally{await fs.rm(dir,{recursive:true,force:true});}
 });

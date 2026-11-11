@@ -25,6 +25,9 @@ const loss=(a,b)=>a.reduce((s,x,i)=>s+.5*(x-b[i])**2,0)/(a.length/3);
 try{
  if(!report.job)throw Error('Ground capture/training requires Greenroom admission');
  const config=JSON.parse(await fs.readFile(configPath,'utf8'));
+ const size=config.comparisonSize??128;
+ if(!Number.isSafeInteger(size)||size<1)throw Error('Positive integer comparison size required');
+ report.comparisonSize=size;
  const options={resolution:64,steps:2000,batch:2048,queries:65536,heldout:2048,samples:8,heldoutSamples:32,bounces:3,seed:41,fresh:true,...config.fit};report.options=options;
  for(const [k,v]of Object.entries(options))if(k==='fresh'?typeof v!=='boolean':!Number.isSafeInteger(v)||v<1)throw Error(`Invalid fit option ${k}`);
  report.sourceRevision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();report.sourceStatus=execFileSync('git',['status','--porcelain'],{encoding:'utf8'});
@@ -41,7 +44,7 @@ try{
  let state=options.seed>>>0;const random=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return (state+.5)/4294967296;};
  const queries=n=>{const data=new Float32Array(n*8);for(let i=0;i<n;i++){const q=i*8;data[q]=random();data[q+1]=random();for(const d of [2,4]){const r=Math.sqrt(random()*.99),t=random()*Math.PI*2;data[q+d]=r*Math.cos(t);data[q+d+1]=r*Math.sin(t);}data[q+6]=random()<.6?0:random()*Math.log2(options.resolution/2);}return data;};
  const trainingQueries=grid?null:queries(options.queries),heldoutQueries=queries(options.heldout),student=createNeumipStudent({resolution:options.resolution,seed:options.seed});
- const buffers=neumipTrainingBufferSizes(neumipTrainingLayout(student),Math.max(options.batch,options.heldout,128**2));
+ const buffers=neumipTrainingBufferSizes(neumipTrainingLayout(student),Math.max(options.batch,options.heldout,size**2));
  const largest=Math.max(...Object.values(buffers),options.queries*32,source.triangles.length*48);
  const requiredLimits={maxStorageBufferBindingSize:Math.max(128*1024**2,largest),maxBufferSize:Math.max(256*1024**2,largest)};
  report.phase='capture';await publish();
@@ -53,7 +56,7 @@ try{
    const labels=grid?null:await withGpuErrorScopes(ctx.device,'ground-label-capture',()=>teacher.evaluateMaterial(trainingQueries,capture));
    const heldoutLabels=await teacher.evaluateMaterial(heldoutQueries,{...capture,samples:options.heldoutSamples,seed:options.seed+1});
    report.captureMs=performance.now()-start;report.dataset={queries:trainingQueries?await raw('training-queries.f32',trainingQueries):null,labels:labels?await raw('training-labels.f32',labels):null,heldoutQueries:await raw('heldout-queries.f32',heldoutQueries),heldoutLabels:await raw('heldout-labels.f32',heldoutLabels),filter:'square box in normalized UV, world reference-plane extent (2^LOD/resolution)*[tileWidth,tileDepth]',response:'linear outgoing radiance under unit directional irradiance divided by macro light cosine; live material multiplies it back'};
-   learner=await createNeumipTraining(ctx.device,student,{batchSize:Math.max(options.batch,options.heldout,128**2)});
+   learner=await createNeumipTraining(ctx.device,student,{batchSize:Math.max(options.batch,options.heldout,size**2)});
    const checkpoint=async step=>{
     learner.setQueries(heldoutQueries);const {rgb}=await learner.evaluate();
     const model=await learner.exportModel(),bytes=writeNeumipModel(model),name=`${stone?'stone':grass?'grass':'ground'}-${options.resolution}-step-${step}.model`;
@@ -94,9 +97,9 @@ try{
    if(grid)report.dataset.rawLabels={file:'fresh-training-raw-labels.f32',bytes:options.steps*options.batch*12,recipes:'grid-recipes.jsonl',capturedRaw:'captured-grid-raw-labels.f32',capturedFiltered:'captured-grid-labels.f32',capturedGridCount:gridCount};
    if(options.fresh)report.dataset.fresh={queries:{file:'fresh-training-queries.f32',bytes:options.steps*options.batch*32,sha256:queryHash.digest('hex')},labels:{file:'fresh-training-labels.f32',bytes:options.steps*options.batch*12,sha256:labelHash.digest('hex')}};
    report.fitMs=performance.now()-fitStart;
-   // Matched 128px material-domain images: same UV, footprint, directions and
+   // Matched material-domain images: same UV, footprint, directions and
    // gain; these diagnose fitting, not projective camera or silhouette behavior.
-   report.phase='comparison';await publish();const size=128,images=[];
+   report.phase='comparison';await publish();const images=[];
    for(const [name,view,light]of [['front',[0,0],[.5,.3]],['oblique',[.75,.2],[-.5,.5]]]){
     const q=new Float32Array(size*size*8);for(let y=0;y<size;y++)for(let x=0;x<size;x++)q.set([(x+.5)/size,(y+.5)/size,...view,...light,0,0],(y*size+x)*8);
     const reference=await teacher.evaluateMaterial(q,{...capture,samples:32,seed:options.seed+2});learner.setQueries(q);const predicted=(await learner.evaluate()).rgb;
