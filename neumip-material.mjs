@@ -30,6 +30,11 @@ export function createNeumipMaterial(model,{uvScale=3,gain=4}={}) {
   })().toVar('neumipDecodedFeatures');
   const features=mat4(0).toVar('neumipFeaturesShared');
   class NeumipMaterial extends MeshStandardNodeMaterial {
+    customProgramCacheKey() {
+      // The lighting graph closes over this instance's weights, textures and
+      // uniforms; NodeMaterial's public-node traversal cannot see that graph.
+      return `${super.customProgramCacheKey()}:neumip:${this.uuid}`;
+    }
     setupLightingModel(builder) {
       const lighting=super.setupLightingModel(builder);
       let reused=null;
