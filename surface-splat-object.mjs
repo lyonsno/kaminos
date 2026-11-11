@@ -51,10 +51,9 @@ export function surfaceSplatsGLTFPlugin(parser){return {
   // Early hybrid exports used the beauty-LOD helper flag for visible, non-solid
   // body siblings. At import these are authored geometry, not runtime helpers.
   for(const scene of new Set(gltf.scenes??[gltf.scene]))scene.traverse(node=>{
-   if(!node.isSurfaceSplatObject)return;
-   for(const sibling of node.parent?.children??[])if(sibling!==node&&sibling.userData.kaminosBeautyLodProxy&&!sibling.userData.kaminosSurfaceSplatResolve){
-    delete sibling.userData.kaminosBeautyLodProxy;sibling.userData.kaminosNonSolidVisual=true;
-   }
+   if(!node.userData.kaminosBeautyLodProxy||node.userData.kaminosSurfaceSplatResolve)return;
+   const paired=node.parent?.children.some(sibling=>sibling!==node&&sibling.getObjectByProperty('isSurfaceSplatObject',true));
+   if(paired){delete node.userData.kaminosBeautyLodProxy;node.userData.kaminosNonSolidVisual=true;}
   });
  },
  createNodeMesh(index){
