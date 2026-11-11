@@ -51,12 +51,12 @@ export function readNeuralAppearanceDecoder(source) {
 }
 
 function number(n) {return `${Math.fround(n).toExponential(9)}`;}
-function networkWGSL(name,ls,acts) {
+function networkWGSL(name,ls,acts,smelu='neuralAppearanceSmeLU') {
   const declarations=[],code=[`var x0 = input;`];
   ls.forEach((l,k)=>{
     declarations.push(`const ${name}W${k} = array<f32,${l.weights.length}>(${l.weights.map(number).join(',')});`, `const ${name}B${k} = array<f32,${l.biases.length}>(${l.biases.map(number).join(',')});`);
     const act=acts[k];
-    const expr=!act||act==='Identity'?'value':act==='SmeLU'?'neuralAppearanceSmeLU(value)':act==='LeakyReLU'?'max(value,0.01*value)':act==='ReLU'?'max(value,0.0)':act==='Tanh'?'tanh(value)':`select(exp(value)-1.0,value,value>=0.0)`;
+    const expr=!act||act==='Identity'?'value':act==='SmeLU'?`${smelu}(value)`:act==='LeakyReLU'?'max(value,0.01*value)':act==='ReLU'?'max(value,0.0)':act==='Tanh'?'tanh(value)':`select(exp(value)-1.0,value,value>=0.0)`;
     code.push(`var x${k+1}: array<f32,${l.output}>;
     for(var j=0u;j<${l.output}u;j++) {
       var value=${name}B${k}[j];
@@ -69,6 +69,18 @@ function networkWGSL(name,ls,acts) {
     ${code.join('\n')} return x${ls.length};
   }`;
 }
+
+// Auxiliary and sampling decoders use the same observed checkpoint layer ABI.
+export function readNeuralAppearanceMLP(record,input,outputs,label){
+ integer(input,label+' inputs');integer(outputs,label+' outputs');
+ if(!Array.isArray(record?.hidden_layers))throw Error(label+' hidden_layers required');
+ const hidden=record.hidden_layers.map((v,i)=>integer(v,`${label} hidden ${i}`));
+ const acts=typeof record.hidden_activations==='string'?hidden.map(()=>record.hidden_activations):record.hidden_activations;
+ if(!Array.isArray(acts)||acts.length!==hidden.length||acts.some(x=>!activations.has(x)))throw Error(label+' unsupported hidden activations');
+ const network=layers(record._params?.network?.mlp_layers,[input,...hidden,outputs],label);
+ return {input,outputs,layers:network,activations:[...acts],mac:network.reduce((n,l)=>n+l.input*l.output,0)};
+}
+export function buildNeuralAppearanceMLPWGSL(name,model,smelu){return networkWGSL(name,model.layers,model.activations,smelu);}
 
 /** Production WGSL for directional decoding. Prepared frames can be shared
  * across lighting queries at one spatial latent lookup. No CoopVec required. */

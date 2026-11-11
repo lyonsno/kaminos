@@ -123,6 +123,29 @@ distinct from the released paper's specimens.
 
 ## Verification and next consumer
 
+`neural-appearance-guides.mjs` separately reads trained auxiliary and sampler
+weights. Untrained configuration-only metadata does not create a dummy trained
+model. Auxiliary input order is view XYZ followed by spatial latents; target
+layouts are `mc_albedo` (3), diffuse/specular/roughness (7), or the latter plus
+normal XYZ (10). Outputs retain their raw learned units and are not clamped or
+silently normalized by this numerical port.
+
+Sampler decoding preserves the released rational approximations
+`x/sqrt(1+x*x)` and `x*sqrt(1+x*x)` for bounded parameters and unbounded slopes.
+These are not ordinary tanh/sinh. Each specular lobe has two alpha parameters,
+correlation, slope and normalized mixture weight. Diffuse has slope and weight.
+The port uses the actual maximum logit for softmax, including all-negative
+logits, to avoid all-exponent underflow. Weights are sampling probabilities,
+not reflection albedos. This module supplies parameters, not environment light,
+direction sampling/PDFs or a trained guide phase. The first portable fit does
+not yet include these separately trained weights.
+
+The default 11→16→16→10 auxiliary and 11→16→16→9 sampler require 592 and 576
+dense MAC respectively. Those are arithmetic counts, not measured times.
+`SHADER_HERDER_STRICT_METAL=1 node tests/neural-appearance-guides.mjs` executes
+the production WGSL, including direction/latent order, zero/multiple specular
+lobes, extreme-logit normalization and exact source parameter transforms.
+
 Run `SHADER_HERDER_STRICT_METAL=1 node tests/neural-appearance.mjs` for native
 production WGSL numerics, or `npm test -- --only tests/neural-appearance.mjs`
 for normal platform routing. The deterministic fixtures use the observed
