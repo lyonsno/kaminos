@@ -55,6 +55,7 @@ test('teacher respects accepted native light visibility and stays out of world A
   assert.equal(instance.read().schema,'kaminos.grass-surface-teacher.v1','shared source viewer extraction must retain the grass read contract');
   const grassColors=()=>gpu.buffers.filter(b=>b.label==='surface teacher materials'&&!b.destroyed).at(-1).data;
   await instance.operations.configure({bounces:3});
+  assert.deepEqual(instance.read().teacherScene.lights[0].color,[0,0,0],'capture state must retain effective lighting for replay');
   assert.deepEqual(Array.from(grassColors().slice(0,3)),Array.from(new Float32Array(new THREE.Color(0x62513a).toArray())));
   const lights=()=>gpu.buffers.filter(b=>b.label==='surface teacher lights'&&!b.destroyed).at(-1).data;
   assert.deepEqual(Array.from(lights().slice(4,7)),[0,0,0],'hidden native spot must not contribute although light.visible is still true between draws');
