@@ -7,4 +7,4 @@ export function validateParticleWorkSettings(s){
  for(const k of ['exchangeEvery','acquisitionEvery','timingEvery'])if(!Number.isSafeInteger(s[k])||s[k]<1)throw Error('Particle '+k+' must be a positive whole number');
  if(![0,1].includes(s.profileMode)||!(s.largeSupportFade>=0&&s.largeSupportFade<=1))throw Error('Invalid particle footprint work controls');return s;
 }
-export function createParticleCaptureClock(){let last=null,key=null;return {due({enabled,step,interval,identity}){if(!enabled)return false;return key!==identity||last===null||step<last||step-last>=interval;},mark(step,identity){last=step;key=identity;},reset(){last=null;key=null;},read(){return {lastCaptureStep:last,identity:key};}};}
+export function createParticleCaptureClock(){let last=null,key=null;return {due({enabled,step,interval,identity,advancing=true,bootstrap=false}){if(!enabled)return false;return bootstrap||(advancing&&(key!==identity||last===null||step<last||step-last>=interval));},mark(step,identity){last=step;key=identity;},reset(){last=null;key=null;},read(){return {lastCaptureStep:last,identity:key};}};}

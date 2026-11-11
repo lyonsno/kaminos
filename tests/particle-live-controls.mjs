@@ -4,18 +4,19 @@ import assert from 'node:assert/strict';
 import definition from '../experiments/optical-particles.experiment.mjs';
 import {opticalParticleSettings} from '../volume-optical-particles.mjs';
 
-async function mounted({shared=false,inputs={}}={}){
+async function mounted({shared=false,inputs={},viewport=false}={}){
  const document=new EventTarget();document.activeElement=null;
  class Element extends EventTarget{
   constructor(tag){super();this.tagName=tag.toUpperCase();this.children=[];this.dataset={};this.style={};this.value='';this.min='';this.max='';const classes=new Set();this.classList={add:v=>classes.add(v),remove:v=>classes.delete(v),contains:v=>classes.has(v)};}
   append(...els){for(let el of els){if(typeof el==='string'){const node=new Element('span');node.textContent=el;el=node;}el.parentNode=this;this.children.push(el);}}
   setAttribute(){}
+  remove(){if(this.parentNode)this.parentNode.children=this.parentNode.children.filter(x=>x!==this);}
   fire(type,init={}){const event=new Event(type,{bubbles:true,cancelable:true});Object.assign(event,init);this.dispatchEvent(event);}
  }
- document.createElement=t=>new Element(t);const native=new Map();document.getElementById=id=>native.get(id)??null;
+ document.createElement=t=>new Element(t);if(viewport)document.body=new Element('body');const native=new Map();document.getElementById=id=>native.get(id)??null;
  let accepted=opticalParticleSettings(),reaction=shared?{burnTime:3,cooling:50,heatRelease:6,sootYield:.1,smokeLife:90}:null,writes=[];
  const trace={settings:[],reaction:[],records:[],redraw:[],nativeEvents:[],reset:[]};
- const runtime={opticalParticleSettings:()=>accepted,setOpticalParticles:s=>{trace.settings.push(s);accepted=opticalParticleSettings(s);},splitIntegralSettings:()=>({mode:'off'}),setSplitIntegral(){},opticalParticleState:()=>({effective:'world-optical-particles',settings:accepted,simulationReaction:reaction,sourceRenderScale:1,sourceRaySteps:8}),setParticleSimulationReaction:p=>{trace.reaction.push(p);reaction={...reaction,...p};return reaction;},resetOpticalParticles(){trace.reset.push(true);}};
+ const runtime={...(viewport?{opticalParticleViewport:()=>({getBoundingClientRect:()=>({left:0,top:0,right:800,bottom:600,width:800,height:600})})}:{}),opticalParticleSettings:()=>accepted,setOpticalParticles:s=>{trace.settings.push(s);accepted=opticalParticleSettings(s);},splitIntegralSettings:()=>({mode:'off'}),setSplitIntegral(){},opticalParticleState:()=>({effective:'world-optical-particles',settings:accepted,simulationReaction:reaction,sourceRenderScale:1,sourceRaySteps:8}),setParticleSimulationReaction:p=>{trace.reaction.push(p);reaction={...reaction,...p};return reaction;},resetOpticalParticles(){trace.reset.push(true);}};
  for(const [key,id] of [['burnTime','volume-reactant-mixing-time'],['cooling','volume-reactant-cooling-time'],['sootYield','volume-reactant-soot-yield']]){
   const input=new Element('input'),label=new Element('span');input.value=String(reaction?.[key]??accepted[key]);input.addEventListener('input',()=>{trace.nativeEvents.push(key);runtime.setParticleSimulationReaction({[key]:Number(input.value)});});native.set(id,input);native.set(id+'-val',label);
  }
@@ -95,3 +96,5 @@ test('untouched numeric controls preserve accepted precision and one edit publis
 });
 
 test('connected-field and cost gates share the live authoring path and preserve the population',async()=>{const x=await mounted();try{for(const key of ['exchangeEnabled','groupingEnabled','acquisitionEnabled','birthsEnabled','updateEnabled','reactionEnabled','transportEnabled','liveTimings','hud']){const input=x.field(key);assert.ok(input,key);assert.equal(input.type,'checkbox');input.checked=false;input.fire('change');await Promise.resolve();assert.equal(x.accepted()[key],false,key);}for(const [key,v] of [['exchangeHeat',20],['exchangeRate',100],['exchangeEvery',4],['acquisitionEvery',3],['exchangeSpacing',.125],['maxFootprint',1],['opticalCutoff',.001]]){const input=x.field(key);assert.ok(input,key);input.classList.add('scrubbing');input.value=String(v);input.fire('input');await Promise.resolve();assert.equal(x.accepted()[key],v,key);}assert.equal(x.trace.reset.length,0,'live work controls cannot clear material');}finally{await x.dispose();}});
+
+test('HUD visibility responds immediately to explicit controls inside the frame throttle window',async t=>{let clock=1000;t.mock.method(Date,'now',()=>clock);const x=await mounted({viewport:true});try{const hud=x.document.body.children[0];assert.equal(hud.style.display,'block');clock++;x.owner.operations.setOptions({hud:false});assert.equal(hud.style.display,'none');clock++;x.owner.operations.setOptions({hud:true});assert.equal(hud.style.display,'block');}finally{await x.dispose();}});
