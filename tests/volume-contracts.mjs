@@ -4,6 +4,8 @@ import {balancedWgslBlock} from './helpers/wgsl-guard-ownership.mjs';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import vm from 'node:vm';
+import {createSceneRenderer} from '../scene-render-bootstrap.mjs';
 
 const root = new URL('..', import.meta.url).pathname;
 const index = readFileSync(join(root, 'index.html'), 'utf8');
@@ -1925,7 +1927,22 @@ assert.match(core, /kaminos-three-volume-shared-webgpu-device-v0/, 'shared devic
 assert.match(core, /single-explicit-device-three-and-volume-v0/, 'shared device contract names its single-device authority');
 assert.match(core, /maxStorageBuffersInFragmentStage/, 'shared device factory requests per-fragment-stage storage buffer limits for Three node materials');
 assert.match(index, /requestKaminosSharedWebGpuDevice/, 'index imports the shared device factory');
-assert.match(index, /new THREE\.WebGPURenderer\(\{[^}]*device:\s*sharedGpu\.device/, 'Three renderer is constructed on the shared GPUDevice when available');
+const rendererStart=index.indexOf('  const sceneRenderBootstrap=await createSceneRenderer(');
+const rendererEnd=index.indexOf("  window.kaminosStartup?.phase('Building workspace');",rendererStart);
+assert.ok(rendererStart>0&&rendererEnd>rendererStart,'actual page renderer bootstrap is present');
+const sharedRendererDevice={queue:{}};
+class RecordedRenderer{
+  constructor(options){this.options=options;this.backend={device:options.device};this.shadowMap={};this.domElement={};}
+  setSize(){} setPixelRatio(){} async init(){} dispose(){}
+}
+const recordedBootstrap=await vm.runInNewContext(`(async()=>{let renderer;${index.slice(rendererStart,rendererEnd)};return {renderer,sceneRenderBootstrap};})()`,{
+  createSceneRenderer,THREE:{WebGPURenderer:RecordedRenderer,PMREMGenerator:class{}},scene:{},camera:{},
+  sharedGpu:{device:sharedRendererDevice,queue:sharedRendererDevice.queue},samHostContext:null,
+  readSceneViewport:()=>({width:100,height:100,pixelRatio:1}),sceneEnvironment:{read:()=>({exposure:1})},
+  isFireLightFieldTimingRoute:()=>false,location:{search:''},URLSearchParams,vp:{appendChild(){}},window:{},
+});
+assert.equal(recordedBootstrap.renderer.options.device,sharedRendererDevice,'actual page and production renderer factory retain the shared GPUDevice');
+assert.equal(recordedBootstrap.sceneRenderBootstrap.renderer,recordedBootstrap.renderer);
 assert.match(index, /sharedGpuContext:\s*fingerFluidPyroCompositionRequested\(\) \? null : sharedGpu/, 'volume prototype is seated on the same shared GPU context, except the liquid-contact route that adopts the fluid solver device');
 
 // Same-state, same-law irradiance lattice seed.

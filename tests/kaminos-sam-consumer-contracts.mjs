@@ -101,14 +101,14 @@ staleFrame.result = { sceneFrameCount: 7, sceneFrameCountBefore: 7, sceneFrameCo
 assert.throws(() => consumer.validateSamApplicationFrame(staleFrame), /draw|count/,
   'an already-positive cumulative count without a new draw cannot close the unload gate');
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const {createSceneFrameComposition}=await import('../scene-frame-composition.mjs');
-const frameStart=html.indexOf('  const frameComposition=createSceneFrameComposition(');
+const {createSceneFrameRuntime}=await import('../scene-frame-runtime.mjs');
+const frameStart=html.indexOf('  const sceneFrameRuntime=createSceneFrameRuntime(');
 const frameEnd=html.indexOf('  let sceneFrameCount',frameStart);
 const hostStart=html.indexOf('  compositionHost = {'),hostEnd=html.indexOf('    async presentGlb(',hostStart);
 assert.ok(frameStart>=0&&frameEnd>frameStart&&hostStart>0&&hostEnd>hostStart);
 const skippedHost = vm.runInNewContext(`${html.slice(frameStart,frameEnd)}
 ${html.slice(hostStart,hostEnd)}};compositionHost`, {
-  deviceRecoveryHeld:()=>false,createSceneFrameComposition,sceneLightingPreparation:null,sceneFrameCount:7,
+  deviceRecoveryHeld:()=>false,createSceneFrameRuntime,simFrameCoordinator:{},readSimFrameInputs:()=>({}),sceneLightingPreparation:null,sceneFrameCount:7,
   authoredWaterFlameTransportActive:false,authoredFlameHDRActive:false,exclusiveInspectionRender:false,manualInspectionRender:false,
   renderer:{backend:{device:{}}},drawSceneFrame(){throw Error('held radiance must not draw');},
   window:{__kaminosSceneRadiance:{canRender:()=>false}},
