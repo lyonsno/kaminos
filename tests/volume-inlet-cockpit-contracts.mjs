@@ -1,3 +1,4 @@
+import {mapVolumeControlValues} from './helpers/volume-control-values.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -11,7 +12,7 @@ test('the six slice-3 inlet controls exist, are read, displayed, listened to, he
   const listenerList = index.slice(index.indexOf("'volume-emitter-source-law',"), index.indexOf("'volume-wind-gust-veer',") + 400);
   for (const id of NEW) {
     assert.match(index, new RegExp(`<input type="range" id="${id}" data-volume-settings-param="${id.replace(/-/g, '_')}"`), `${id} row`);
-    assert.match(index, new RegExp(`${SNAPSHOT[id]}: parseFloat\\(document\\.getElementById\\('${id}'\\)\\.value\\)`), `${id} in the controls snapshot`);
+    assert.equal(mapVolumeControlValues({[id]:'.31'})[SNAPSHOT[id]],.31,`${id} reaches the actual controls snapshot`);
     assert.match(index, new RegExp(`getElementById\\('${id}-val'\\)\\.textContent = `), `${id} value display`);
     assert.ok(listenerList.includes(`'${id}',`), `${id} has a change listener`);
     // The help span follows its row as a sibling: that is what the hover-help
@@ -51,7 +52,7 @@ test('spiral and concentric are gone from the pattern select; retired-from-the-i
   assert.match(select, /value="shape"[\s\S]*value="jets"[\s\S]*value="slot"[\s\S]*value="bed"/);
   for (const id of ['volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-emitter-aperture-ratio']) {
     assert.match(index, new RegExp(`<div class="slider-row"[^>]*data-volume-ui-retired="${id}"[^>]*>\\s*<span class="slider-label">[^<]*</span>\\s*<(?:input|select)[^>]*id="${id}"`), `${id} row is marked retired from the interface`);
-    assert.match(index, new RegExp(`getElementById\\('${id}'\\)`), `${id} is still read, so saved basins route their value`);
+    assert.ok(Object.hasOwn(mapVolumeControlValues(),id==='volume-emitter-aperture-ratio'?'emitterApertureRatio':id.slice(7).replace(/-([a-z])/g,(_,c)=>c.toUpperCase())),`${id} is still read by the actual mapper`);
   }
   assert.match(index, /\.slider-row\[data-volume-ui-retired\] \{ display: none; \}/);
   // The layout engine must keep these controls authorable: saved layouts name
@@ -80,7 +81,7 @@ test('a retired pattern in a saved route loads as the family shape with its requ
   assert.match(index, /const VOLUME_RETIRED_APERTURE_PATTERNS = \['concentric', 'spiral'\];/);
   const init = index.slice(index.indexOf('async function initKaminosVolumeRoute()'), index.indexOf('\n}\n', index.indexOf('async function initKaminosVolumeRoute()')));
   assert.match(init, /if \(id === 'volume-emitter-aperture-pattern' && VOLUME_RETIRED_APERTURE_PATTERNS\.includes\(value\)\) \{\s*\n\s*patternSelect\.value = 'shape';\s*\n\s*patternSelect\.dataset\.volumeRetiredPatternRequest = value;/, 'the loader keeps the retired request beside a valid selection');
-  assert.match(index, /emitterAperturePattern: volumeAperturePatternValue\(document\.getElementById\('volume-emitter-aperture-pattern'\)\)/, 'the snapshot sends the kept request so the resolver names the fallback');
+  assert.equal(mapVolumeControlValues().emitterAperturePattern,'spiral','the actual snapshot sends the kept request so the resolver names the fallback');
   assert.match(index, /delete document\.getElementById\('volume-emitter-aperture-pattern'\)\.dataset\.volumeRetiredPatternRequest/, 'authoring a pattern clears the kept request');
   assert.match(index, /volume-emitter-aperture-pattern-val'\)\.textContent = [^;]*retired/, 'the label says a retired request is standing in');
 });

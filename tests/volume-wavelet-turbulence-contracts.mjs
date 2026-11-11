@@ -1,4 +1,6 @@
 // kaminos-test: node
+import {mapVolumeControlValues} from './helpers/volume-control-values.mjs';
+import {REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS} from '../volume-runtime-control-values.mjs';
 // Wavelet turbulence (Kim, Thürey, James & Gross 2008) as a spectral closure on
 // the fine grid: the sub-band the grid cannot sustain is relaxed toward a
 // divergence-free curl-noise field whose amplitude is extrapolated from the
@@ -249,10 +251,7 @@ test('WGSL: the kernel module carries the same slope, period and no trigonometri
 test('cockpit: the two wavelet controls exist, are in the control table, and the snapshot builder forwards them', () => {
   const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   for (const id of ['volume-wavelet-turbulence', 'volume-wavelet-octaves', 'volume-wavelet-strength']) assert.ok(index.includes(`id="${id}"`), `${id} is in the cockpit`);
-  assert.match(index, /\{ key: 'waveletStrength', id: 'volume-wavelet-strength', param: 'volume_wavelet_strength'/);
-  assert.match(index, /\{ key: 'waveletTurbulence', id: 'volume-wavelet-turbulence', param: 'volume_wavelet_turbulence'/);
-  assert.match(index, /\{ key: 'waveletOctaves', id: 'volume-wavelet-octaves', param: 'volume_wavelet_octaves'/);
   // The live capture of 2026-10-16 found the sliders moving while the kernel stayed at gain 0:
   // the snapshot builder filtered the table to keys starting with `physical`.
-  assert.match(index, /REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS\.filter\(field => field\.key\.startsWith\('physical'\) \|\| field\.key\.startsWith\('wavelet'\)\)/, 'the snapshot builder forwards the wavelet keys');
+  for(const [key,id,param]of [['waveletStrength','volume-wavelet-strength','volume_wavelet_strength'],['waveletTurbulence','volume-wavelet-turbulence','volume_wavelet_turbulence'],['waveletOctaves','volume-wavelet-octaves','volume_wavelet_octaves']]){assert.ok(REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.some(field=>field.key===key&&field.id===id&&field.param===param));assert.equal(mapVolumeControlValues({[id]:'1.23'})[key],1.23,'the actual mapper forwards the wavelet coefficient');}
 });

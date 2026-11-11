@@ -334,7 +334,7 @@ function readVolumeRenderScaleControlValue(control) {
   const value=Number(control?.value);
   return Number.isFinite(value)?Math.max(.1,Math.min(1,value)):.3;
 }
-function aperturePatternValue(select) {
+export function volumeAperturePatternValue(select) {
   return select.value === 'shape' && select.requestedValue ? select.requestedValue : select.value;
 }
 export function readVolumeRuntimeControlValues({readControl,quality='full',params=new URLSearchParams(),lightFieldParams=params,route,adaptiveMaterial=null}={}) {
@@ -432,7 +432,7 @@ export function readVolumeRuntimeControlValues({readControl,quality='full',param
     emitterEdgeEntrainment: parseFloat(readControl('volume-emitter-edge-entrainment').value),
     emitterFuelFraction: parseFloat(readControl('volume-emitter-fuel-fraction').value),
     emitterInletTemperature: parseFloat(readControl('volume-emitter-inlet-temperature').value),
-    emitterAperturePattern: aperturePatternValue(readControl('volume-emitter-aperture-pattern')),
+    emitterAperturePattern: volumeAperturePatternValue(readControl('volume-emitter-aperture-pattern')),
     emitterApertureCount: parseFloat(readControl('volume-emitter-aperture-count').value),
     emitterApertureRatio: parseFloat(readControl('volume-emitter-aperture-ratio').value),
     emitterApertureSeed: parseFloat(readControl('volume-emitter-aperture-seed').value),

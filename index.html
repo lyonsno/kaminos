@@ -3472,7 +3472,7 @@ const {
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import {createSceneGltfLoaderClass} from './scene-gltf-loader.mjs';
-import {readVolumeRuntimeControlValues,REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS,normalizeReactionFrontLiveView,normalizeBoundarySidecarSource,normalizeBoundarySidecarView,normalizeBoundarySplatMode,normalizeVolumeRuntimeQuality,normalizeVolumeQualityReason,volumeRuntimeQualityFromPressure,applyVolumeRuntimeQualityLadder} from './volume-runtime-control-values.mjs';
+import {volumeAperturePatternValue as sharedVolumeAperturePatternValue,readVolumeRuntimeControlValues,REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS,normalizeReactionFrontLiveView,normalizeBoundarySidecarSource,normalizeBoundarySidecarView,normalizeBoundarySplatMode,normalizeVolumeRuntimeQuality,normalizeVolumeQualityReason,volumeRuntimeQualityFromPressure,applyVolumeRuntimeQualityLadder} from './volume-runtime-control-values.mjs';
 import {sceneObjectTransformState as sharedSceneObjectTransformState, applySceneObjectTransformState as sharedApplySceneObjectTransformState, getMaterialStateForObject as sharedGetMaterialStateForObject, applyMaterialStateToObject as sharedApplyMaterialStateToObject} from './scene-object-state.mjs';
 import {loadBrazierRoom} from './brazier-room.mjs';
 import { configureSurfelRendering } from './trellis-surfels.mjs';
@@ -17182,7 +17182,7 @@ const VOLUME_RETIRED_APERTURE_PATTERNS = ['concentric', 'spiral'];
 // The aperture pattern the basin asks for: a kept retired request while the
 // select still shows its shape fallback, otherwise the chosen pattern.
 function volumeAperturePatternValue(select) {
-  return select.value === 'shape' && select.dataset.volumeRetiredPatternRequest ? select.dataset.volumeRetiredPatternRequest : select.value;
+  return sharedVolumeAperturePatternValue({value:select.value,requestedValue:select.dataset.volumeRetiredPatternRequest});
 }
 
 function setVolumeControlValue(id, value) {
@@ -18838,8 +18838,8 @@ function readVolumeControls({quality=viewportDisplay.quality,document=globalThis
   return readVolumeRuntimeControlValues({quality,params:routeParams??new URLSearchParams(window.location.search),
     lightFieldParams:routeParams??fireLightFieldRouteParams(),adaptiveMaterial:adaptiveMaterialRuntimeControls(),
     readControl:id=>{const control=document.getElementById(id);if(!control)return undefined;
-      return {value:id==='volume-grid-height-ratio'&&document===globalThis.document?volumeRebuildControlValue(id):control.value,
-        checked:control.checked,requestedValue:id==='volume-scene'?control.dataset.volumeSceneRequest:control.dataset.volumeRetiredPatternRequest};},
+      return {value:id==='volume-emitter-aperture-pattern'?volumeAperturePatternValue(control):id==='volume-grid-height-ratio'&&document===globalThis.document?volumeRebuildControlValue(id):control.value,
+        checked:control.checked,requestedValue:id==='volume-scene'?control.dataset.volumeSceneRequest:undefined};},
     route:{activeVolumeRayBudgetPreset,routedVolumeRayBudgetPreset,activeCanonicalVolumeMacroPreset,routedCanonicalSourceMode,routedCanonicalRenderMode,routedCanonicalMotionMode,routedCanonicalContentMode,routedCanonicalSourceY,routedCanonicalInjection,routedCanonicalBuoyancy,routedVolumeReactionFuelScale,routedVolumePressureIterations,routedVolumePressureStrategy,routedVolumePressureMode,routedVolumeSimProfile,routedVolumeLifecycleEffect,routedVolumeLifecycleT,routedVolumeQuenchVapor,routedVolumeRuntimeQuality,routedVolumeGpuPressure,routedVolumeQualityReason,routedBonfireAblationControls},
   });
 }

@@ -21,7 +21,7 @@ test('the actual page wrapper consumes the shared mapper and preserves pending g
  const vm=await import('node:vm');const page=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
  const start=page.indexOf('function readVolumeControls('),end=page.indexOf('\n}',start)+2;
  const f=fixtures[0],document={getElementById:id=>f.controls[id]},context={routedVolumePressureIterations:undefined,...f.route,document,window:{location:{search:f.params}},URLSearchParams,
-  viewportDisplay:{quality:'full'},readVolumeRuntimeControlValues:api.readVolumeRuntimeControlValues,
+  volumeAperturePatternValue:control=>api.volumeAperturePatternValue({value:control.value,requestedValue:control.dataset.volumeRetiredPatternRequest}),viewportDisplay:{quality:'full'},readVolumeRuntimeControlValues:api.readVolumeRuntimeControlValues,
   adaptiveMaterialRuntimeControls:()=>null,fireLightFieldRouteParams:()=>new URLSearchParams(f.lightFieldParams),volumeRebuildControlValue:()=>1.25};
  vm.createContext(context);vm.runInContext(page.slice(start,end),context);
  const actual=context.readVolumeControls();assert.equal(actual.gridHeightRatio,1.25);

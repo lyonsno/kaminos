@@ -1,3 +1,4 @@
+import {volumeAperturePatternValue as sharedVolumeAperturePatternValue} from '../volume-runtime-control-values.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
@@ -65,7 +66,7 @@ assert.deepEqual([pattern.value, pattern.dataset.volumeRetiredPatternRequest], [
 // session records the change (and undo restores the request).
 const requestSource = grab('function volumeAperturePatternValue(');
 assert.ok(requestSource, 'one reader decides the aperture pattern value');
-const patternValue = vm.runInNewContext(`${requestSource}; volumeAperturePatternValue`, {});
+const patternValue = vm.runInNewContext(`${requestSource}; volumeAperturePatternValue`, {sharedVolumeAperturePatternValue});
 assert.equal(patternValue({ value: 'shape', dataset: { volumeRetiredPatternRequest: 'spiral' } }), 'spiral');
 assert.equal(patternValue({ value: 'jets', dataset: { volumeRetiredPatternRequest: 'spiral' } }), 'jets', 'a chosen pattern wins over a stale request');
 assert.equal(patternValue({ value: 'ring', dataset: {} }), 'ring');

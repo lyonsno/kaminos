@@ -1,3 +1,4 @@
+import {mapVolumeControlValues} from './helpers/volume-control-values.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
@@ -27,7 +28,7 @@ assert.equal(136 % 8, 0, '136 preserves the structure-grid divisor');
 
 assertRange('volume-render-scale', { min: '0.1', max: '1', step: 'any' });
 const scaleControl=control('volume-render-scale');assert.match(scaleControl,/step="any"/, 'render scale retains exact values instead of quantizing authored fractions');
-assert.match(index,/renderScale: readVolumeRenderScaleControlValue\((?:document)?\)/,'runtime capture retains exact render scale');
+assert.equal(mapVolumeControlValues({'volume-render-scale':'.83672'}).renderScale,.83672,'runtime capture retains exact render scale');
 assert.match(core, /return Math\.max\(0\.1, Math\.min\(1, requested\)\)/, 'the runtime still accepts exact full resolution and legacy preset values');
 assert.match(index,/function readVolumeRenderScaleControlValue\((?:document=globalThis.document)?\)[\s\S]*value/, 'source render scale reads its numeric control');
 assert.match(index, /id="raymarch-smoke-presentation-control"[^>]+data-requested-mode="on"/, 'Smoke On/Off owns stable authored requested state');
