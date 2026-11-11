@@ -31,7 +31,7 @@ export function createCorrosionSource(retained,{width=2.4,showSubstrate=false,sn
   }
   if(!s.opening[i]&&!showSubstrate){
    const top=corners(x,y,film),back=top.map(p=>[p[0],p[1]-c.filmThickness*width,p[2]]);
-   quad(...top,4,'paint-top:'+id);quad(...[back[3],back[2],back[1],back[0]],5,'paint-back:'+id);
+   quad(...top,4,'paint-top:'+id);quad(back[2],back[1],back[0],back[3],5,'paint-back:'+id);
    const adjacent=[[x-1,y],[x,y+1],[x+1,y],[x,y-1]];
    for(let e=0;e<4;e++)if(s.opening[index(...adjacent[e])])quad(top[e],back[e],back[(e+1)%4],top[(e+1)%4],5,`paint-edge:${id}:${e}`);
   }

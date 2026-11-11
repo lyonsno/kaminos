@@ -32,3 +32,11 @@ test('materialized lifted rims exclude missing-film cells at the pit floor',()=>
  const s=createCorrosionState({resolution:8});s.opening.fill(0);s.filmHeight.fill(.1);s.opening[27]=1;s.bond[27]=0;s.metalLoss[27]=20;s.filmHeight[27]=-.499;
  const src=createCorrosionSource(serializeCorrosion(s));assert.ok(src.triangles.filter(t=>t.identity.startsWith('paint-top:')).every(t=>[t.a,t.b,t.c].every(p=>p[1]>=.24-1e-10)));
 });
+test('paint underside uses the top triangulation so bending cannot make it pierce the sheet',()=>{
+ const s=createCorrosionState({resolution:8});s.opening.fill(0);s.filmHeight[0]=.4;const src=createCorrosionSource(serializeCorrosion(s));
+ const footprint=t=>[t.a,t.b,t.c].map(p=>[p[0],p[2]].join(':')).sort();
+ const backs=new Map(src.triangles.filter(t=>t.identity.startsWith('paint-back:')).map(t=>[t.identity.replace('paint-back:',''),t]));
+ for(const top of src.triangles.filter(t=>t.identity.startsWith('paint-top:'))){const back=backs.get(top.identity.replace('paint-top:',''));assert.deepEqual(footprint(back),footprint(top),'Both faces need the same diagonal');
+  for(const p of [top.a,top.b,top.c]){const q=[back.a,back.b,back.c].find(q=>q[0]===p[0]&&q[2]===p[2]);assert.ok(Math.abs(p[1]-q[1]-s.config.filmThickness*src.config.width)<1e-12);}
+ }
+});
