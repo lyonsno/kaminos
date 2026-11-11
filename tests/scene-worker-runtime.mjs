@@ -1,6 +1,7 @@
 // kaminos-test: node
 import test from 'node:test';import assert from 'node:assert/strict';
 import {MessageChannel} from 'node:worker_threads';
+import {once} from 'node:events';
 import * as THREE from '../lib/three.core.js';
 import {createSceneRenderObjects} from '../scene-render-bootstrap.mjs';
 import {createSceneWorkerClient,installSceneWorkerHost} from '../scene-worker-handoff.mjs';
@@ -163,4 +164,32 @@ test('actual domain constructor receives a live shared-device reader that clears
  const runtime=factory(f.options)({payload:f.payload,lifecycle:{}});await runtime.initialize(f.context);
  assert.equal(typeof input.readSharedGpu,'function','presentation recovery needs the current owner rather than the initial device snapshot');assert.equal(input.readSharedGpu().device,f.device);
  const read=input.readSharedGpu;await runtime.retire(f.context);assert.equal(read(),null);
+});
+
+function recoveryFixture({failReplacement=false}={}){
+ const f=fixture();let lose,epochChanged,attempt=0,input;
+ f.device.lost=new Promise(resolve=>{lose=resolve;});
+ const next={queue:{submit(){},onSubmittedWorkDone:async()=>{}},lost:new Promise(()=>{}),destroy:()=>f.calls.push('next.device.dispose')};
+ const shared={device:next,queue:next.queue,adapter:{}};
+ const originalCreate=f.options.createSceneResources;f.options.createSceneResources=value=>{input=value;return originalCreate(value);};
+ const acquire=f.options.services.requestDevice;f.options.services.requestDevice=async options=>++attempt===1?acquire(options):shared;
+ let active=true,paused=true;
+ f.options.services.createVolume=options=>({isActive:()=>active,debugState:()=>({simulationPaused:paused}),retireLostDevice:()=>f.calls.push('volume.lost'),setSimulationPaused:value=>{paused=value;},setActive:async value=>{active=value;options.presentationSurface.setActive(value);f.calls.push(['volume.active',value]);},
+  setControls:()=>{},dispose:()=>f.calls.push('volume.dispose'),foregroundGpuContext:()=>({device:options.sharedGpuContext.device,queue:options.sharedGpuContext.device.queue,renderer:'ordinary-volume',productFrameOwner:'prototype'}),renderSharedFrame:({service})=>{assert.equal(service.device,options.sharedGpuContext.device);return {flameDrawn:active};}});
+ Object.assign(f.sceneResources,{async attachVolume(){f.calls.push('scene.attach');},stopRendererResources(){f.calls.push('presentation.stop');},async releaseVolume(){f.calls.push('volume.release');},async releaseRendererPresentation(){f.calls.push('presentation.release');},async restoreRendererPresentation(){f.calls.push('presentation.restore');},async prepareVolume(){f.calls.push('volume.prepare');},async reattachVolume(){f.calls.push('volume.reattach');}});
+ const render=f.options.services.createRenderResources;f.options.services.createRenderResources=options=>{const owner=render(options);owner.replaceRenderer=async shared=>{f.calls.push('renderer.replace');assert.equal(shared.device,next);if(failReplacement){failReplacement=false;throw Error('replacement allocation refused');}owner.renderer={replacement:true};return {renderer:owner.renderer};};return owner;};
+ const invalidated=new Promise(resolve=>{epochChanged=resolve;});
+ return {...f,next,invalidated,lose:()=>lose({reason:'destroyed',message:'controlled loss'}),input:()=>input,createRuntime:args=>factory(f.options)({...args,payload:{...args.payload,sceneCanvas:f.payload.sceneCanvas,volumeCanvas:f.payload.volumeCanvas},lifecycle:{...args.lifecycle,invalidate(part){const value=args.lifecycle.invalidate(part);epochChanged(value);return value;}}})};
+}
+test('explicit device recovery retains authored state and accepted controls on the new shared host',async t=>{
+ const f=recoveryFixture(),{port1,port2}=new MessageChannel();let runtime;
+ const host=installSceneWorkerHost({port:port2,createRuntime:args=>(runtime=f.createRuntime(args))}),client=createSceneWorkerClient({port:port1,sessionId:'retained-recovery'});
+ t.after(()=>{client.disconnect();host.disconnect();port1.close();port2.close();});
+ await client.initialize({viewport:f.payload.viewport,flameControls:f.payload.flameControls}).completion;assert.equal(typeof runtime.commands['renderer.recover'],'function');await client.request('scene.move',{}).completion;await client.request('flame.controls',{resolution:32}).completion;
+ const epoch=once(port1,'message');f.lose();await f.invalidated;await epoch;assert.equal(host.read().phase,'invalidated');assert.equal(f.calls.includes('presentation.stop'),true);await assert.rejects(client.request('frame',{now:1}).completion,/not active/);
+ await client.request('renderer.recover',{}).completion;assert.equal(host.read().phase,'active');assert.equal(runtime.host.device,f.next);assert.equal(f.input().readSharedGpu().device,f.next);assert.equal(f.input().readFlameControls().resolution,32);
+ assert.equal((await client.request('scene.read',{}).completion).output.registered,true);assert.equal(f.calls.filter(row=>row==='scene.initialize').length,1);assert.equal(f.calls.includes('scene.dispose'),false);
+ assert(f.calls.indexOf('volume.release')<f.calls.indexOf('presentation.release'));assert(f.calls.indexOf('presentation.restore')<f.calls.indexOf('volume.reattach'));
+ assert.equal((await client.request('frame',{now:2}).completion).output.result.flameDrawn,true);assert.equal((await client.request('renderer.read',{}).completion).output.phase,'active');
+ await client.request('retire').completion;
 });

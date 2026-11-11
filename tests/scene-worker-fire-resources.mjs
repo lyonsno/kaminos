@@ -153,3 +153,9 @@ test('reattachment prepares a replacement volume from the current authored plan 
  assert.deepEqual(restored.find(row=>row[0]==='domain')[1],[2,0,0]);assert.equal(restored.filter(row=>row[0]==='world').length,1);assert.equal(restored.filter(row=>row[0]==='primitives').length,1);assert.equal(restored.find(row=>row[0]==='sources')[1][0].id,'source');
  assert.equal(f.calls.slice(before).some(row=>row[0]==='accepted'),false);assert.equal(f.ordinary.workingScene.objects.length,1);assert(f.calls.slice(before).some(row=>row[0]==='mount-device'));await f.resources.retire(f.ctx);
 });
+
+test('recovery releases fire presentation without retiring its authored source owner',async()=>{
+ const f=fixture();await f.resources.initialize(f.ctx);await f.resources.prepareVolume({volume:f.volume,context:f.ctx});await f.resources.loaders.flame(f.plan.flameSources[0],{context:f.ctx});await f.resources.document.afterReplace(f.document,f.plan,{context:f.ctx});
+ assert.equal(typeof f.resources.releaseVolume,'function');await f.resources.releaseVolume({volume:f.volume,context:f.ctx});assert(f.calls.includes('radiance.dispose'));assert.equal(f.ordinary.workingScene.objects.length,1);assert.equal(f.resources.commands['fire.read'](null,f.ctx).present,true);
+ await f.resources.reattachVolume({volume:f.volume,context:f.ctx});assert.equal(f.resources.readUi().fireLighting.status,'mounted');await f.resources.retire(f.ctx);
+});

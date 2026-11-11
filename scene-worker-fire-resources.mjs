@@ -128,6 +128,7 @@ export function createSceneWorkerFireResources(input,{definitions,fetch:request=
   async initialize(ctx){check(ctx);if(payload.admission?.data){const data=payload.admission.data;const next=planSceneRestore(data,{allowEmpty:true});shell.document.assertSupported(data,next);const values=await loader.prepare(next,ctx);accept(data,next,values,ctx);}},
   async prepareVolume({volume:next,context}){check(context);if(volume!==next){configured=null;sourceSignature=null;}volume=next;configure();},
   async attachVolume({volume:next,context}){check(context);volume=next;if(!payload.admission?.data)await mount(context);},
+  async releaseVolume({context}){check(context);await releaseRadiance();for(const owner of receiverOwners){await owner.dispose();receiverOwners.delete(owner);}},
   async reattachVolume({volume:next,context}){check(context);if(next!==volume)throw Error('Prepare the replacement volume before reattachment');configure();await mount(context);},
   prepareFrame(){syncSources();syncTransport();syncWaterPreview();},
   readFrameState(){syncTransport();const params=route();return {transportRequired:transport,radianceReady:!radiance||radiance.canRender(),fireLightFieldRoute:present()&&params.get('volume_light_field')==='1',distributed:present()&&params.get('volume_light_field_distributed')==='1',
