@@ -41,7 +41,7 @@ export function sheetElasticEnergy(topology,u,{stretching,bending,poisson=.3}){
 }
 // Limited-memory BFGS stores optimizer curvature pairs, not a restriction on
 // physical state or iteration count. A residual/no-progress condition closes it.
-function minimize(initial,evaluate,tolerance){
+export function minimizeSheetEnergy(initial,evaluate,tolerance,onAcceptedStep=()=>{}){
  let x=initial.slice(),current=evaluate(x),history=[],iterations=0;
  if(!Number.isFinite(current.energy))throw Error('Invalid initial finite sheet geometry');
  for(;;){
@@ -53,22 +53,40 @@ function minimize(initial,evaluate,tolerance){
   direction=Float64Array.from(direction,v=>-v);let slope=dot(current.gradient,direction);
   if(!(slope<0)){history=[];direction=Float64Array.from(current.gradient,v=>-v);slope=-dot(current.gradient,current.gradient);}
   let step=1,next,candidate;
-  for(;;){candidate=Float64Array.from(x,(v,i)=>v+step*direction[i]);if(candidate.every((v,i)=>v===x[i]))throw Error(`Finite sheet line search cannot progress; residual ${maximum}`);next=evaluate(candidate);if(Number.isFinite(next.energy)&&next.energy<=current.energy+1e-4*step*slope)break;step*=.5;}
+  for(;;){candidate=Float64Array.from(x,(v,i)=>v+step*direction[i]);if(candidate.every((v,i)=>v===x[i]))throw Error(`Finite sheet line search cannot progress; residual ${maximum}`);next=evaluate(candidate);const required=current.energy+1e-4*step*slope;if(Number.isFinite(next.energy)&&next.energy<current.energy&&next.energy<=required)break;if(required===current.energy&&next.energy===current.energy)throw Error(`Finite sheet floating precision stagnation; residual ${maximum}`);step*=.5;}
+  onAcceptedStep(current,next);
   const s=Float64Array.from(candidate,(v,i)=>v-x[i]),y=Float64Array.from(next.gradient,(v,i)=>v-current.gradient[i]),sy=dot(s,y);
   if(sy>1e-14*Math.sqrt(dot(s,s)*dot(y,y))){history.push({s,y,rho:1/sy});if(history.length>8)history.shift();}
   x=candidate;current=next;iterations++;
  }
 }
 const index=(n,x,z)=>((z%n+n)%n)*n+(x%n+n)%n;
-export function coatingCorner(field,n,x,z){return [index(n,x,z),index(n,x-1,z),index(n,x,z-1),index(n,x-1,z-1)].reduce((s,i)=>s+field[i],0)/4;}
-function heightSample(corners,n,x,z){
- x=(x-Math.floor(x))*n;z=(z-Math.floor(z))*n;const ix=Math.floor(x),iz=Math.floor(z),a=x-ix,b=z-iz,h00=corners[index(n,ix,iz)],h01=corners[index(n,ix,iz+1)],h11=corners[index(n,ix+1,iz+1)],h10=corners[index(n,ix+1,iz)];
- return b>=a?{height:(1-b)*h00+(b-a)*h01+a*h11,dx:n*(h11-h01),dz:n*(h01-h00)}:{height:(1-a)*h00+b*h11+(a-b)*h10,dx:n*(h10-h00),dz:n*(h11-h10)};
+export function coatingCorner(field,n,x,z,opening=null){
+ const incident=[index(n,x,z),index(n,x-1,z),index(n,x,z-1),index(n,x-1,z-1)].filter(i=>!opening||!opening[i]);return incident.length?incident.reduce((sum,i)=>sum+field[i],0)/incident.length:0;
+}
+export function sampleSheetObstacle(corners,n,x,z){
+ x=(x-Math.floor(x))*n;z=(z-Math.floor(z))*n;const ix=Math.floor(x),iz=Math.floor(z),a=x-ix,b=z-iz;
+ const plane=(cx,cz,upper)=>{const h00=corners[index(n,cx,cz)],h01=corners[index(n,cx,cz+1)],h11=corners[index(n,cx+1,cz+1)],h10=corners[index(n,cx+1,cz)];return upper?{height:(1-(z-cz))*h00+((z-cz)-(x-cx))*h01+(x-cx)*h11,dx:n*(h11-h01),dz:n*(h01-h00)}:{height:(1-(x-cx))*h00+(z-cz)*h11+((x-cx)-(z-cz))*h10,dx:n*(h10-h00),dz:n*(h11-h10)};};
+ const result=plane(ix,iz,b>=a),epsilon=32*Number.EPSILON*Math.max(1,n),xs=[ix],zs=[iz],slopes=[];
+ if(a<=epsilon)xs.push(ix-1);if(1-a<=epsilon)xs.push(ix+1);if(b<=epsilon)zs.push(iz-1);if(1-b<=epsilon)zs.push(iz+1);
+ for(const cx of xs)for(const cz of zs){const u=x-cx,v=z-cz;if(u< -epsilon||u>1+epsilon||v< -epsilon||v>1+epsilon)continue;for(const upper of[true,false])if(upper?v>=u-epsilon:v<=u+epsilon){const p=plane(cx,cz,upper);if(!slopes.some(s=>s[0]===p.dx&&s[1]===p.dz))slopes.push([p.dx,p.dz]);}}
+ return {...result,slopes};
+}
+// At an exact triangle crease the height is unchanged, but the derivative is
+// a set of active-face slopes. Choose its minimum-norm Clarke gradient after
+// adding the other forces; no normal smoothing or height smoothing is applied.
+export function minimumContactSlope(sample,target){
+ const points=sample.slopes??[[sample.dx,sample.dz]];if(points.length===1||!target.every(Number.isFinite))return points[0];
+ const turn=(a,b,c)=>(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]),sorted=[...points].sort((a,b)=>a[0]-b[0]||a[1]-b[1]),lower=[],upper=[];
+ for(const p of sorted){while(lower.length>=2&&turn(lower.at(-2),lower.at(-1),p)<=0)lower.pop();lower.push(p);}for(const p of [...sorted].reverse()){while(upper.length>=2&&turn(upper.at(-2),upper.at(-1),p)<=0)upper.pop();upper.push(p);}const hull=[...lower.slice(0,-1),...upper.slice(0,-1)];
+ if(hull.length>=3&&hull.every((p,i)=>turn(p,hull[(i+1)%hull.length],target)>=0))return target;
+ let best=hull[0],distance=Infinity;for(let i=0;i<hull.length;i++){const a=hull[i],b=hull[(i+1)%hull.length],d=[b[0]-a[0],b[1]-a[1]],length=d[0]**2+d[1]**2,t=length?Math.max(0,Math.min(1,((target[0]-a[0])*d[0]+(target[1]-a[1])*d[1])/length)):0,p=[a[0]+t*d[0],a[1]+t*d[1]],value=(target[0]-p[0])**2+(target[1]-p[1])**2;if(value<distance){distance=value;best=p;}}
+ return best;
 }
 export function relaxFiniteCoating(s){
  const c=s.config,n=c.resolution,topology=periodicSheetTopology(n,s.opening),count=n*n,area=1/count;
  const steel=new Float64Array(count),oxide=new Float64Array(count),weights=new Float64Array(count),bondWeights=new Float64Array(count),multipliers=new Float64Array(count);
- for(let z=0;z<n;z++)for(let x=0;x<n;x++){const i=z*n+x;steel[i]=-c.metalScale*coatingCorner(s.metalLoss,n,x,z);oxide[i]=steel[i]+c.metalScale*c.oxideExpansion*coatingCorner(s.rustIron,n,x,z)/(1-c.oxidePorosity);}
+ for(let z=0;z<n;z++)for(let x=0;x<n;x++){const i=z*n+x;steel[i]=-c.metalScale*coatingCorner(s.metalLoss,n,x,z,s.opening);oxide[i]=-c.metalScale*coatingCorner(s.metalLoss,n,x,z)+c.metalScale*c.oxideExpansion*coatingCorner(s.rustIron,n,x,z)/(1-c.oxidePorosity);}
  for(const face of topology.faces)for(const i of face.vertices)weights[i]+=face.area/3;
  let u=s.filmDisplacement,penalty=c.attachmentStiffness*10,totalIterations=0,contactResidual=Infinity,failed;
  do{
@@ -77,11 +95,11 @@ export function relaxFiniteCoating(s){
    const evaluate=u=>{const result=sheetElasticEnergy(topology,u,{stretching:c.sheetStretching,bending:c.plateBending,poisson:c.sheetPoisson}),g=result.gradient;if(!Number.isFinite(result.energy))return result;
     for(let z=0;z<n;z++)for(let x=0;x<n;x++){
      const i=z*n+x,j=i*3;if(!weights[i])continue;const dy=u[j+1]-steel[i],k=c.attachmentStiffness*bondWeights[i];result.energy+=.5*k*(u[j]**2+dy**2+u[j+2]**2);g[j]+=k*u[j];g[j+1]+=k*dy;g[j+2]+=k*u[j+2];
-     const h=heightSample(oxide,n,x/n+u[j],z/n+u[j+2]),gap=h.height-u[j+1],force=Math.max(0,multipliers[i]+penalty*gap);result.energy+=weights[i]*(force**2-multipliers[i]**2)/(2*penalty);g[j]+=weights[i]*force*h.dx;g[j+1]-=weights[i]*force;g[j+2]+=weights[i]*force*h.dz;
+     const h=sampleSheetObstacle(oxide,n,x/n+u[j],z/n+u[j+2]),gap=h.height-u[j+1],force=Math.max(0,multipliers[i]+penalty*gap);result.energy+=weights[i]*(force**2-multipliers[i]**2)/(2*penalty);const slope=minimumContactSlope(h,[-g[j]/(weights[i]*force),-g[j+2]/(weights[i]*force)]);g[j]+=weights[i]*force*slope[0];g[j+1]-=weights[i]*force;g[j+2]+=weights[i]*force*slope[1];
     }return result;
    };
-   const solved=minimize(u,evaluate,c.mechanicalTolerance*area);u=solved.x;totalIterations+=solved.iterations;contactResidual=0;
-   for(let z=0;z<n;z++)for(let x=0;x<n;x++){const i=z*n+x,j=i*3;if(!weights[i])continue;const gap=heightSample(oxide,n,x/n+u[j],z/n+u[j+2]).height-u[j+1];multipliers[i]=Math.max(0,multipliers[i]+penalty*gap);contactResidual=Math.max(contactResidual,Math.max(0,gap),multipliers[i]>0?Math.abs(gap):0);}
+   const solved=minimizeSheetEnergy(u,evaluate,c.mechanicalTolerance*area);u=solved.x;totalIterations+=solved.iterations;contactResidual=0;
+   for(let z=0;z<n;z++)for(let x=0;x<n;x++){const i=z*n+x,j=i*3;if(!weights[i])continue;const gap=sampleSheetObstacle(oxide,n,x/n+u[j],z/n+u[j+2]).height-u[j+1];multipliers[i]=Math.max(0,multipliers[i]+penalty*gap);contactResidual=Math.max(contactResidual,Math.max(0,gap),multipliers[i]>0?Math.abs(gap):0);}
    if(contactResidual<=c.mechanicalTolerance)break;penalty*=2;if(!Number.isFinite(penalty))throw Error('Finite coating contact cannot converge');
   }
   failed=0;

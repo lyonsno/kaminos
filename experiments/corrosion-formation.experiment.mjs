@@ -18,12 +18,12 @@ export default{
   const choose=options=>{
    if(options!==undefined&&(!options||typeof options!=='object'||Array.isArray(options)))throw Error('Invalid corrosion presentation');
    const snapshot=options?.snapshot??states.length-1;if(!Number.isSafeInteger(snapshot)||!states[snapshot])throw Error('Retained snapshot is unavailable');
-   const source=createCorrosionSource(states[snapshot],{...options,snapshot});source.config.stateSHA256=catalog.snapshots[snapshot].sha256;return source;
+   const source=createCorrosionSource(states[snapshot],{...options,snapshot});source.config.stateSHA256=catalog.snapshots[snapshot].sha256;source.config.formationMode=catalog.mode??'coupled-formation';source.config.chemistrySourceRevision=catalog.chemistrySourceRevision??catalog.sourceRevision;return source;
   };
   const definition=surfaceTeacherExperiment({id:this.id,title:this.title,createSource:choose,label:'Corrosion-grown coated steel',sourceURL:catalogURL,
-   boundary:'Retained formation states: pitting, oxide deposition and adhesion loss. Mechanical model is retained with each state; film fracture and self-contact are not implemented. Periodic fields, finite ray tile.',
+   boundary:(catalog.mode==='prescribed-chemistry-sheet-replay'?'Prescribed retained deposits; stronger-sheet response. Chemistry was not recomputed. ':'Retained coupled formation states: pitting, oxide deposition and adhesion loss. ')+'Mechanical model is retained with each state; film fracture and self-contact are not implemented. Periodic fields, finite ray tile.',
    initialView:{position:[1.5,1.1,1.9],target:[0,.02,0],fov:40},defaultTracing:false,defaultMaterials:[],sourceControls:[],sourceToggles:[['Inspect substrate beneath paint','showSubstrate']],
-   describeSource:options=>({...summaries[options.snapshot],stateSHA256:catalog.snapshots[options.snapshot].sha256,producerRevision:catalog.sourceRevision}),readSchema:'kaminos.corrosion-formation-experiment.v1'});
+   describeSource:options=>({...summaries[options.snapshot],stateSHA256:catalog.snapshots[options.snapshot].sha256,producerRevision:catalog.sourceRevision,formationMode:catalog.mode??'coupled-formation',chemistrySourceRevision:catalog.chemistrySourceRevision??catalog.sourceRevision}),readSchema:'kaminos.corrosion-formation-experiment.v1'});
   const api=await definition.create(args),mount=api.mount,source=api.operations.source;let select,sourceInfo;
   const updateSourceInfo=()=>{const state=api.read(),n=state.source.formationResolution;if(sourceInfo)sourceInfo.textContent=`Formation grid: ${n} × ${n} cells · ${state.sourceTriangles} triangles · ${state.source.mechanics==='finite-shell'?'Finite rotation and stretching':'Small-slope plate'}`;};
   api.operations.source=async value=>{const result=await source(value);if(select)select.value=String(result.source.snapshot);updateSourceInfo();return result;};
