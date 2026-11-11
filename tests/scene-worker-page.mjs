@@ -102,3 +102,13 @@ test('partial UI merges preserve actual flags and additive metadata, and explici
  assert.equal(mergeSceneWorkerUi(next,{bounds:null}).bounds,null);assert.equal(Object.hasOwn(next.surfaces,'scene'),false);
  assert.throws(()=>mergeSceneWorkerUi(next,{surfaces:{volume:null}}),/state must be an object/);
 });
+
+test('transport visibility hides stale canvas pixels without changing simulation activity',()=>{
+ const changes=[],volume={hidden:false,classList:{toggle:(...args)=>changes.push(args)},style:{background:'transparent',visibility:''}};
+ applySceneWorkerSurfaces({volume},{volume:{active:true,visible:false}});
+ assert.equal(volume.hidden,false);assert.equal(volume.style.visibility,'hidden');assert.deepEqual(changes,[['active',true]]);
+ applySceneWorkerSurfaces({volume},{volume:{transparent:true}});assert.equal(volume.style.visibility,'hidden');
+ applySceneWorkerSurfaces({volume},{volume:{visible:true}});assert.equal(volume.style.visibility,'');assert.equal(volume.hidden,false);
+ const before=structuredClone(volume.style);
+ assert.throws(()=>applySceneWorkerSurfaces({volume},{volume:{transparent:false,visible:'false'}}),/boolean/);assert.deepEqual(volume.style,before);
+});

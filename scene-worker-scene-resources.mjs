@@ -28,6 +28,8 @@ import {resolveSceneWorkerStartupInput} from './scene-worker-startup-input.mjs';
 import {checkedCameraView} from './scene-camera-views.mjs';
 import {checkedViewportDisplay} from './viewport-display-settings.mjs';
 import {sceneItemVisible,withViewportVisibility} from './scene-visibility.mjs';
+import {createLightingPreparation,compileSceneLighting} from './scene-lighting-compile.mjs';
+import {borrowViewportVisibility,withViewportVisibilityAsync} from './scene-visibility.mjs';
 import {createViewportShading} from './viewport-shading.mjs';
 
 const paramsFor=payload=>new URL(payload.location?.href??payload.location??'http://localhost/').searchParams;
@@ -45,12 +47,13 @@ export function createSceneWorkerSceneResources(context){
  const workingScene=createWorkingScene(),ao=createSceneAOState(),environment=createSceneEnvironmentState({presets:SCENE_HDR_PRESETS});
  let appearance=null,authored=null,document=null,domains=null,frames=null,display=null,sceneBloom=null,selection=null,materials=null,beautyLods=null,giProxies=null;
  let started=false,retiring=false,attached=false,frameCount=0,draw=null,output=null,shading=null,domainRetired=false,rootsRetired=false;
+ let lightingPreparation=null,volume=null,lightingHeld=false,documentHolds=0;
  let gi=resolveSceneGIControlState(),reflections=resolveReflectionSettings(),bloomSettings=checkedSceneBloom({enabled:paramsFor(payload).get('scene_bloom')==='1',composeFlame:paramsFor(payload).get('scene_bloom')==='1'}),ground={},editorDisplay=checkedViewportDisplay(),startup=null;
  let arrival={sceneKind:'static-asset',lookId:DEFAULT_STUDIO_LOOK_ID,studioLightsEnabled:true,materialTuningEnabled:false,bounds:null,materialProfile:inspectArrivalMaterialProfile([]),plan:null};
  const graphs=new Map(),wireMaterials=[],pendingRoots=new Set(),stops=[];
  const renderer=()=>renderResources.renderer,lighting=()=>renderResources.lighting;
  const params=new URL(payload.location?.href??payload.location??'http://localhost/').searchParams;
- const current=ctx=>{required(ctx?.assertCurrent,'current command context')();if(retiring)throw Error('Ordinary scene is retiring');};
+ const current=ctx=>{required(ctx?.assertCurrent,'current command context');ctx.assertCurrent();if(retiring)throw Error('Ordinary scene is retiring');};
  const report=(ctx,ui)=>ctx?.report?.({ui});
  const visible=id=>sceneItemVisible(id,editorDisplay.hiddenIds,workingScene);
  const roots=()=>[scene,...workingScene.retainedObjects().map(e=>e.object),...workingScene.suspendedObjects().map(e=>e.object)];
@@ -60,6 +63,12 @@ export function createSceneWorkerSceneResources(context){
  }
  const telemetry=createLoadingTelemetryTracker({onChange:value=>{activeContext?.report?.({ui:{loading:value}});}});
  let activeContext=null;
+ function frameState(now){
+  const value=domains.readFrameState(now);
+  if(!value||typeof value.then==='function'||typeof value.radianceReady!=='boolean'||typeof value.transportRequired!=='boolean'
+   ||['flame','water','ash'].some(name=>typeof value.simInputs?.[name]?.active!=='boolean'))throw Error('Ordinary scene requires live simulator state and render admission');
+  return value;
+ }
  function replanAppearance(){
   arrival.plan=planArrivalStudioLights({...arrival,groundY:ground.height??-.85});
   lighting()?.sceneGI.setOpticalFinish(resolveStudioLook(arrival.lookId).opticalFinish);
@@ -93,10 +102,14 @@ export function createSceneWorkerSceneResources(context){
  function assertOrdinarySupport(data,plan){
   // These need their actual presentation owners; the root's support callback
   // must implement/accept them before a document can clear the current scene.
-  return domains.document.assertSupported(data,plan);
+  const supported=domains.document.assertSupported(data,plan);
+  if(supported&&typeof supported.then==='function'){Promise.resolve(supported).catch(()=>{});throw Error('Scene document support must be synchronous');}
+  if(supported===false)throw Error('Scene document support refused');return supported;
  }
  const ordinary=Object.freeze({scene,camera,renderResources,sharedGpu,workingScene,viewport,
   get appearance(){return appearance;},get lighting(){return lighting();},get display(){return display;},get frames(){return frames;},get authored(){return authored;},get document(){return document;},get materials(){return materials;},get beautyLods(){return beautyLods;},get giProxies(){return giProxies;},
+  get bloom(){return sceneBloom;},decorateOutput:node=>selection.output(node),
+  get lightingPreparation(){return lightingPreparation;},get surfaceLighting(){return lighting()?.sceneGI.surfaceLighting;},
   get output(){return output;},get coordinator(){return coordinator;},readSettings:settings,applySettings,visible,
   get startup(){return startup;},
   readBounds(){const box=new THREE.Box3();for(const row of workingScene.objects)if(row.object&&row.type!=='light'&&row.type!=='camera')box.expandByObject(row.object);return box.isEmpty()?null:{min:box.min.toArray(),max:box.max.toArray()};},
@@ -105,6 +118,10 @@ export function createSceneWorkerSceneResources(context){
  });
  const coordinator=createSimFrameCoordinator();
  const shell={ordinary,
+  readUi(){const contributed=domains?.readUi?.()??{};return {...contributed,
+   environmentLoading:appearance?.environment.read()??null,lightingPreparation:lightingPreparation?.state()??null,loading:telemetry.read(),
+   surfaces:{...contributed.surfaces,scene:{active:attached,...contributed.surfaces?.scene}},
+  };},
   get lightingOptions(){return appearance?.lightingOptions;},get frames(){return frames;},
   get initialVolumeActive(){return domains?.initialVolumeActive;},get volumeOptions(){return domains?.volumeOptions;},get commands(){return commandMap;},get foregroundCommands(){return domains?.foregroundCommands;},
   async initialize(ctx){
@@ -120,7 +137,7 @@ export function createSceneWorkerSceneResources(context){
     required(domains.assertRecordSupported,'domains.assertRecordSupported');
     appearance=createSceneAppearanceResources({THREE,readScene:()=>scene,readRenderer:renderer,readPMREM:()=>renderResources.pmremGenerator,environmentState:environment,readEntries:()=>workingScene.objects,
      readArrival:()=>arrival,readGround:()=>({...ground,distributed:params.get('volume_light_field_distributed')==='1'}),
-     readStudio:()=>({records:arrival.plan?.lights,enabled:arrival.studioLightsEnabled&&!domains.readFrameState().fireLightFieldRoute}),
+     readStudio:()=>({records:arrival.plan?.lights,enabled:arrival.studioLightsEnabled&&!frameState().fireLightFieldRoute}),
      readLighting:()=>({aoSettings:ao.read(),aoIntensityValue:ao.read().enabled?ao.read().intensity:0,giOptions:{reflections,filterImplementation:params.get('lighting_filter')==='separate'?'separate':'shared',surfaceReuse:params.get('lighting_surface_reuse')!=='0',sourceComparison:params.get('experiment')==='gi-source-study'}}),
      ...(services.loadHDR?{loadHDR:services.loadHDR}:{}),changed:value=>report(activeContext,{environmentLoading:value})});
     const GLTFLoader=createSceneGltfLoaderClass({THREE,readRenderer:renderer});
@@ -131,7 +148,7 @@ export function createSceneWorkerSceneResources(context){
      onRungLoaded:()=>materials.sync(),onRepresentationChanged:()=>materials.sync(),onRepresentationReleased:(_root,representation)=>materials.releaseObject(representation),canDisplayRung:(...args)=>materials.canDisplay(...args)});
     materials=createSceneMaterials({entries:()=>[...workingScene.objects,...workingScene.suspendedObjects()],retainedEntries:()=>workingScene.retainedObjects(),definitions:sceneMaterialPrograms,representations:entry=>beautyLods.materialRoots(entry.object)});
     authored=createAuthoredSceneRuntime({scene,workingScene,readers:{transform:sceneObjectTransformState,materials:getMaterialStateForObject,...domains.recordReaders},
-     roots:{restore(entry,record){restoreAuthoredSceneRecord(entry,record,{transform:applySceneObjectTransformState,materials:applyMaterialStateToObject,...domains.restoreOperations});},dispose:disposeRoot,...domains.roots},
+     roots:{prepare(entry){if(entry.giProxy){const task=entry.giProxy.enabled?giProxies.select(entry.object,entry.giProxy.selection):giProxies.disable(entry.object,{retainLevels:true});Promise.resolve(task).catch(()=>{});}domains.roots?.prepare?.(entry);},restore(entry,record){restoreAuthoredSceneRecord(entry,record,{transform:applySceneObjectTransformState,materials:applyMaterialStateToObject,...domains.restoreOperations});},dispose:disposeRoot,...domains.roots},
      membership:domains.membership,replacement:{...domains.replacement,context:{...domains.replacement?.context,retire:async()=>{await sharedGpu.device.queue.onSubmittedWorkDone();await domains.replacement?.context?.retire?.();}}},
      assertRecordSupported(record,loaders){if(record.type==='glb')return;return domains.assertRecordSupported(record,loaders);},
      createLoaders({registerSceneObject}){
@@ -146,21 +163,29 @@ export function createSceneWorkerSceneResources(context){
     document=createSceneDocumentApplication({runtime:authored,assertSupported:assertOrdinarySupport,
      async prepareDocument(data,plan,meta){await materials.prepare(plan.materialLibrary??{recipes:[],bindings:[]});await domains.document.prepareDocument(data,plan,meta);},
      async beforeReplace(data,plan,meta){applySettings(data,meta.context);return domains.document.beforeReplace(data,plan,meta);},
-     async afterReplace(data,plan,meta){materials.write(plan.materialLibrary??{recipes:[],bindings:[]});await domains.document.afterReplace(data,plan,meta);appearance.applyEnvironment();report(meta.context,projection());},
+     async afterReplace(data,plan,meta){materials.write(plan.materialLibrary??{recipes:[],bindings:[]});await giProxies.whenIdle();await domains.document.afterReplace(data,plan,meta);appearance.applyEnvironment();report(meta.context,projection());},
      documentServices:{readAddress:()=>{const url=new URL(payload.location?.href??payload.location);return {href:url.href,origin:url.origin,search:url.search,hash:url.hash};},...domains.documentServices}});
     await domains.initialize(ctx);current(ctx);
     if(startup.startupDefaults.defaults){assertOrdinarySupport(startup.startupDefaults.defaults,{});applySettings(startup.startupDefaults.defaults,ctx);await domains.applyPreferences?.(startup,ctx);}
     replanAppearance();await appearance.initialize(ctx);current(ctx);
     renderResources.initializeLighting(ctx);syncLighting();
+    const preparePasses=()=>gi.mode==='combined'?[lighting().sceneGI.source,lighting().sceneGI.beauty]:[lighting().prePass,lighting().scenePass];
+    const frameOptions=()=>({viewportHeight:viewport().height*viewport().pixelRatio,pinnedObjects:new Set(workingScene.selection.ids)});
+    const preparation=createLightingPreparation({
+     hold(value){lightingHeld=value;return syncVolumeHold();},
+     compile:()=>withViewportVisibilityAsync(workingScene.objects,visible,async()=>{await beautyLods.whenIdle();return compileSceneLighting(renderer(),preparePasses(),{visibility:()=>beautyLods.borrowFrame(camera,frameOptions())});}),
+     liveCompile:({isCurrent})=>compileSceneLighting(renderer(),preparePasses(),{live:true,isCurrent,visibility:()=>{const restoreVisibility=borrowViewportVisibility(workingScene.objects,visible),restoreBeauty=beautyLods.borrowFrame(camera,frameOptions());return()=>{restoreBeauty();restoreVisibility();};}}),
+     onStatus:value=>report(activeContext,{lightingPreparation:value})});
+    lightingPreparation=Object.freeze({...preparation,request(change){if(retiring)throw Error('Ordinary scene is retiring');return preparation.request(change);}});
     selection=createSelectionFeedback(camera);selection.setStyle({width:editorDisplay.outlineWidth,opacity:editorDisplay.outlineOpacity});
     shading=createViewportShading({createWireMaterial:()=>{const material=new THREE.MeshBasicNodeMaterial({color:0x15181c,wireframe:true,transparent:true,opacity:.42,depthWrite:false,side:THREE.DoubleSide});wireMaterials.push(material);return material;}});
     sceneBloom=createSceneBloom({bloom,convertToTexture:THREE.TSL.convertToTexture,vec4:THREE.TSL.vec4,rebuild:()=>display?.rebuild(),redraw(){},initial:bloomSettings});
-    display=createSceneDisplayOwner({THREE,graphs,readSettings:()=>({...domains.readFrameState(),...gi,sharedDeviceAvailable:!!sharedGpu.device}),
-     readResources:()=>({...lighting(),sceneBloom,selectionFeedback:selection}),createFireLightFieldReceiverPass:(...args)=>required(domains.createFireLightFieldReceiverPass,'fire light-field receiver')(...args),createSceneEmissiveCamera,onOutput:value=>{output=value;}});
+    display=createSceneDisplayOwner({THREE,graphs,readSettings:()=>({...frameState(),...gi,sharedDeviceAvailable:!!sharedGpu.device}),
+     readResources:()=>({...lighting(),sceneBloom,selectionFeedback:selection}),createFireLightFieldReceiverPass:(...args)=>required(domains.createFireLightFieldReceiverPass??domains.createFireLightReceiver,'fire light-field receiver')(...args),createSceneEmissiveCamera,onOutput:value=>{output=value;}});
     display.rebuild();
-    frames=createSceneFrameRuntime({readInputs:()=>{const state=domains.readFrameState();return {...state,lightingHeld:retiring||document.session.state().phase==='applying'||state.lightingHeld===true};},draw:()=>draw(),frameCount:()=>frameCount,
-     prepare:()=>{camera.updateMatrixWorld();output.fireLightFieldPass?.update();},readDepth:()=>renderer().backend.get(output.activeSceneDepth.value).texture,readSharedDevice:()=>sharedGpu.device,readCamera:()=>camera,
-     coordinator,readSimInputs:now=>domains.readFrameState(now).simInputs});
+    frames=createSceneFrameRuntime({readInputs:()=>{const state=frameState();return {...state,lightingHeld:retiring||lightingHeld||documentHolds>0||document.session.state().phase==='applying'||state.lightingHeld===true};},draw:()=>draw(),frameCount:()=>frameCount,
+     prepare:()=>{camera.updateMatrixWorld();const result=domains.prepareFrame?.();if(result&&typeof result.then==='function'){Promise.resolve(result).catch(()=>{});throw Error('Scene frame preparation must be synchronous');}output.fireLightFieldPass?.update();},readDepth:()=>renderer().backend.get(output.activeSceneDepth.value).texture,readSharedDevice:()=>sharedGpu.device,readCamera:()=>camera,
+     coordinator,readSimInputs:now=>frameState(now).simInputs});
     draw=createSceneDrawRuntime({THREE,readSettings:()=>({held:retiring,customToneMapping:false,giMode:gi.mode,giView:gi.view,matchFlameCamera:false,assetPreparationActive:false,capturing:false,
       beautyFrameOptions:{viewportHeight:viewport().height*viewport().pixelRatio,pinnedObjects:new Set(workingScene.selection.ids)},...domains.readDrawSettings()}),
      readResources:()=>({...domains.readDrawResources(),...output,renderer:renderer(),renderPipeline:lighting().renderPipeline,sceneBeautyLods:beautyLods,transportFrame:frames.composition.transportFrame}),
@@ -169,21 +194,26 @@ export function createSceneWorkerSceneResources(context){
       withBeautyFrame:(options,run)=>withViewportVisibility(workingScene.objects,visible,()=>beautyLods.withFrame(camera,options,()=>shading.renderWith(workingScene.objects.map(e=>e.object),editorDisplay.shading,run)))},
      onCameraStatus:value=>report(frameContext,{cameraStatus:value}),onWaterFrame:value=>domains.onWaterFrame?.(value),onWaterError:(error,fallback)=>required(domains.onWaterError,'water failure handling')(error,fallback),
      afterDraw:(receipt,now)=>{frameCount++;domains.afterDraw?.(receipt,now);}});
-    commandMap=mergeCommands(document.commands,domains.commands);
+    commandMap=mergeCommands({...document.commands,async 'scene.applyDocument'(input,context){
+     current(context);documentHolds++;const previousContext=activeContext;activeContext=context;
+     try{await syncVolumeHold();current(context);return await document.commands['scene.applyDocument'](input,context);}
+     finally{activeContext=previousContext;documentHolds--;await syncVolumeHold();}
+    }},domains.commands);
     current(ctx);return shell;
    }finally{activeContext=null;}
   },
-  async prepareVolume(input){current(input.context);await domains.prepareVolume(input);current(input.context);},
+  async prepareVolume(input){current(input.context);volume=input.volume;await domains.prepareVolume(input);current(input.context);},
   async attachVolume(input){
    current(input.context);await domains.attachVolume(input);current(input.context);activeContext=input.context;
-   try{if(payload.admission?.data)await document.commands['scene.applyDocument']({document:payload.admission.data,sceneFile:payload.admission.sceneFile??null,emptySettings:true},input.context);
+   try{if(payload.admission?.data)await commandMap['scene.applyDocument']({document:payload.admission.data,sceneFile:payload.admission.sceneFile??null,emptySettings:true},input.context);
     current(input.context);attached=true;appearance.environment.releaseFull();report(input.context,{...projection(),initialization:{sceneApplied:true,preferencesApplied:true}});
    }finally{activeContext=null;}
   },
   applyFrameInputs(input,ctx){current(ctx);if(!attached)throw Error('Ordinary scene is not attached');frameContext=ctx;domains.applyFrameInputs?.(input,ctx);},
   async retire(ctx){
-   required(ctx?.assertCurrent,'retirement context')();retiring=true;attached=false;
+   required(ctx?.assertCurrent,'retirement context');ctx.assertCurrent();retiring=true;attached=false;
    if(domains&&!domainRetired){await domains.retire(ctx);domainRetired=true;}
+   if(lightingPreparation){try{await lightingPreparation.whenIdle();}catch(error){if(!lightingPreparation.state().error)throw error;}await sharedGpu.device.queue.onSubmittedWorkDone();}
    if(!rootsRetired){
     materials?.clear();beautyLods?.dispose();giProxies?.clear();
     if(authored)await authored.lifecycle.clear();for(const root of pendingRoots){root.removeFromParent();disposeRoot(root);}rootsRetired=true;
@@ -191,8 +221,9 @@ export function createSceneWorkerSceneResources(context){
    while(stops.length){await stops.at(-1)();stops.pop();}
    if(selection){await selection.dispose();selection=null;}
    while(wireMaterials.length){await wireMaterials.at(-1).dispose();wireMaterials.pop();}shading=null;
-   // The display cache owns receiver/camera graphs; renderResources owns AO/GI.
-   for(const [key,graph]of graphs){await graph.fireLightFieldPass?.dispose?.();await graph.sceneEmissiveCamera?.dispose?.();graphs.delete(key);}
+   // Root domains retain fire receivers, including partial construction. The
+   // ordinary cache borrows them; renderResources separately owns AO/GI.
+   for(const [key,graph]of graphs){await graph.sceneEmissiveCamera?.dispose?.();graphs.delete(key);}
    if(sceneBloom){await sceneBloom.dispose();sceneBloom=null;}
    if(appearance){await appearance.retire(ctx);appearance=null;}
    authored?.membership.dispose();frames=null;draw=null;display=null;output=null;commandMap=null;
@@ -200,6 +231,7 @@ export function createSceneWorkerSceneResources(context){
   },
  };
  let frameContext=null,commandMap=null;
+ function syncVolumeHold(){if(volume&&typeof volume.setSceneLightingRebuildPending==='function')return volume.setSceneLightingRebuildPending(lightingHeld||documentHolds>0);if(lightingHeld||documentHolds)return sharedGpu.device.queue.onSubmittedWorkDone();}
  function projection(){return {bounds:ordinary.readBounds(),selection:structuredClone(workingScene.selection),objects:authored?.snapshot().objects??[]};}
  return shell;
 }
