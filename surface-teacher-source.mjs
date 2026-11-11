@@ -3,6 +3,7 @@ import {periodicSurfaceTriangles} from './periodic-surface-source.mjs';
 // motion never changes strand identity or geometry.
 export function createGrassTeacherSource(options={}) {
  const config={periodic:false,seed:31,blades:72,height:.8,width:2.4,depth:1.8,bladeWidth:.045,bend:.45,segments:7,...options};
+ if(config.lengthLogSigma!==undefined&&(!Number.isFinite(config.lengthLogSigma)||config.lengthLogSigma<0))throw Error('lengthLogSigma must be nonnegative and finite');
  if(typeof config.periodic!=='boolean')throw Error('periodic must be a boolean');
  for(const key of ['height','width','depth','bladeWidth'])if(!Number.isFinite(config[key])||config[key]<=0)throw Error(`${key} must be positive and finite`);
  if(!Number.isSafeInteger(config.seed)||!Number.isSafeInteger(config.blades)||config.blades<1||!Number.isSafeInteger(config.segments)||config.segments<2||!Number.isFinite(config.bend))throw Error('finite seed/bend and positive integer blade/segment counts required');
@@ -13,6 +14,10 @@ export function createGrassTeacherSource(options={}) {
  }
  let state=config.seed>>>0;
  const random=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return state/4294967296;};
+ // A separate stream supplies the Gaussian phase without moving any root,
+ // width or orientation draws in the existing source sequence.
+ let lengthState=(config.seed^0x9e3779b9)>>>0;
+ const normalFrom=u=>{lengthState=(Math.imul(lengthState,1664525)+1013904223)>>>0;return Math.sqrt(-2*Math.log(u+1/8589934592))*Math.cos(2*Math.PI*(lengthState+.5)/4294967296);};
  const triangles=[],blades=[];
  let cutHeight=Infinity;
  const triangle=(a,b,c,materialIndex,identity)=>{
@@ -40,7 +45,10 @@ export function createGrassTeacherSource(options={}) {
   const x=tufts?tuft[0]+tufts.radius*radiusFraction*Math.cos(2*Math.PI*r1):((i%columns+.2+.6*r0)/columns-.5)*w*(config.periodic?1:.9);
   const z=tufts?tuft[1]+tufts.radius*radiusFraction*Math.sin(2*Math.PI*r1):((Math.floor(i/columns)+.2+.6*r1)/rows-.5)*d*(config.periodic?1:.9);
   const heightFactor=tufts?.grading==='radial'?tufts.rimFraction+(1-tufts.rimFraction)*(1-radiusFraction**2):1;
-  const angle=random()*Math.PI*2,lean=(random()-.5)*2*config.bend,height=config.height*(.65+.35*random())*heightFactor;
+  const angle=random()*Math.PI*2,lean=(random()-.5)*2*config.bend,lengthDraw=random();
+  const lengthFactor=config.lengthLogSigma===undefined?.65+.35*lengthDraw:Math.exp(config.lengthLogSigma*normalFrom(lengthDraw));
+  const height=config.height*lengthFactor*heightFactor;
+  if(!Number.isFinite(height)||height<=0)throw Error('lengthLogSigma produces an unrepresentable stalk height');
   cutHeight=Infinity;
   for(const cut of tufts?.cuts??[])if(x>=cut.min[0]&&x<cut.max[0]&&z>=cut.min[1]&&z<cut.max[1])cutHeight=Math.min(cutHeight,cut.height);
   const width=config.bladeWidth*(.75+.5*random()),centres=[],widths=[],left=[],right=[];
