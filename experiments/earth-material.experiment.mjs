@@ -33,7 +33,7 @@ export default {
   const frame=()=>session.setView({position:[.63,.48,.69],target:[0,.065,0],fov:40});
   const read=()=>({schema:'kaminos.earth-authoring.v1',objectId:asset?.id,toolId:toolAsset?.id,physics:model.state(),physicsWidth:model.config.width,material:{cohesion:model.config.cohesion,friction:model.config.friction,plasticYield:model.config.plasticYield,clodStrength:model.config.clodStrength,interfaceStrength:model.config.interfaceStrength,gritBinding:model.config.gritBinding},ingredients:{clodCount:model.config.clodCount,maxClods:model.config.columns**2*(model.config.layers-Math.floor(model.config.layers/2))},settings:{...config},busy,failure,renderPreview:{active:!!renderPreview,state:renderPreview?.read()??null},live:{enabled:liveEnabled,pendingSamples:samples.length,inFlight:!!liveFlight,revision,surfaceRevision,previewDetail:Math.min(config.liveResolution,config.previewResolution),previewFailure,recordedSamples:history.samples.length,settlingSeconds:settling},surface:source?{resolution:source.reconstruction.resolution,triangles:source.triangles.length,matrixTriangles:source.reconstruction.matrixTriangles,clodTriangles:source.reconstruction.clodTriangles,boundary:source.boundary}:null,view:session.readView(),pose:pose(root),tool:pose(tool),snapshotContinuation:'cold contact reconstruction; retained physical values, not solver contact caches'});
   const recipe=()=>({snapshot:model.snapshot(),live:liveEnabled,forming:structuredClone(history),settings:{...config},pose:pose(root),tool:pose(tool),view:session.readView()});
-  const show=()=>ui?.refresh();
+  const show=()=>ui?.refresh?.();
   const sync=()=>show();
   const update=()=>{updateInputs(recipe());show();};
   const prepare=async(snapshot,resolution)=>{
