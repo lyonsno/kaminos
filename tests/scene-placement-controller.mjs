@@ -229,3 +229,11 @@ test('undo from a focused inspector button uses scene history without enabling t
  assert.equal(undo.defaultPrevented,true);assert.deepEqual(f.pose.position,[0,0,0]);
  emit(f.document,'keydown',{key:'z',metaKey:true,shiftKey:true,target:button});assert.deepEqual(f.pose.position,[2,0,0]);
 });
+
+test('starting and switching modal transforms identifies even the zero preview',()=>{
+ const f=fixture(),contexts=[],preview=f.tools.edits.preview;
+ f.tools.edits.preview=(patch,context)=>{contexts.push(context);return preview(patch,context);};
+ f.tools.start('translate');assert.equal(contexts.at(-1).transform,'translate');
+ f.tools.start('rotate');assert.equal(contexts.at(-1).transform,'rotate','Zero rotation is distinct from a translating target returning to zero');
+ f.tools.finish(false);
+});

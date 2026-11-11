@@ -120,7 +120,7 @@ export function installScenePlacementTools({
     // Operation changes are alternatives within one gesture. Always restart
     // from the accepted pose captured by begin(), then preview only this mode.
     modal.base = structuredClone(edits.state().active.before);
-    edits.preview(modal.base);
+    edits.preview(modal.base,{transform:operation});
     modal.operation = operation;
     modal.anchor = { ...lastPointer };
     modal.awaitViewportEntry = !pointerInViewport(lastPointer);
