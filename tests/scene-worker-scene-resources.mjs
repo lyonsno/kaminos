@@ -176,3 +176,34 @@ test('document result projects its applied camera and final restored selection f
  assert.equal(f.shell.readUi().camera,undefined,'per-frame metadata does not replay a document camera');await f.shell.retire(f.ctx);
  }finally{delete globalThis.self;}
 });
+
+test('domain root hooks augment ordinary proxy, saved pose and owned geometry lifetime',async()=>{
+ globalThis.self=globalThis;const hooks=[];const f=fixture({domainOverrides:{roots:{prepare:entry=>hooks.push(['prepare',entry.id]),restore:entry=>hooks.push(['restore',entry.id]),dispose:root=>hooks.push(['dispose',root])}}});
+ try{await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},appHost:{},context:f.ctx});
+ await f.shell.commands['scene.applyDocument']({document:saved()},f.ctx);const entry=f.shell.ordinary.workingScene.find('mesh');
+ assert.equal(f.shell.ordinary.giProxies.get(entry.object)?.state,'not-generated');assert.deepEqual(entry.object.position.toArray(),[1,2,3]);
+ const geometry=new Set();entry.object.traverse(n=>{if(n.geometry)geometry.add(n.geometry);});let releases=0;for(const value of geometry)value.addEventListener('dispose',()=>releases++);
+ await f.shell.commands['scene.applyDocument']({document:saved('next')},f.ctx);
+ assert.equal(releases,geometry.size);assert.equal(entry.object.parent,null);assert(hooks.some(([kind,root])=>kind==='dispose'&&root===entry.object));
+ assert.equal(hooks.filter(([kind])=>kind==='prepare').length,2);assert.equal(hooks.filter(([kind])=>kind==='restore').length,2);await f.shell.retire(f.ctx);
+ }finally{delete globalThis.self;}
+});
+
+test('invalid ordinary settings refuse before domain preparation and preserve the viable document binding',async()=>{
+ globalThis.self=globalThis;let prepared=0;const f=fixture({domainOverrides:{document:{assertSupported(){},prepareDocument(){prepared++;},beforeReplace(){},afterReplace(){}}}});
+ try{await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},appHost:{},context:f.ctx});
+ await f.shell.commands['scene.applyDocument']({document:saved(),sceneFile:'kept.kaminos.json'},f.ctx);const kept=f.shell.ordinary.workingScene.find('mesh').object;
+ const invalid=[{environment:{name:'absent-environment'}},{environment:{name:'neutral',ground:{height:'bad'}}},{postprocessing:{sceneGI:{radius:-1}}},{postprocessing:{bloom:{strength:-1}}},{postprocessing:{ao:{enabled:'false'}}},{camera:{position:[0,0,0],target:[0,0,0],up:[0,1,0],fov:50,near:.1,far:200}}];
+ for(const patch of invalid){await assert.rejects(f.shell.commands['scene.applyDocument']({document:{...saved('bad'),...patch}},f.ctx));
+  assert.equal(prepared,1,'invalid ordinary values cannot invoke preparation');assert.equal(f.shell.ordinary.document.session.state().filename,'kept.kaminos.json');assert.equal(f.shell.ordinary.document.session.state().blocked,false);
+  assert.equal(f.shell.ordinary.workingScene.find('mesh').object,kept);assert.equal(kept.parent,f.scene);
+ }await f.shell.retire(f.ctx);
+ }finally{delete globalThis.self;}
+});
+
+test('legacy document camera omissions preserve the ordinary page lens and default up convention',async()=>{
+ globalThis.self=globalThis;const f=fixture();try{await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},appHost:{},context:f.ctx});
+ const document=saved();document.camera={position:[4,5,6],target:[0,0,0]};const result=await f.shell.commands['scene.applyDocument']({document},f.ctx);
+ assert.deepEqual(result.ui.camera,{...document.camera,up:[0,1,0],fov:50,near:.1,far:200});await f.shell.retire(f.ctx);
+ }finally{delete globalThis.self;}
+});
