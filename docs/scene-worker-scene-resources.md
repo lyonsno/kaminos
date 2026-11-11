@@ -100,7 +100,12 @@ identity and document load generations.
 `shell.readUi()` reads current asynchronous environment/loading/preparation state
 and merges `domains.readUi()`. The common runtime uses this for current
 frame/mutation/initialization replies; it does not rely on progress sent through
-a completed initializer. Full registry/bounds projection occurs at authored
+a completed initializer. A successful `scene.applyDocument` returns `output.ui.camera` only when that
+document restores a camera; it includes the applied pose/lens/target after final
+selection restoration. The page adopts that explicit command reply in its own
+camera/controls before the next frame. Ordinary frame metadata omits this field
+so later navigation is not pinned by cached state.
+Full registry/bounds projection occurs at authored
 command boundaries, not on every frame. `surfaces.volume.visible` controls
 canvas presentation separately from simulation `active`; transport can hide
 retained volume pixels without disabling the simulation.

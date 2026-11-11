@@ -166,3 +166,13 @@ test('ordinary bloom graph consumes the same authored-width node as the actual p
  await f.shell.initialize(f.ctx);const output=f.shell.ordinary.bloom.output(THREE.TSL.vec4(0),THREE.TSL.texture(new THREE.Texture())),nodes=[];
  output.traverse(node=>nodes.push(node));assert(nodes.some(node=>node instanceof SceneBloomNode),'actual SceneBloomNode must be wired; shader equations are unchanged');await f.shell.retire(f.ctx);
 });
+
+test('document result projects its applied camera and final restored selection for the next page frame',async()=>{
+ globalThis.self=globalThis;const f=fixture();try{
+ await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},appHost:{},context:f.ctx});
+ const document=saved();document.camera={position:[4,5,6],target:[1,0,0],up:[0,1,0],fov:57,near:.2,far:120};
+ const result=await f.shell.commands['scene.applyDocument']({document},f.ctx);
+ assert.deepEqual(result.ui?.camera,document.camera);assert.deepEqual(result.ui.selection.ids,document.selectionIds);assert.deepEqual(f.shell.ordinary.camera.position.toArray(),document.camera.position);
+ assert.equal(f.shell.readUi().camera,undefined,'per-frame metadata does not replay a document camera');await f.shell.retire(f.ctx);
+ }finally{delete globalThis.self;}
+});

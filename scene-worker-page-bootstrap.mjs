@@ -1,5 +1,6 @@
 import {createSceneWorkerPage,captureSceneWorkerCamera,applySceneWorkerSurfaces,mergeSceneWorkerUi} from './scene-worker-page.mjs';
 import {createSceneWorkerImageController} from './scene-worker-image-controller.mjs';
+import {checkedCameraView} from './scene-camera-views.mjs';
 import {resolveSceneWorkerStartupInput} from './scene-worker-startup-input.mjs';
 
 export function assertSceneWorkerStartup(reply,{admission,preferences,ui=reply.output?.ui}){
@@ -56,7 +57,19 @@ export function mountSceneWorkerPage({document,window,THREE,createControls,insta
   initializePayload:{camera:captureSceneWorkerCamera(camera,controls.target),admission,preferences,location:{href:window.location.href,search:window.location.search,hash:window.location.hash}},
   validateInitialization:(reply,ui)=>assertSceneWorkerStartup(reply,{admission,preferences,ui}),
   beforeFrame(){const size=readViewport();if(camera.aspect!==size.width/size.height){camera.aspect=size.width/size.height;camera.updateProjectionMatrix();}controls.update();},
-  applyUi(value){const next=mergeSceneWorkerUi(ui,value);if(next.surfaces)applySceneWorkerSurfaces(canvases,next.surfaces);ui=next;},
+  applyUi(value){
+   const restored=value.camera==null?null:checkedCameraView(value.camera);
+   const next=mergeSceneWorkerUi(ui,value);if(next.surfaces)applySceneWorkerSurfaces(canvases,next.surfaces);
+   if(restored){
+    // A document changes the page input owner too. Consume only this explicit
+    // reply, never the merged cache on later surface/status updates.
+    const damping=controls.enableDamping;controls.enableDamping=false;
+    try{controls.update();camera.position.fromArray(restored.position);camera.up.fromArray(restored.up);controls.target.fromArray(restored.target);
+     for(const key of ['fov','near','far'])camera[key]=restored[key];camera.updateProjectionMatrix();controls.update();}
+    finally{controls.enableDamping=damping;}
+   }
+   ui=next;
+  },
   onPhase(value){
    for(const canvas of Object.values(canvases))canvas.dataset.sceneWorkerState=value;
    if(['held','retiring','retired','closed'].includes(value)){ui=null;report(`Worker scene ${value}; previous scene metadata is unavailable`);}
