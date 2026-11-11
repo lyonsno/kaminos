@@ -1,6 +1,7 @@
 import * as CANNON from './node_modules/cannon-es/dist/cannon-es.js';
 import {EARTH_STRUCTURE_SCHEMA,seedEarthStructure,bondKind,bondProfile} from './earth-structure.mjs';
 
+export const EARTH_DESIGN_SCHEMA='kaminos.earth-design.v1';
 export const EARTH_SCHEMA='kaminos.earth-specimen.v1';
 export const EARTH_MATERIALS=[
  {name:'fine compacted earth',color:[.19,.105,.047],roughness:.94,metalness:0},
@@ -43,17 +44,35 @@ export function checkedEarthSnapshot(s){
   if(!Array.isArray(s.embeddings)||s.embeddings.length!==s.grit.length*4)throw Error('Incomplete grit embedding inventory');
   const counts=new Int32Array(s.grit.length),pairs=new Set();for(const e of s.embeddings){integer(e.grain,'grain index');integer(e.particle,'embedding particle');const key=`${e.grain}:${e.particle}`;if(e.grain>=s.grit.length||e.particle>=s.particles.length||pairs.has(key)||typeof e.active!=='boolean')throw Error('Invalid grit embedding');pairs.add(key);counts[e.grain]++;finite(e.rest,'embedding length',Number.MIN_VALUE);finite(e.initial,'initial embedding length',Number.MIN_VALUE);}if([...counts].some(n=>n!==4))throw Error('Each grain requires four retained embedding rows');
  }else if(s.embeddings!==undefined||s.particles.some(p=>p.clodId!==undefined)||s.bonds.some(b=>b.kind!==undefined))throw Error('Structured earth requires its structure identity');
+ if(s.design)checkedEarthDesign(s.design);
  return structuredClone({...s,config:c});
 }
-function initialSnapshot(c){
+// Capture a virgin generator's world-space ingredients once. The reference
+// grid defines material scale; subsequent solve grids do not regenerate grit
+// or move/resize clods. This is a material authoring description, not a claim
+// that coarse and fine cohesive particle solves are mechanically equivalent.
+export function createEarthDesign(snapshot){
+ const s=checkedEarthSnapshot(snapshot);if(s.time!==0||s.steps!==0)throw Error('A common specimen design requires an unworked initial bed');
+ const spacing=s.config.width/s.config.columns;
+ return checkedEarthDesign({schema:EARTH_DESIGN_SCHEMA,reference:{...s.config},bed:{bottom:spacing*(.34-.41),depth:s.config.layers*spacing*.82,hillAmplitude:spacing*.55,hillCenter:[-.065,.03],hillWidth:.018},matrixMass:s.particles.reduce((n,p)=>n+p.mass,0),clods:(s.structure?.clods??[]).map(c=>({id:c.id,center:[...s.particles[c.seedParticle].position],radii:[...c.radii]})),grit:s.grit});
+}
+export function checkedEarthDesign(d){
+ if(d?.schema!==EARTH_DESIGN_SCHEMA)throw Error('Invalid earth design schema');const c=configuration(d.reference);
+ const bed=d.bed;if(!bed)throw Error('Missing earth design bed');finite(bed.bottom,'bed bottom',-Infinity);finite(bed.depth,'bed depth',Number.MIN_VALUE);finite(bed.hillAmplitude,'hill amplitude');finite(bed.hillWidth,'hill width',Number.MIN_VALUE);vector(bed.hillCenter,2,'hill center');finite(d.matrixMass,'matrix mass',Number.MIN_VALUE);
+ if(!Array.isArray(d.clods)||d.clods.length!==c.clodCount||!Array.isArray(d.grit)||d.grit.length!==c.grains)throw Error('Invalid earth design ingredients');
+ for(const [i,clod]of d.clods.entries()){if(clod.id!==i+1)throw Error('Invalid design clod identity');vector(clod.center,3,'clod center');vector(clod.radii,3,'clod radii').forEach(r=>finite(r,'clod radius',Number.MIN_VALUE));}
+ for(const g of d.grit){vector(g.position,3,'grit position');vector(g.radii,3,'grit radii').forEach(r=>finite(r,'grit radius',Number.MIN_VALUE));vector(g.quaternion,4,'grit orientation');if(Math.abs(Math.hypot(...g.quaternion)-1)>1e-5)throw Error('Invalid grit orientation');for(const key of ['velocity','angularVelocity'])vector(g[key],3,key);finite(g.mass,'grit mass',Number.MIN_VALUE);integer(g.materialIndex,'grit material',1);if(g.materialIndex>3)throw Error('Invalid grit material');}
+ return structuredClone({...d,reference:c});
+}
+function initialSnapshot(c,design=null){
  let state=c.seed>>>0;const rand=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return(state+.5)/4294967296;};
- const spacing=c.width/c.columns,radius=spacing*.34;
+ const spacing=c.width/c.columns,radius=Math.min(spacing,design?design.bed.depth/c.layers/.82:spacing)*.34;
  const particles=[],bonds=[],grit=[];
  const body=(position,mass)=>({position,velocity:[0,0,0],angularVelocity:[0,0,0],quaternion:[0,0,0,1],mass});
  for(let y=0;y<c.layers;y++)for(let z=0;z<c.columns;z++)for(let x=0;x<c.columns;x++){
   const px=(x+.5-c.columns/2)*spacing,pz=(z+.5-c.columns/2)*spacing;
-  const hill=spacing*.55*Math.exp(-((px+.065)**2+(pz-.03)**2)/.018);
-  particles.push({...body([px+(rand()-.5)*spacing*.17,radius+y*spacing*.82+hill+(rand()-.5)*spacing*.13,pz+(rand()-.5)*spacing*.17],c.density*spacing**3*.58),radius});
+  const bed=design?.bed;const hill=bed?bed.hillAmplitude*Math.exp(-((px-bed.hillCenter[0])**2+(pz-bed.hillCenter[1])**2)/bed.hillWidth):spacing*.55*Math.exp(-((px+.065)**2+(pz-.03)**2)/.018);
+  particles.push({...body([px+(rand()-.5)*spacing*.17,(design?design.bed.bottom+(y+.5)*design.bed.depth/c.layers:radius+y*spacing*.82)+hill+(rand()-.5)*Math.min(spacing,design?design.bed.depth/c.layers:spacing)*.13,pz+(rand()-.5)*spacing*.17],(design?design.matrixMass/(c.columns*c.columns*c.layers):c.density*spacing**3*.58)),radius});
  }
  const index=(x,y,z)=>(y*c.columns+z)*c.columns+x;
  const offsets=[[1,0,0],[0,1,0],[0,0,1],[1,1,0],[-1,1,0],[0,1,1],[0,1,-1],[1,0,1],[-1,0,1]];
@@ -62,12 +81,12 @@ function initialSnapshot(c){
   const a=index(x,y,z),b=index(x+dx,y+dy,z+dz),rest=Math.hypot(...particles[a].position.map((v,k)=>v-particles[b].position[k]));
   bonds.push({a,b,rest,initial:rest,active:true});
  }
- for(let i=0;i<c.grains;i++){
+ for(let i=0;i<(design?0:c.grains);i++){
   const r=spacing*(.29+rand()*.50),radii=[r*(.8+rand()*.5),r*(.55+rand()*.35),r*(.8+rand()*.5)];
   const q=new CANNON.Quaternion();q.setFromEuler(rand(),rand()*6.28,rand());
   grit.push({...body([(rand()-.5)*(c.width-4*r),(c.layers-.1)*spacing*.82+rand()*spacing*.5,(rand()-.5)*(c.width-4*r)],2400*4*Math.PI/3*radii.reduce((a,b)=>a*b,1)),quaternion:q.toArray(),radii,materialIndex:1+i%3});
  }
- return seedEarthStructure({schema:EARTH_SCHEMA,config:c,time:0,steps:0,particles,grit,bonds});
+ return seedEarthStructure({schema:EARTH_SCHEMA,config:c,time:0,steps:0,particles,grit:design?structuredClone(design.grit):grit,bonds,...(design?{design}: {})},design?.clods);
 }
 
 // CPU physical preparation for a small material specimen. Cannon supplies contact,
@@ -76,7 +95,7 @@ function initialSnapshot(c){
 export class EarthSpecimen {
  constructor(config={},snapshot=null){
   const s=snapshot?checkedEarthSnapshot(snapshot):initialSnapshot(configuration(config));
-  this.config=s.config;this.structure=s.structure;this.time=s.time;this.steps=s.steps;this.disposed=false;
+  this.design=s.design;this.config=s.config;this.structure=s.structure;this.time=s.time;this.steps=s.steps;this.disposed=false;
   const w=this.world=new CANNON.World({gravity:new CANNON.Vec3(0,-9.81,0)});
   w.allowSleep=false;w.solver.iterations=this.config.iterations;w.solver.tolerance=1e-7;
   w.broadphase=new CANNON.SAPBroadphase(w);
@@ -94,6 +113,10 @@ export class EarthSpecimen {
   this.bonds=s.bonds.map(row=>{const constraint=new CANNON.DistanceConstraint(this.particles[row.a].body,this.particles[row.b].body,row.rest,bondProfile(this.config,row.kind).force);constraint.collideConnected=true;if(row.active)w.addConstraint(constraint);return {...row,constraint};});
   this.embeddings=(s.embeddings??[]).map(row=>{const constraint=new CANNON.DistanceConstraint(this.grit[row.grain].body,this.particles[row.particle].body,row.rest,this.config.cohesion*this.config.gritBinding);constraint.collideConnected=true;if(row.active)w.addConstraint(constraint);return {...row,constraint};});
   this.tool=new CANNON.Body({type:CANNON.Body.KINEMATIC,mass:0});this.tool.addShape(new CANNON.Sphere(.08));this.tool.collisionResponse=false;this.tool.position.y=10;w.addBody(this.tool);
+ }
+ static fromDesign(input,quality={}){
+  const design=checkedEarthDesign(input);if(!quality||Object.keys(quality).some(k=>!['columns','layers','iterations','dt'].includes(k)))throw Error('Invalid physical quality setting');
+  const c=configuration({...design.reference,...quality});return EarthSpecimen.fromSnapshot(initialSnapshot(c,design));
  }
  static fromSnapshot(snapshot){return new EarthSpecimen({},snapshot);}
  advance(seconds,{tool=null,report=true}={}){
@@ -133,6 +156,6 @@ export class EarthSpecimen {
   return this.state();
  }
  state(){const ys=this.particles.map(p=>p.body.position.y);return {schema:EARTH_SCHEMA,time:this.time,steps:this.steps,particles:this.particles.length,grains:this.grit.length,mass:this.particles.reduce((s,p)=>s+p.mass,0),top:Math.max(...ys),meanHeight:ys.reduce((s,y)=>s+y,0)/ys.length,activeBonds:this.bonds.filter(b=>b.active).length,brokenBonds:this.bonds.filter(b=>!b.active).length,plasticCompression:this.bonds.reduce((s,b)=>s+Math.max(0,b.initial-b.rest),0),backend:'cannon-es-0.20.0-cpu',boundary:'bounded tray; no periodic dynamics',material:'contacting spheres with yielding cohesive distance bonds; dynamic convex grit',structure:{clods:this.structure?.clods.length??0,clodParticles:this.particles.filter(p=>p.clodId>0).length,matrixParticles:this.particles.filter(p=>!p.clodId).length,brokenInterfaces:this.bonds.filter(b=>b.kind==='interface'&&!b.active).length,brokenInteriors:this.bonds.filter(b=>b.kind==='clod'&&!b.active).length,embeddedGrains:new Set(this.embeddings.filter(b=>b.active).map(b=>b.grain)).size,brokenEmbeddings:this.embeddings.filter(b=>!b.active).length}};}
- snapshot(){const row=p=>{const {body,...rest}=p;return {...rest,position:body.position.toArray(),velocity:body.velocity.toArray(),quaternion:body.quaternion.toArray(),angularVelocity:body.angularVelocity.toArray()};};return {schema:EARTH_SCHEMA,config:{...this.config},time:this.time,steps:this.steps,particles:this.particles.map(row),grit:this.grit.map(row),bonds:this.bonds.map(({constraint,...r})=>({...r})),...(this.structure?{structure:structuredClone(this.structure),embeddings:this.embeddings.map(({constraint,...r})=>({...r}))}:{})};}
+ snapshot(){const row=p=>{const {body,...rest}=p;return {...rest,position:body.position.toArray(),velocity:body.velocity.toArray(),quaternion:body.quaternion.toArray(),angularVelocity:body.angularVelocity.toArray()};};return {...(this.design?{design:structuredClone(this.design)}:{}),schema:EARTH_SCHEMA,config:{...this.config},time:this.time,steps:this.steps,particles:this.particles.map(row),grit:this.grit.map(row),bonds:this.bonds.map(({constraint,...r})=>({...r})),...(this.structure?{structure:structuredClone(this.structure),embeddings:this.embeddings.map(({constraint,...r})=>({...r}))}:{})};}
  dispose(){if(this.disposed)return;this.disposed=true;for(const b of [...this.world.bodies])this.world.removeBody(b);for(const c of [...this.world.constraints])this.world.removeConstraint(c);}
 }

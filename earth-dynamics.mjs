@@ -7,7 +7,7 @@ export function createEarthDynamicsKernel(){
  let model;
  const result=()=>({snapshot:model.snapshot(),state:model.state()});
  return {apply(message){
-  if(message.kind==='init'){const next=message.snapshot?EarthSpecimen.fromSnapshot(message.snapshot):new EarthSpecimen(message.config);model?.dispose();model=next;return result();}
+  if(message.kind==='init'){const next=message.snapshot?EarthSpecimen.fromSnapshot(message.snapshot):message.design?EarthSpecimen.fromDesign(message.design,message.config):new EarthSpecimen(message.config);model?.dispose();model=next;return result();}
   if(!model)throw Error('Earth dynamics has not been initialized');
   if(message.kind==='material')model.setMaterial(message.values);
   else if(message.kind==='advance')model.advance(message.seconds,{tool:message.tool});
@@ -26,7 +26,7 @@ export function createEarthDynamicsKernel(){
  },dispose(){model?.dispose();model=null;}};
 }
 
-export async function createEarthDynamics({config,snapshot,WorkerType=globalThis.Worker}={}){
+export async function createEarthDynamics({config,snapshot,design,WorkerType=globalThis.Worker}={}){
  let worker,kernel,disposed=false,serial=0,current,workerError=null;
  const pending=new Map();
  if(WorkerType){
@@ -47,5 +47,5 @@ export async function createEarthDynamics({config,snapshot,WorkerType=globalThis
   setMaterial:values=>request({kind:'material',values}),
   dispose(){disposed=true;worker?.terminate();kernel?.dispose();for(const task of pending.values())task.reject(Error('Earth dynamics disposed'));pending.clear();}
  };
- try{await request({kind:'init',config,snapshot});return api;}catch(error){api.dispose();throw error;}
+ try{await request({kind:'init',config,snapshot,design});return api;}catch(error){api.dispose();throw error;}
 }

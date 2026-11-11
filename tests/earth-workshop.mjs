@@ -143,3 +143,25 @@ test('frozen transport uses the authored specimen placement',async()=>{
  const {host,roots}=fakeHost(),placement={position:[.2,.1,-.1],quaternion:[0,Math.sin(.2),0,Math.cos(.2)],scale:[1.2,1.2,1.2]},app=await workshop.create({host,inputs:{pose:placement,config:{columns:3,layers:2,grains:0},settings:{previewResolution:8,captureResolution:10}},record:()=>{}});
  try{await app.operations.render({paused:true,scale:.02});const frozen=roots.find(r=>r.name==='Frozen worked earth');assert.deepEqual(frozen.position.toArray(),placement.position);assert.deepEqual(frozen.quaternion.toArray(),placement.quaternion);assert.deepEqual(frozen.scale.toArray(),placement.scale);await app.operations.returnToEarth();}finally{await app.dispose();}
 });
+
+test('saved authoring program includes material changes and each completed advance as well as tool input',async()=>{
+ const {host,roots,frame}=fakeHost(),app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8,captureResolution:10}},record:()=>{}});
+ try{roots[1].position.y=.05;frame(.01);await app.operations.live(false);await app.operations.material({friction:.31});await app.operations.advance({seconds:.035});const saved=await app.operations.snapshot();assert.ok(saved.forming.program,'a complete self-contained applied program is required');assert.deepEqual(saved.forming.program.actions.map(a=>a.kind),['sweep','material','advance','advance']);assert.equal(saved.forming.program.actions[1].values.friction,.31);assert.ok(Math.abs(saved.forming.program.actions.filter(a=>a.kind==='advance').reduce((n,a)=>n+a.seconds,0)-.035)<1e-12);
+ }finally{await app.dispose();}
+});
+
+test('finer replay retains the live bed and full raw history; edits invalidate its result',async()=>{
+ const {host,roots,frame}=fakeHost(),app=await workshop.create({host,admitReplay:async(options,run)=>({result:await run({status:'test-admission'}),lease:{status:'test-admission'}}),inputs:{config:{columns:3,layers:2,grains:1},settings:{previewResolution:8,captureResolution:10}},record:()=>{}});
+ try{roots[1].position.y=.05;frame(.01);await app.operations.live(false);await app.operations.material({friction:.31});await app.operations.advance({seconds:.01});const before=await app.operations.snapshot();await app.operations.replay({columns:4,layers:3});const fine=app.operations.replayResult();assert.equal(fine.snapshot.particles.length,48);assert.deepEqual(fine.snapshot.grit.map(g=>g.radii),before.snapshot.grit.map(g=>g.radii));const after=await app.operations.snapshot();assert.deepEqual(after.snapshot,before.snapshot);assert.deepEqual(after.forming,before.forming);assert.deepEqual(fine.program,before.forming.program);assert.equal(app.read().replay.hasResult,true);await app.operations.material({friction:.4});assert.equal(app.read().replay.hasResult,false);assert.throws(()=>app.operations.replayResult(),/No current/);
+ }finally{await app.dispose();}
+});
+test('legacy saved states remain usable without inventing a complete replay program',async()=>{
+ const {host}=fakeHost(),app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8}},record:()=>{}});
+ try{await app.operations.advance({seconds:.01});const saved=await app.operations.snapshot();delete saved.forming.program;await app.operations.load(saved);assert.equal(app.read().replay.available,false);await assert.rejects(app.operations.replay(),/older specimen/);await app.operations.advance({seconds:.01});assert.ok(app.read().physics.time>.019);}finally{await app.dispose();}
+});
+
+test('queued replay waits without a second physics worker and cancellation retains live authoring',async()=>{
+ const {host}=fakeHost();let admitted=false;
+ const app=await workshop.create({host,inputs:{config:{columns:3,layers:2,grains:0},settings:{previewResolution:8}},record:()=>{},admitReplay:async(options,run)=>{options.onWait({position:3});await new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(Object.assign(Error('stopped'),{name:'AbortError'})),{once:true}));admitted=true;return {result:await run({status:'test-admission'}),lease:{}};}});
+ try{const before=await app.operations.snapshot();const pending=app.operations.replay();for(let i=0;i<20&&app.read().replay.status!=='waiting';i++)await new Promise(r=>setTimeout(r,5));assert.equal(app.read().replay.queuePosition,3);await assert.rejects(app.operations.material({friction:.2}),/cancel.*replay/);app.operations.replayCancel();await pending;assert.equal(admitted,false);assert.equal(app.read().replay.status,'cancelled');assert.deepEqual((await app.operations.snapshot()).snapshot,before.snapshot);await app.operations.live(true);await app.operations.advance({seconds:.01});assert.ok(app.read().physics.time>.009);}finally{await app.dispose();}
+});
