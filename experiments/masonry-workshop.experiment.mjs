@@ -1,8 +1,10 @@
 import {Mesh,MeshStandardMaterial,MeshBasicMaterial,BufferGeometry,Float32BufferAttribute,SphereGeometry,Vector3,Matrix3,Matrix4,Color,Line,LineBasicMaterial} from '../lib/three.core.js';
 import {prepareNavigationGeometry} from '../scene-navigation.mjs';
-import {createMasonrySource,traceMasonryRay,masonryDefaults} from '../masonry-source.mjs';
+import {createMasonrySource,traceMasonryRay,resolveMasonryConfig} from '../masonry-source.mjs';
 
-const modes=['source','carrier','regions'];
+import {controlDefinitions,controlValue,displayValue,createLiveMasonryEdits} from '../masonry-controls.mjs';
+
+const modes=['source','integral','carrier','regions'];
 const checkMode=value=>{if(!modes.includes(value))throw Error('Unknown masonry view');return value;};
 const regionColors=[0x417eab,0xe9a945,0xc86b81].map(hex=>new Color(hex).toArray());
 const sourceColor=new Color(0x938675).toArray();
@@ -23,7 +25,8 @@ const validVector=(v,label)=>{if(!Array.isArray(v)||v.length!==3||!v.every(Numbe
 export default {
  id:'masonry-workshop',title:'Masonry source workshop',
  async create({host,inputs={},record,updateInputs=()=>{}}){
-  let config=createMasonrySource(inputs.source??{}).config,mode=checkMode(inputs.display??inputs.mode??'source');
+  let config=resolveMasonryConfig({...inputs.source,...(inputs.resolutions?.integral!==undefined?{cells:inputs.resolutions.integral}:{})}),displayCells=inputs.resolutions?.display??inputs.displayCells??config.cells,mode=checkMode(inputs.display??inputs.mode??'source');
+  resolveMasonryConfig({...config,cells:displayCells});
   const poses=inputs.stones??[
    {position:[-.77,.14,-.55],quaternion:[0,0,0,1],scale:[1,1,1]},
    {position:[.77,.14,-.55],quaternion:[0,0,0,1],scale:[1,1,1]},
@@ -41,23 +44,40 @@ export default {
   const carrierMaterial=new MeshStandardMaterial({color:0xabb1b9,roughness:.8});
   const materials=[sourceMaterial,regionMaterial,carrierMaterial],dragHandles=[];
   const probe=new Mesh(new SphereGeometry(.017,12,8),new MeshBasicMaterial({color:0xffe09a}));probe.name='Ray target · move with the scene gizmo';probe.position.fromArray(initialProbe);
-  let probeAsset,rayLine,lastProbe=null,disposed=false,panelStatus,probeText,modeSelect;
-  const controls=new Map();
-  const recipe=()=>({source:{...config},display:mode,stones:stones.map(({mesh})=>({position:mesh.position.toArray(),quaternion:mesh.quaternion.toArray(),scale:mesh.scale.toArray()})),probe:probe.position.toArray(),view:session.readView()});
-  const read=()=>({schema:'kaminos.masonry-workshop.v1',source:config,display:mode,stones:stones.map(s=>({id:s.asset.id,config:s.source.config,regions:s.source.counts,triangles:s.source.triangles.length,position:s.mesh.position.toArray()})),probe:lastProbe,recipe:recipe(),representations:{geometry:'authored explicit inward relief',appearance:'ordinary PBR baseline',nvidia:'unimplemented',sbtf:'unimplemented',simulation:'not run'}});
+  let probeAsset,rayLine,lastProbe=null,disposed=false,panelStatus,probeText,modeSelect,liveEdits;
+  const controls=new Map(),drafts=new Map();
+  const recipe=()=>({source:{...config},resolutions:{display:displayCells,integral:config.cells},display:mode,stones:stones.map(({mesh})=>({position:mesh.position.toArray(),quaternion:mesh.quaternion.toArray(),scale:mesh.scale.toArray()})),probe:probe.position.toArray(),view:session.readView()});
+  const read=()=>({schema:'kaminos.masonry-workshop.v1',source:config,resolutions:{display:displayCells,integral:config.cells},display:mode,stones:stones.map(s=>({id:s.asset.id,config:s.source.config,regions:s.source.counts,triangles:s.source.triangles.length,displayTriangles:s.displaySource.triangles.length,position:s.mesh.position.toArray()})),probe:lastProbe,recipe:recipe(),representations:{geometry:'authored explicit inward relief',appearance:'ordinary PBR baseline',nvidia:'unimplemented',sbtf:'unimplemented',simulation:'not run'}});
   const persist=()=>{updateInputs(recipe());session.redraw();};
-  const sync=(force=false)=>{if(modeSelect)modeSelect.value=mode;for(const [key,input] of controls)if(force||host.controls.document?.activeElement!==input||input.readOnly)input.value=String(config[key]);if(panelStatus)panelStatus.textContent=`${stones.length} editable stones · ${stones.reduce((n,s)=>n+s.source.triangles.length,0).toLocaleString()} triangles. PBR baseline; neural responses not built yet.`;};
-  const applyMode=()=>{for(const s of stones){s.mesh.geometry=s[mode==='carrier'?'carrier':'detailed'];paintGeometry(s.detailed,s.source,mode==='regions');s.mesh.material=mode==='regions'?regionMaterial:mode==='carrier'?carrierMaterial:sourceMaterial;}sync();session.redraw();};
-  const clearRay=()=>{if(rayLine){rayLine.removeFromParent();rayLine.geometry.dispose();rayLine.material.dispose();rayLine=null;}lastProbe=null;if(probeText)probeText.textContent='Move the gold target with the native gizmo, then inspect its viewing ray.';};
-  const refresh=nextConfig=>{
-   const sources=stones.map(s=>createMasonrySource({...nextConfig,seed:nextConfig.seed+s.index*17}));
-   const prepared=[];
-   try{for(const source of sources)prepared.push({source,detailed:geometryFor(source),carrier:geometryFor(source,true)});}
-   catch(error){for(const p of prepared){p.detailed.dispose();p.carrier.dispose();}throw error;}
-   config=nextConfig;
-   for(let i=0;i<stones.length;i++){const s=stones[i],p=prepared[i];s.mesh.geometry=p.detailed;s.detailed.dispose();s.carrier.dispose();Object.assign(s,p);}
-   applyMode();clearRay();for(const s of stones){host.scene.refreshPresentation(s.asset);void prepareNavigationGeometry(s.mesh).catch(error=>{if(panelStatus)panelStatus.textContent=error.message;});}sync();persist();
+  const sync=(force=false)=>{
+   if(modeSelect)modeSelect.value=mode;
+   for(const [key,input] of controls){
+    const value=key==='displayCells'?displayCells:config[key];
+    if(force||host.controls.document?.activeElement!==input||input.readOnly)input.value=String(displayValue(key,drafts.get(key)??value));
+    const d=controlDefinitions.find(d=>d.key===key),minimum=Math.min(config.width,config.height,config.depth)/2;
+    input.max=String(key==='bevel'?minimum*1000*(1-1e-6):key==='relief'?(minimum-config.bevel)*1000*(1-1e-6):Math.max(d.max,displayValue(key,value)));
+   }
+   if(panelStatus)panelStatus.textContent=`${stones.length} stones · display ${stones.reduce((n,s)=>n+s.displaySource.triangles.length,0).toLocaleString()} triangles · integral source ${stones.reduce((n,s)=>n+s.source.triangles.length,0).toLocaleString()}. Geometry only; traced integral and learned responses are not built.`;
   };
+  const applyMode=()=>{for(const s of stones){s.mesh.geometry=mode==='carrier'?s.carrier:mode==='integral'?s.integral:s.detailed;paintGeometry(s.detailed,s.displaySource,mode==='regions');s.mesh.material=mode==='regions'?regionMaterial:mode==='carrier'?carrierMaterial:sourceMaterial;}sync();session.redraw();};
+  const clearRay=()=>{if(rayLine){rayLine.removeFromParent();rayLine.geometry.dispose();rayLine.material.dispose();rayLine=null;}lastProbe=null;if(probeText)probeText.textContent='Move the gold target with the native gizmo, then inspect its viewing ray.';};
+  const refresh=(nextConfig,nextDisplay=displayCells)=>{
+   resolveMasonryConfig({...nextConfig,cells:nextDisplay});
+   const changed=Object.keys(nextConfig).some(k=>k!=='cells'&&nextConfig[k]!==config[k]);
+   const integralChanged=changed||nextConfig.cells!==config.cells,displayChanged=changed||nextDisplay!==displayCells;
+   if(!integralChanged&&!displayChanged)return;
+   const prepared=[],allocated=[];
+   try{
+    for(const stone of stones){const p={};prepared.push(p);
+     if(integralChanged){p.source=createMasonrySource({...nextConfig,seed:nextConfig.seed+stone.index*17});p.integral=geometryFor(p.source);allocated.push(p.integral);}
+     if(displayChanged){p.displaySource=createMasonrySource({...nextConfig,cells:nextDisplay,seed:nextConfig.seed+stone.index*17});p.detailed=geometryFor(p.displaySource);allocated.push(p.detailed);p.carrier=geometryFor(p.displaySource,true);allocated.push(p.carrier);}
+    }
+   }catch(error){for(const g of allocated)g.dispose();throw error;}
+   config=nextConfig;displayCells=nextDisplay;
+   for(let i=0;i<stones.length;i++){const stone=stones[i],p=prepared[i];for(const key of ['detailed','carrier','integral'])if(p[key])stone[key].dispose();Object.assign(stone,p);}
+   applyMode();clearRay();for(const stone of stones){if(!stone.mesh.parent)continue;host.scene.refreshPresentation(stone.asset);void prepareNavigationGeometry(stone.mesh).catch(error=>{if(panelStatus)panelStatus.textContent=error.message;});}sync();persist();
+  };
+  const tune=values=>{const {displayCells:nextDisplay=displayCells,...source}=values;refresh(resolveMasonryConfig({...config,...source}),nextDisplay);record({kind:'masonry.source',phase:'applied',effective:recipe()});return read();};
   const inspect=request=>{
    const view=session.readView(),origin=validVector(request?.origin??view.position,'ray origin');
    const target=probe.getWorldPosition(new Vector3()),direction=request?.direction??target.toArray().map((x,i)=>x-origin[i]);validVector(direction,'ray direction');if(Math.hypot(...direction)===0)throw Error('Invalid masonry ray direction');
@@ -81,17 +101,20 @@ export default {
   };
   try{
    for(let i=0;i<poses.length;i++){
-    const source=createMasonrySource({...config,seed:config.seed+i*17}),detailed=geometryFor(source),carrier=geometryFor(source,true),mesh=new Mesh(detailed,sourceMaterial);
+    const source=createMasonrySource({...config,seed:config.seed+i*17}),displaySource=createMasonrySource({...config,cells:displayCells,seed:config.seed+i*17}),detailed=geometryFor(displaySource),carrier=geometryFor(displaySource,true),integral=geometryFor(source),mesh=new Mesh(detailed,sourceMaterial);
     mesh.name=`Stone ${i+1}`;mesh.position.fromArray(poses[i].position);mesh.quaternion.fromArray(poses[i].quaternion).normalize();mesh.scale.fromArray(poses[i].scale??[1,1,1]);mesh.castShadow=true;mesh.receiveShadow=true;
-    const stone={index:i,source,detailed,carrier,mesh,asset:null};stones.push(stone);stone.asset=await session.attach(mesh,{owned:true,metadata:{label:mesh.name,source:'authored:masonry-workshop-v1',type:'experiment'}});
+    const stone={index:i,source,displaySource,detailed,carrier,integral,mesh,asset:null};stones.push(stone);stone.asset=await session.attach(mesh,{owned:true,metadata:{label:mesh.name,source:'authored:masonry-workshop-v1',type:'experiment'}});
    }
    probeAsset=await session.attach(probe,{owned:true,metadata:{label:probe.name,source:'authored:masonry-ray-target',type:'experiment'}});
    applyMode();session.setView(inputs.view??{position:[3.3,2.5,3.4],target:[0,.18,0],fov:43});
-  }catch(error){for(const s of stones){s.detailed.dispose();s.carrier.dispose();}await session.dispose();for(const m of materials)m.dispose();probe.geometry.dispose();probe.material.dispose();throw error;}
+  }catch(error){for(const s of stones){s.detailed.dispose();s.carrier.dispose();s.integral.dispose();}await session.dispose();for(const m of materials)m.dispose();probe.geometry.dispose();probe.material.dispose();throw error;}
   return {
    read,
    operations:{
-    source(values){const next=createMasonrySource({...config,...values});refresh(next.config);record({kind:'masonry.source',phase:'applied',effective:recipe()});return read();},
+    source:values=>tune(values),
+    tune,
+    resolution({display=displayCells,integral=config.cells}){return tune({displayCells:display,cells:integral});},
+    async flushEdits(){await liveEdits?.flush();return read();},
     display({mode:value}){mode=checkMode(value);applyMode();persist();return read();},
     sourceData(){return {recipe:recipe(),stones:stones.map(s=>({id:s.asset.id,source:structuredClone(s.source)}))};},
     inspect,
@@ -101,15 +124,17 @@ export default {
    mount({root:panel,document,invoke}){
     const heading=document.createElement('h3');heading.textContent='Masonry source';
     const intro=document.createElement('p');intro.textContent='Select and move stones normally. The recipe below shapes all four sources; relief is authored geometry, not simulated damage.';
-    const select=document.createElement('select');modeSelect=select;select.setAttribute('aria-label','Masonry view');for(const [value,label] of [['source','Detailed source'],['carrier','Enclosing carrier'],['regions','Material regions']]){const o=document.createElement('option');o.value=value;o.textContent=label;select.append(o);}select.value=mode;
+    const select=document.createElement('select');modeSelect=select;select.setAttribute('aria-label','Masonry view');for(const [value,label] of [['source','Display surface'],['integral','Integral source mesh'],['carrier','Enclosing carrier'],['regions','Material regions']]){const o=document.createElement('option');o.value=value;o.textContent=label;select.append(o);}select.value=mode;
     const status=document.createElement('p');status.setAttribute('role','status');panelStatus=status;
-    const fail=e=>{sync(true);status.textContent=e.message;};select.addEventListener('change',()=>invoke('display',{mode:select.value}).catch(fail));
+    const fail=e=>{drafts.clear();sync(true);status.textContent=e.message;};
+    liveEdits=createLiveMasonryEdits({apply:async patch=>{await invoke('tune',patch);for(const [key,value] of Object.entries(patch))if(drafts.get(key)===value)drafts.delete(key);sync();},onError:fail});select.addEventListener('change',()=>invoke('display',{mode:select.value}).catch(fail));
     panel.append(heading,intro,select);
-    for(const [key,label,step] of [['bevel','Corner rounding',.005],['margin','Rich margin width',.01],['relief','Margin relief',.003],['seed','Source seed',1]]){
-     const row=document.createElement('label');row.style.cssText='display:flex;gap:8px;align-items:center;margin:8px 0';const grip=document.createElement('span');grip.textContent=label;grip.style.flex='1';
-     const input=document.createElement('input');input.type='number';input.step='any';input.className='transform-input';input.style.width='100%';input.setAttribute('aria-label',label);controls.set(key,input);
-     input.addEventListener('change',()=>{const value=Number(input.value);if(input.value.trim()&&Number.isFinite(value))invoke('source',{[key]:value}).catch(fail);else sync();});
-     const field=document.createElement('span');field.style.cssText='display:inline-flex;flex:0 0 86px;width:86px';field.append(input);row.append(grip,field);panel.append(row);input.addEventListener('blur',()=>sync());dragHandles.push(host.controls.installNumberDrag({input,grip,step}));
+    for(const d of controlDefinitions){const {key,label,step}=d;
+     const row=document.createElement('label');row.style.cssText='display:flex;gap:8px;align-items:center;margin:8px 0';const grip=document.createElement('span');grip.textContent=label+(d.unit?' ('+d.unit+')':'');grip.style.flex='1';
+     const input=document.createElement('input');input.type='number';input.step='any';input.min=String(d.min??0);input.className='transform-input';input.style.width='100%';input.setAttribute('aria-label',label);controls.set(key,input);
+     const schedule=()=>{if(!input.value.trim()||!Number.isFinite(Number(input.value)))return;const value=controlValue(key,Number(input.value));input.value=String(displayValue(key,value));drafts.set(key,value);liveEdits.schedule({[key]:value});};
+     input.addEventListener('input',schedule);input.addEventListener('change',()=>{schedule();void liveEdits.flush();});
+     const field=document.createElement('span');field.style.cssText='display:inline-flex;flex:0 0 86px;width:86px';field.append(input);row.append(grip,field);panel.append(row);input.addEventListener('blur',()=>{void liveEdits.flush();sync();});dragHandles.push(host.controls.installNumberDrag({input,grip,step}));
     }
     const legend=document.createElement('p');legend.textContent='Regions: blue face · amber margin · rose corner.';
     const button=document.createElement('button');button.textContent='Inspect ray to gold target';button.addEventListener('click',()=>invoke('inspect',{}).catch(fail));
@@ -118,7 +143,7 @@ export default {
     const copy=document.createElement('button');copy.textContent='Copy current workshop link';copy.addEventListener('click',()=>{const u=new URL(location.href);u.searchParams.set('experiment_inputs',JSON.stringify(recipe()));navigator.clipboard.writeText(u.href).then(()=>{status.textContent='Current source, object transforms, ray target and camera copied in the link.';}).catch(fail);});
     panel.append(legend,button,probeText,frame,copy,status);sync();
    },
-   async dispose(){if(disposed)return;disposed=true;for(const h of dragHandles)h?.dispose?.();clearRay();await session.dispose();for(const s of stones){s.detailed.dispose();s.carrier.dispose();}for(const m of materials)m.dispose();},
+   async dispose(){if(disposed)return;disposed=true;liveEdits?.dispose();for(const h of dragHandles)h?.dispose?.();clearRay();await session.dispose();for(const s of stones){s.detailed.dispose();s.carrier.dispose();s.integral.dispose();}for(const m of materials)m.dispose();},
   };
  },
 };

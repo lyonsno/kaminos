@@ -10,19 +10,24 @@ const faces=[
 ];
 export const masonryDefaults=Object.freeze({width:1.4,height:.28,depth:1,bevel:.04,margin:.13,relief:.025,cells:18,seed:41});
 
-export function createMasonrySource(options={}){
+export function resolveMasonryConfig(options={}){
  const config={...masonryDefaults,...options};
  const {width,height,depth,bevel,margin,relief,cells,seed}=config;
  const half=[width/2,height/2,depth/2],minimum=Math.min(...half);
- if(![width,height,depth,bevel,margin].every(x=>Number.isFinite(x)&&x>0)||!Number.isFinite(relief)||relief<0||bevel>=minimum||relief>=minimum-bevel||!Number.isSafeInteger(cells)||cells<2||!Number.isSafeInteger(seed))throw Error('Invalid masonry recipe: positive dimensions, bevel and margin; inward relief must fit inside the carrier');
+ if(![width,height,depth].every(x=>Number.isFinite(x)&&x>0)||![bevel,margin].every(x=>Number.isFinite(x)&&x>=0)||!Number.isFinite(relief)||relief<0||bevel>=minimum||relief>=minimum-bevel||!Number.isSafeInteger(cells)||cells<2||(!Number.isSafeInteger(seed)||seed<0))throw Error('Invalid masonry recipe: positive dimensions, nonnegative bevel and margin; inward relief must fit inside the carrier');
+ return config;
+}
+export function createMasonrySource(options={}){
+ const config=resolveMasonryConfig(options);
+ const {width,height,depth,bevel,margin,relief,cells,seed}=config,half=[width/2,height/2,depth/2];
  let state=seed>>>0;const random=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return state/4294967296;};
  const phase=Array.from({length:6},()=>random()*6.283185307);
  const distances=q=>q.map((x,i)=>half[i]-Math.abs(x)).sort((a,b)=>a-b);
  const shape=q=>{
   const center=q.map((x,i)=>Math.max(-half[i]+bevel,Math.min(half[i]-bevel,x)));
-  const delta=q.map((x,i)=>x-center[i]),length=Math.hypot(...delta),normal=delta.map(x=>x/length);
+  const delta=q.map((x,i)=>x-center[i]),length=Math.hypot(...delta),normal=delta.map(x=>length?x/length:0);
   const carrier=center.map((x,i)=>x+normal[i]*bevel);
-  const distance=distances(q)[1],edge=Math.max(0,1-distance/margin);
+  const distance=distances(q)[1],edge=margin===0?0:Math.max(0,1-distance/margin);
   const [x,y,z]=q;
   const structure=.5+.21*Math.sin(19*x+13*y+11*z+phase[0])+.17*Math.sin(37*x-29*y+23*z+phase[1])+.12*Math.cos(71*x+41*y-53*z+phase[2]);
   const inset=relief*edge*edge*structure;

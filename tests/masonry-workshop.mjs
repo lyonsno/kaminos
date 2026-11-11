@@ -47,11 +47,11 @@ test('numeric controls mount before installing drag and release their handles',a
  f.host.controls={document,installNumberDrag({input}){assert.ok(input.parentNode,'numeric drag requires an attached input');return {dispose(){cleaned++;}};}};
  const instance=await openExperiment(definition,{host:f.host,inputs:{source:{cells:8}},record(){}});
  await instance.mount({root:document.createElement('panel'),document});
- const input=elements.find(e=>e.attributes['aria-label']==='Margin relief');document.activeElement=input;input.value='.3';input.listeners.change();
- await instance.invoke('recipe');await Promise.resolve();
- assert.equal(Number(input.value),.025,'rejected focused draft returns to the accepted value');
+ const input=elements.find(e=>e.attributes['aria-label']==='Margin relief');document.activeElement=input;input.value='300';input.listeners.change();
+ await instance.invoke('flushEdits');
+ assert.equal(Number(input.value),25,'rejected focused draft returns to the accepted value');
  const status=elements.find(e=>e.attributes.role==='status');assert.match(status.textContent,/Invalid masonry/);
- await instance.dispose();assert.equal(cleaned,4,'all numeric drag listeners are released');
+ await instance.dispose();assert.equal(cleaned,6,'all numeric drag listeners are released');
 });
 
 test('inspection line stays in the recorded world and returns explicitly world normals',async()=>{
@@ -62,4 +62,18 @@ test('inspection line stays in the recorded world and returns explicitly world n
  assert.ok(hit.source.hit);assert.ok(Math.abs(hit.sourceWorldNormal[0]+Math.SQRT1_2)<1e-6);assert.ok(Math.abs(hit.sourceWorldNormal[1]-Math.SQRT1_2)<1e-6);
  const line=f.scene.getObjectByProperty('isLine',true),point=()=>{line.updateWorldMatrix(true,false);return new THREE.Vector3().fromBufferAttribute(line.geometry.getAttribute('position'),0).applyMatrix4(line.matrixWorld).toArray();};
  const before=point();probe.position.x+=.4;assert.deepEqual(point(),before,'moving the target does not move a recorded ray');await instance.dispose();
+});
+
+test('display and integral tessellation are independently exercised and retained',async()=>{
+ const f=fixture();const instance=await openExperiment(definition,{host:f.host,inputs:{source:{cells:8},displayCells:6},record(){}});
+ const [stone]=[...f.rows.values()].map(r=>r.root);
+ assert.equal(stone.geometry.getAttribute('position').count,12*6*6*3);
+ const original=await instance.invoke('sourceData');
+ await instance.invoke('resolution',{display:10});assert.equal(stone.geometry.getAttribute('position').count,12*10*10*3);
+ assert.deepEqual((await instance.invoke('sourceData')).stones[0].source,original.stones[0].source,'display changes retain integral geometry');
+ const displayed=stone.geometry;
+ await instance.invoke('resolution',{integral:12});assert.equal(stone.geometry,displayed,'integral changes retain displayed mesh');
+ assert.equal((await instance.invoke('sourceData')).stones[0].source.triangles.length,12*12*12);
+ await instance.invoke('display',{mode:'integral'});assert.equal(stone.geometry.getAttribute('position').count,12*12*12*3);
+ assert.deepEqual((await instance.invoke('recipe')).resolutions,{display:10,integral:12});await instance.dispose();
 });

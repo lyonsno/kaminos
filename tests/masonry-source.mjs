@@ -38,7 +38,7 @@ test('damaged source stays inside its carrier and shares vertices across chart s
 });
 
 test('invalid geometry recipes reject without inventing a fallback source',()=>{
- for(const controls of [{width:NaN},{height:-1},{cells:1},{seed:1.2},{bevel:0},{bevel:1},{relief:-.1},{relief:.3}])assert.throws(()=>createMasonrySource(controls),/Invalid masonry/);
+ for(const controls of [{width:NaN},{height:-1},{cells:1},{seed:1.2},{bevel:1},{relief:-.1},{relief:.3}])assert.throws(()=>createMasonrySource(controls),/Invalid masonry/);
 });
 
 import * as masonry from '../masonry-source.mjs';
@@ -66,4 +66,9 @@ test('deep relief retains outward winding through resolved bevels and corners',(
    assert.ok(n.reduce((s,x,i)=>s+x*a[i],0)>0,'relief must not fold through the stone');
   }
  }
+});
+
+test('zero rounding and zero rich width produce a valid flat boundary',()=>{
+ const source=createMasonrySource({bevel:0,margin:0,relief:0,cells:4});
+ for(const t of source.triangles)for(const key of ['a','b','c'])assert.deepEqual(t[key],t.reference[key]);
 });

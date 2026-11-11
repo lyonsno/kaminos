@@ -47,3 +47,12 @@ with an independent browser and the exact expected server root. It exercises the
 actual source/view controls, retained invalid-edit state, carrier/source ray,
 registered geometry and source/region/carrier captures. Rendering inspection is
 required in addition to its numerical checks.
+
+
+## Resolution and live authoring
+
+Display divisions and Integral source divisions independently tessellate the same authored field. Display edits replace only the visible source/carrier meshes; integral edits replace only the actual triangle source returned by sourceData and used by ray inspection. Choose Integral source mesh to inspect that geometry directly. These are geometry resolutions, not traced image resolution, pixel-footprint size or samples per integral. This workshop still has no integrated tracer/trainer.
+
+Spatial controls display millimeters; agent source values remain meters. Their lower bound is zero, and zero rounding or width is a valid source state. Division counts require at least two and round to integer values; seeds are nonnegative integers. Nominal drag ranges give useful granularity without adding source-resolution caps: valid larger typed values expand the displayed range. Rounding and relief maxima follow the actual geometric support.
+
+Input events coalesce into 80 ms windows and flush on release/blur. Continuous dragging updates before release. Each window retains the latest value of every changed field, and teardown cancels pending edits. Agents can invoke flushEdits before inspecting accepted state. The resolution operation accepts display and integral division counts; the recipe retains both. Mortar/grout placement or flow is not implemented by this slice.
