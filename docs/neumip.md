@@ -96,7 +96,8 @@ and actual source/capture dimensions through
 `kaminosNeuralShading.diagnostics.read()`; **Clear** or `.stop()` clears it.
 There is no background sampler, recurring timer or diagnostic readback when idle.
 
-A measurement renders a fresh ordinary scene frame, then one full-resolution
+A measurement waits for environment and lighting preparation, renders a fresh
+ordinary scene frame, then one full-resolution
 mask using the same production reconstruction predicate. The mask bypasses
 neural inference and GPU reduction reads back four integers (16 bytes). The
 first measurement may compile its private diagnostic shaders. This operation

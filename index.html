@@ -11772,7 +11772,8 @@ async function initScene() {
   window.kaminosNeuralShading={read:()=>sceneGI.neuralShading.state(),setScale:value=>{window.kaminosViewportSettings.set({neuralResolution:value});return sceneGI.neuralShading.state();},setReuse:value=>{sceneGI.neuralShading.reuse.value=!!value;markDirty();return sceneGI.neuralShading.state();}};
   const neuralFallbackProbe=new SourceNeuralFallbackProbe(sceneGI.neuralShading);
   sceneGI.neuralShading.diagnosticProbe=neuralFallbackProbe;
-  const neuralFallbackReadout=new NeuralFallbackReadout(async({signal})=>{
+  const neuralFallbackReadout=new NeuralFallbackReadout(async({signal,captured})=>{
+    await environmentLoader.whenSettled();signal.throwIfAborted();
     await sceneLightingPreparation.whenIdle();signal.throwIfAborted();
     if(sceneGISettings.mode!=='combined')throw Error('Source fallback measurement requires combined GI mode');
     const release=window.__kaminosBeginSceneInspection();
@@ -11780,12 +11781,12 @@ async function initScene() {
       await new Promise(requestAnimationFrame);signal.throwIfAborted();
       const before=sceneGI.debugState(),draw=window.__kaminosRenderSceneForInspection(),after=sceneGI.debugState();
       if(after.frames!==before.frames+1)throw Error('A fresh opaque source frame was not rendered');
-      signal.throwIfAborted();
+      signal.throwIfAborted();captured();
       const result=await neuralFallbackProbe.sample(renderer,{frame:draw.sceneFrameCount,borrowVisibility:borrowViewportAndBeautyVisibility});
       if(result.captureActive&&after.neuralShading.frames!==before.neuralShading.frames+1)throw Error('A fresh neural capture was not rendered');
       return {...result,rendererBackend:'webgpu',sourceRoute:'combined',sourceEstimatorFrame:after.frames,captureFrame:result.captureActive?after.neuralShading.frames:null};
     }finally{release();}
-  });
+  },{deferInvalidationUntilCapture:true});
   window.kaminosNeuralShading.diagnostics={read:()=>neuralFallbackReadout.read(),sample:()=>neuralFallbackReadout.sample(),stop:()=>neuralFallbackReadout.stop()};
   mountNeuralFallbackReadout(document.getElementById('scene-neural-fallback-readout'),neuralFallbackReadout);
   const reflectionSceneSetup=scenePass.setup;

@@ -13,16 +13,16 @@ export function sourceFallbackSummary(counters,{width,height,scale,capture,frame
 
 // No timer, worker, pass or readback exists until sample() is explicitly called.
 export class NeuralFallbackReadout{
- constructor(probe,{onChange=()=>{},now=()=>Date.now()}={}){this.probe=probe;this.onChange=onChange;this.now=now;this.generation=0;this.pending=null;this.value={status:'off',result:null,error:null};}
+ constructor(probe,{onChange=()=>{},now=()=>Date.now(),deferInvalidationUntilCapture=false}={}){this.deferInvalidationUntilCapture=deferInvalidationUntilCapture;this.probe=probe;this.onChange=onChange;this.now=now;this.generation=0;this.pending=null;this.value={status:'off',result:null,error:null};}
  read(){return {...this.value,busy:this.pending!==null};}
  publish(value){this.value=value;this.onChange(this.read());return this.read();}
  sample(){
   if(this.pending)return this.pending;
-  const generation=++this.generation,abort=new AbortController();this.abort=abort;
+  const generation=++this.generation,abort=new AbortController();this.abort=abort;this.awaitingCapture=this.deferInvalidationUntilCapture;
   let resolve,reject;const pending=new Promise((yes,no)=>{resolve=yes;reject=no;});this.pending=pending;
   this.publish({status:'sampling',result:null,error:null});
   (async()=>{
-   try{const result=await this.probe({signal:abort.signal});if(generation===this.generation)this.publish({status:'snapshot',result:{...result,sampledAt:this.now()},error:null});}
+   try{const result=await this.probe({signal:abort.signal,captured:()=>{if(generation===this.generation)this.awaitingCapture=false;}});if(generation===this.generation){if(this.awaitingCapture)throw Error('Neural diagnostic capture boundary was not recorded');this.publish({status:'snapshot',result:{...result,sampledAt:this.now()},error:null});}}
    catch(error){if(generation===this.generation){this.publish({status:'failed',result:null,error:error.message});throw error;}}
    finally{this.pending=null;this.onChange(this.read());}
    return this.read();
@@ -30,7 +30,7 @@ export class NeuralFallbackReadout{
   return pending;
  }
  invalidate(reason='scene changed'){
-  if(['off','stale'].includes(this.value.status))return;
+  if(['off','stale'].includes(this.value.status)||this.value.status==='sampling'&&this.awaitingCapture)return;
   this.generation++;this.abort?.abort();this.publish({status:'stale',result:null,error:null,reason});
  }
  stop(){this.generation++;this.abort?.abort();return this.publish({status:'off',result:null,error:null});}

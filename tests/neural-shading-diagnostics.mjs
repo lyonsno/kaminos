@@ -38,3 +38,13 @@ test('synchronous probe failures release the sampler for another request',async(
  await assert.rejects(readout.sample(),/not available/);assert.equal(readout.read().busy,false);
  assert.equal((await readout.sample()).status,'snapshot');assert.equal(n,2);
 });
+
+test('preparation changes enter the fresh snapshot while post-capture changes invalidate it',async()=>{
+ let finish,captured;
+ const readout=new NeuralFallbackReadout(context=>{captured=context.captured;return new Promise(resolve=>{finish=resolve;});},{deferInvalidationUntilCapture:true});
+ const first=readout.sample();readout.invalidate('environment arrived before capture');
+ assert.equal(readout.read().status,'sampling');captured();finish({fullRateFraction:0});assert.equal((await first).status,'snapshot');
+ const second=readout.sample();captured();readout.invalidate('camera changed after capture');finish({fullRateFraction:.2});await second;
+ assert.equal(readout.read().status,'stale');assert.equal(readout.read().result,null);
+ const missing=new NeuralFallbackReadout(async()=>({}),{deferInvalidationUntilCapture:true});await assert.rejects(missing.sample(),/capture boundary/);
+});

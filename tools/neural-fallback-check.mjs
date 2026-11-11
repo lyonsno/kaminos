@@ -33,9 +33,10 @@ try{
   await page.evaluate(()=>window.kaminosSceneLightingPreparation.whenIdle());
   assert.equal(await page.evaluate(()=>window.kaminosNeuralShading.diagnostics.read().status),'off');
   await page.locator('[data-inspector-context="scene"]').click();await page.locator('#authoring-render-slot > summary').click();
+  await page.evaluate(async()=>{const {NeuralFallbackReadout}=await import('./scene-neural-diagnostics.mjs');const original=NeuralFallbackReadout.prototype.invalidate;window.neuralDiagnosticInvalidations=[];NeuralFallbackReadout.prototype.invalidate=function(reason){if(this.read().status==='sampling')window.neuralDiagnosticInvalidations.push({reason,stack:new Error().stack});return original.call(this,reason);};});
   await page.locator('#scene-neural-fallback-readout button').first().click();
   await page.waitForFunction(()=>['snapshot','failed','stale'].includes(window.kaminosNeuralShading.diagnostics.read().status));
-  report.ui=await page.evaluate(()=>({readout:window.kaminosNeuralShading.diagnostics.read(),text:document.getElementById('scene-neural-fallback-readout').textContent,scene:window.kaminosWorkbenchSceneState()}));await save();assert.equal(report.ui.readout.status,'snapshot',report.ui.text);assert.equal(report.ui.scene.rendererBackend,'webgpu');
+  report.ui=await page.evaluate(()=>({readout:window.kaminosNeuralShading.diagnostics.read(),text:document.getElementById('scene-neural-fallback-readout').textContent,scene:window.kaminosWorkbenchSceneState(),invalidations:window.neuralDiagnosticInvalidations}));await save();assert.equal(report.ui.readout.status,'snapshot',report.ui.text);assert.equal(report.ui.scene.rendererBackend,'webgpu');
   await page.screenshot({path:out+'/readout-ui.png'});
   await page.evaluate(()=>window.kaminosNeuralShading.setScale(.5));assert.equal(await page.evaluate(()=>window.kaminosNeuralShading.diagnostics.read().status),'stale');assert.equal(await page.evaluate(()=>window.kaminosNeuralShading.diagnostics.read().result),null);
   await page.locator('#scene-neural-fallback-readout button').nth(1).click();assert.equal(await page.evaluate(()=>window.kaminosNeuralShading.diagnostics.read().status),'off');
