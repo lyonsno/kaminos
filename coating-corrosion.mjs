@@ -4,7 +4,7 @@
 // separate electrochemical potentials/cathodic fronts and osmotic fluid pressure
 // are not solved. The coating is a small-slope elastic plate with an irreversible
 // cohesive attachment, contacted by the growing solid oxide.
-const defaults={resolution:48,seed:19,wetPeriod:2,wetFraction:.65,oxygenSupply:1,
+const defaults={transportRegime:'defect-fed',bondedMobility:.02,resolution:48,seed:19,wetPeriod:2,wetFraction:.65,oxygenSupply:1,
  moistureDiffusion:.002,oxygenDiffusion:.004,ironDiffusion:.0008,
  openingPermeability:2,paintPermeability:.012,corrosionRate:.18,
  precipitationRate:1.2,oxygenCapacity:.3,oxideExpansion:2.5,oxidePorosity:.35,
@@ -19,10 +19,11 @@ function configuration(options={}){
  if(!Number.isSafeInteger(c.resolution)||c.resolution<4)throw Error('resolution must be an integer at least four');
  if(!Number.isSafeInteger(c.seed))throw Error('seed must be an integer');
  for(const [k,v]of Object.entries(c)){
-  if(['seed','resolution','defects'].includes(k))continue;
+  if(['seed','resolution','defects','transportRegime'].includes(k))continue;
   if(!Number.isFinite(v)||v<0)throw Error(`Invalid corrosion setting ${k}`);
  }
  for(const k of ['wetPeriod','oxygenCapacity','oxideExpansion','metalScale','filmThickness','attachmentStiffness','adhesionEnergy','mechanicalInterval','mechanicalTolerance'])if(c[k]<=0)throw Error(`${k} must be positive`);
+ if(!['defect-fed','distributed'].includes(c.transportRegime))throw Error('Unknown corrosion transport regime');
  if(c.wetFraction>1||c.oxygenSupply>1||c.oxidePorosity>=1)throw Error('Invalid concentration or porosity');
  if(!Array.isArray(c.defects)||!c.defects.every(d=>d&&[d.a,d.b].every(p=>Array.isArray(p)&&p.length===2&&p.every(v=>Number.isFinite(v)&&v>=0&&v<=1))&&Number.isFinite(d.radius)&&d.radius>0&&d.radius<=.5))throw Error('Invalid coating defects');
  return structuredClone(c);
@@ -82,20 +83,26 @@ export function advanceCorrosion(s,duration){
  if(!Number.isFinite(duration)||duration<0)throw Error('Corrosion time must be finite and nonnegative');
  if(!duration)return s;
  const c=s.config,n=c.resolution,neighbors=neighborTable(n),end=s.time+duration;
- const dmax=Math.max(c.moistureDiffusion,c.oxygenDiffusion,c.ironDiffusion),stable=dmax?.24/(n*n*dmax):Infinity;
+ const dmax=Math.max(c.moistureDiffusion,c.oxygenDiffusion,c.ironDiffusion)*Math.max(1,c.bondedMobility),stable=dmax?.24/(n*n*dmax):Infinity;
  let untilMechanical=Math.min(end,s.time+c.mechanicalInterval);
  while(s.time<end){
   const phase=(s.time%c.wetPeriod)/c.wetPeriod,wet=phase<c.wetFraction?1:0;
   const switchAt=s.time+(wet?c.wetFraction-phase:1-phase)*c.wetPeriod;
   const dt=Math.min(stable,untilMechanical-s.time,end-s.time,switchAt-s.time>1e-12?switchAt-s.time:stable);
   if(!(dt>0)||s.time+dt===s.time)throw Error('Corrosion timestep cannot advance');
-  diffuse(s.moisture,c.moistureDiffusion,dt,n,neighbors);diffuse(s.oxygen,c.oxygenDiffusion,dt,n,neighbors);diffuse(s.dissolvedIron,c.ironDiffusion,dt,n,neighbors,s.moisture);
+  const interfaceMobility=c.transportRegime==='defect-fed'?Float64Array.from(s.bond,(b,i)=>s.opening[i]||!b?1:c.bondedMobility):null;
+  const wetMobility=Float64Array.from(s.moisture,(w,i)=>w*(interfaceMobility?.[i]??1));
+  diffuse(s.moisture,c.moistureDiffusion,dt,n,neighbors,interfaceMobility);diffuse(s.oxygen,c.oxygenDiffusion,dt,n,neighbors,interfaceMobility);diffuse(s.dissolvedIron,c.ironDiffusion,dt,n,neighbors,wetMobility);
   for(let i=0;i<n*n;i++){
-   const permeability=s.opening[i]?c.openingPermeability:c.paintPermeability;
+   // In the defect-fed regime a bonded interface has no under-film cavity
+   // for normal ingress; lateral transport can still wet its thin interface.
+   // Detachment opens that cavity. Distributed permeation remains a separate
+   // retained regime rather than being silently reinterpreted.
+   const permeability=s.opening[i]?c.openingPermeability:c.paintPermeability*(c.transportRegime==='defect-fed'?1-s.bond[i]:1);
    s.moisture[i]=wet+(s.moisture[i]-wet)*Math.exp(-permeability*dt);
    s.oxygen[i]=c.oxygenSupply+(s.oxygen[i]-c.oxygenSupply)*Math.exp(-permeability*dt);
    const consumed=Math.min(c.corrosionRate*s.reactivity[i]*s.moisture[i]*s.oxygen[i]*dt,s.oxygen[i]*c.oxygenCapacity);
-   s.metalLoss[i]+=consumed;s.dissolvedIron[i]+=consumed;s.oxygen[i]-=consumed/c.oxygenCapacity;
+   s.metalLoss[i]+=consumed;s.dissolvedIron[i]+=consumed;s.oxygen[i]=Math.max(0,s.oxygen[i]-consumed/c.oxygenCapacity);
    const deposited=s.dissolvedIron[i]*(1-Math.exp(-c.precipitationRate*s.nucleation[i]*s.moisture[i]*dt));
    s.dissolvedIron[i]-=deposited;s.rustIron[i]+=deposited;
   }
@@ -106,7 +113,7 @@ export function advanceCorrosion(s,duration){
 }
 export function corrosionSummary(s){
  const consumedIron=total(s.metalLoss),dissolvedIron=total(s.dissolvedIron),depositedIron=total(s.rustIron),count=s.bond.length;
- return {time:s.time,consumedIron,dissolvedIron,depositedIron,ironBalanceError:consumedIron-dissolvedIron-depositedIron,
+ return {time:s.time,formationResolution:s.config.resolution,transportRegime:s.config.transportRegime,consumedIron,dissolvedIron,depositedIron,ironBalanceError:consumedIron-dissolvedIron-depositedIron,
   debondedFraction:s.bond.reduce((v,b,i)=>v+Number(!b&&!s.opening[i]),0)/count,openingFraction:total(s.opening)/count,
   oxideSolidVolumeEquivalent:depositedIron*s.config.oxideExpansion,
   chemicalSteps:s.chemicalSteps,mechanicalSolves:s.mechanicalSolves,
@@ -115,7 +122,7 @@ export function corrosionSummary(s){
 export function serializeCorrosion(s){return {...Object.fromEntries(['schema','time','chemicalSteps','mechanicalSolves'].map(k=>[k,s[k]])),config:structuredClone(s.config),...Object.fromEntries(names.map(k=>[k,Array.from(s[k])]))};}
 export function restoreCorrosion(value){
  if(value?.schema!=='kaminos.coating-corrosion.v1')throw Error('Unknown corrosion state');
- const config=configuration(value.config),count=config.resolution**2,s={schema:value.schema,config};
+ const config=configuration({transportRegime:'distributed',...value.config}),count=config.resolution**2,s={schema:value.schema,config};
  for(const k of ['time','chemicalSteps','mechanicalSolves'])if(!Number.isFinite(value[k])||value[k]<0)throw Error(`Invalid retained ${k}`);else s[k]=value[k];
  for(const k of names){if(!Array.isArray(value[k])||value[k].length!==count||!value[k].every(Number.isFinite))throw Error(`Invalid retained ${k}`);s[k]=Float64Array.from(value[k]);}
  for(const k of ['moisture','oxygen','bond','opening'])if(!s[k].every(v=>v>=0&&v<=1))throw Error(`Invalid retained ${k}`);

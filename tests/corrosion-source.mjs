@@ -23,3 +23,12 @@ test('opaque oxide replaces the hidden steel face instead of nearly coplanar dup
  const s=createCorrosionState({resolution:8});s.rustIron[0]=1e-12;const src=createCorrosionSource(serializeCorrosion(s));
  assert.ok(src.triangles.some(t=>t.identity.startsWith('oxide:0:0:')));assert.ok(!src.triangles.some(t=>t.identity.startsWith('steel:0:0:')));
 });
+test('thin oxide retains a continuous metallic response and records formation resolution',()=>{
+ const s=createCorrosionState({resolution:8});s.rustIron[0]=1e-12;const thin=createCorrosionSource(serializeCorrosion(s));
+ const t=thin.triangles.find(t=>t.identity.startsWith('oxide:0:0:'));assert.ok(thin.materials[t.materialIndex].metalness>.99);
+ assert.equal(thin.config.formationResolution,8);s.rustIron[0]=.4;const thick=createCorrosionSource(serializeCorrosion(s));const q=thick.triangles.find(t=>t.identity.startsWith('oxide:0:0:'));assert.ok(thick.materials[q.materialIndex].metalness<.01);
+});
+test('materialized lifted rims exclude missing-film cells at the pit floor',()=>{
+ const s=createCorrosionState({resolution:8});s.opening.fill(0);s.filmHeight.fill(.1);s.opening[27]=1;s.bond[27]=0;s.metalLoss[27]=20;s.filmHeight[27]=-.499;
+ const src=createCorrosionSource(serializeCorrosion(s));assert.ok(src.triangles.filter(t=>t.identity.startsWith('paint-top:')).every(t=>[t.a,t.b,t.c].every(p=>p[1]>=.24-1e-10)));
+});

@@ -99,3 +99,19 @@ test('coating preserves input refusal, source summaries and native mode after ca
   await instance.operations.capture({width:8,height:8,samples:1});assert.equal(instance.read().effective.width,8,'native mode must not dispatch an additional full-viewport trace');
  }finally{SurfaceTeacher.prototype.publish=oldPublish;SurfaceTeacher.prototype.readLinear=oldRead;await instance.dispose();}
 });
+
+test('continuous native source fields and traced materials follow the same changed source',async()=>{
+ const THREE=await import('../lib/three.webgpu.js'),{surfaceTeacherExperiment}=await import('../experiments/surface-teacher-experiment.mjs');
+ const world=new THREE.Scene(),camera=new THREE.PerspectiveCamera(45,1,.01,100),gpu=device();gpu.addEventListener=()=>{};gpu.removeEventListener=()=>{};
+ let view={position:[2,2,3],target:[0,0,0],fov:42};const session={async attach(object){world.add(object);return {id:object.name};},setView(v){view=v;},readView:()=>view,onFrame:()=>()=>{},redraw(){},async dispose(){}};
+ const host={scene:{async open(){return session;},rendering:()=>({renderer:{getDrawingBufferSize:v=>v.set(100,100),backend:{device:gpu}},scene:world,camera}),isVisible:()=>true,refreshPresentation(){}}};
+ const createSource=({metalness=.999999}={})=>({schema:'fixture',nativeMaterialFields:true,config:{metalness},materials:[{color:[.2,.3,.4],roughness:.6,metalness}],triangles:[{a:[0,0,0],b:[1,0,0],c:[0,0,1],materialIndex:0}]});
+ const instance=await surfaceTeacherExperiment({id:'fixture',title:'Fixture',createSource,label:'Field source',sourceURL:'fixture',boundary:'CPU fixture',initialView:view,sourceControls:[],defaultTracing:false}).create({host,inputs:{},record(){}});
+ try{
+  const root=world.children.find(o=>o.name==='Field source');assert.ok(!Array.isArray(root.material));assert.equal(root.geometry.groups.length,0);assert.ok(Math.abs(root.geometry.getAttribute('sourceMetalness').getX(0)-.999999)<1e-7);
+  await instance.operations.source({metalness:.25});assert.equal(root.geometry.getAttribute('sourceMetalness').getX(0),.25);
+  await instance.operations.configure({tracing:true});assert.equal(instance.read().teacherScene.materials[0].metalness,.25);assert.equal(root.material.colorWrite,false);
+  await instance.operations.source({metalness:.75});assert.equal(instance.read().teacherScene.materials[0].metalness,.75);assert.equal(root.geometry.getAttribute('sourceMetalness').getX(0),.75);
+  await instance.operations.configure({tracing:false});assert.equal(root.material.colorWrite,true);
+ }finally{await instance.dispose();}
+});

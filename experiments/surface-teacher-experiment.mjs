@@ -1,5 +1,6 @@
 import * as THREE from '../lib/three.webgpu.js';
 import {SurfaceTeacher} from '../surface-teacher.mjs';
+import{populateSourceMaterialFields,createSourceFieldMaterial}from'../source-material-fields.mjs';
 import {prepareNavigationGeometry} from '../scene-navigation.mjs';
 
 function checkedConfiguration(value){
@@ -17,8 +18,9 @@ export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,
   try{context=host.scene.rendering();const size=context.renderer.getDrawingBufferSize(new THREE.Vector2()),limit=context.renderer.backend.device.limits.maxTextureDimension2D;if(Math.round(size.x*configuration.scale)>limit||Math.round(size.y*configuration.scale)>limit)throw Error('Image scale exceeds active device capacity');}catch(error){await session.dispose();throw error;}
   const {renderer,scene,camera}=context;
   const sourceMaterials=(source.materials??defaultMaterials).map(m=>new THREE.MeshStandardMaterial({color:new THREE.Color(...m.color),roughness:m.roughness,metalness:m.metalness,side:THREE.DoubleSide,colorWrite:!configuration.tracing,depthWrite:!configuration.tracing}));
-  const root=new THREE.Mesh(new THREE.BufferGeometry(),sourceMaterials);root.name=label;root.castShadow=false;root.receiveShadow=false;
-  const presentationMode=()=>{for(const material of sourceMaterials){if(material.colorWrite!==!configuration.tracing){material.colorWrite=!configuration.tracing;material.depthWrite=!configuration.tracing;material.needsUpdate=true;}}if(screen)screen.visible=configuration.tracing;};
+  const fieldMaterial=source.nativeMaterialFields?createSourceFieldMaterial(configuration):null;
+  const root=new THREE.Mesh(new THREE.BufferGeometry(),fieldMaterial??sourceMaterials);root.name=label;root.castShadow=false;root.receiveShadow=false;
+  const presentationMode=()=>{for(const material of fieldMaterial?[fieldMaterial]:sourceMaterials){if(material.colorWrite!==!configuration.tracing){material.colorWrite=!configuration.tracing;material.depthWrite=!configuration.tracing;material.needsUpdate=true;}}if(screen)screen.visible=configuration.tracing;};
   let sceneKey='',failure=null,capturing=false,disposed=false,status,pending=null,fieldDocument;
   const fields=[];
   const syncControls=()=>{for(const {input,group,key}of fields){if(fieldDocument.activeElement===input&&input.type!=='checkbox')continue;const value=group==='source'?source.config[key]:configuration[key];if(input.type==='checkbox')input.checked=value;else input.value=String(value);}};
@@ -26,7 +28,7 @@ export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,
   const gpuFailure=event=>{failure=event.error?.message??String(event.error);showStatus();};
   const replaceGeometry=()=>{
    const positions=new Float32Array(source.triangles.flatMap(t=>[...t.a,...t.b,...t.c]));
-   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));let start=0;for(let i=1;i<=source.triangles.length;i++){if(i===source.triangles.length||source.triangles[i].materialIndex!==source.triangles[start].materialIndex){geometry.addGroup(start*3,(i-start)*3,source.triangles[start].materialIndex);start=i;}}geometry.computeVertexNormals();geometry.computeBoundingSphere();const old=root.geometry;root.geometry=geometry;old.dispose();sceneKey='';if(asset){host.scene.refreshPresentation(asset);void prepareNavigationGeometry(root);}
+   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));if(fieldMaterial)populateSourceMaterialFields(geometry,source);let start=0;for(let i=1;i<=source.triangles.length;i++){if(i===source.triangles.length||source.triangles[i].materialIndex!==source.triangles[start].materialIndex){if(!fieldMaterial)geometry.addGroup(start*3,(i-start)*3,source.triangles[start].materialIndex);start=i;}}geometry.computeVertexNormals();geometry.computeBoundingSphere();const old=root.geometry;root.geometry=geometry;old.dispose();sceneKey='';if(asset){host.scene.refreshPresentation(asset);void prepareNavigationGeometry(root);}
   };
   const nativeLights=()=>{
    const lights=[];scene.updateMatrixWorld(true);
@@ -53,7 +55,7 @@ export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,
    engine.setTransport(configuration);
   };
   const teacherScene=()=>{if(!sceneKey)return null;const [matrixWorld,materials,lights,visible]=JSON.parse(sceneKey);return {matrixWorld,materials,lights,visible};};
-  const read=()=>({schema:readSchema,sourceSchema:source.schema,objectId:asset?.id,source:source.config,teacherScene:teacherScene(),...(describeSource?{sourceSummary:describeSource(source.config)}:{}),configuration:{...configuration},effective:engine?.state()??null,view:session.readView(),cameraFrame:cameraFrame(),failure,capturing,display:'shared Kaminos scene and camera; native selection/gizmos',displaySourceVisible:!!root.parent&&host.scene.isVisible(asset?.id),presentationLighting:screenMaterial?.lights===false?'lighting bypassed':'unverified',navigationIndexReady:!!root.geometry.boundsTree,supportedLights:'native directional, inverse-square point and spot; constant environment',boundary,deviceOwnership:'borrowed'});
+  const read=()=>({schema:readSchema,sourceSchema:source.schema,objectId:asset?.id,source:source.config,sourceTriangles:source.triangles.length,teacherScene:teacherScene(),...(describeSource?{sourceSummary:describeSource(source.config)}:{}),configuration:{...configuration},effective:engine?.state()??null,view:session.readView(),cameraFrame:cameraFrame(),failure,capturing,display:'shared Kaminos scene and camera; native selection/gizmos',displaySourceVisible:!!root.parent&&host.scene.isVisible(asset?.id),presentationLighting:screenMaterial?.lights===false?'lighting bypassed':'unverified',navigationIndexReady:!!root.geometry.boundsTree,supportedLights:'native directional, inverse-square point and spot; constant environment',boundary,deviceOwnership:'borrowed'});
   const showStatus=()=>{if(status)status.textContent=failure?`Stopped: ${failure}`:capturing?'Capturing raw reference…':!configuration.tracing?'Native surface preview · path tracing off':`${configuration.paused?'Paused · ':''}${engine?.samples??0} samples · ${engine?.width??0} × ${engine?.height??0} · ${configuration.bounces} bounces`;};
   const render=({width,height,filter=configuration.reconstruction}={})=>{
    if(disposed)return;
@@ -82,7 +84,7 @@ export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,
    });
    const operations={
     frame(){return session.setView(initialView);},
-    async source(values){const next=createSource({...source.config,...values});await pending;source=next;replaceGeometry();if(configuration.tracing)syncScene();failure=null;syncControls();updateInputs({source:source.config,view:session.readView(),...configuration});session.redraw();record({kind:'surface-teacher.source',phase:'applied',effective:source.config});return read();},
+    async source(values){const next=createSource({...source.config,...values});await pending;source=next;if(fieldMaterial){const old=sourceMaterials.splice(0,sourceMaterials.length,...source.materials.map(m=>new THREE.MeshStandardMaterial({color:new THREE.Color(...m.color),roughness:m.roughness,metalness:m.metalness,side:THREE.DoubleSide})));for(const m of old)m.dispose();}replaceGeometry();if(configuration.tracing)syncScene();failure=null;syncControls();updateInputs({source:source.config,view:session.readView(),...configuration});session.redraw();record({kind:'surface-teacher.source',phase:'applied',effective:source.config});return read();},
     async configure(values){
      const next=checkedConfiguration({...configuration,...values}),size=renderer.getDrawingBufferSize(new THREE.Vector2());if(Math.round(size.x*next.scale)>renderer.backend.device.limits.maxTextureDimension2D||Math.round(size.y*next.scale)>renderer.backend.device.limits.maxTextureDimension2D)throw Error('Image scale exceeds active device capacity');
      await pending;configuration=next;presentationMode();if(configuration.tracing)syncScene();failure=null;syncControls();updateInputs({source:source.config,view:session.readView(),...configuration});session.redraw();record({kind:'surface-teacher.configuration',phase:'applied',effective:{...configuration}});showStatus();return read();
@@ -113,7 +115,7 @@ export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,
     const frame=document.createElement('button');frame.textContent='Frame source';frame.onclick=()=>invoke('frame').catch(error=>{status.textContent=error.message;});status=document.createElement('p');status.setAttribute('role','status');
     const note=document.createElement('p');note.textContent='Frozen explicit geometry with real visibility and surface bounces. Orbit and use native selection and scene lights. Reconstruction off shows the raw accumulated estimate. '+boundary;
     panel.append(frame,status,note);showStatus();this.drags=drags;
-   },async dispose(){disposed=true;stop?.();renderer.backend.device.removeEventListener('uncapturederror',gpuFailure);for(const drag of this.drags??[])drag?.dispose?.();engine?.dispose();texture?.dispose();await session.dispose();}};
-  }catch(error){disposed=true;stop?.();renderer.backend.device.removeEventListener('uncapturederror',gpuFailure);engine?.dispose();texture?.dispose();try{await session.dispose();}catch(cleanup){throw new AggregateError([error,cleanup],`Grass setup: ${error.message}; cleanup: ${cleanup.message}`);}throw error;}
+   },async dispose(){disposed=true;stop?.();renderer.backend.device.removeEventListener('uncapturederror',gpuFailure);for(const drag of this.drags??[])drag?.dispose?.();engine?.dispose();texture?.dispose();if(fieldMaterial)for(const m of sourceMaterials)m.dispose();await session.dispose();}};
+  }catch(error){disposed=true;stop?.();renderer.backend.device.removeEventListener('uncapturederror',gpuFailure);engine?.dispose();texture?.dispose();if(fieldMaterial)for(const m of sourceMaterials)m.dispose();try{await session.dispose();}catch(cleanup){throw new AggregateError([error,cleanup],`Grass setup: ${error.message}; cleanup: ${cleanup.message}`);}throw error;}
  }
 };}

@@ -1,7 +1,8 @@
 import {restoreCorrosion,corrosionSummary} from './coating-corrosion.mjs';
 const linear=v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4;
 const color=hex=>[hex>>16&255,hex>>8&255,hex&255].map(v=>linear(v/255));
-export function createCorrosionSource(retained,{width=2.4,showSubstrate=false,snapshot=0}={}){
+export function createCorrosionSource(retained,{width=2.4,showSubstrate=false,snapshot=0,opticalThicknessScale=.0005}={}){
+ if(!Number.isFinite(opticalThicknessScale)||opticalThicknessScale<=0)throw Error('Optical thickness scale must be positive');
  if(!Number.isFinite(width)||width<=0||typeof showSubstrate!=='boolean'||!Number.isSafeInteger(snapshot)||snapshot<0)throw Error('Invalid corrosion source presentation');
  const s=restoreCorrosion(retained),n=s.config.resolution,c=s.config,triangles=[];
  const materials=[{color:color(0x747a7c),roughness:.35,metalness:1},
@@ -15,12 +16,19 @@ export function createCorrosionSource(retained,{width=2.4,showSubstrate=false,sn
  const sample=(a,x,y)=>{let v=0;for(const j of [index(x,y),index(x-1,y),index(x,y-1),index(x-1,y-1)])v+=a[j];return v*.25;};
  const steel=(x,y)=>-c.metalScale*sample(s.metalLoss,x,y);
  const oxide=(x,y)=>steel(x,y)+c.metalScale*c.oxideExpansion*sample(s.rustIron,x,y)/(1-c.oxidePorosity);
- const film=(x,y)=>Math.max(sample(s.filmHeight,x,y),oxide(x,y)+c.filmThickness);
+ const film=(x,y)=>{let h=0,count=0;for(const i of [index(x,y),index(x-1,y),index(x,y-1),index(x-1,y-1)])if(!s.opening[i]){h+=s.filmHeight[i];count++;}return Math.max(count?h/count:c.filmThickness,oxide(x,y)+c.filmThickness);};
  const point=(x,y,h)=>[(x/n-.5)*width,h*width,(y/n-.5)*width];
  const corners=(x,y,h)=>[[x,y],[x,y+1],[x+1,y+1],[x+1,y]].map(([u,v])=>point(u,v,h(u,v)));
  for(let y=0;y<n;y++)for(let x=0;x<n;x++){
   const i=index(x,y),id=`${x}:${y}`;if(!s.rustIron[i])quad(...corners(x,y,steel),0,'steel:'+id);
-  if(s.rustIron[i]>0)quad(...corners(x,y,oxide),s.rustIron[i]<.04?3:s.rustIron[i]<.2?2:1,'oxide:'+id);
+  if(s.rustIron[i]>0){
+   // Phenomenological unresolved oxide/steel response, continuous at zero.
+   // This is not a spectral thin-film solution or resolved oxide grains.
+   const thickness=c.metalScale*c.oxideExpansion*s.rustIron[i]/(1-c.oxidePorosity),transmittance=Math.exp(-thickness/opticalThicknessScale),coverage=-Math.expm1(-thickness/opticalThicknessScale),tone=-Math.expm1(-s.rustIron[i]/.08);
+   const rust=materials[3].color.map((v,j)=>v+(materials[1].color[j]-v)*tone),m=materials.length;
+   materials.push({color:materials[0].color.map((v,j)=>transmittance*v+coverage*rust[j]),roughness:transmittance*materials[0].roughness+coverage*.93,metalness:transmittance});
+   quad(...corners(x,y,oxide),m,'oxide:'+id);
+  }
   if(!s.opening[i]&&!showSubstrate){
    const top=corners(x,y,film),back=top.map(p=>[p[0],p[1]-c.filmThickness*width,p[2]]);
    quad(...top,4,'paint-top:'+id);quad(...[back[3],back[2],back[1],back[0]],5,'paint-back:'+id);
@@ -29,7 +37,8 @@ export function createCorrosionSource(retained,{width=2.4,showSubstrate=false,sn
   }
  }
  const referenceHeight=triangles.reduce((v,t)=>Math.max(v,t.a[1],t.b[1],t.c[1]),-Infinity)+.005;
- return {schema:'kaminos.corrosion-derived-source.v1',config:{width,depth:width,showSubstrate,snapshot},triangles,materials,referenceHeight,
+ return {schema:'kaminos.corrosion-derived-source.v1',config:{width,depth:width,showSubstrate,snapshot,opticalThicknessScale,formationResolution:n},triangles,materials,referenceHeight,
   process:corrosionSummary(s),boundary:'Periodic formation fields, finite source tile. No periodic ray transport or learned material yet.',
+  nativeMaterialFields:true,opticalModel:'Continuous effective oxide/steel PBR mixture with explicit optical thickness scale; not spectral thin-film optics',
   geometryModel:'State-derived pitted metal, oxide height field and two-sided small-slope coating; no cracked/curling free sheets or resolved oxide microporosity'};
 }

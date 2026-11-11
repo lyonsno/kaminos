@@ -36,3 +36,13 @@ test('an unloaded detached flat sheet is not pinned to the bottom of an opening'
  const s=createCorrosionState({resolution:8,corrosionRate:0,precipitationRate:0,defects:[{a:[.5,.5],b:[.5,.5],radius:.15}]});assert.ok(sum(s.opening)>0);s.bond.fill(0);s.filmHeight.fill(.1);
  advanceCorrosion(s,.02);advanceCorrosion(s,.02);assert.ok(s.filmHeight.every((v,i)=>s.opening[i]||Math.abs(v-.1)<1e-10));
 });
+test('defect-fed interface stays dry without access and detachment increases local transport',()=>{
+ const options={resolution:8,transportRegime:'defect-fed',wetFraction:1,defects:[],corrosionRate:0,precipitationRate:0};
+ const sealed=createCorrosionState(options);advanceCorrosion(sealed,1);assert.equal(sum(sealed.moisture),0);
+ const held=createCorrosionState(options),loose=createCorrosionState(options);loose.bond.fill(0);
+ advanceCorrosion(held,.2);advanceCorrosion(loose,.2);assert.ok(sum(loose.moisture)>sum(held.moisture));
+});
+test('legacy retained states keep their distributed-permeation route when restored',()=>{
+ const raw=serializeCorrosion(createCorrosionState({resolution:8,transportRegime:'distributed'}));delete raw.config.transportRegime;
+ const restored=restoreCorrosion(raw);assert.equal(restored.config.transportRegime,'distributed');
+});
