@@ -54,7 +54,7 @@ try{
    learner=await createNeumipTraining(ctx.device,student,{batchSize:Math.max(options.batch,options.heldout,128**2)});
    const checkpoint=async step=>{
     learner.setQueries(heldoutQueries);const {rgb}=await learner.evaluate();
-    const model=await learner.exportModel(),bytes=writeNeumipModel(model),name=`${grass?'grass':'ground'}-${options.resolution}-step-${step}.model`;
+    const model=await learner.exportModel(),bytes=writeNeumipModel(model),name=`${stone?'stone':grass?'grass':'ground'}-${options.resolution}-step-${step}.model`;
     // Round-trip the actual runtime artifact, not only training-resident state.
     readNeumipModel(bytes);await fs.writeFile(path.join(out,name),bytes);await raw(`heldout-${step}.f32`,rgb);
     const record={step,loss:loss(rgb,heldoutLabels),elapsedMs:performance.now()-start,file:name,sha256:digest(bytes),bytes:bytes.length};report.checkpoints.push(record);console.log(JSON.stringify(record));await publish();

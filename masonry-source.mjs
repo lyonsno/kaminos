@@ -11,10 +11,10 @@ const faces=[
 export const masonryDefaults=Object.freeze({width:1.4,height:.28,depth:1,bevel:.04,margin:.13,relief:.025,cells:18,seed:41});
 
 export function resolveMasonryConfig(options={}){
- const config={...masonryDefaults,...options};
+ const config={sampling:'uniform',...masonryDefaults,...options};
  const {width,height,depth,bevel,margin,relief,cells,seed}=config;
  const half=[width/2,height/2,depth/2],minimum=Math.min(...half);
- if(![width,height,depth].every(x=>Number.isFinite(x)&&x>0)||![bevel,margin].every(x=>Number.isFinite(x)&&x>=0)||!Number.isFinite(relief)||relief<0||bevel>=minimum||relief>=minimum-bevel||!Number.isSafeInteger(cells)||cells<2||(!Number.isSafeInteger(seed)||seed<0))throw Error('Invalid masonry recipe: positive dimensions, nonnegative bevel and margin; inward relief must fit inside the carrier');
+ if(!['uniform','edge'].includes(config.sampling)||![width,height,depth].every(x=>Number.isFinite(x)&&x>0)||![bevel,margin].every(x=>Number.isFinite(x)&&x>=0)||!Number.isFinite(relief)||relief<0||bevel>=minimum||relief>=minimum-bevel||!Number.isSafeInteger(cells)||cells<2||(!Number.isSafeInteger(seed)||seed<0))throw Error('Invalid masonry recipe: positive dimensions, nonnegative bevel and margin; inward relief must fit inside the carrier');
  return config;
 }
 export function createMasonrySource(options={}){
@@ -38,10 +38,18 @@ export function createMasonrySource(options={}){
   return {position:carrier.map(v=>v*factor),carrier};
  };
  const triangles=[],counts={face:0,margin:0,corner:0};
+ const coordinate=(i,axis)=>{
+  const n=Math.floor(cells/3),band=Math.min(half[axis],Math.max(margin,bevel));
+  if(config.sampling!=='edge'||n===0||band===0)return (2*i-cells)/cells;
+  let value;if(i<=n)value=-half[axis]+band*i/n;
+  else if(i>=cells-n)value=half[axis]-band*(cells-i)/n;
+  else value=-half[axis]+band+(2*(half[axis]-band))*(i-n)/(cells-2*n);
+  return value/half[axis];
+ };
  for(let faceId=0;faceId<faces.length;faceId++){
   const f=faces[faceId],points=[];
   for(let j=0;j<=cells;j++)for(let i=0;i<=cells;i++){
-   const u=(2*i-cells)/cells,v=(2*j-cells)/cells;
+   const u=coordinate(i,f.u.findIndex(x=>x!==0)),v=coordinate(j,f.v.findIndex(x=>x!==0));
    const reference=f.n.map((n,k)=>(n+f.u[k]*u+f.v[k]*v)*half[k]).map(x=>x===0?0:x);
    points.push({reference,...shape(reference),uv:[i/cells,j/cells]});
   }
