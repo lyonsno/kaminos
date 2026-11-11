@@ -62,3 +62,13 @@ test('cockpit promotion records the live renderer controls used by actor policy'
  const state=runInNewContext(index.slice(start,end)+'\nbuildVolumeBasinPromotionEffectiveState()',context);
  assert.equal(state.renderer.renderScale,.5);assert.equal(state.renderer.raySteps,8);assert.equal(state.renderer.adaptiveRays,0);assert.equal(state.renderer.active,true);assert.equal(state.simulator.grid,8);
 });
+
+test('the checked-in consumer mount uses the supported current loader and effective policy',()=>{
+ const mounted=JSON.parse(readFileSync(new URL('consumers/wake-kiln-preview/mount.json',root)));
+ assert.equal(mounted.representation.composition,'raymarch-only-v0');
+ assert.equal(mounted.policy.effective.splats.enabled,false);
+ assert.equal(mounted.runtimeApplication.presentation.boundarySplats,'off');
+ assert.equal(new URL(mounted.loader.targetUrl).pathname,'/volume-settings-preset.html');
+ assert.deepEqual(Object.keys(mounted.loader.visualUrls),['raymarch-only']);
+ assert.equal(mounted.basin.revision,expectedRevision);
+});

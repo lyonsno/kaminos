@@ -633,16 +633,7 @@ function fluidBufferBytes(gridSize, gridHeight = gridSize, gridDepth = gridSize)
 // The prototype's own device request and the shared host device both use it,
 // so an adopted shared device is never smaller than the one the prototype owns.
 function volumeStorageBufferRequestBytes(gridSize, cellCapacity = null, gridHeight = gridSize * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER) {
-  const maxRequestedCellCapacity = cellCapacity ?? gridCellCount(gridSize, gridHeight, gridSize);
-  const maxRequestedFluidBufferBytes = fluidBufferBytes(gridSize, gridHeight, gridSize);
-
-  const maxRequestedBoundaryFeatureBytes = maxRequestedCellCapacity * null;
-  return Math.max(
-    maxRequestedFluidBufferBytes,
-    null,
-    null,
-    maxRequestedBoundaryFeatureBytes,
-  );
+  return fluidBufferBytes(gridSize, gridHeight, gridSize);
 }
 
 function irradianceLatticeBufferBytes(irradianceGridSize = DEFAULT_FIRE_IRRADIANCE_GRID_SIZE, irradianceGridHeight = irradianceGridSize * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER) {

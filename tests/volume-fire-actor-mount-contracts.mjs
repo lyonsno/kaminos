@@ -318,9 +318,11 @@ try {
   assert.equal(trackedMount.schema, FIRE_ACTOR_MOUNT_SCHEMA);
   assert.equal(trackedMount.status, 'mounted');
   assert.equal(trackedMount.basin.stableRef, stableRef);
-  assert.equal(trackedMount.mountId, 'firemount-50c6c9e5977fd4c1a8bc133bda0bdf30af5ac8ee91f63805abb182ab17cd72b7');
-  assert.equal(trackedMount.policy.policyId, 'firepolicy-0d0e2ed351051a48ab0b9eaaacbe38c482305f2bd21dc78297be1de50f318d17');
   assert.equal(trackedMount.policy.basinRevisionChanged, false);
+  assert.equal(trackedMount.representation.composition, 'raymarch-only-v0');
+  assert.equal(trackedMount.policy.effective.splats.enabled, false);
+  assert.equal(trackedMount.runtimeApplication.presentation.boundarySplats, 'off');
+  assert.equal(new URL(trackedMount.loader.targetUrl).pathname, '/volume-settings-preset.html');
   assert.deepEqual(trackedMount.runtimeApplication.controls, {
     resolution: 128,
     raySteps: 130,

@@ -828,9 +828,6 @@
     "tests/volume-frame-only-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-frozen-composition-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-grid-height-contracts.mjs": {
       "kind": "node"
     },
@@ -865,15 +862,6 @@
       "kind": "node"
     },
     "tests/volume-kiln-composition-bridge.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-layer-coefficient-live-union-overlay-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-layer-coefficient-live-union-remap-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-layer-coefficient-live-union-witness-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-live-field-viewer-contracts.mjs": {

@@ -60,6 +60,23 @@ function assertOrdinaryCockpitState(observation, phase, expectedPresetId, expect
   assert.equal(observation?.activeTab, 'volume', `${phase}: reopened cockpit is not on the Volume tab`);
 }
 
+function assertCockpitControls(observation) {
+  assert.ok(Array.isArray(observation?.retired), 'retired-control telemetry is missing');
+  assert.ok(observation.retired.some(row => row.name === 'atlas-capture'), 'compatibility group telemetry is missing');
+  for (const row of observation.retired) {
+    assert.equal(row.hidden, true, `retired ${row.name} is not hidden`);
+    assert.equal(row.display, 'none', `retired ${row.name} is rendered`);
+    assert.equal(row.width, 0, `retired ${row.name} occupies width`);
+    assert.equal(row.height, 0, `retired ${row.name} occupies height`);
+  }
+  for (const id of ['volume-oracle-activity-cue', 'volume-pressure-mode']) {
+    const row = observation.surviving?.find(control => control.id === id);
+    assert.equal(row?.missing, false, `surviving control ${id} is missing`);
+    assert.notEqual(row.display, 'none', `surviving control ${id} is hidden directly`);
+    assert.notEqual(row.hidden, true, `surviving control ${id} is hidden directly`);
+  }
+}
+
 function assertNumericEquivalent(actual, expected, message) {
   const actualNumber = Number(actual);
   const expectedNumber = Number(expected);
@@ -286,11 +303,22 @@ try {
   assert.equal(commandResult.presetViewUrls?.[requestedView], `${commandResult.presetUrl}&view=${requestedView}`, 'settings preset command omitted the selected visual route');
   await delay(500);
   const cockpitVisibility = await evaluate(initialSocket, operatorContext(`(() => {
+    const retired = [...operatorDocument.querySelectorAll('[data-volume-retired-control-state]')].map(element => {
+      const style = operatorWindow.getComputedStyle(element), rect = element.getBoundingClientRect();
+      return {name:element.dataset.volumeRetiredControlState,hidden:element.hidden,display:style.display,width:rect.width,height:rect.height};
+    });
+    const surviving = ['volume-oracle-activity-cue','volume-pressure-mode'].map(id => {
+      const element = operatorDocument.getElementById(id);
+      if (!element) return {id,missing:true};
+      const style=operatorWindow.getComputedStyle(element),rect=element.getBoundingClientRect();
+      return {id,missing:false,hidden:element.hidden,display:style.display,width:rect.width,height:rect.height,visible:rect.width>0&&rect.height>0};
+    });
     const anchorId = ${JSON.stringify(cockpitAnchor)};
     const anchor = anchorId ? operatorDocument.getElementById(anchorId) : null;
     if (anchor) anchor.scrollIntoView({ block: 'center' });
     const rect = anchor?.getBoundingClientRect();
     return {
+      retired, surviving,
       anchorId, anchorFound: !anchorId || !!anchor,
       anchorVisible: !anchorId || !!rect && rect.width > 0 && rect.height > 0
         && rect.right > 0 && rect.bottom > 0 && rect.left < innerWidth && rect.top < innerHeight,
@@ -298,6 +326,7 @@ try {
     };
   })()`));
   lastTrustworthyEvidence.cockpitVisibility = cockpitVisibility;
+  assertCockpitControls(cockpitVisibility);
   assert.equal(cockpitVisibility.anchorFound && cockpitVisibility.anchorVisible, true, 'requested cockpit anchor is not visible');
   assert.equal(cockpitVisibility.layoutReceipt?.identity, 'kaminos-volume-cockpit-layout-receipt-v0', 'cockpit layout receipt is missing');
   assert.equal(cockpitVisibility.layoutReceipt?.presetControlCount, expectedPresetControlCount, 'cockpit basin inventory drifted');
