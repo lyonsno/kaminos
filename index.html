@@ -6869,7 +6869,7 @@ function updateTransformInspector() {
   document.getElementById('transform-inspector-name').textContent = (entry.label || entry.fileName || entry.id)
     + (entry.type === FLAME_EMITTER_TYPE && flameEmitterInjectionSuspended ? ' · injection paused' : '');
   document.getElementById('transform-inspector-id').textContent = entry.id;
-  const transform = entry.type === 'splat' ? splatSceneTransformState(entry) : sceneObjectTransformState(entry.object);
+  const transform = entry.read?.() ?? (entry.type === 'splat' ? splatSceneTransformState(entry) : sceneObjectTransformState(entry.object));
   const values = {
     'position.x': transform.position[0],
     'position.y': transform.position[1],
@@ -12035,7 +12035,7 @@ async function initScene() {
       syncSplatCorrectionDraftFromActiveTarget();
     } else {
       const component=sceneComponents?.target();
-      if(component&&transformControls.object===component.object&&transformControls.dragging){const active=scenePlacementTools?.edits.state().active;if(!scenePlacementTools?.state().gizmoEditing||!active)return;try{scenePlacementTools.edits.preview({...active.before,...sceneObjectTransformState(component.object)});}catch(error){scenePlacementTools.finish(false);setInfo(error.message);}return;}
+      if(component&&transformControls.object===component.object&&transformControls.dragging){const active=scenePlacementTools?.edits.state().active;if(!scenePlacementTools?.state().gizmoEditing||!active)return;try{scenePlacementTools.previewWorld(sceneObjectTransformState(component.object));}catch(error){scenePlacementTools.finish(false);setInfo(error.message);}return;}
       if(workingScene.activeFieldId==='water-field'&&transformControls.object===waterDomainProxy&&transformControls.dragging){if(!scenePlacementTools?.state().gizmoEditing)return;try{scenePlacementTools.edits.preview(sceneObjectTransformState(waterDomainProxy));}catch(error){scenePlacementTools.finish(false);setInfo(error.message);}return;}
       if(workingScene.activeFieldId==='flame-field'&&transformControls.object===flameDomainProxy&&transformControls.dragging){if(!scenePlacementTools?.state().gizmoEditing)return;try{scenePlacementTools.edits.preview(sceneObjectTransformState(flameDomainProxy));}catch(error){scenePlacementTools.finish(false);setInfo(error.message);}return;}
       if(transformControls.object===selectionProxy&&transformControls.dragging){if(!scenePlacementTools?.state().gizmoEditing||!scenePlacementTools.edits.state().active)return;try{selectionTransforms.write({...selectionTransforms.read(),...sceneObjectTransformState(selectionProxy)});}catch(error){scenePlacementTools.finish(false);setInfo(error.message);}updateTransformInspector();return;}
@@ -12131,6 +12131,7 @@ async function initScene() {
     overlaysVisible:()=>viewportDisplay.overlays&&!selectionCaptureSuspended,
     viewReference:id=>{const state=sceneCameras?.state();return state?.mode==='camera'&&id===state.activeId?{point:controls.target.toArray(),screen:[state.frame.x+state.frame.width/2,state.frame.y+state.frame.height/2]}:null;},
     transformSettings:()=>transformPreferences,
+    coordinateFrame:id=>sceneComponents?.resolve(id)?.coordinateFrame?.()??null,
     localOrientation:()=>sceneComponents?.ownsTransforms()?sceneComponents.target()?.localOrientation??[0,0,0]:workingScene.activeFieldId?[0,0,0]:workingScene.selection.activeId?selectionRootState(workingScene.selection.activeId).rotation:[0,0,0],
     read: id => {
       const component=sceneComponents?.resolve(id);if(component)return component.read();

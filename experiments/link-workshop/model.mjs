@@ -30,6 +30,10 @@ export function checkedMechanism(m){
   if(a.axle!==undefined){if(!a.hinge||!['position','rotation'].every(k=>Array.isArray(a.axle[k])&&a.axle[k].length===3&&a.axle[k].every(Number.isFinite)))throw Error('Finite hinge axle frame required');}
   ids.add(a.objectId);
  }
+ if(m.construction!==undefined){
+  const c=m.construction,keys=new Set();if(c?.schema!=='kaminos.construction.v1'||!Array.isArray(c.anchors))throw Error('Construction requires its schema and anchors');
+  for(const a of c.anchors){const key=a.objectId+':'+a.pose;if(typeof a.objectId!=='string'||!a.objectId||!['A','B'].includes(a.pose)||keys.has(key)||!['position','rotation','scale'].every(k=>Array.isArray(a.target?.[k])&&a.target[k].length===3&&a.target[k].every(Number.isFinite))||a.target.scale.some(v=>v!==1))throw Error('Construction anchors require unique parts, poses and rigid targets');keys.add(key);}
+ }
  if(m.poseHold!==undefined){const h=m.poseHold;if((h.space!==undefined&&h.space!=='object')||typeof h.objectId!=='string'||!h.objectId||!['A','B'].includes(h.pose)||!['position','rotation','scale'].every(k=>Array.isArray(h.target?.[k])&&h.target[k].length===3&&h.target[k].every(Number.isFinite))||h.target.scale.some(v=>v!==1))throw Error('Held pose requires an object, Pose A/B and finite rigid target frame');}
  return copy(m);
 }

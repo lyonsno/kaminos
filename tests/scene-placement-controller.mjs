@@ -11,7 +11,7 @@ class Element extends EventTarget {
  setPointerCapture(id){this.captures.add(id);} hasPointerCapture(id){return this.captures.has(id);} releasePointerCapture(id){this.captures.delete(id);}
 }
 function emit(target,type,values={}){const event=new Event(type,{cancelable:true});for(const [key,value] of Object.entries(values))Object.defineProperty(event,key,{configurable:true,value});target.dispatchEvent(event);return event;}
-function fixture({overlaysVisible=()=>true,selected=()=> 'kiln',localOrientation=()=>[0,0,0],transformSettings=()=>({orientation:"world",explicit:true}),viewHeld=()=>null}={}){
+function fixture({overlaysVisible=()=>true,selected=()=> 'kiln',localOrientation=()=>[0,0,0],transformSettings=()=>({orientation:"world",explicit:true}),viewHeld=()=>null,coordinateFrame=()=>null}={}){
  const document=new Element(),window=new Element(),viewport=new Element(),input=new Element(),grip=new Element(),status=new Element(),historyControl=new Element(),numberControl=new Element(),historyScope=new Element();
  historyControl.tagName='INPUT';historyControl.type='range';numberControl.tagName='INPUT';numberControl.type='number';numberControl.closest=()=>numberControl;historyScope.contains=target=>target===historyControl||target===numberControl;
  document.body=new Element();document.activeElement=new Element();
@@ -25,7 +25,7 @@ function fixture({overlaysVisible=()=>true,selected=()=> 'kiln',localOrientation
  let pose={position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},allowed=true,busy=false;
  const sceneObject={userData:{kaminosSceneObject:{label:'kiln'}},updateWorldMatrix(){}};
  let frames=0;
- const tools=installScenePlacementTools({viewport,camera,controls,gizmo,selected,overlaysVisible,read:()=>structuredClone(pose),write:(_,p)=>pose=structuredClone(p),object:()=>sceneObject,refresh(){},localOrientation,transformSettings,allowed:()=>allowed,busy:()=>busy,viewHeld,frameSelected:()=>frames++,historyScopes:[historyScope]});
+ const tools=installScenePlacementTools({viewport,camera,controls,gizmo,selected,overlaysVisible,read:()=>structuredClone(pose),write:(_,p)=>pose=structuredClone(p),object:()=>sceneObject,refresh(){},coordinateFrame,localOrientation,transformSettings,allowed:()=>allowed,busy:()=>busy,viewHeld,frameSelected:()=>frames++,historyScopes:[historyScope]});
  return {tools,input,grip,document,window,viewport,status,controls,gizmo,helper,historyControl,numberControl,historyScope,get frames(){return frames;},get pose(){return pose;},set allowed(v){allowed=v;},set busy(v){busy=v;},
    set position(value){pose.position=[...value];tools.draw();},
    get hud(){return viewport.children.find(child=>child.id==='scene-edit-hud');},get overlay(){return viewport.children.find(child=>child.id==='scene-edit-overlay');},
@@ -228,4 +228,23 @@ test('undo from a focused inspector button uses scene history without enabling t
  const undo=emit(f.document,'keydown',{key:'z',metaKey:true,target:button});
  assert.equal(undo.defaultPrevented,true);assert.deepEqual(f.pose.position,[0,0,0]);
  emit(f.document,'keydown',{key:'z',metaKey:true,shiftKey:true,target:button});assert.deepEqual(f.pose.position,[2,0,0]);
+});
+
+test('native world drags map through a captured authored frame while number fields stay local',()=>{
+ let origin=4;
+ const coordinateFrame=()=>{const x=origin;return {toWorld:p=>({...p,position:[p.position[0]+x,...p.position.slice(1)]}),fromWorld:p=>({...p,position:[p.position[0]-x,...p.position.slice(1)]})};};
+ const f=fixture({coordinateFrame});
+ f.tools.start('translate');
+ emit(f.document,'keydown',{key:'x'});emit(f.document,'keydown',{key:'1'});
+ assert.deepEqual(f.pose.position,[1,0,0]);
+ origin=6;emit(f.document,'keydown',{key:'Backspace'});emit(f.document,'keydown',{key:'2'});
+ assert.deepEqual(f.pose.position,[2,0,0],'accommodation moving the receiver must not change the active input frame');
+ f.tools.finish(true);
+ f.input.value='3';emit(f.input,'input');emit(f.input,'change');
+ assert.deepEqual(f.pose.position,[3,0,0],'the Inspector writes authored local coordinates directly');
+ f.gizmo.dispatchEvent({type:'mouseDown'});
+ assert.equal(typeof f.tools.previewWorld,'function','native gizmo uses the same coordinate bridge');
+ f.tools.previewWorld({position:[10,0,0],rotation:[0,0,0],scale:[1,1,1]});
+ assert.deepEqual(f.pose.position,[4,0,0]);f.tools.finish(true);
+ f.tools.edits.undo();assert.deepEqual(f.pose.position,[3,0,0]);
 });

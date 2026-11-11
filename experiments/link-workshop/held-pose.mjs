@@ -6,7 +6,7 @@ import {frames} from './model.mjs';
 const position=m=>new T.Vector3().setFromMatrixPosition(m),rotation=m=>new T.Quaternion().setFromRotationMatrix(m),axis=m=>new T.Vector3(0,0,1).transformDirection(m);
 // Keep solver math in matrices; Euler's broad gimbal threshold must not erase
 // a small physical rotation. Use the exact XYZ branch until the actual pole.
-function rigidFrame(m){
+export function rigidFrame(m){
  const q=rotation(m).normalize(),e=new T.Matrix4().makeRotationFromQuaternion(q).elements,cy=Math.hypot(e[0],e[4]);
  return {position:position(m).toArray(),rotation:[cy>1e-12?Math.atan2(-e[9],e[10]):Math.atan2(e[6],e[5]),Math.atan2(e[8],cy),cy>1e-12?Math.atan2(-e[4],e[0]):0],scale:[1,1,1]};
 }

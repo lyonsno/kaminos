@@ -24,7 +24,7 @@ export function getPivotViewState(camera, point, width, height) {
 export function installScenePlacementTools({
   viewport, historyScope = null, camera, controls, gizmo, selected, read, write, object, refresh,
   allowed = () => true, busy = () => false, viewHeld = () => null, frameSelected = () => {},
-  viewReference = () => null, overlaysVisible = () => true,
+  coordinateFrame = () => null, viewReference = () => null, overlaysVisible = () => true,
   settled = () => {}, captureContext = () => null, historyScopes = [], prepare=()=>{}, transformSettings=()=>({orientation:'world'}),localOrientation=()=>read(selected())?.rotation||[0,0,0],
 }) {
   const hud = document.createElement('div');
@@ -35,7 +35,7 @@ export function installScenePlacementTools({
   overlay.setAttribute('aria-hidden', 'true');
   viewport.append(overlay, hud);
 
-  let modal = null;
+  let modal = null, activeFrame = null;
   let continuous = null;
   let field = null;
   const fieldScrubbers = new WeakMap();
@@ -69,6 +69,9 @@ export function installScenePlacementTools({
   const isSceneControl = target => target?.tagName === 'INPUT' && ['range', 'checkbox', 'color'].includes(target.type);
   const steal = event => { event.preventDefault(); event.stopImmediatePropagation(); };
   const pose = () => read(selected());
+  const toWorld = value => (activeFrame ?? coordinateFrame(selected()))?.toWorld(value) ?? value;
+  const fromWorld = value => activeFrame?.fromWorld(value) ?? value;
+  function previewWorld(value) {return edits.preview(fromWorld({...edits.state().active.before,...value}));}
   const viewAxis = () => camera.getWorldDirection(new Vector3()).negate();
   const pointerInViewport = point => {
     const rect = viewport.getBoundingClientRect();
@@ -98,6 +101,7 @@ export function installScenePlacementTools({
     let error;
     try { commit ? edits.commit() : edits.cancel(); }
     catch (caught) { error = caught; edits.cancel(); }
+    activeFrame = null;
     restoreControls(prior);
     try{completed?.({commit:commit&&!error});}catch(caught){error=caught;}
     draw();
@@ -105,8 +109,8 @@ export function installScenePlacementTools({
     return !error;
   }
   function begin(id, label) {
-    try { prepare(); edits.begin(id, label); return true; }
-    catch (error) { hud.textContent = error.message; return false; }
+    try { prepare(); activeFrame = coordinateFrame(id); edits.begin(id, label); return true; }
+    catch (error) { activeFrame = null; hud.textContent = error.message; return false; }
   }
   function start(operation,completed=null) {
     // viewHeld() names another actor holding the viewport camera; a transform
@@ -119,8 +123,8 @@ export function installScenePlacementTools({
     }
     // Operation changes are alternatives within one gesture. Always restart
     // from the accepted pose captured by begin(), then preview only this mode.
-    modal.base = structuredClone(edits.state().active.before);
-    edits.preview(modal.base);
+    modal.base = toWorld(structuredClone(edits.state().active.before));
+    edits.preview(fromWorld(modal.base));
     modal.operation = operation;
     modal.anchor = { ...lastPointer };
     modal.awaitViewportEntry = !pointerInViewport(lastPointer);
@@ -184,7 +188,7 @@ export function installScenePlacementTools({
       const rotation=current.frame==='local'?current.frameRotation:[0,0,0];
       base={...base,rotation:[...rotation],frame:{position:[...base.position],rotation:[...rotation],scale:[...base.scale]},preferences:{...base.preferences,orientation:current.frame}};
     }
-    edits.preview({...base,...transformPose(base, { ...current, amount, delta: delta.toArray(), viewAxis: forward.toArray(), snap })});
+    edits.preview(fromWorld({...base,...transformPose(base, { ...current, amount, delta: delta.toArray(), viewAxis: forward.toArray(), snap })}));
     current.amount = amount;
     draw();
   }
@@ -193,7 +197,7 @@ export function installScenePlacementTools({
     camera.updateMatrixWorld(true);
     const id = selected(), target = id ? object(id) : null, current = modal;
     const label = target?.userData?.kaminosSceneObject?.label || id;
-    const authoredPose = id ? pose() : null;
+    const authoredPose = id ? toWorld(pose()) : null;
     const reference=id?viewReference(id,authoredPose):null;
     const pivotState = reference?{state:'camera-frame',x:reference.screen[0],y:reference.screen[1]}:authoredPose ? getPivotViewState(camera, { x: authoredPose.position[0], y: authoredPose.position[1], z: authoredPose.position[2] }, viewport.clientWidth, viewport.clientHeight) : null;
     const pivotRecovery = edits.state().active
@@ -372,7 +376,7 @@ export function installScenePlacementTools({
     statusResizeObserver.observe(statusBar);
   }
   return {
-    edits, state, start, finish, selectionChanged, draw,
+    edits, state, start, finish, selectionChanged, draw, previewWorld,
     addHistoryScope: scope => historyScopes.push(scope),
     clear() { finish(false); edits.clear(); draw(); },
   };
