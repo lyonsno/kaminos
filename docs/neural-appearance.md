@@ -3,9 +3,12 @@
 `neural-appearance.mjs` reads the directional decoder portion of `model.json`
 from [NVlabs/neuralappearance](https://github.com/NVlabs/neuralappearance), pinned
 at `305b4b9c12e679398c487603dd8245c3f348526c`, and produces ordinary WebGPU WGSL.
-This is an inference foundation. It does not yet load latent EXRs, construct a
-native scene material, train a model, or integrate indirect lighting. There is
-no trained-checkpoint appearance or performance result from this slice.
+The native program loads a spatial bundle, assigns it through ordinary material
+recipes, and evaluates point, spot and directional lights. A portable MLX
+trainer fits retained directional-response corpora. The first trained specimen
+is pending; numerical/native adapter checks do not establish learned appearance,
+published-material reproduction or performance. Auxiliary guides, the sampler,
+environment response and indirect integration remain separate work.
 
 The checked author tree includes MaterialX sources and textures for FauxLeather,
 Bark and PatternedMetal, but no trained checkpoints; its GitHub release list was
@@ -60,6 +63,41 @@ or reproduce intermediate FP16 rounding.
 
 ## Texture and training work still needed
 
+`neural-appearance-bundle.mjs` retains the author's decoder metadata and adds a
+`kaminos.neural-appearance.bundle.v1` extension with per-level dimensions, relative
+payload URLs and SHA256. Payloads are little-endian float32, row-major,
+channel-interleaved. The model and every payload are verified before material
+assignment. Mounted `/api/read` companions preserve their root and directory.
+The explicit filtering policy is `nearest-authored-texel-mip`: nearest spatial
+texel and nearest authored level. It evaluates existing learned levels; it does
+not manufacture latent MIPs by averaging. This stable initial adapter does not
+reproduce the author's stochastic interpolation or supply temporal reconstruction.
+Its shading is currently full rate; NeuMIP's resolution control does not yet
+apply to this new program.
+
+`neural-appearance-material.mjs` prepares spatial latents and learned frames once
+per shaded fragment and shares them across direct light queries. The trained
+response includes the macro light cosine, so the adapter does not multiply it
+again. Each material has a private program-cache identity. Area lights fail
+explicitly; environment and indirect response are currently absent.
+
+`tools/neural-appearance-fit.py CONFIG OUTPUT` runs through Greenroom with an
+MLX-enabled Python interpreter. Its optional capture stage consumes an existing
+owner-authored source JSON and a pinned `SurfaceMaterialTeacher` worktree. The
+corpus retains every training/held-out query and label, source geometry and
+source-module identities. View/light directions are converted explicitly from
+the teacher's incoming convention to outward Z-up chart directions. Teacher
+labels are multiplied by the macro light cosine to produce projected response.
+Checkpoints retain their corpus identity, provenance, held-out predictions and
+exact native model/latent bytes. Configuration and output paths are caller-owned.
+
+This first portable fit directly optimizes eight normalized latent channels and
+one two-frame/2x16 decoder in float32. It uses a log-response loss, a finite
+retained corpus and one initialization. It does not reproduce the official
+encoder, FP16 arithmetic, candidate pruning, auxiliary or sampler training.
+It supplies a portable integration specimen, not the paper's pretrained material
+or a capacity/quality ceiling.
+
 The author runtime stochastically selects latent texels and integer MIP levels
 before nonlinear decoding. Deterministic interpolation of decoded values and
 interpolating latent values before decoding are different operations. A future
@@ -79,10 +117,9 @@ reproducing that training method.
 The documented author route requires a Vulkan-capable NVIDIA GPU with
 Cooperative Vector support, Slang/SlangPy and falcor2. The current M4/WebGPU port
 therefore needs a portable teacher and training implementation, or an author
-checkpoint / supported NVIDIA training execution. No training route has run in
-this slice. The existing Kaminos directional teacher machinery is a potential
-input source; replacing the author teacher with it would produce our own fitted
-materials, not the released paper's specimens.
+checkpoint / supported NVIDIA training execution. The portable route above uses
+the existing Kaminos directional teacher and produces our own fitted materials,
+distinct from the released paper's specimens.
 
 ## Verification and next consumer
 

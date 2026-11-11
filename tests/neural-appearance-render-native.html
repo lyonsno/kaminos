@@ -1,0 +1,26 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Neural appearance native light conformance</title><link rel="icon" href="data:,">
+<script type="importmap">{"imports":{"three/webgpu":"/lib/three.webgpu.js","three/tsl":"/lib/three.tsl.js"}}</script>
+<script type="module">
+import * as THREE from '../lib/three.webgpu.js';
+import {readNeuralAppearanceBundle} from '../neural-appearance-bundle.mjs';
+import {createNeuralAppearanceMaterial} from '../neural-appearance-material.mjs';
+try{
+ const layer=(i,o)=>({num_inputs:i,num_outputs:o,weights:Array(i*o).fill(0),biases:Array(o).fill(0)}),last=layer(16,3),expected=[.125,.25,.5];last.biases=expected.map(v=>Math.log(v*1e5/(1e5-v)));
+ const raw={latents:{num_channels:8},decoder:{hidden_layers:[16,16],hidden_activations:'SmeLU',output_activation:{type:'ScaledSigmoid',scale:1e5},half_diff_parameterization:'StableRusinkiewicz',num_shading_frames:2,direction_inputs:'WhWdZiZo',_params:{rotation:{rotation_decoder:{mlp_layers:[layer(8,12)]}},network:{mlp_layers:[layer(24,16),layer(16,16),last]}}},kaminos:{schema:'kaminos.neural-appearance.bundle.v1',response:'projected-bsdf',filtering:'nearest-authored-texel-mip',levels:[{width:2,height:2,url:'fixture.f32',sha256:'0'.repeat(64)}],provenance:{kind:'synthetic-conformance-only'}}};
+ const bundle=readNeuralAppearanceBundle(raw);bundle.levels[0].data=new Float32Array(32);
+ const runtime=createNeuralAppearanceMaterial(bundle),renderer=new THREE.WebGPURenderer({antialias:false});await renderer.init();if(!renderer.backend.isWebGPUBackend)throw Error('WebGPU required');renderer.setSize(64,64);renderer.toneMapping=THREE.NoToneMapping;document.body.append(renderer.domElement);
+ const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(40,1,.1,20);camera.position.z=3;camera.lookAt(0,0,0);camera.updateMatrixWorld();
+ const geometry=new THREE.PlaneGeometry(2,2);geometry.computeTangents();const mesh=new THREE.Mesh(geometry,runtime.material);scene.add(mesh);
+ const light=new THREE.DirectionalLight(0xffffff,1);scene.add(light,light.target);
+ const target=new THREE.RenderTarget(64,64,{type:THREE.HalfFloatType,format:THREE.RGBAFormat});
+ const results=[];
+ for(const direction of [[0,0,1],[.98,0,.2]]){
+  light.position.fromArray(direction);light.updateMatrixWorld();renderer.setRenderTarget(target);await renderer.renderAsync(scene,camera);await renderer.backend.device.queue.onSubmittedWorkDone();const data=await renderer.readRenderTargetPixelsAsync(target,0,0,64,64);const actual=Array.from(data.slice((32*64+32)*4,(32*64+32)*4+3),THREE.DataUtils.fromHalfFloat);results.push({direction,actual,expected});
+  for(let c=0;c<3;c++)if(Math.abs(actual[c]-expected[c])>.001)throw Error('Native projected response mismatch '+JSON.stringify(results));
+ }
+ renderer.setRenderTarget(null);await renderer.renderAsync(scene,camera);
+ const adapter=renderer.backend.device.adapterInfo;
+ window.neuralAppearanceResult={status:'passed',results,identity:{backend:'WebGPU',adapter:{vendor:adapter?.vendor,architecture:adapter?.architecture,device:adapter?.device},width:64,height:64,scope:'synthetic projected response conformance, not trained appearance'}};
+ window.neuralAppearanceDispose=async()=>{await renderer.dispose();target.dispose();runtime.dispose();geometry.dispose();};
+}catch(error){window.neuralAppearanceResult={status:'failed',error:error.stack};console.error(error);}
+</script></html>
