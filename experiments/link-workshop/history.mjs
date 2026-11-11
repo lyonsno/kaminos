@@ -43,6 +43,7 @@ export function mechanismHistory(edits,objectId,objects){
     const fallback=value=>{const r=root(),g=r.userData.linkGeometry??{schema:'kaminos.assembly-geometry.v1',bodies:[]};return {...value,recipe:checkedMechanism(r.userData.linkMechanism),geometryRef:rememberGeometry(g),placements:capturePlacements((value.placements??[]).map(p=>p.id),objects())};};
     edits.register(id,{
      read:()=>slot.adapter?slot.adapter.read():fallback({}),
+     committed:continuation=>slot.adapter?.committed?.(continuation),
      readForReplay:value=>slot.adapter?.readForReplay?slot.adapter.readForReplay(value):fallback(value),
      check:value=>slot.adapter?slot.adapter.check(value):{...value,recipe:checkedMechanism(value.recipe)},
      write:(value,context)=>{if(slot.adapter)return slot.adapter.write(value,context);const r=root(),m=checkedMechanism(value.recipe);r.userData.linkMechanism=m;if('geometry' in value||'geometryRef' in value){const g=checkedBodyGeometry(m,value.geometryRef?geometry(value.geometryRef):value.geometry);if(g)r.userData.linkGeometry=g;else delete r.userData.linkGeometry;}restorePlacements(value.placements,objects());}

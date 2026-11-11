@@ -4,8 +4,16 @@ Enable **Dynamic posing** in a mechanism's native inspector, enter joint editing
 with Tab, and carry a point with G. The grip closely tracks reachable motion;
 connected parts move with body inertia, gravity and cylinder resistance. Stop or
 reverse the hand while still holding to see passive parts continue and
-accommodate. Release commits the authored pose and pauses this preview; it does
-not run a post-release simulation. Escape/Undo restore the native transaction. Returning the hand through its
+accommodate. With **Settle after placing**, releasing the mouse commits the hand
+gesture immediately and supports the achieved point while connected bodies
+continue with their retained velocities and chamber pressures. This is an
+explicit temporary authoring support, rather than free release under gravity.
+The tail sleeps after sustained low speed and acceleration; it has no duration
+cut-off. Its achieved pose updates the same Undo entry. Undo during the tail
+restores the entire gesture, and Redo restores its final achieved pose without
+restarting simulation. Starting another edit or selecting a component interrupts
+the tail at its current pose. Disabling **Settle after placing** preserves the
+earlier immediate freeze. Escape cancels a held native gesture. Returning the hand through its
 gesture-start coordinate retains momentum, chamber pressures and the complete
 recording. Live previews carry explicit write context through native history;
 restore writes remain separate from equal-valued previews.
@@ -23,19 +31,24 @@ this passive posing model; it reports that boundary before history mutation.
 ```js
 const id = window.kaminosMechanisms.read()[0].objectId;
 const call = (name, args) => window.kaminosMechanisms.invoke(id, name, args);
-await call('dynamics', {enabled: true, hydraulicsEnabled: true});
+await call('dynamics', {enabled: true, hydraulicsEnabled: true, settleAfterRelease: true});
 await call('body', {joint: 2, mass: 3});
 await call('hydraulics', {index: 0, valve: 'metered', conductance: 2e-7});
 await call('pull', {joint: 3, point: [1.8, 2.2], mode: 'B'});
 await call('stepMechanical', {seconds: 1 / 120});
 const capture = await call('exportDynamics');
 await call('releasePull', {cancel: false});
+// Frames, or explicit stepMechanical calls, continue the settling tail.
 ```
 
 `exportDynamics` retains the initial recipe/mode/joint and every effective
-step interval and hand target, without a retention cap. The packet can be
-replayed with `createBodyDynamics` and used for fluid-enabled/disabled comparison
-on identical inputs. Native frames consume their elapsed time in steps no larger
+step interval and constraint, without a retention cap. Hand-only captures retain
+`kaminos.mechanical-pull.v1`. A released tail uses `kaminos.mechanical-pull.v2`,
+with an explicit release event, per-step `support` instead of `grab`, and the
+actual finish reason/time. Replay each step with
+`solver.step(s.seconds, {grab:s.grab, support:s.support ?? null})` on
+`createBodyDynamics`. This preserves the distinction between hand input and
+placed support for identical-input comparisons. Native frames consume their elapsed time in steps no larger
 than the authored `mechanics.stepSeconds` (default1/120s), without dropping
 remaining elapsed time. `read().mechanics` reports actual body velocities,
 kinetic energy, active joints/cylinders, chamber pressures, hydraulic forces,

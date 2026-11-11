@@ -20,6 +20,8 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
   let future = [];
   let replaying = false;
   let settling = null;
+  let continuation = null;
+  const retireContinuation = () => { if (continuation) continuation.live = false; continuation = null; };
   const targets = new Map();
   const historyScopes = new Set();
   const historyScope = () => [...historyScopes].find(scope => scope.active());
@@ -67,6 +69,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
     assertAvailable();
     if (active) throw new Error('A scene edit is already active');
     const before=get(id);
+    retireContinuation();
     active = { id, label, before, historyBefore:captureHistory(id,before), beforeContext: clone(captureContext(id)) };
     notify();
     return state();
@@ -95,6 +98,18 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
       entry.afterContext = clone(captureContext(entry.id));
       past.push(entry);
       future = [];
+      active = null;
+      const token={live:true};continuation=token;
+      const current=()=>token.live&&!active&&!replaying&&past.at(-1)===entry;
+      try {
+        targets.get(entry.id)?.committed?.({current,finish(){token.live=false;if(continuation===token)continuation=null;},amend(){
+          if(!current())return false;
+          const after=get(entry.id);
+          settled({operation:'commit',id:entry.id,before:clone(entry.after),after:clone(after),beforeContext:clone(entry.afterContext)});
+          entry.after=clone(after);entry.historyAfter=captureHistory(entry.id,after);entry.afterContext=clone(captureContext(entry.id));
+          notify();return true;
+        }});
+      } catch(error) { retireContinuation();notify();throw error; }
     }
     active = null;
     notify();
@@ -102,6 +117,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
   }
 
   function cancel() {
+    retireContinuation();
     if (!active) return false;
     assertAvailable();
     // Live control handlers can leave a value that commit cannot validate.
@@ -155,6 +171,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
     if (scope) { const result = key === 'before' ? scope.undo() : scope.redo(); notify(); return result; }
     const entry = from.at(-1);
     if (!entry) return false;
+    retireContinuation();
     const previous = get(entry.id,entry[key]);
     const next=restoreHistory(entry.id,entry[key==='before'?'historyBefore':'historyAfter']??entry[key]);
     const result = put(entry.id, next);
@@ -198,6 +215,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
       throw new Error(`Applied scene edit "${label}" does not match target "${id}"`);
     }
     if (JSON.stringify(checkedBefore) === JSON.stringify(checkedAfter)) return false;
+    retireContinuation();
     past.push({ id, label, before: checkedBefore, after: checkedAfter,historyBefore:captureHistory(id,checkedBefore),historyAfter:captureHistory(id,checkedAfter),
       beforeContext: null, afterContext: clone(captureContext(id)) });
     future = [];
@@ -220,6 +238,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
   function discard(predicate) {
     assertAvailable();
     if (typeof predicate !== 'function') throw new Error('History discard requires an entry predicate');
+    retireContinuation();
     if (active) cancel();
     past = past.filter(entry => !predicate(clone(entry)));
     future = future.filter(entry => !predicate(clone(entry)));
@@ -255,7 +274,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
     assertCanRecordApplied,
     discard,
     unregister,
-    clear() { assertAvailable(); if (active) cancel(); past = []; future = []; notify(); },
+    clear() { assertAvailable(); retireContinuation();if (active) cancel(); past = []; future = []; notify(); },
   };
 }
 
