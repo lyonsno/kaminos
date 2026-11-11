@@ -36,6 +36,10 @@ export function createSceneFrameComposition({readInputs,draw,prepare=()=>{},fram
     const before=frameCount();
     try {
       const result=run();
+      if(result&&typeof result.then==='function'){
+        Promise.resolve(result).catch(()=>{});
+        throw Error('Scene frame transaction must be synchronous');
+      }
       if(frameCount()===before){prepare();render();}
       const after=frameCount(),drawn=after>before;
       return {...result,sceneFrameCount:after,sceneFrameCountBefore:before,sceneFrameCountAfter:after,sceneDrawn:drawn,
