@@ -20,7 +20,10 @@ test('unchanged extracted vertex count reuses compact render geometry and buffer
  rebuildSpace(root,p);assert.equal(mesh.geometry,geometry);assert.equal(mesh.geometry.attributes.position,position);assert.equal(position.count,mesh.count);assert.equal(position.array.length,mesh.count*3);
 });
 test('reused vertex storage invalidates the native picking index before another raycast',async()=>{
- const p={...defaultSpace(),resolution:16},root=createSpace(p),mesh=root.children[0];await prepareNavigationGeometry(root);assert.ok(mesh.geometry.boundsTree);
+ const p={...defaultSpace(),resolution:16},root=createSpace(p),mesh=root.children[0],positions=mesh.geometry.attributes.position;root.updateMatrixWorld(true);
+ const triangle=new T.Triangle(...[0,1,2].map(i=>new T.Vector3().fromBufferAttribute(positions,i))),point=triangle.getMidpoint(new T.Vector3()).applyMatrix4(mesh.matrixWorld),normal=triangle.getNormal(new T.Vector3()).applyNormalMatrix(new T.Matrix3().getNormalMatrix(mesh.matrixWorld));
+ const ray=new T.Raycaster(point.clone().addScaledVector(normal,2),normal.clone().negate());assert.ok(ray.intersectObject(root,true).length>0,'baseline ray must hit actual concrete');
+ await prepareNavigationGeometry(root);assert.ok(mesh.geometry.boundsTree);
  rebuildSpace(root,p);assert.ok(!mesh.geometry.boundsTree,'native picking must not use the preceding vertex index');root.updateMatrixWorld(true);
- assert.ok(new T.Raycaster(new T.Vector3(1.43,1.05,4),new T.Vector3(0,0,-1)).intersectObject(root,true).length>0);
+ assert.ok(ray.intersectObject(root,true).length>0);
 });
