@@ -75,7 +75,7 @@ function kitDouble(log){
  };
 }
 
-function harness({features=['shader-f16'],gate=null,deliverFails=0,swapFails=0,modelWeights=null,loadFails=0,clock=undefined,onLoad=null,onGenerate=null}={}){
+function harness({features=['shader-f16'],gate=null,deliverFails=0,swapFails=0,modelWeights=null,loadFails=0,clock=undefined,onLoad=null,onGenerate=null,prepareReference=undefined}={}){
  let loadFailures=loadFails;
  let swapFailures=swapFails;const pipelines=[];
  let deliverFailures=deliverFails;
@@ -84,7 +84,7 @@ function harness({features=['shader-f16'],gate=null,deliverFails=0,swapFails=0,m
  const device={features:new Set(features),queue:{submit(){}}};
  let loads=0,generations=[];const swaps=[];
  const service=createKleinAuthoringImageGeneration({
-  clock,context:()=>({sharedGpu:{device,queue:device.queue},prototype,host,handoff}),
+  clock,prepareReference,context:()=>({sharedGpu:{device,queue:device.queue},prototype,host,handoff}),
   kit:async()=>kitDouble(log),
   weights:modelWeights|| (async()=>'/klein-weights'),
   createPipeline:(givenDevice,urls,model='flux2')=>{assert.equal(givenDevice,device,'klein must run on the host shared device');pipelines.push({...urls,model});
@@ -190,6 +190,33 @@ test('Stop during denoising leaves no image, settles the route, and gives the ki
  assert.equal(h.service.read().status,'stopped');assert.equal(h.delivered.length,0);
  assert.ok(h.log.includes('drain')&&h.log.includes('finish')&&h.log.includes('close'));assert.equal(h.handoff.owner(),'sf3d');
  assert.equal(h.service.busy(),false);
+});
+
+test('an already canceled worker command starts no image operation',async()=>{
+ const h=harness(),controller=new AbortController();controller.abort();
+ await assert.rejects(h.service.run({prompt:'lantern',seed:1,signal:controller.signal}),{name:'AbortError'});
+ assert.equal(h.loads(),0);assert.equal(h.generations.length,0);assert.equal(h.service.busy(),false);
+});
+
+test('worker command cancellation during reference preparation cannot start loading weights',async()=>{
+ const preparing=deferred(),reference=deferred(),controller=new AbortController();
+ const h=harness({prepareReference:async(_entry,{signal})=>{assert.equal(signal.aborted,false);preparing.resolve();return reference.promise;}});
+ const run=h.service.run({prompt:'lantern',seed:1,reference:{kind:'image',source:'/reference.png'},signal:controller.signal});
+ await preparing.promise;controller.abort(Error('worker scene retired'));
+ assert.equal(h.service.read().status,'stopping');
+ reference.resolve({width:16,height:16,rgb:new Float32Array(768),provenance:{}});
+ assert.equal(await run,null);assert.equal(h.loads(),0);assert.equal(h.generations.length,0);assert.equal(h.service.busy(),false);
+});
+
+test('worker command cancellation requests Stop but waits for inference cleanup',async()=>{
+ const gate=deferred(),controller=new AbortController(),h=harness({gate});
+ const run=h.service.run({prompt:'lantern',seed:1,signal:controller.signal});
+ for(let i=0;i<20&&!h.generations.length;i++)await tick();
+ controller.abort(Error('worker command canceled'));
+ assert.equal(h.generations[0].schedule.signal.aborted,true);assert.equal(h.service.busy(),true);
+ assert.equal(h.log.includes('finish'),false);
+ gate.resolve();assert.equal(await run,null);assert.ok(h.log.includes('drain')&&h.log.includes('finish'));
+ assert.equal(h.delivered.length,0);assert.equal(h.service.read().status,'stopped');
 });
 
 test('a device without shader-f16 makes klein unavailable instead of failing inside a kernel',async()=>{
