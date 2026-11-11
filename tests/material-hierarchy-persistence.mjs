@@ -69,7 +69,7 @@ test('the experiment edits domain state, respects saved disabled state and leave
 });
 test('legacy adoption waits for basin admission and preserves authored disabled policy',async()=>{
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
- const source=html.slice(html.indexOf('function readAdaptiveMaterialSettings()'),html.indexOf('function readVolumeDomControls()'));
+ const source=html.slice(html.indexOf('function readAdaptiveMaterialSettings('),html.indexOf('function readVolumeDomControls()'));
  for(const authored of [false,true]){
   const controls=Object.fromEntries(schema.controls.filter(f=>f.key.startsWith('volume-adaptive-')).map(f=>[f.key,descriptor(f.key,f.additiveDefault)]));
   const context=vm.createContext({window:{},volumePrototype:null,adaptiveMaterialSettingsAuthored:false,

@@ -23,7 +23,8 @@ with tempfile.TemporaryDirectory() as tmp:
     result = serve.read_volume_settings_preset(store, observed["presetId"])
     assert result["presetId"] == observed["presetId"]
     assert path.read_bytes() == before, "loading must preserve the content-addressed artifact"
-    assert result["schemaProjection"]["defaultsApplied"] == ["volume-adaptive-rays"]
+    assert "volume-adaptive-rays" in result["schemaProjection"]["defaultsApplied"]
+    assert result["preset"]["domControls"]["volume-world-smoke-join"]["value"] == "prescribed-flow"
     preset = result["preset"]
     assert preset["domControls"]["volume-adaptive-rays"]["value"] == 0.65
     for key, descriptor in observed["preset"]["domControls"].items():
