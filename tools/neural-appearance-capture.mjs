@@ -13,6 +13,10 @@ const save=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,n
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 try{
  if(!report.job)throw Error('Material corpus capture requires Greenroom admission');
+ report.sourceCommit=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+ if(!process.env.EXPECTED_COMMIT||process.env.EXPECTED_COMMIT!==report.sourceCommit)throw Error('Explicit pinned capture source commit required');
+ if(execFileSync('git',['status','--porcelain'],{encoding:'utf8'}).trim())throw Error('Capture source is dirty');
+ report.implementationHashes={};for(const name of ['tools/neural-appearance-capture.mjs','neural-appearance-training-recipe.mjs','neural-appearance-direction-capture.mjs'])report.implementationHashes[name]=hash(await fs.readFile(name));
  const config=JSON.parse(await fs.readFile(configPath,'utf8')),c=config.capture,resolution=config.fit?.resolution??64;
  const {SurfaceMaterialTeacher}=await import(pathToFileURL(path.join(c.teacherRoot,'surface-material-teacher.mjs')));
  const sourceBytes=await fs.readFile(c.sourcePath);if(hash(sourceBytes)!==c.sourceSha256)throw Error('Authored source digest mismatch');
