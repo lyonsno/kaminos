@@ -41,19 +41,38 @@ export function sheetElasticEnergy(topology,u,{stretching,bending,poisson=.3}){
 }
 // Limited-memory BFGS stores optimizer curvature pairs, not a restriction on
 // physical state or iteration count. A residual/no-progress condition closes it.
-export function minimizeSheetEnergy(initial,evaluate,tolerance,onAcceptedStep=()=>{}){
- let x=initial.slice(),current=evaluate(x),history=[],iterations=0;
+export function minimizeSheetEnergy(initial,evaluate,tolerance,onAcceptedStep=()=>{},breakpoint=()=>null){
+ let x=initial.slice(),current=evaluate(x),history=[],iterations=0,creaseProjections=0;
  if(!Number.isFinite(current.energy))throw Error('Invalid initial finite sheet geometry');
  for(;;){
-  let maximum=0;for(const v of current.gradient)maximum=Math.max(maximum,Math.abs(v));if(maximum<=tolerance)return {x,iterations,residual:maximum};
+  let maximum=0;for(const v of current.gradient)maximum=Math.max(maximum,Math.abs(v));if(maximum<=tolerance)return {x,iterations,creaseProjections,residual:maximum};
   let q=current.gradient.slice(),alphas=[];
   for(let i=history.length-1;i>=0;i--){const h=history[i],a=h.rho*dot(h.s,q);alphas[i]=a;for(let j=0;j<q.length;j++)q[j]-=a*h.y[j];}
   const last=history.at(-1),factor=last?dot(last.s,last.y)/dot(last.y,last.y):1;let direction=Float64Array.from(q,v=>v*factor);
   for(let i=0;i<history.length;i++){const h=history[i],b=h.rho*dot(h.y,direction);for(let j=0;j<q.length;j++)direction[j]+=h.s[j]*(alphas[i]-b);}
   direction=Float64Array.from(direction,v=>-v);let slope=dot(current.gradient,direction);
   if(!(slope<0)){history=[];direction=Float64Array.from(current.gradient,v=>-v);slope=-dot(current.gradient,current.gradient);}
-  let step=1,next,candidate;
-  for(;;){candidate=Float64Array.from(x,(v,i)=>v+step*direction[i]);if(candidate.every((v,i)=>v===x[i]))throw Error(`Finite sheet line search cannot progress; residual ${maximum}`);next=evaluate(candidate);const required=current.energy+1e-4*step*slope;if(Number.isFinite(next.energy)&&next.energy<current.energy&&next.energy<=required)break;if(required===current.energy&&next.energy===current.energy)throw Error(`Finite sheet floating precision stagnation; residual ${maximum}`);step*=.5;}
+  let step=1,next,candidate,projected=false,retried=false;
+  for(;;){
+   candidate=Float64Array.from(x,(v,i)=>v+step*direction[i]);
+   const unchanged=candidate.every((v,i)=>v===x[i]);next=unchanged?current:evaluate(candidate);
+   const required=current.energy+1e-4*step*slope;
+   if(Number.isFinite(next.energy)&&next.energy<current.energy&&next.energy<=required)break;
+   if(unchanged||(required===current.energy&&next.energy===current.energy)){
+    // Resolve an actual contact event only when ordinary descent runs out of
+    // float64 energy resolution. Smooth-region L-BFGS steps remain unchanged.
+    const crossing=breakpoint(x,direction,1);
+    if(crossing){const atCrease=evaluate(crossing.candidate);
+     if(atCrease.energy<=current.energy&&dot(atCrease.gradient,atCrease.gradient)<dot(current.gradient,current.gradient)){
+      candidate=crossing.candidate;next=atCrease;projected=true;break;
+     }
+    }
+    if(history.length&&!retried){history=[];retried=true;direction=Float64Array.from(current.gradient,v=>-v);slope=-dot(current.gradient,current.gradient);step=1;continue;}
+    throw Error(`Finite sheet floating precision stagnation; residual ${maximum}`);
+   }
+   step*=.5;
+  }
+  if(projected){history=[];creaseProjections++;x=candidate;current=next;iterations++;continue;}
   onAcceptedStep(current,next);
   const s=Float64Array.from(candidate,(v,i)=>v-x[i]),y=Float64Array.from(next.gradient,(v,i)=>v-current.gradient[i]),sy=dot(s,y);
   if(sy>1e-14*Math.sqrt(dot(s,s)*dot(y,y))){history.push({s,y,rho:1/sy});if(history.length>8)history.shift();}
@@ -83,6 +102,26 @@ export function minimumContactSlope(sample,target){
  let best=hull[0],distance=Infinity;for(let i=0;i<hull.length;i++){const a=hull[i],b=hull[(i+1)%hull.length],d=[b[0]-a[0],b[1]-a[1]],length=d[0]**2+d[1]**2,t=length?Math.max(0,Math.min(1,((target[0]-a[0])*d[0]+(target[1]-a[1])*d[1])/length)):0,p=[a[0]+t*d[0],a[1]+t*d[1]],value=(target[0]-p[0])**2+(target[1]-p[1])**2;if(value<distance){distance=value;best=p;}}
  return best;
 }
+// Stop a line search at the first actual triangle-grid boundary reached by
+// a contacting node. Snapping expresses that known geometric event exactly,
+// rather than widening the contact surface or smoothing its creases.
+export function sheetContactBreakpoint(u,direction,step,n,weights){
+ let first=step,event=null;
+ for(let z=0;z<n;z++)for(let x=0;x<n;x++){
+  const j=(z*n+x)*3;if(weights&&!weights[z*n+x])continue;
+  const a=x+n*u[j],b=z+n*u[j+2],da=n*direction[j],db=n*direction[j+2];
+  for(const [value,delta,axis]of [[a,da,0],[b,db,2],[a-b,da-db,1]]){
+   if(!delta)continue;const nearest=Math.round(value),active=Math.abs(value-nearest)<=32*Number.EPSILON*Math.max(1,n),cell=active?nearest:value,edge=delta>0?Math.floor(cell)+1:Math.ceil(cell)-1,t=(edge-value)/delta;
+   if(t>0&&t<=first){first=t;event={j,x,z,axis,edge};}
+  }
+ }
+ if(!event)return null;
+ const candidate=Float64Array.from(u,(v,i)=>v+first*direction[i]),{j,x,z,axis,edge}=event;
+ if(axis===0)candidate[j]=(edge-x)/n;
+ else if(axis===2)candidate[j+2]=(edge-z)/n;
+ else candidate[j]=candidate[j+2]+(edge-x+z)/n;
+ return {step:first,candidate};
+}
 export function relaxFiniteCoating(s){
  const c=s.config,n=c.resolution,topology=periodicSheetTopology(n,s.opening),count=n*n,area=1/count;
  const steel=new Float64Array(count),oxide=new Float64Array(count),weights=new Float64Array(count),bondWeights=new Float64Array(count),multipliers=new Float64Array(count);
@@ -98,7 +137,7 @@ export function relaxFiniteCoating(s){
      const h=sampleSheetObstacle(oxide,n,x/n+u[j],z/n+u[j+2]),gap=h.height-u[j+1],force=Math.max(0,multipliers[i]+penalty*gap);result.energy+=weights[i]*(force**2-multipliers[i]**2)/(2*penalty);const slope=minimumContactSlope(h,[-g[j]/(weights[i]*force),-g[j+2]/(weights[i]*force)]);g[j]+=weights[i]*force*slope[0];g[j+1]-=weights[i]*force;g[j+2]+=weights[i]*force*slope[1];
     }return result;
    };
-   const solved=minimizeSheetEnergy(u,evaluate,c.mechanicalTolerance*area);u=solved.x;totalIterations+=solved.iterations;contactResidual=0;
+   const solved=minimizeSheetEnergy(u,evaluate,c.mechanicalTolerance*area,()=>{},(x,d,step)=>sheetContactBreakpoint(x,d,step,n,weights));u=solved.x;totalIterations+=solved.iterations;contactResidual=0;
    for(let z=0;z<n;z++)for(let x=0;x<n;x++){const i=z*n+x,j=i*3;if(!weights[i])continue;const gap=sampleSheetObstacle(oxide,n,x/n+u[j],z/n+u[j+2]).height-u[j+1];multipliers[i]=Math.max(0,multipliers[i]+penalty*gap);contactResidual=Math.max(contactResidual,Math.max(0,gap),multipliers[i]>0?Math.abs(gap):0);}
    if(contactResidual<=c.mechanicalTolerance)break;penalty*=2;if(!Number.isFinite(penalty))throw Error('Finite coating contact cannot converge');
   }
