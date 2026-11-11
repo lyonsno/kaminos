@@ -125,7 +125,8 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
   kit=()=>import('./webgpu-inference-kit/src/core.js'),
   createPipeline=createAuthoringImagePipeline,
   prepareReference=readReferenceImage,
-  encodePng=encodeCanvasPng,changed=()=>{},blocked=()=>null,appHost=null,clock=()=>performance.now()}){
+  encodePng=encodeCanvasPng,changed=()=>{},blocked=()=>null,appHost=null,clock=()=>performance.now(),
+  retainOutputPixels=true,isRetryableOutputError=()=>true}){
   // appHost (app-gpu-host.mjs): borrow the page's session and run on its one foreground
   // service. Without it, klein keeps its own session and service (the earlier route).
   let loaded=null,retiring=null,active=false,abort=null,decodeRequested=false;
@@ -154,15 +155,21 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
     output.status='saving';output.error=null;publish();
     try{
       if(!pending.file){
-        const {rgba,width,height}=output.preview;
+        const {rgba,width,height}=pending.image??output.preview;
         const blob=await withPngProvenance(await encodePng(rgba,width,height),output.provenance);
         pending.file=new File([blob],output.name,{type:'image/png'});
+        pending.image=null;
       }
       const entry=await pending.persist(pending.file,output.provenance);
       output.entry=entry;output.status='complete';output.pending=false;
       state.results.push({...entry,provenance:output.provenance});outputSaves.delete(id);publish();
       return entry;
-    }catch(error){output.status='failed';output.error=errorIdentity(error).message;publish();throw error;}
+    }catch(error){
+      const retryable=isRetryableOutputError(error);
+      output.status=!retryable&&error?.name==='AbortError'?'stopped':'failed';output.error=errorIdentity(error).message;
+      if(!retryable){output.pending=false;output.preview=null;outputSaves.delete(id);}
+      publish();throw error;
+    }
   }
   function unavailable(){
     const {sharedGpu}=context();const device=sharedGpu?.device;
@@ -219,6 +226,13 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       await releaseLoaded();
     },
     retryOutput:saveOutput,
+    discardOutput(id,reason='Image output canceled'){
+      const output=state.outputs.find(value=>value.id===id);
+      if(!outputSaves.has(id))return false;
+      if(output.status==='saving')throw Error('Caller output is already saving');
+      outputSaves.delete(id);
+      Object.assign(output,{pending:false,preview:null,status:'stopped',error:String(reason)});publish();return true;
+    },
     async retryPersistence(){
       if(active)throw Error('Image generation is already running');
       if(!pendingImage)throw Error('No generated image needs saving');
@@ -308,6 +322,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
           schedule:{runtime:route.runtime,invocation,control,signal:abort.signal,targetDutyMs:12,maxInFlight:2,withForeground:frameRun.withForeground}})});
         const completion=await job.completion;
         if(completion.status!=='succeeded'){const error=Error(completion.failure?.message??completion.status);error.name=completion.failure?.name??'Error';throw error;}
+        if(commandSignal?.aborted)throw runAbort.signal.reason;
         const image=completion.output;
         state.timing={...timing(),generationMs:clock()-generationStartedAt};generationFinished=true;
         // Completed pixels win a stop race; they are saved like any other result.
@@ -317,8 +332,8 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         if(pipeline.ditManifest?.source)provenance.source=structuredClone(pipeline.ditManifest.source);
         if(model==='flux3')Object.assign(provenance,{sampling:structuredClone(pipeline.sampling),source:structuredClone(pipeline.ditManifest.source),...(pipeline.ditManifest.lora?{lora:structuredClone(pipeline.ditManifest.lora)}:{})});
         if(output){
-          Object.assign(output,{provenance,preview:{rgba:image.rgba,width:image.width,height:image.height,kind:'final',runId},pending:true});
-          outputSaves.set(runId,{persist,file:null});
+          Object.assign(output,{provenance,preview:retainOutputPixels?{rgba:image.rgba,width:image.width,height:image.height,kind:'final',runId}:null,pending:true});
+          outputSaves.set(runId,{persist,file:null,image:retainOutputPixels?null:image});
           set({status:'complete',error:null,canStop:false,canDecode:false,stage:'Complete',percent:100,progress:'Image generated.'});
           // Do not await storage here: finally releases the route and foreground run.
           // The returned promise still reports this caller's exact persistence result.
@@ -330,7 +345,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         return await savePending();
       }catch(error){
         const identity=errorIdentity(error);
-        if(output){output.status=abort.signal.aborted&&identity.name==='AbortError'?'stopped':'failed';output.error=identity.message;}
+        if(output){output.status=abort.signal.aborted&&identity.name==='AbortError'?'stopped':'failed';output.error=identity.message;if(!retainOutputPixels)output.preview=null;}
         if(phase!=='persistence')state.preview=null;
         if(phase!=='persistence'&&abort.signal.aborted&&identity.name==='AbortError'){set({status:'stopped',error:null,stage:null,percent:null,progress:'Image generation stopped. Your scene is unchanged.'});return null;}
         set({status:'failed',error:`${phase}: ${identity.message}`,stage:null,percent:null});throw error;

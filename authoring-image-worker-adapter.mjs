@@ -1,20 +1,35 @@
 import {createKleinAuthoringImageGeneration} from './authoring-image-operation.mjs';
 
+function previewMetadata(preview){
+  if(!preview)return null;
+  const {rgba,...metadata}=preview;return metadata;
+}
+function projectState(state,runId=state.request?.id){
+  const output=state.outputs.find(value=>value.id===runId);
+  const status=output?.pending&&output.status==='generating'?'saving':
+    ['saving','complete','failed','stopped'].includes(output?.status)?output.status:state.status;
+  return {...state,status,error:output?.error??state.error,
+    ...(status==='saving'?{stage:'Saving image',percent:null,progress:'Saving the image…'}:{}),
+    preview:previewMetadata(state.preview),outputs:state.outputs.map(value=>({...value,preview:previewMetadata(value.preview)}))};
+}
+
 // Construct inside the scene worker's runtime factory. The application host and
 // model resources stay local; only progress and stored asset references leave it.
 export function createKleinSceneWorkerAdapter({deliver,changed,appHost,...options}={}){
   if(typeof appHost!=='function'||typeof deliver!=='function')throw TypeError('Worker image adapter needs appHost and deliver');
   let active=null;
   const tickets=new Map(),diagnostics=[];
-  const operation=createKleinAuthoringImageGeneration({...options,appHost,deliver,changed(state){
+  const operation=createKleinAuthoringImageGeneration({...options,appHost,deliver,retainOutputPixels:false,
+    isRetryableOutputError:error=>error?.retryable!==false,changed(state){
     if(!active)return;
     if(!active.runId)active.runId=state.request?.id;
     const ctx=active.context;
     try{ctx.assertCurrent();}catch{return;}
     const output=state.outputs.find(value=>value.id===active.runId);
     const preview=output?.preview??state.preview;
-    const progress={request:state.request,status:state.status,stage:state.stage,percent:state.percent,
-      progress:state.progress,timing:state.timing,canStop:state.canStop,canDecode:state.canDecode,
+    const projected=projectState(state,active.runId);
+    const progress={request:state.request,outputId:active.runId,status:projected.status,stage:projected.stage,percent:projected.percent,
+      progress:projected.progress,error:projected.error,timing:state.timing,canStop:state.canStop,canDecode:state.canDecode,
       preview:preview?.kind==='partial'?preview:null};
     try{ctx.report(progress);changed?.(progress);}catch(error){
       diagnostics.push({phase:'progress',requestId:ctx.requestId,name:error?.name??'Error',message:String(error?.message??error)});
@@ -22,9 +37,12 @@ export function createKleinSceneWorkerAdapter({deliver,changed,appHost,...option
   }});
   async function save(file,provenance,ticket){
     const ctx=ticket.context;
-    ctx.assertCurrent();
-    const entry=await deliver(file,provenance,{origin:ticket.origin,requestId:ctx.requestId,epoch:ctx.epoch(),assertCurrent:ctx.assertCurrent});
-    ctx.assertCurrent();
+    const check=()=>{try{ctx.assertCurrent();}catch(error){error.retryable=false;throw error;}};
+    check();
+    let entry;
+    try{entry=await deliver(file,provenance,{origin:ticket.origin,requestId:ctx.requestId,epoch:ctx.epoch(),assertCurrent:ctx.assertCurrent});}
+    catch(error){check();throw error;}
+    check();
     return entry;
   }
   async function execute(ctx,ticket,run){
@@ -51,10 +69,16 @@ export function createKleinSceneWorkerAdapter({deliver,changed,appHost,...option
     'image.retrySave':(payload,ctx)=>ctx.withFrames(()=>{
       const ticket=tickets.get(payload?.runId);
       if(!ticket)throw Error('Unknown worker image output');
+      ctx.assertCurrent();
+      const epoch=ctx.epoch();
+      if(ticket.context.signal.aborted||Object.keys(ticket.origin.epoch).some(part=>epoch[part]!==ticket.origin.epoch[part])){
+        operation.discardOutput(payload.runId,'Image output belongs to a canceled request or stale worker epoch');tickets.delete(payload.runId);
+        throw Error('Image output belongs to a canceled request or stale worker epoch');
+      }
       ticket.context=ctx;
       return execute(ctx,ticket,()=>operation.retryOutput(payload.runId));
     }),
-    'image.read':(_payload,ctx)=>{ctx.assertCurrent();return {state:operation.read(),controls:['decodeNow'],stop:'cancel'};},
+    'image.read':(_payload,ctx)=>{ctx.assertCurrent();return {state:projectState(operation.read()),controls:['decodeNow'],stop:'cancel'};},
   },
     control(action,_payload,ctx){
       ctx.assertCurrent();
