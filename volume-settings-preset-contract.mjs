@@ -454,6 +454,19 @@ export function validateVolumeSettingsPresetDocument(document, requestedPresetRe
     throw new Error(`settings preset route has unexpected volume parameters: ${extraVolumeParams.join(',') || 'none'}`);
   }
 
+  const inheritedDefaultParams = new Set(retirementMigration.addedRouteParams);
+  if (document.schemaProjection?.identity === 'kaminos-volume-settings-schema-projection-v1') {
+    for (const id of serverProjection.defaultsApplied) {
+      const descriptor = schemaByKey.get(id);
+      const entry = domControls[id] || rendererControls?.[id] || presentationControls?.[id];
+      const value = entry && (Object.hasOwn(entry, 'rawValue') ? entry.rawValue : entry.value);
+      if (descriptor && Object.hasOwn(descriptor, 'additiveDefault')
+        && String(value ?? '') === String(descriptor.additiveDefault ?? '')) {
+        inheritedDefaultParams.add(descriptor.param);
+      }
+    }
+  }
+
   return Object.freeze({
     requestedPresetRef: requestedPresetRef || document.requestedPresetRef || document.presetId,
     presetId: document.presetId,
@@ -469,6 +482,7 @@ export function validateVolumeSettingsPresetDocument(document, requestedPresetRe
     presentationControlCount: presentationEntries.length,
     routeEntries: Object.freeze([...presetRoute.searchParams].map(entry => Object.freeze([...entry]))),
     routeVolumeEntries: Object.freeze(routeVolumeEntries.map(entry => Object.freeze([...entry]))),
+    inheritedDefaultParams: Object.freeze([...inheritedDefaultParams]),
     serverProjection,
     retirementMigration: Object.freeze({
       identity: 'kaminos.volume.retired-control-migration.v1',
@@ -641,7 +655,7 @@ export function validateVolumeSettingsPresetTarget(receipt, params) {
   // A verified older document can acquire additive defaults before its saved
   // URL knows those fields. Only that migration permits an absent parameter;
   // explicit values and every originally authored field remain exact.
-  const addedDefaults = new Set(receipt.retirementMigration?.addedRouteParams || []);
+  const addedDefaults = new Set(receipt.inheritedDefaultParams || receipt.retirementMigration?.addedRouteParams || []);
   for (const [key, value] of receipt.routeEntries) {
     const values = params.getAll(key);
     if (values.length === 0 && addedDefaults.has(key)) continue;
