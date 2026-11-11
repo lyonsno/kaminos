@@ -11,9 +11,12 @@ function layout(options={}){
  for(let i=0;i<config.patches;i++){
   const cell=Math.min(config.width/columns,config.depth/rows);
   const radius=cell*(.14+.055*random());
-  const center=[((i%columns+.4+.2*random())/columns-.5)*config.width,((Math.floor(i/columns)+.4+.2*random())/rows-.5)*config.depth];
+  const jitter=[.4+.2*random(),.4+.2*random()];
   const phase=random()*Math.PI*2,supportRadius=radius*1.25+config.supportMargin;
-  if(supportRadius>=cell*.45)throw Error('Patch support exceeds its construction cell; reduce patch count or support margin');
+  if(supportRadius>=cell*.5)throw Error('Patch support cannot fit its construction cell; reduce patch count or support margin');
+  const cellWidth=config.width/columns,cellDepth=config.depth/rows;
+  const fit=(fraction,size)=>Math.max(supportRadius/size,Math.min(1-supportRadius/size,fraction));
+  const center=[((i%columns+fit(jitter[0],cellWidth))/columns-.5)*config.width,((Math.floor(i/columns)+fit(jitter[1],cellDepth))/rows-.5)*config.depth];
   patches.push({id:i,center,radius,phase,supportRadius,flakeSeed:Math.floor(random()*4294967296)});
  }
  return {config,patches};
@@ -47,8 +50,9 @@ export function createPaintedSteelSource(options={}) {
   }
   // Attached strips peel inward from the hole boundary. Their tops, backs,
   // and thin side walls are actual surfaces; the integrator owns visibility.
-  for(let f=0;f<5;f++){
-   const begin=Math.floor((f/5+random()*.06)*sides),span=3+Math.floor(random()*4),height=config.height*(.45+.55*random()),twist=(random()-.5)*.4;
+  const flakes=1+Math.floor(random()*3);
+  for(let f=0;f<flakes;f++){
+   const begin=Math.floor(random()*sides),span=8+Math.floor(random()*15),height=config.height*(.45+.55*random()),twist=(random()-.5)*.7;
    const grid=[];
    for(let row=0;row<=8;row++){
     const t=row/8,line=[];
@@ -64,6 +68,11 @@ export function createPaintedSteelSource(options={}) {
     if(col===span-1)quad(c,b,under(b),under(c),3,id+':edge');
     if(row===8)quad(d,c,under(c),under(d),3,id+':tip');
    }
+  }
+  const bareAngle=random()*Math.PI*2,bareCenter=point(p,p.radius*.28,bareAngle,.0005),bareRadius=p.radius*(.18+.1*random());
+  for(let i=0;i<11;i++){
+   const at=j=>{const a=j*2*Math.PI/11,r=bareRadius*(1+.18*Math.sin(a*3+p.phase));return [bareCenter[0]+r*Math.cos(a),bareCenter[1],bareCenter[2]+r*Math.sin(a)];};
+   triangle(bareCenter,at(i+1),at(i),0,`bare-steel:${p.id}:${i}`);
   }
   for(let i=0;i<36;i++){
    const a=random()*Math.PI*2,r=Math.sqrt(random())*p.radius*.85,center=point(p,r,a,.0003),rad=p.radius*(.025+.07*random()),h=.001+config.height*.13*random();

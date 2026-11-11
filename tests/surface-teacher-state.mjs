@@ -72,7 +72,7 @@ test('native source preview is visible and allocates no path tracer until reques
  gpu.addEventListener=()=>{};gpu.removeEventListener=()=>{};
  let view={position:[2,2,3],target:[0,0,0],fov:42};
  const session={async attach(object){world.add(object);return {id:object.name};},setView(v){view=v;},readView:()=>view,onFrame:()=>()=>{},redraw(){},async dispose(){}};
- const host={scene:{async open(){return session;},rendering:()=>({renderer:{getDrawingBufferSize:v=>v.set(100,100),backend:{device:gpu}},scene:world,camera}),isVisible:()=>true}};
+ const host={scene:{async open(){return session;},rendering:()=>({renderer:{getDrawingBufferSize:v=>v.set(100,100),backend:{device:gpu}},scene:world,camera}),isVisible:()=>true,refreshPresentation(){}}};
  const instance=await experiment.create({host,inputs:{tracing:false,paused:true},record(){}});
  try{
   assert.equal(instance.read().configuration.tracing,false);assert.equal(gpu.buffers.length,0);
@@ -81,4 +81,18 @@ test('native source preview is visible and allocates no path tracer until reques
   await instance.operations.configure({tracing:true});assert.ok(gpu.buffers.length>0);assert.ok(root.material.every(m=>!m.colorWrite&&!m.depthWrite));
   await instance.operations.configure({tracing:false});assert.ok(root.material.every(m=>m.colorWrite&&m.depthWrite));assert.equal(screen.visible,false);
  }finally{await instance.dispose();}
+});
+
+test('coating preserves input refusal, source summaries and native mode after capture',async()=>{
+ const coating=(await import('../experiments/painted-steel-teacher.experiment.mjs')).default;
+ for(const inputs of [null,[]]){let opened=0;await assert.rejects(()=>coating.create({host:{scene:{async open(){opened++;throw Error('invalid inputs opened a scene');}}},inputs,record(){}}));assert.equal(opened,0);}
+ const THREE=await import('../lib/three.webgpu.js'),world=new THREE.Scene(),camera=new THREE.PerspectiveCamera(45,1,.01,100),gpu=device();gpu.addEventListener=()=>{};gpu.removeEventListener=()=>{};gpu.queue.onSubmittedWorkDone=async()=>{};
+ let view={position:[2,2,3],target:[0,0,0],fov:42};const session={async attach(object){world.add(object);return {id:object.name};},setView(v){view=v;},readView:()=>view,onFrame:()=>()=>{},redraw(){},async dispose(){}};
+ const host={scene:{async open(){return session;},rendering:()=>({renderer:{getDrawingBufferSize:v=>v.set(100,100),backend:{device:gpu}},scene:world,camera}),isVisible:()=>true,refreshPresentation(){}}};
+ const instance=await coating.create({host,inputs:{},record(){}}),oldPublish=SurfaceTeacher.prototype.publish,oldRead=SurfaceTeacher.prototype.readLinear;
+ SurfaceTeacher.prototype.publish=()=>{};SurfaceTeacher.prototype.readLinear=async()=>new Float32Array(8*8*4);
+ try{
+  const changed=await instance.operations.source({height:.06});assert.ok(changed.sourceSummary?.geometricSupportFraction>0);
+  await instance.operations.capture({width:8,height:8,samples:1});assert.equal(instance.read().effective.width,8,'native mode must not dispatch an additional full-viewport trace');
+ }finally{SurfaceTeacher.prototype.publish=oldPublish;SurfaceTeacher.prototype.readLinear=oldRead;await instance.dispose();}
 });

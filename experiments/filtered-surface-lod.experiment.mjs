@@ -1,0 +1,67 @@
+import {Mesh,PlaneGeometry,SphereGeometry} from '../lib/three.webgpu.js';
+import {loadFilteredSurfaceModel} from '../filtered-surface-material.mjs';
+import {createFilteredSurfaceMaterial} from '../filtered-surface-material.mjs';
+import {probeFilteredSurface} from '../filtered-surface-probe.mjs';
+
+// Reuses the existing material-study interaction pattern; domain decoding is separate.
+const rootURL='/api/read?root=image-inbox&path=filtered-grass-distance-pilot%2Fresult%2F';
+const positive=(x,name)=>{if(!Number.isFinite(x)||x<=0)throw Error(`${name} must be positive`);return x;};
+export default {
+  id:'filtered-surface-lod',title:'Filtered surface LOD',
+  async create({host,inputs,record,updateInputs}) {
+    const catalogURL=inputs.catalogURL??rootURL+'catalog.json';
+    const response=await fetch(catalogURL);if(!response.ok)throw Error(`Filtered material model catalog HTTP ${response.status}: ${catalogURL}`);
+    const catalog=await response.json();if(!['kaminos.filtered-surface.models.v1'].includes(catalog.schema))throw Error('Unknown Filtered material model catalog');
+    if(!catalog.materials||typeof catalog.materials!=='object'||Array.isArray(catalog.materials)||!Object.keys(catalog.materials).length)throw Error('Filtered material catalog has no materials');
+    const source=name=>{const entry=catalog.materials[name];if(!entry)throw Error(`Filtered material material is not installed: ${name}`);
+      if(typeof entry.url==='string'&&entry.url.trim())return {...entry,url:entry.url};
+      if(typeof entry.filename==='string'&&entry.filename.trim())return {...entry,url:rootURL+encodeURIComponent(entry.filename)};
+      throw Error(`Filtered material material needs a source URL or filename: ${name}`);
+    };
+    let name=inputs.material??catalog.defaultMaterial??Object.keys(catalog.materials)[0],uvScale=positive(inputs.uvScale??1,'UV scale'),gain=positive(inputs.gain??1,'Material gain'),surface=inputs.surface??'folded';
+    const session=await host.scene.open();if(!host.scene.renderer().backend.isWebGPUBackend){await session.dispose();throw Error('Filtered materials require native WebGPU');}
+    let current,mesh,asset,disposed=false,generation=0,abort,pendingName=null,selector,scaleInput,gainInput,surfaceInput,status,drag=[];
+    const makeGeometry=kind=>{
+      if(kind==='sphere'){const g=new SphereGeometry(1,64,48);g.computeTangents();return g;}
+      if(kind!=='folded')throw Error('Choose folded or sphere');
+      const g=new PlaneGeometry(2.6,2.6,96,96),p=g.attributes.position;
+      for(let i=0;i<p.count;i++){const x=p.getX(i),y=p.getY(i);p.setZ(i,.18*Math.sin(6*x+1.2*y)+.12*Math.cos(3*y-2*x));}
+      p.needsUpdate=true;g.computeVertexNormals();g.computeTangents();return g;
+    };
+    const read=()=>({material:name,catalogURL,pending:!!abort,surface,uvScale,gain,objectId:asset?.id,backend:'WebGPU',...current?.read(),authoredLights:host.scene.objects().filter(o=>o.type==='light').map(o=>({id:o.id,...o.light})),view:session.readView(),continuation:'Experiment inputs restore model, surface and material controls. Native scene lights remain editable; indirect/environment response is not implemented.'});
+    const sync=(force=false)=>{if(!status)return;selector.value=pendingName??name;for(const [input,value] of [[scaleInput,uvScale],[gainInput,gain]])if(force||input.ownerDocument.activeElement!==input||input.readOnly)input.value=String(value);surfaceInput.value=surface;status.textContent=abort?'Loading material…':'Fixed-footprint approximation with no offset network. Orbit and change native lights. Environment response and automatic LOD transitions are not implemented.';};
+    const persist=()=>updateInputs({...inputs,material:name,surface,uvScale,gain});
+    const select=async requested=>{
+      if(disposed)throw Error('Filtered surface session is disposed');
+      const entry=source(requested),token=++generation;abort?.abort();const controller=new AbortController();abort=controller;pendingName=requested;sync();
+      try{
+        const model=await loadFilteredSurfaceModel(entry.url,{sha256:entry.sha256,signal:controller.signal});
+        if(disposed)return;
+        if(token!==generation)return read();
+        const next=createFilteredSurfaceMaterial(model,{uvScale,gain});
+        const previous=current;current=next;name=requested;if(mesh)mesh.material=next.material;previous?.material.dispose();persist();session.redraw();
+        record({kind:'filtered-surface.material',phase:'applied',effective:{name,source:model.source}});return read();
+      }catch(error){if(disposed||token!==generation)return;throw error;}finally{if(abort===controller){abort=null;pendingName=null;sync();}}
+    };
+    try{
+      await select(name);mesh=new Mesh(makeGeometry(surface),current.material);mesh.name='Filtered surface';mesh.receiveShadow=true;mesh.position.y=1.5;
+      asset=await session.attach(mesh,{owned:true,metadata:{label:mesh.name,source:current.read().source.url,type:'experiment'}});
+      if(inputs.view)session.setView(inputs.view);else host.scene.frame([mesh]);
+    }catch(error){console.error('Filtered material setup failed',error.stack);disposed=true;abort?.abort();if(!asset)mesh?.geometry.dispose();current?.material.dispose();try{await session.dispose();}catch(cleanup){throw new AggregateError([error,cleanup],`${error.message}; cleanup: ${cleanup.message}`);}throw error;}
+    const applied=kind=>{persist();session.redraw();sync();const state=read();record({kind:'filtered-surface.'+kind,phase:'applied',effective:state});return state;};
+    return {read,operations:{selectMaterial:select,
+      probeDirectionalResponse(options){return probeFilteredSurface(host.scene.renderer(),current,options);},
+      setUVScale(value){uvScale=positive(value,'UV scale');current.settings.scale.value=uvScale;return applied('scale');},
+      setGain(value){gain=positive(value,'Material gain');current.settings.gain.value=gain;return applied('gain');},
+      setSurface(value){const next=makeGeometry(value),old=mesh.geometry;mesh.geometry=next;surface=value;old.dispose();return applied('surface');},
+      frame(){host.scene.frame([mesh]);return applied('view');}},
+      mount({root,document,invoke}){
+        const selectField=(text,entries,operation)=>{const label=document.createElement('label'),select=document.createElement('select');label.append(text,select);for(const [value,title] of entries){const option=document.createElement('option');option.value=value;option.textContent=title;select.append(option);}select.addEventListener('change',()=>invoke(operation,select.value).catch(e=>{sync();status.textContent=e.message;}));root.append(label);return select;};
+        selector=selectField('Material ',Object.keys(catalog.materials).map(name=>[name,catalog.materials[name].title??name]),'selectMaterial');
+        surfaceInput=selectField('Surface ',[['folded','Folded surface'],['sphere','Sphere']],'setSurface');
+        const number=(text,operation,value,step)=>{const label=document.createElement('label'),grip=document.createElement('span'),input=document.createElement('input');grip.textContent=text;input.type='number';input.step='any';input.min='0.000001';input.className='transform-input';input.value=String(value);input.addEventListener('blur',()=>sync(true));input.addEventListener('input',()=>{if(input.value&&input.validity.valid)invoke(operation,Number(input.value)).catch(e=>status.textContent=e.message);});label.append(grip,input);root.append(label);drag.push(host.controls.installNumberDrag({input,grip,step}));return input;};
+        scaleInput=number('UV scale ','setUVScale',uvScale,.05);gainInput=number('Material gain ','setGain',gain,.05);
+        const frame=document.createElement('button');frame.textContent='Frame surface';frame.onclick=()=>invoke('frame');status=document.createElement('p');status.className='small';root.append(frame,status);sync();
+      },async dispose(){disposed=true;generation++;abort?.abort();for(const d of drag)d?.dispose();await session.dispose();}}
+  }
+};

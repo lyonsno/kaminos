@@ -23,3 +23,7 @@ test('support covers every lifted flake and can be displayed without changing ge
 test('invalid dimensions and counts reject before geometry allocation',()=>{
  for(const c of [{height:-1},{width:0},{patches:0},{seed:NaN},{supportMargin:-.1}])assert.throws(()=>createPaintedSteelSource(c));
 });
+test('large collars construct contained nonoverlapping holes rather than escaping the tile',()=>{
+ const source=createPaintedSteelSource({seed:126,patches:4,width:2,depth:2,supportMargin:.165});
+ for(const t of source.triangles)for(const p of [t.a,t.b,t.c])assert.ok(Math.abs(p[0])<=1&&Math.abs(p[2])<=1,`escaped: ${p}`);
+});

@@ -5,7 +5,7 @@ import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {createGrassMaterialSource} from '../grass-material-source.mjs';
 import {SurfaceMaterialTeacher} from '../surface-material-teacher.mjs';
-import {fitFilteredSurface,evaluateFilteredSurface} from '../filtered-surface-lod.mjs';
+import {fitFilteredSurface,evaluateFilteredSurface,filteredSurfaceCasePlan} from '../filtered-surface-lod.mjs';
 import {withKaminosGpu} from './shader-herder.mjs';
 const [configPath,out]=process.argv.slice(2);
 if(!configPath||!out)throw Error('Usage: node tools/filtered-surface-fit.mjs CONFIG OUTPUT');
@@ -20,6 +20,7 @@ try{
  const config=JSON.parse(await fs.readFile(configPath,'utf8'));
  for(const k of ['grid','trainAngles','testAngles','samples','testSamples','bounces','seed'])if(!Number.isSafeInteger(config[k])||config[k]<1)throw Error(`Invalid ${k}`);
  if(config.trainAngles<16||!Array.isArray(config.footprints)||!config.footprints.length||!config.footprints.every(v=>Number.isFinite(v)&&v>0&&v<=1))throw Error('Invalid fit design');
+ const resolution=config.referenceResolution??256,cases=filteredSurfaceCasePlan(config.footprints,resolution);
  report.sourceRevision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();report.sourceStatus=execFileSync('git',['status','--porcelain'],{encoding:'utf8'});report.config=config;
  if(config.sourceRevision!==report.sourceRevision||report.sourceStatus)throw Error('Requested clean source revision is not effective');
  const source=createGrassMaterialSource(config.source);report.source={config:source.config,triangles:source.triangles.length,sha256:sha(JSON.stringify(source)),boundary:source.boundary};
@@ -32,9 +33,9 @@ try{
  report.phase='capture';await publish();
  await withKaminosGpu(async ctx=>{
   report.adapter=ctx.adapterInfo;teacher=new SurfaceMaterialTeacher(ctx.device,{...source,lights:[],environment:0,bounces:config.bounces});
-  const resolution=256,capture={tileSize:source.config.width,tileDepth:source.config.depth,referenceHeight:source.referenceHeight,resolution,samples:config.samples,seed:config.seed};
-  for(const footprint of config.footprints){
-   const tag=`footprint-${Math.round(1/footprint)}`,lod=Math.log2(footprint*resolution),entry={tag,footprint,lod,filter:'Square box at the reference plane, same physical footprint in source and approximation',status:'running'};report.cases.push(entry);await publish();
+  const capture={tileSize:source.config.width,tileDepth:source.config.depth,referenceHeight:source.referenceHeight,resolution,samples:config.samples,seed:config.seed};
+  for(const {footprint,tag,lod,index} of cases){
+   const entry={tag,index,footprint,lod,referenceResolution:resolution,physicalFootprint:[source.config.width*footprint,source.config.depth*footprint],filter:'Square box in normalized UV at the reference plane; physical dimensions recorded explicitly',status:'running'};report.cases.push(entry);await publish();
    const q=queries(train,0,lod),test=queries(heldout,.25,lod);
    const labels=await teacher.evaluateMaterial(q,capture),testLabels=await teacher.evaluateMaterial(test,{...capture,samples:config.testSamples,seed:config.seed+1});
    entry.trainQueries=await raw(tag+'-train-queries.f32',q);entry.trainLabels=await raw(tag+'-train-labels.f32',labels);entry.testQueries=await raw(tag+'-test-queries.f32',test);entry.testLabels=await raw(tag+'-test-labels.f32',testLabels);

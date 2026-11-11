@@ -7,21 +7,21 @@ function checkedConfiguration(value){
  return value;
 }
 
-export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,boundary,initialView,sourceControls,defaultMaterials,readSchema='kaminos.surface-teacher-experiment.v1'}){return {
+export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,boundary,initialView,sourceControls,sourceToggles=[],describeSource,defaultTracing=true,defaultMaterials,readSchema='kaminos.surface-teacher-experiment.v1'}){return {
  id,title,
  async create({host,inputs={},record,updateInputs=()=>{}}){
   if(!inputs||typeof inputs!=='object'||Array.isArray(inputs))throw Error('Teacher inputs must be an object');
-  let configuration=checkedConfiguration({scale:inputs.scale??.5,bounces:inputs.bounces??3,environment:inputs.environment??.15,reconstruction:inputs.reconstruction??true,paused:inputs.paused??false,tracing:inputs.tracing??true});
+  let configuration=checkedConfiguration({scale:inputs.scale??.5,bounces:inputs.bounces??3,environment:inputs.environment??.15,reconstruction:inputs.reconstruction??true,paused:inputs.paused??false,tracing:inputs.tracing??defaultTracing});
   let source=createSource(inputs.source),engine,texture,screenMaterial,screen,asset,stop;
   const session=await host.scene.open();let context;
   try{context=host.scene.rendering();const size=context.renderer.getDrawingBufferSize(new THREE.Vector2()),limit=context.renderer.backend.device.limits.maxTextureDimension2D;if(Math.round(size.x*configuration.scale)>limit||Math.round(size.y*configuration.scale)>limit)throw Error('Image scale exceeds active device capacity');}catch(error){await session.dispose();throw error;}
   const {renderer,scene,camera}=context;
   const sourceMaterials=(source.materials??defaultMaterials).map(m=>new THREE.MeshStandardMaterial({color:new THREE.Color(...m.color),roughness:m.roughness,metalness:m.metalness,side:THREE.DoubleSide,colorWrite:false,depthWrite:false}));
   const root=new THREE.Mesh(new THREE.BufferGeometry(),sourceMaterials);root.name=label;root.castShadow=false;root.receiveShadow=false;
-  const presentationMode=()=>{for(const material of sourceMaterials){if(material.colorWrite!==!configuration.tracing){material.colorWrite=!configuration.tracing;material.depthWrite=!configuration.tracing;material.needsUpdate=true;}}if(screen)screen.visible=configuration.tracing;};
+  const presentationMode=()=>{root.castShadow=!configuration.tracing;root.receiveShadow=!configuration.tracing;for(const material of sourceMaterials){if(material.colorWrite!==!configuration.tracing){material.colorWrite=!configuration.tracing;material.depthWrite=!configuration.tracing;material.needsUpdate=true;}}if(screen)screen.visible=configuration.tracing;};
   let sceneKey='',failure=null,capturing=false,disposed=false,status,pending=null,fieldDocument;
   const fields=[];
-  const syncControls=()=>{for(const {input,group,key}of fields){if(fieldDocument.activeElement===input)continue;const value=group==='source'?source.config[key]:configuration[key];if(input.type==='checkbox')input.checked=value;else input.value=String(value);}};
+  const syncControls=()=>{for(const {input,group,key}of fields){if(fieldDocument.activeElement===input&&input.type!=='checkbox')continue;const value=group==='source'?source.config[key]:configuration[key];if(input.type==='checkbox')input.checked=value;else input.value=String(value);}};
   const cameraFrame=()=>{camera.updateMatrixWorld(true);return {viewProjection:new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse).elements,position:camera.getWorldPosition(new THREE.Vector3()).toArray()};};
   const gpuFailure=event=>{failure=event.error?.message??String(event.error);showStatus();};
   const replaceGeometry=()=>{
@@ -52,7 +52,7 @@ export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,
    }
    engine.setTransport(configuration);
   };
-  const read=()=>({schema:readSchema,sourceSchema:source.schema,objectId:asset?.id,source:source.config,configuration:{...configuration},effective:engine?.state()??null,view:session.readView(),cameraFrame:cameraFrame(),failure,capturing,display:'shared Kaminos scene and camera; native selection/gizmos',displaySourceVisible:!!root.parent&&host.scene.isVisible(asset?.id),presentationLighting:screenMaterial?.lights===false?'lighting bypassed':'unverified',navigationIndexReady:!!root.geometry.boundsTree,supportedLights:'native directional, inverse-square point and spot; constant environment',boundary,deviceOwnership:'borrowed'});
+  const read=()=>({schema:readSchema,sourceSchema:source.schema,objectId:asset?.id,source:source.config,...(describeSource?{sourceSummary:describeSource(source.config)}:{}),configuration:{...configuration},effective:engine?.state()??null,view:session.readView(),cameraFrame:cameraFrame(),failure,capturing,display:'shared Kaminos scene and camera; native selection/gizmos',displaySourceVisible:!!root.parent&&host.scene.isVisible(asset?.id),presentationLighting:screenMaterial?.lights===false?'lighting bypassed':'unverified',navigationIndexReady:!!root.geometry.boundsTree,supportedLights:'native directional, inverse-square point and spot; constant environment',boundary,deviceOwnership:'borrowed'});
   const showStatus=()=>{if(status)status.textContent=failure?`Stopped: ${failure}`:capturing?'Capturing raw reference…':!configuration.tracing?'Native surface preview · path tracing off':`${configuration.paused?'Paused · ':''}${engine?.samples??0} samples · ${engine?.width??0} × ${engine?.height??0} · ${configuration.bounces} bounces`;};
   const render=({width,height,filter=configuration.reconstruction}={})=>{
    if(disposed)return;
@@ -100,14 +100,15 @@ export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,
        await new Promise(resolve=>setTimeout(resolve,0));
       }
       const pixels=await engine.readLinear();result={...read(),width,height,samples,pixels:Array.from(pixels)};return result;
-     }finally{capturing=false;if(!disposed&&!failure&&root.parent&&host.scene.isVisible(asset.id)){try{render();}catch(error){failure=error.message;}}showStatus();session.redraw();}
+     }finally{capturing=false;if(configuration.tracing&&!disposed&&!failure&&root.parent&&host.scene.isVisible(asset.id)){try{render();}catch(error){failure=error.message;}}showStatus();session.redraw();}
     },
     async query({rays,sample=0}){syncScene();return engine.evaluate(rays,{sample});},
    };
    return {read,operations,mount({root:panel,document,invoke}){fieldDocument=document;
-    const controls=[...sourceControls,['Path bounces','configure','bounces',1],['Environment radiance','configure','environment',.02],['Resolution scale','configure','scale',.05]];
-    const drags=[];for(const [label,op,key,step]of controls){const row=document.createElement('label'),grip=document.createElement('span'),input=document.createElement('input');grip.textContent=label+' ';input.type='number';input.step=String(step);input.value=String((op==='source'?source.config:configuration)[key]);input.className='transform-input';input.setAttribute('aria-label',label);input.addEventListener('input',()=>{if(input.value.trim())invoke(op,{[key]:Number(input.value)}).catch(error=>{status.textContent=error.message;});});input.addEventListener('blur',syncControls);fields.push({input,group:op==='source'?'source':'configuration',key});row.append(grip,input);panel.append(row);drags.push(host.controls.installNumberDrag({input,grip,step}));}
+    const controls=[...sourceControls,['Path bounces','configure','bounces',1,1],['Environment radiance','configure','environment',.02,0],['Resolution scale','configure','scale',.005,.000001]];
+    const drags=[];for(const [label,op,key,step,min]of controls){const row=document.createElement('label'),grip=document.createElement('span'),input=document.createElement('input');grip.textContent=label+' ';input.type='number';input.step='any';if(min!==undefined)input.min=String(min);input.value=String((op==='source'?source.config:configuration)[key]);input.className='transform-input';input.setAttribute('aria-label',label);input.addEventListener('input',()=>{if(input.value.trim()&&input.validity.valid)invoke(op,{[key]:Number(input.value)}).catch(error=>{status.textContent=error.message;});});input.addEventListener('blur',syncControls);fields.push({input,group:op==='source'?'source':'configuration',key});row.append(grip,input);panel.append(row);drags.push(host.controls.installNumberDrag({input,grip,step}));}
     for(const [label,key]of [['Path-traced preview','tracing'],['Reconstruction','reconstruction'],['Pause tracing','paused']]){const row=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.checked=configuration[key];input.onchange=()=>invoke('configure',{[key]:input.checked}).catch(error=>{status.textContent=error.message;syncControls();});fields.push({input,group:'configuration',key});row.append(input,label);panel.append(row);}
+    for(const [label,key] of sourceToggles){const row=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.checked=source.config[key];input.onchange=()=>invoke('source',{[key]:input.checked}).catch(error=>{status.textContent=error.message;syncControls();});fields.push({input,group:'source',key});row.append(input,label);panel.append(row);}
     const frame=document.createElement('button');frame.textContent='Frame source';frame.onclick=()=>invoke('frame').catch(error=>{status.textContent=error.message;});status=document.createElement('p');status.setAttribute('role','status');
     const note=document.createElement('p');note.textContent='Frozen explicit geometry with real visibility and surface bounces. Orbit and use native selection and scene lights. Reconstruction off shows the raw accumulated estimate. '+boundary;
     panel.append(frame,status,note);showStatus();this.drags=drags;
