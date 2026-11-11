@@ -20,7 +20,7 @@ tray/window/platen, not the finished material-authoring apparatus.
 Mixture controls are visible in the viewport. Radius, size spread, proportions,
 friction, angularity and seed describe the next specimen; **New mixture**
 constructs it explicitly. **Grains per pour** sets how many additional grains
-Pour adds to the current packing. Type a quantity and press Pour; Enter is
+Pour adds to the current packing and then physically settles. Type a quantity and press Pour; Enter is
 optional. Typed quantity and seed drafts remain visible until accepted or
 cancelled with Escape. Costly counts have no drag control. Existing grain
 identities, shapes and physical state are retained when reserving another batch.
