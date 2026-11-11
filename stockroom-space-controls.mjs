@@ -1,8 +1,8 @@
 import * as THREE from './lib/three.core.js';
-import {checkedSpace,rebuildSpace,pullSpace,spaceDirection,nextSpaceClaimId,transformSpaceClaim} from './stockroom-space.mjs';
+import {checkedSpace,rebuildSpace,pullSpace,spaceDirection,nextSpaceClaimId,transformSpaceClaim,compileSpace} from './stockroom-space.mjs';
 
 export function createSpaceEditing({document,viewport,canvas,camera,navigation,entries,selected,edits,ownerControls,components,nativeInteraction=()=>false,redraw,onError}){
- const seats=new Map(),targets=new Set();let gesture=null,hover=null,syncing=false;
+ const seats=new Map(),targets=new Set();let gesture=null,hover=null,syncing=false,suppressClick=false;
  const find=id=>entries().find(e=>e.id===id),recipe=id=>checkedSpace(find(id)?.object.userData.stockroomSpace);
  const isActive=seat=>seat.enabled&&find(seat.id)?.object===seat.root&&(selected()?.id===seat.id||selected()?.ownerId===seat.id)&&seat.root.visible;
  function ray(event){const r=canvas.getBoundingClientRect(),caster=new THREE.Raycaster();caster.setFromCamera(new THREE.Vector2(2*(event.clientX-r.left)/r.width-1,1-2*(event.clientY-r.top)/r.height),camera);return caster;}
@@ -21,7 +21,7 @@ export function createSpaceEditing({document,viewport,canvas,camera,navigation,e
  function updateHandles(){
   for(const seat of seats.values()){
    const active=isActive(seat);seat.overlay.hidden=!active;seat.helper.visible=active&&hover?.seat===seat;if(!active)continue;
-   const p=recipe(seat.id),wanted=new Set();
+   const p=recipe(seat.id),wanted=new Set(),distance=compileSpace(p);
    for(const c of p.claims){
     if(c.id!==seat.focus)continue;
     const rotation=new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(...c.rotation));
@@ -32,7 +32,7 @@ export function createSpaceEditing({document,viewport,canvas,camera,navigation,e
       button.addEventListener('pointerenter',()=>{if(!gesture)preview(seat,button.probe);});wireGesture(button,seat,()=>button.probe);seat.overlay.append(button);seat.handles.set(key,button);
      }
      const offset=new THREE.Vector3();offset.setComponent(axis,c.radii[axis]*sign);offset.applyMatrix4(rotation).add(new THREE.Vector3(...c.center));button.probe={claim:c.id,point:offset.toArray()};
-     const pos=screen(offset.toArray(),seat.root);button.hidden=!pos.visible;button.style.left=`${pos.x}px`;button.style.top=`${pos.y}px`;button.style.background=c.role==='empty'?'#303335':'#e6e4dc';
+     const pos=screen(offset.toArray(),seat.root);button.hidden=!pos.visible||Math.abs(distance(...offset.toArray()))>.06;button.style.left=`${pos.x}px`;button.style.top=`${pos.y}px`;button.style.background=c.role==='empty'?'#303335':'#e6e4dc';
      button.title=`${c.id} - ${c.role==='empty'?'Keep empty':'Occupy'} - ${['width','height','depth'][axis]} ${sign>0?'+':'-'}`;button.setAttribute('aria-label',button.title);
     }
    }
@@ -58,7 +58,7 @@ export function createSpaceEditing({document,viewport,canvas,camera,navigation,e
   try{edits.preview(pullSpace(g.original,g.probe,delta,g.role));g.seat.error.textContent='';}catch(error){g.seat.error.textContent=error.message;}
  }
  function finish(cancel){
-  if(!gesture)return;const g=gesture;gesture=null;g.seat.overlay.dataset.spaceDragging='false';navigation.enabled=g.navigation;
+  if(!gesture)return;const g=gesture;gesture=null;g.seat.overlay.dataset.spaceDragging='false';navigation.enabled=g.navigation;suppressClick=g.element===canvas;
   if(edits.state().active?.id===g.seat.target){if(cancel)edits.cancel();else edits.commit();}
   if(!cancel&&!g.probe.claim&&recipe(g.seat.id).claims.some(c=>c.id===g.probe.id)){g.seat.focus=g.probe.id;g.seat.list.value=g.probe.id;}
   if(g.element.hasPointerCapture(g.pointerId))g.element.releasePointerCapture(g.pointerId);hidePreview();sync();
@@ -83,7 +83,7 @@ export function createSpaceEditing({document,viewport,canvas,camera,navigation,e
   for(const [value,label]of [['occupy','Occupy'],['empty','Keep empty']]){const input=document.createElement('input');input.type='radio';input.name=`space-role-${id}`;input.value=value;input.checked=value==='occupy';input.dataset.spaceRole=value;const row=document.createElement('label');row.append(input,label);modes.append(row);input.addEventListener('change',()=>{seat.role=value;hidePreview();});}
   const list=document.createElement('select');list.setAttribute('aria-label','Authored regions');list.style.cssText='max-width:100%;width:100%;margin:8px 0';const error=document.createElement('p');error.className='error';error.setAttribute('role','status');properties.append(modes,list,error);
   const overlay=document.createElement('div');overlay.className='scene-owner-playback';overlay.dataset.spaceHandles=id;overlay.style.cssText='position:absolute;inset:0;pointer-events:none;overflow:hidden';viewport.append(overlay);
-  const surface=document.createElement('button');surface.type='button';surface.dataset.spaceSurface=id;surface.hidden=true;surface.title='Shape this surface';surface.setAttribute('aria-label','Shape this surface');surface.style.cssText='position:absolute;transform:translate(-50%,-50%);width:32px;height:32px;padding:0;border-radius:50%;background:#26292b66;border:1px solid #f3f0e2;pointer-events:auto;touch-action:none;cursor:grab';overlay.append(surface);
+  const surface=document.createElement('div');surface.dataset.spaceSurface=id;surface.hidden=true;surface.setAttribute('aria-hidden','true');surface.style.cssText='position:absolute;transform:translate(-50%,-50%);width:32px;height:32px;box-sizing:border-box;border-radius:50%;background:#26292b66;border:1px solid #f3f0e2;pointer-events:none';overlay.append(surface);
   const helper=new THREE.Group();helper.userData.kaminosEditorHelper=true;helper.visible=false;root.parent.add(helper);
   const forward=new THREE.ArrowHelper(new THREE.Vector3(0,1,0),new THREE.Vector3(),.72,0xf1e3b7,.13,.09),backward=new THREE.ArrowHelper(new THREE.Vector3(0,-1,0),new THREE.Vector3(),.38,0xe4e7e8,.1,.07),ring=new THREE.Mesh(new THREE.RingGeometry(.4,.414,48),new THREE.MeshBasicMaterial({color:0xe6e4dc,side:THREE.DoubleSide,transparent:true,opacity:.65,depthTest:false}));
   helper.add(forward,backward,ring);helper.traverse(o=>{o.userData.kaminosEditorHelper=true;o.renderOrder=999;if(o.material){o.material.depthTest=false;o.material.depthWrite=false;}});
@@ -105,7 +105,7 @@ export function createSpaceEditing({document,viewport,canvas,camera,navigation,e
    if(nearest)seat.component.changed(()=>{seat.focus=nearest.c.id;seat.list.value=seat.focus;updateHandles();placeProxy();});
   }});
   list.addEventListener('change',()=>{seat.component.changed(()=>{seat.focus=list.value;placeProxy();updateHandles();});const c=recipe(id).claims.find(c=>c.id===list.value);if(c)preview(seat,{claim:c.id,point:new THREE.Vector3(0,c.radii[1],0).applyEuler(new THREE.Euler(...c.rotation)).add(new THREE.Vector3(...c.center)).toArray()});});
-  wireGesture(surface,seat,()=>surface.probe);seat.mount=ownerControls.mount({asset:{id,root},properties});
+  seat.mount=ownerControls.mount({asset:{id,root},properties});
  }
  function sync(){
   if(syncing)return;syncing=true;
@@ -118,6 +118,13 @@ export function createSpaceEditing({document,viewport,canvas,camera,navigation,e
   }finally{syncing=false;}
  }
  const escape=e=>{if(gesture&&e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();finish(true);}},blur=()=>finish(true),leave=()=>{if(!gesture)hidePreview();};
+ // Only an already-previewed surface takes the primary drag. Other pointer
+ // buttons and wheel/trackpad input remain with the native camera controls.
+ canvas.addEventListener('pointerdown',event=>{suppressClick=false;if(event.button===0&&hover&&!hover.probe.claim&&isActive(hover.seat)&&!nativeInteraction()){begin(event,hover.seat,hover.probe);if(gesture)event.stopImmediatePropagation();}},true);
+ canvas.addEventListener('pointermove',event=>{if(gesture?.element===canvas){move(event);event.stopImmediatePropagation();}},true);
+ canvas.addEventListener('pointerup',event=>{if(gesture?.element===canvas){event.preventDefault();event.stopImmediatePropagation();finish(false);}},true);
+ canvas.addEventListener('pointercancel',()=>{if(gesture?.element===canvas)finish(true);});canvas.addEventListener('lostpointercapture',()=>{if(gesture?.element===canvas)finish(true);});
+ canvas.addEventListener('click',event=>{if(suppressClick){suppressClick=false;event.preventDefault();event.stopImmediatePropagation();}},true);
  viewport.addEventListener('pointermove',pointerMove);viewport.addEventListener('pointerleave',leave);document.addEventListener('keydown',escape,true);document.defaultView.addEventListener('blur',blur);navigation.addEventListener('change',updateHandles);
  const observer=new document.defaultView.ResizeObserver(updateHandles);observer.observe(canvas);edits.subscribe(sync);
  return {sync,read(id){return {id,recipe:recipe(id),focus:seats.get(id)?.focus,preview:hover?.seat.id===id?structuredClone(hover.probe):null,dragging:gesture?.seat.id===id};},apply(id,probe,amount,role){const before=recipe(id),next=pullSpace(before,probe,amount,role),result=edits.apply(`@space:${id}`,next,'Shape place'),seat=seats.get(id);if(next.claims.length>before.claims.length&&seat){seat.focus=next.claims.at(-1).id;sync();}return result;}};
