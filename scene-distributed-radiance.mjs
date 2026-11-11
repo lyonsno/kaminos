@@ -236,7 +236,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         const row=originals.get(mesh);if(!row||!face)throw new Error('selected surface is not a current lighting receiver');
         const vertexIds=[face.a,face.b,face.c];
         if(vertexIds.some(i=>!Number.isInteger(i)||i<0||i>=row.clone.attributes.position.count))throw new Error('selected triangle indices invalid');
-        prototype.setSelectiveHeadLiveCapturePaused(true);paused=true;
+        prototype.setCapturePaused(true);paused=true;
         const generation=frame.generation,build=status.geometryBuilds;
         result.metadata={generation,frame:frame.frame,sourceDomain:frame.sourceDomain,directions:frame.directions,angularPattern:frame.angularPattern,samplingLaw:frame.samplingLaw,sourceGuide:frame.sourceGuide,surfaceGainFactor:frame.surfaceScattering.enabled?1:frame.gain,surfaceReconstruction:{passes:frame.surfaceReconstruction.passes},receiverSampling:{...frame.receiverSampling},geometryBuilds:build,geometryTriangles:frame.geometryTriangles};
         result.worldTransform=validateSceneSourceTransform(sourceTransform);result.selection={meshId:mesh.uuid,meshName:mesh.name,materialSide:(Array.isArray(row.material)?row.material[face.materialIndex]:row.material).side,point:point?.toArray?.()||point,cameraPosition:cameraPosition?.toArray?.()||cameraPosition,vertices:[]};
@@ -256,7 +256,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         result.status='captured';result.phase='CPU-replay';validateInspectionSnapshot(result);
         result.replay=inspectSourceRays({inputs,field:result.fields.gatherSource,metadata:result.metadata});result.phase='complete';
       }catch(error){result.status='failed';result.error=String(error.message||error);}
-      finally{if(paused)prototype.setSelectiveHeadLiveCapturePaused(!!before.selectiveHeadLiveCapturePaused);}
+      finally{if(paused)prototype.setCapturePaused(!!before.capturePaused);}
       return result;
     },
     canRender(){return !disposed&&!status.error&&handle&&frame?.generation===prototype.sceneVolumeSourceField().generation;},

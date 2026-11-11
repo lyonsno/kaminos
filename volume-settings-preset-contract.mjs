@@ -3,93 +3,13 @@ import { volumeSceneReceipt } from './volume-scene-ontology.mjs';
 
 export const VOLUME_SETTINGS_PRESET_SCHEMA_IDENTITY = 'kaminos-volume-settings-preset-schema-v2';
 export const VOLUME_SETTINGS_PRESET_VISUAL_VIEWS = Object.freeze({
-  'splat-only': Object.freeze({ role: 'truthHigh', composition: 'splat-only-v0' }),
-  'raymarch-only': Object.freeze({ role: 'truthHigh', composition: 'raymarch-only-v0' }),
-  'smoke-hybrid': Object.freeze({ role: 'truthHigh', composition: 'smoke-raymarch-under-splats-v0' }),
-  'full-hybrid-diagnostic': Object.freeze({ role: 'truthHigh', composition: 'full-raymarch-under-splats-diagnostic-v0' }),
+  'raymarch-only': Object.freeze({composition:'raymarch-only-v0'}),
 });
-const VOLUME_SETTINGS_PRESET_VIEW_BY_COMPOSITION = Object.freeze(Object.fromEntries(
-  Object.entries(VOLUME_SETTINGS_PRESET_VISUAL_VIEWS).map(([view, definition]) => [definition.composition, view]),
-));
-
-export function resolveVolumeSettingsPresetVisualView(selectedView, rendererState = null) {
-  const selected = String(selectedView || 'current');
-  if (selected !== 'current') {
-    if (!Object.hasOwn(VOLUME_SETTINGS_PRESET_VISUAL_VIEWS, selected)) {
-      throw new Error(`unsupported settings preset visual view: ${selected}`);
-    }
-    return selected;
-  }
-  if (rendererState?.status !== 'running') {
-    throw new Error('current renderer view is not running; select an explicit preset renderer view');
-  }
-  if (rendererState.compositionOverrideReason) {
-    throw new Error(`current renderer view is overridden: ${rendererState.compositionOverrideReason}; select an explicit preset renderer view`);
-  }
-  if (rendererState.requestedComposition !== rendererState.effectiveComposition) {
-    throw new Error(
-      `current renderer requested/effective composition substitution: ${rendererState.requestedComposition || 'missing'} -> ${rendererState.effectiveComposition || 'missing'}`,
-    );
-  }
-  const fallbackReason = rendererState.fallbackReason
-    || rendererState.compositionFallbackReason
-    || rendererState.boundarySplatFallbackReason;
-  if (fallbackReason) throw new Error(`current renderer fallback: ${fallbackReason}`);
-  const view = VOLUME_SETTINGS_PRESET_VIEW_BY_COMPOSITION[rendererState.effectiveComposition];
-  if (!view) {
-    throw new Error(`current renderer composition is unavailable: ${rendererState.effectiveComposition || 'missing'}`);
-  }
-  return view;
-}
-const VOLUME_APPEARANCE_DECOMPOSITION_MODES = Object.freeze([
-  'off',
-  'structural-a',
-  'broad-carrier-b',
-  'b-applied-to-fixed-a',
-  'a-plus-b-recomposition',
-  'smoke-off-beauty-control',
-  'complete-flame-emission',
-  'complete-flame-extinction',
-  'ridge-owned-emission',
-  'ridge-owned-extinction',
-  'non-ridge-emission',
-  'non-ridge-extinction',
-  'positive-optical-recomposition',
-  'ridge-emission-under-ridge-extinction',
-  'ridge-emission-under-total-flame-extinction',
-  'nonridge-emission-under-total-flame-extinction',
-  'complete-flame-under-total-extinction',
-]);
-const VOLUME_APPEARANCE_DECOMPOSITION_SELECTIONS = Object.freeze(
-  VOLUME_APPEARANCE_DECOMPOSITION_MODES.filter(mode => mode !== 'off'),
-);
-const VOLUME_COMPOSITION_REQUIRED_SMOKE_PRESENTATION = Object.freeze({
-  'splat-only-v0': 'off',
-  'smoke-raymarch-under-splats-v0': 'on',
-});
-
 function validateAppearanceDecompositionTarget(params, prefix = '') {
-  const requestedAppearanceDecompositionModes = params.getAll('volume_appearance_decomposition');
-  if (requestedAppearanceDecompositionModes.length > 1) {
-    throw new Error(`${prefix}target duplicates appearance decomposition identity`);
-  }
-  if (requestedAppearanceDecompositionModes.length === 1
-    && !VOLUME_APPEARANCE_DECOMPOSITION_MODES.includes(requestedAppearanceDecompositionModes[0])) {
-    throw new Error(`unsupported ${prefix}target appearance decomposition: ${requestedAppearanceDecompositionModes[0]}`);
-  }
-  const requestedAppearanceSelections = params.getAll('volume_appearance_selection');
-  if (requestedAppearanceSelections.length > 1) {
-    throw new Error(`${prefix}target duplicates appearance decomposition selection`);
-  }
-  if (requestedAppearanceSelections.length === 1
-    && !VOLUME_APPEARANCE_DECOMPOSITION_SELECTIONS.includes(requestedAppearanceSelections[0])) {
-    throw new Error(`unsupported ${prefix}target appearance decomposition selection: ${requestedAppearanceSelections[0]}`);
-  }
-  if (requestedAppearanceDecompositionModes.length === 1
-    && requestedAppearanceDecompositionModes[0] !== 'off'
-    && requestedAppearanceSelections.length === 1
-    && requestedAppearanceSelections[0] !== requestedAppearanceDecompositionModes[0]) {
-    throw new Error(`${prefix}target active appearance decomposition conflicts with remembered selection`);
+  for (const key of ['volume_appearance_decomposition', 'volume_appearance_selection']) {
+    const values = params.getAll(key);
+    if (values.length > 1) throw new Error(`${prefix}target duplicates retired appearance identity: ${key}`);
+    if (values.some(value => value !== 'off')) throw new Error(`${prefix}target requests retired appearance diagnostic: ${key}`);
   }
 }
 
@@ -478,6 +398,7 @@ export function validateVolumeSettingsPresetDocument(document, requestedPresetRe
       removedRouteParams: Object.freeze([...retirementMigration.removedRouteParams]),
       addedControlIds: Object.freeze([...retirementMigration.addedControlIds]),
       addedRouteParams: Object.freeze([...retirementMigration.addedRouteParams]),
+      retiredModeChanges:Object.freeze((retirementMigration.retiredModeChanges??[]).map(row=>Object.freeze({...row}))),
     }),
   });
 }
@@ -543,94 +464,15 @@ export function buildVolumeSettingsPresetTarget(receipt, origin) {
 }
 
 export function buildVolumeSettingsPresetVisualTarget(receipt, origin, view, { assayToolbar = false } = {}) {
-  const viewSpec = VOLUME_SETTINGS_PRESET_VISUAL_VIEWS[view];
-  if (!viewSpec) throw new Error(`unsupported settings preset visual view: ${view || 'missing'}`);
-  const target = new URL('/volume-selective-head-live.html', origin);
-  for (const [key, value] of receipt.routeVolumeEntries) target.searchParams.set(key, value);
-  target.searchParams.set('role', viewSpec.role);
-  target.searchParams.set('composition', viewSpec.composition);
-  target.searchParams.set('warmup_steps', '0');
-  target.searchParams.set('volume_presentation', 'beauty');
-  target.searchParams.set('volume_raymarch_smoke', viewSpec.composition === 'splat-only-v0' ? 'off' : 'on');
-  target.searchParams.set('settings_preset', receipt.runtimeFallback?.requestedPresetRef || receipt.presetId);
-  target.searchParams.set('settings_preset_authority', receipt.sourcePresetAuthority);
-  if (assayToolbar) target.searchParams.set('assay_toolbar', '1');
-  return target;
+  if (!Object.hasOwn(VOLUME_SETTINGS_PRESET_VISUAL_VIEWS, view)) {
+    throw new Error(`unsupported settings preset visual view: ${view || 'missing'}`);
+  }
+  if (assayToolbar) throw new Error('appearance diagnostic toolbar is retired');
+  return buildVolumeSettingsPresetTarget(receipt, origin);
 }
 
 export function validateVolumeSettingsPresetVisualTarget(receipt, params) {
-  if (params.get('settings_preset') !== (receipt.runtimeFallback?.requestedPresetRef || receipt.presetId)) throw new Error('visual target settings preset id mismatch');
-  if (params.get('settings_preset_authority') !== receipt.sourcePresetAuthority) {
-    throw new Error('visual target settings preset authority mismatch');
-  }
-  const viewSpec = Object.values(VOLUME_SETTINGS_PRESET_VISUAL_VIEWS)
-    .find(candidate => candidate.composition === params.get('composition'));
-  if (!viewSpec
-    || params.get('role') !== viewSpec.role
-    || params.get('warmup_steps') !== '0') {
-    throw new Error('visual target renderer view mismatch');
-  }
-  const requestedPresentationModes = params.getAll('volume_presentation');
-  if (requestedPresentationModes.length > 1) throw new Error('visual target duplicates volume presentation identity');
-  if (requestedPresentationModes.length === 1 && !['beauty', 'intrinsic'].includes(requestedPresentationModes[0])) {
-    throw new Error(`unsupported visual target volume presentation: ${requestedPresentationModes[0]}`);
-  }
-  const requestedSmokePresentationModes = params.getAll('volume_raymarch_smoke');
-  if (requestedSmokePresentationModes.length > 1) throw new Error('visual target duplicates raymarch smoke presentation identity');
-  if (requestedSmokePresentationModes.length === 1 && !['on', 'off'].includes(requestedSmokePresentationModes[0])) {
-    throw new Error(`unsupported visual target raymarch smoke presentation: ${requestedSmokePresentationModes[0]}`);
-  }
-  const expectedSmokeForComposition = VOLUME_COMPOSITION_REQUIRED_SMOKE_PRESENTATION[viewSpec.composition];
-  if (requestedSmokePresentationModes.length === 1
-    && expectedSmokeForComposition
-    && requestedSmokePresentationModes[0] !== expectedSmokeForComposition) {
-    throw new Error(`visual target composition/smoke identity mismatch: ${viewSpec.composition} requires ${expectedSmokeForComposition}`);
-  }
-  validateAppearanceDecompositionTarget(params, 'visual ');
-  const requestedAssayToolbarModes = params.getAll('assay_toolbar');
-  if (requestedAssayToolbarModes.length > 1) throw new Error('visual target duplicates diagnostic toolbar identity');
-  if (requestedAssayToolbarModes.length === 1 && requestedAssayToolbarModes[0] !== '1') {
-    throw new Error(`unsupported visual target diagnostic toolbar mode: ${requestedAssayToolbarModes[0]}`);
-  }
-  const allowed = new Set([
-    ...receipt.routeVolumeEntries.map(([key]) => key),
-    'role',
-    'composition',
-    'warmup_steps',
-    'settings_preset',
-    'settings_preset_authority',
-    'volume_presentation',
-    'volume_raymarch_smoke',
-    'volume_appearance_decomposition',
-    'volume_appearance_selection',
-    'assay_toolbar',
-  ]);
-  const unexpected = [...params].map(([key]) => key).filter(key => !allowed.has(key));
-  if (unexpected.length > 0) {
-    throw new Error(`visual target contains unexpected parameters: ${unexpected.join(',')}`);
-  }
-  for (const key of ['role', 'composition', 'warmup_steps', 'settings_preset', 'settings_preset_authority']) {
-    if (params.getAll(key).length !== 1) throw new Error(`visual target duplicates parameter: ${key}`);
-  }
-  const visualOwnedVolumeParams = new Set([
-    'volume_presentation',
-    'volume_raymarch_smoke',
-    'volume_appearance_decomposition',
-    'volume_appearance_selection',
-  ]);
-  const requestedVolumeEntries = [...params].filter(([key]) => (
-    key.startsWith('volume_') && !visualOwnedVolumeParams.has(key)
-  ));
-  const savedVolumeEntries = receipt.routeVolumeEntries.filter(([key]) => !visualOwnedVolumeParams.has(key));
-  if (requestedVolumeEntries.length !== savedVolumeEntries.length) {
-    throw new Error('visual target volume route is partial or contains extra settings');
-  }
-  const requested = new URLSearchParams(requestedVolumeEntries);
-  for (const [key, value] of savedVolumeEntries) {
-    const values = requested.getAll(key);
-    if (values.length !== 1 || values[0] !== value) throw new Error(`visual target settings route mismatch for ${key}`);
-  }
-  return true;
+  return validateVolumeSettingsPresetTarget(receipt, params);
 }
 
 export function validateVolumeSettingsPresetTarget(receipt, params) {

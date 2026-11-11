@@ -47,6 +47,6 @@ requests = [];
 await acquire();
 // Without a model the host still provisions the volume prototype's own storage
 // request (tall 1x2x1 domain), clamped to what this adapter supports.
-assert.equal(requests[0].requiredLimits.maxStorageBufferBindingSize, 1073741824, 'ordinary host provisions the volume storage request');
-assert.equal(requests[0].requiredLimits.maxBufferSize, 1073741824);
+assert.equal(requests[0].requiredLimits.maxStorageBufferBindingSize, 1048576000, 'ordinary host provisions the volume storage request');
+assert.equal(requests[0].requiredLimits.maxBufferSize, 1048576000);
 console.log('SF3D shared-device acquisition contracts passed');

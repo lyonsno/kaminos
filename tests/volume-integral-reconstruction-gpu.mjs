@@ -1,0 +1,129 @@
+// kaminos-test: node
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {withKaminosGpu,evalWgslBatch} from '../tools/shader-herder.mjs';
+import {createIntegralReconstruction,INTEGRAL_FILTER_FUNCTIONS_WGSL} from '../volume-integral-reconstruction.mjs';
+
+test('production uncertainty and rejection functions distinguish stability, noise and motion',async()=>{
+  await withKaminosGpu(async ctx=>{
+    const options={preamble:INTEGRAL_FILTER_FUNCTIONS_WGSL,argTypes:['f32','f32','f32','f32'],returnType:'f32',
+      body:'return integralReuse(vec2<f32>(arg0,0),vec2<f32>(arg1,0),vec2<f32>(arg2),arg3,.875);',
+      inputs:[[1,1,0,1],[1,0,0,1],[1,0,1,1],[1,0,0,0]]};
+    const r=await evalWgslBatch(ctx,options);
+    assert.ok(Math.abs(r[0]-.875)<1e-6);assert.ok(r[1]<1e-6);assert.ok(r[2]>.3);assert.ok(Math.abs(r[3]-.875)<1e-6);
+    const bad=INTEGRAL_FILTER_FUNCTIONS_WGSL.replace('exp(-response*dot(d,d))','1.0');
+    const wrong=await evalWgslBatch(ctx,{...options,preamble:bad});assert.ok(wrong[1]>.8,'negative control removes motion rejection');
+  });
+});
+
+test('actual GPU image banks smooth linear light AND transmission, retain noise, reset and release',async()=>{
+  await withKaminosGpu(async ctx=>{
+    const d=ctx.device,h=createIntegralReconstruction(d);
+    const camera=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,.6,0,0,0,0,0]);
+    const target=d.createTexture({size:[3,3],format:'rgba8unorm',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC});
+    const read=async texture=>{
+      const b=d.createBuffer({size:768,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+      const e=d.createCommandEncoder();e.copyTextureToBuffer({texture},{buffer:b,bytesPerRow:256},[3,3]);d.queue.submit([e.finish()]);
+      await b.mapAsync(GPUMapMode.READ);const data=new Float32Array(b.getMappedRange().slice(0));const center=Array.from(data.slice(64+4,64+8));b.unmap();b.destroy();return center;
+    };
+    const draw=async (controls,values,identity='camera-a',step=0)=>{
+      const e=d.createCommandEncoder();h.prepare(3,3,controls,identity,step);
+      d.queue.writeTexture({texture:h.raw},new Float32Array(values.flat()),{bytesPerRow:48},[3,3]);
+      d.queue.writeTexture({texture:h.guide},new Float32Array(9).fill(10),{bytesPerRow:12},[3,3]);
+      const state=h.encode(e,target.createView(),'rgba8unorm',camera);d.queue.submit([e.finish()]);return {state,value:await read(h.output),moments:await read(h.moments)};
+    };
+    try {
+      const pixels=Array.from({length:9},(_,i)=>i===4?[3,2,1,.2]:[1,1,1,.8]);
+      const raw=await draw({integralReconstruction:'spatial',reconstructionSpatial:0},pixels);
+      assert.deepEqual(raw.value.map(x=>+x.toFixed(4)),[3,2,1,.2]);
+      const blur=await draw({integralReconstruction:'spatial',reconstructionSpatial:1,reconstructionEdge:0},pixels,'blur');
+      assert.ok(blur.value[0]<3&&blur.value[0]>1);assert.ok(blur.value[3]>.2&&blur.value[3]<.8);
+      assert.ok(blur.moments[2]>blur.moments[0]**2,'spatial variation seeds uncertainty');
+      const t={integralReconstruction:'temporal',reconstructionResponse:0,reconstructionWindow:8};
+      await draw(t,pixels,'temporal');
+      const changed=pixels.map((v,i)=>i===4?[1,1,1,.8]:[3,2,1,.2]);
+      const retained=await draw(t,changed,'temporal');
+      assert.ok(Math.abs(retained.value[0]-2)<1e-5);assert.ok(Math.abs(retained.value[3]-.5)<1e-5);
+      const reset=await draw(t,changed,'new-camera');assert.equal(reset.state.frames,1);assert.ok(Math.abs(reset.value[0]-1)<1e-5);
+      const jump=await draw(t,pixels,'new-camera',20);assert.equal(jump.state.resetReason,'simulation-discontinuity');assert.equal(jump.state.frames,1);
+      h.disable();assert.equal(h.describe().bytes,0);
+    }finally{h.dispose();target.destroy();}
+  });
+});
+
+
+test('evaluation holds one raw draw and its incoming history across all four views',async()=>{
+  await withKaminosGpu(async ctx=>{
+    const d=ctx.device,h=createIntegralReconstruction(d);
+    const camera=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,.6,0,0,0,0,0]);
+    const target=d.createTexture({size:[3,3],format:'rgba8unorm',usage:GPUTextureUsage.RENDER_ATTACHMENT});
+    const c={integralReconstruction:'combined',reconstructionSpatial:1,reconstructionEdge:0,reconstructionResponse:0};
+    const draw=async(values,step)=>{
+      const e=d.createCommandEncoder();h.prepare(3,3,c,'fixed-camera',step);
+      d.queue.writeTexture({texture:h.raw},new Float32Array(values.flat()),{bytesPerRow:48},[3,3]);
+      d.queue.writeTexture({texture:h.guide},new Float32Array(9).fill(10),{bytesPerRow:12},[3,3]);
+      h.encode(e,target.createView(),'rgba8unorm',camera);d.queue.submit([e.finish()]);await d.queue.onSubmittedWorkDone();
+    };
+    try {
+      const previous=Array.from({length:9},(_,i)=>i===4?[3,2,1,.2]:[1,1,1,.8]);
+      const current=previous.map((v,i)=>i===4?[1,1,1,.8]:[3,2,1,.2]);
+      await draw(previous,10);await draw(current,11);
+      const before=await h.sample();const pin=h.beginEvaluation();assert.equal(pin.frames,2);assert.equal(pin.previousDraws,1);
+      const values={};
+      for(const mode of ['off','spatial','temporal','combined','temporal']) {
+        const e=d.createCommandEncoder();const state=h.encodeEvaluation(e,target.createView(),'rgba8unorm',camera,{...c,integralReconstruction:mode});d.queue.submit([e.finish()]);
+        const sample=await h.sample();assert.equal(state.frames,2);assert.equal(sample.state.frames,2);
+        assert.deepEqual(sample.raw,before.raw);assert.equal(state.evaluation.previousDraws,1);
+        const pixel=Array.from(sample.filtered.slice(16,20));
+        if(values[mode])assert.deepEqual(pixel,values[mode],'view order must not accumulate the pinned input');
+        values[mode]=pixel;
+      }
+      assert.deepEqual(values.off.map(x=>+x.toFixed(4)),[1,1,1,.8]);
+      assert.ok(values.temporal[0]>values.off[0]+.2,'previous draw remains available');
+      assert.ok(values.spatial[0]>values.off[0]+.1);assert.notDeepEqual(values.combined,values.spatial);
+      h.endEvaluation();const after=await h.sample();assert.deepEqual(after.filtered,before.filtered);assert.deepEqual(after.moments,before.moments);
+      assert.equal(after.state.frames,2);assert.equal(after.state.simulationStepChanges,1);
+      h.reset('changed-source');assert.throws(()=>h.beginEvaluation(),/rendered history/);
+    }finally{h.dispose();target.destroy();}
+  });
+});
+
+test('spatial radius covers intervening pixels instead of preserving a checkerboard sublattice',async()=>{
+  await withKaminosGpu(async ctx=>{
+    const d=ctx.device,h=createIntegralReconstruction(d),size=7;
+    const target=d.createTexture({size:[size,size],format:'rgba8unorm',usage:GPUTextureUsage.RENDER_ATTACHMENT});
+    const camera=new Float32Array(20),pixels=new Float32Array(size*size*4);
+    for(let y=0;y<size;y++)for(let x=0;x<size;x++)pixels.set((x+y)%2?[2,1,.5,.4]:[0,0,0,1],(y*size+x)*4);
+    const draw=async radius=>{
+      const e=d.createCommandEncoder();h.prepare(size,size,{integralReconstruction:'spatial',reconstructionSpatial:1,reconstructionEdge:0,reconstructionRadius:radius},`radius-${radius}`,1);
+      d.queue.writeTexture({texture:h.raw},pixels,{bytesPerRow:size*16},[size,size]);
+      d.queue.writeTexture({texture:h.guide},new Float32Array(size*size).fill(10),{bytesPerRow:size*4},[size,size]);
+      h.encode(e,target.createView(),'rgba8unorm',camera);d.queue.submit([e.finish()]);return (await h.sample()).filtered[(3*size+3)*4];
+    };
+    try {
+      assert.ok(await draw(2)>.05,'a radius-two blur must see the bright intervening pixels');
+      const a=await draw(.49),b=await draw(.51);assert.ok(a>.01);assert.ok(Math.abs(b-a)<.02,'fractional radius changes continuously');
+    }finally{h.dispose();target.destroy();}
+  });
+});
+
+test('cached image contours preserve coherent edges without treating a checkerboard as protected structure',async()=>{
+ await withKaminosGpu(async({device:d})=>{
+  const n=11,h=createIntegralReconstruction(d),camera=new Float32Array(20),target=d.createTexture({size:[n,n],format:'rgba8unorm',usage:GPUTextureUsage.RENDER_ATTACHMENT});
+  async function draw(pixel,edgeMode){
+   const values=new Float32Array(n*n*4);for(let y=0;y<n;y++)for(let x=0;x<n;x++)values.set(pixel(x,y),(y*n+x)*4);
+   h.prepare(n,n,{integralReconstruction:'spatial',reconstructionSpatial:1,reconstructionEdge:1,reconstructionEdges:edgeMode},'fixture-'+edgeMode,1);
+   d.queue.writeTexture({texture:h.raw},values,{bytesPerRow:n*16},[n,n]);d.queue.writeTexture({texture:h.guide},new Float32Array(n*n).fill(10),{bytesPerRow:n*4},[n,n]);
+   const e=d.createCommandEncoder();h.encode(e,target.createView(),'rgba8unorm',camera);d.queue.submit([e.finish()]);return await h.sample();
+  }
+  try{
+   const noise=(x,y)=>(x+y)%2?[4,4,4,.5]:[0,0,0,.5],i=(5*n+5)*4;
+   const image=await draw(noise,'image');assert.ok(image.filtered[i]>.1,'image guide must let Spatial fill high-frequency misses');
+   const samples=await draw(noise,'samples');assert.ok(samples.filtered[i]<.01);
+   const off=await draw(noise,'off');assert.ok(Math.abs(image.filtered[i]-off.filtered[i])<.02);
+   const step=x=>x<5?[0,0,0,1]:[4,4,4,1];const unprotected=await draw(step,'off'),protectedImage=await draw(step,'image');assert.ok(protectedImage.filtered[i]>unprotected.filtered[i]+.1,'coherent light boundary is protected');
+   h.beginEvaluation();const c={integralReconstruction:'spatial',reconstructionSpatial:1,reconstructionEdge:1,reconstructionEdges:'image'};
+   const e=d.createCommandEncoder();h.encodeEvaluation(e,target.createView(),'rgba8unorm',camera,c);d.queue.submit([e.finish()]);assert.equal(h.describe().edgeGuide.builtThisDraw,false,'held guide is reused');
+  }finally{h.dispose();target.destroy();}
+ });
+});

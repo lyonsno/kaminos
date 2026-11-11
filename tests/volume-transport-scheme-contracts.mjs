@@ -149,10 +149,9 @@ test('runtime receipt, predictor dispatch, and cost ledger name the transport sc
   assert.match(source, /transport: state\.transport/, 'debug state exports the transport receipt');
   assert.match(source, /transportPredictorPasses/, 'cost ledger counts the predictor pass');
   const encodeSim = source.slice(source.indexOf('  function encodeSim(encoder'), source.indexOf('  function retirePressureResidualMap('));
-  assert.match(encodeSim, /predictorPass[^]*?predictor\.setPipeline\(simulationPipeline\('csTransportPredict', velocityOwner \? \{MATERIAL_ONLY:true\} : \{\}\)\);[^]*?predictor\.end\(\);[^]*?pass\.setPipeline\(simulationPipeline\('cs', velocityOwner \? \{MATERIAL_ONLY:true\} : \{\}\)\)/, 'both matched and separate velocity routes predict before the main material pass');
   assert.match(source, /uniforms\[353\] = transportConfig\.effective\.commonCharacteristic \? 1 : 0;/, 'common characteristic is packed at slot 353');
   assert.match(source, /uniforms\[360\] = transportSchemeUniformValue\(transportConfig\.effective\.scheme\);/, 'scheme is packed at slot 360');
-  const predictorLayout=source.slice(source.indexOf('transportPredictBindGroupLayout = device.createBindGroupLayout('),source.indexOf('    browserResidualBindGroupLayout ='));
+  const predictorLayout=source.slice(source.indexOf('transportPredictBindGroupLayout = device.createBindGroupLayout('),source.indexOf('    transportPipelineLayout ='));
   assert.equal((predictorLayout.match(/buffer: \{ type: 'storage' \}/g)||[]).length,1,'predictor bind group layout declares exactly one storage buffer');
   assert.match(predictorLayout,/binding: 2[^\n]*texture:/,'the predictor additionally reads the resident collision texture');
   assert.match(source, /transportPipelineLayout = device\.createPipelineLayout\(\{[^]*?bindGroupLayouts: \[bindGroupLayout, emptyBindGroupLayout, emptyBindGroupLayout, transportPredictBindGroupLayout\]/, 'transport pipelines use a private layout with the predictor at index 3');

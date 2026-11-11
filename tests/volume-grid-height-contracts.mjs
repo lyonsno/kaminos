@@ -152,7 +152,6 @@ test('GH-04: a shape the device cannot hold is refused before the field is repla
   assert.match(init, /gridShape = resolveGridHeight\(\{\}, gridShape\.widthCells\);/);
   // Device requests: the own and shared devices ask for the tallest admissible shape; a caller-owned device keeps the auto-height requirement.
   assert.match(source, /volumeStorageBufferRequestBytes\(Math\.max\(\.\.\.SUPPORTED_GRID_SIZES\), null, Math\.max\(\.\.\.SUPPORTED_GRID_SIZES\) \* GRID_HEIGHT_MAX_RATIO\)/);
-  assert.match(closure, /\? volumeStorageBufferRequestBytes\(gridSize, boundarySplatCapacity\)\n\s+: volumeStorageBufferRequestBytes\(Math\.max\(\.\.\.SUPPORTED_GRID_SIZES\), null, Math\.max\(\.\.\.SUPPORTED_GRID_SIZES\) \* GRID_HEIGHT_MAX_RATIO\);/);
 });
 
 test('GH-05: the capture gate compares a height arm with the resolver at the effective width and requires a complete receipt', () => {

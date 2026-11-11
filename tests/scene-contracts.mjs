@@ -62,7 +62,7 @@ assert.match(index, /function createSceneGroupForObjects\(/, 'editor can create 
 assert.match(index, /function renameSceneObject\(/, 'editor can rename authored objects without touching source identity');
 assert.match(index, /function renameSceneGroup\(/, 'editor can rename authored groups');
 assert.match(index, /function updateTransformInspector\(/, 'selection changes refresh the transform inspector');
-assert.match(index, /function applyTransformInspectorField\(/, 'transform inspector fields mutate the selected object');
+assert.match(index, /scenePlacementTools = installScenePlacementTools\(/, 'transform inspector edits use the shared placement owner');
 assert.match(index, /function sceneObjectReloadabilityLabel\(/, 'scene object list exposes reloadability/source status');
 assert.match(index, /function greenroomEntryDisplay\(/, 'Greenroom rows use a shared display metadata fallback instead of raw filenames only');
 assert.match(index, /function renderGreenroomEntryIdentity\(/, 'Greenroom rows render display title and secondary metadata through one shared helper');
@@ -90,7 +90,7 @@ assert.match(index, /fetch\('\/api\/splat-correction'/, 'splat correction save/l
 assert.match(index, /window\.kaminosSaveSelectedSplatCorrection/, 'browser witnesses can persist selected splat corrections without DOM inference');
 assert.match(index, /window\.saveSelectedSplatCorrection\s*=\s*saveSelectedSplatCorrection/, 'visible Save Correction button has the exact global handler named by its inline onclick');
 assert.match(index, /window\.resetSelectedSplatCorrection\s*=\s*resetSelectedSplatCorrection/, 'visible Reset Correction button has the exact global handler named by its inline onclick');
-assert.match(index, /applySplatCorrectionToObject/, 'imported splat corrections are applied to preview/model transforms');
+assert.match(index, /applySplatCorrectionToRecord/, 'imported splat corrections are applied to preview/model transforms');
 assert.match(index, /function composeSplatObjectPivotTransform\(/, 'Corrected splat imports compose the scene object pivot from the saved centroid offset');
 assert.match(index, /function applySplatVisualRootOffset\(/, 'Corrected splat imports compensate the visual root so pivot corrections do not move the visible splat');
 assert.match(index, /Splat Correction Mode/, 'viewport exposes an explicit splat correction edit-mode badge');

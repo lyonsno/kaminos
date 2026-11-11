@@ -1,6 +1,5 @@
 import {FINE_COVERAGE_FIELDS} from './volume-fine-coverage-controls.mjs';
 import {ADAPTIVE_MATERIAL_FIELDS} from './volume-adaptive-material-controls.mjs';
-import {resolveRaymarchAdaptivity} from './volume-optical-native.mjs';
 import {createGridTuningInspector} from './volume-grid-tuning-ui.mjs';
 import {GRID_TUNING_FIELDS} from './volume-grid-tuning.mjs';
 import {PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS} from './volume-physics-appearance.mjs';
@@ -129,9 +128,9 @@ export const FLAME_PROPERTY_GROUPS = [
   {name:'Fine coverage',view:'quality',scope:'Move fixed-size Fine coverage around sources and evolving fire. World bounds stay fixed. Manual box edits hold following until a source or policy changes.',fields:FINE_COVERAGE_FIELDS.map(field=>[field.id,field.label])},
   {name:'Adaptive material',view:'quality',scope:'Allocation follows fire throughout the world field. Settings are saved with scenes and basins.',fields:ADAPTIVE_MATERIAL_FIELDS.map(field=>[field.id,field.label])},
   { name:'Ray marching', view:'quality', open:true, fields:[
-    ['volume-raymarch-mode','Ray marcher'], ['volume-optical-tolerance','Tolerance'], ['volume-ray-step-telemetry','Ray statistics'],
+    ['volume-raymarch-mode','Ray marcher'], ['volume-history-influence','History influence'], ['volume-history-window','Importance memory (draws)'], ['volume-integral-reconstruction','Image reconstruction'], ['volume-reconstruction-spatial','Spatial smoothing'], ['volume-reconstruction-radius','Blur radius (px)'], ['volume-reconstruction-window','Image memory (draws)'], ['volume-reconstruction-response','History rejection'], ['volume-reconstruction-edges','Edge guide'], ['volume-reconstruction-image-edge','Image edge protection'], ['volume-reconstruction-edge','Raw-sample edge gain'], ['integral-guide-view','Guide inspection'], ['integral-guide-gain','Guide display gain'], ['volume-reconstruction-fresh','Animate samples while paused'], ['volume-optical-tolerance','Tolerance'], ['volume-ray-step-telemetry','Ray statistics'],
     ['volume-steps','Ray count'],
-    ['volume-adaptive-rays','Adaptive rays'], ['volume-occupancy-skip','Empty-space acceleration'],
+    ['volume-occupancy-skip','Ray interval culling'], ['volume-occupancy-threshold','Material cutoff (lossy)'],
     ['volume-ray-start-noise','Blue noise'], ['volume-ray-noise-animated','Animate noise'], ['volume-quadrature-jitter','Interior jitter'],
     ['volume-flame-priority','Flame priority'], ['volume-render-scale','Screen resolution (%)'],
     ['volume-pressure-resolution','Pressure grid (experimental)'],
@@ -213,7 +212,7 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-pressure-solver','Pressure solver'], ['volume-projection','Projection'],
     ['volume-advection-scheme','Advection'],
     ['volume-common-gas-transport','Common gas transport'], ['volume-velocity-staggering','Velocity sampling'],
-    ['volume-fast-bypass','Fast empty-air bypass'],
+    ['volume-fast-bypass','Skip empty Fine updates'],
   ] },
   { name:'Diagnostics', view:'quality', fields:[
     ['volume-reaction-live-view','Field view'], ['volume-boundary-sidecar-view','Structure view'],
@@ -384,19 +383,10 @@ export function createFlameInspector({ document, host, gridTuning, scopeDescript
           const bound=bounds&&Object.hasOwn(bounds,key)?bounds[key]:source[key];
           field[key]=bound===null||bound===undefined||bound===''?'':String(flameControlDisplayValue(id,bound));
         }
-        const adaptivity=id==='volume-adaptive-rays'
-          ?resolveRaymarchAdaptivity(byId('volume-raymarch-mode').value,Number(source.value),readRaymarchRuntime()):null;
-        field.disabled=adaptivity?adaptivity.automatic:source.disabled;
-        if(adaptivity){
-          grip.textContent=adaptivity.label;
-          field.setAttribute('aria-label',`Flame ${adaptivity.label}`);
-          grip.title=field.title=adaptivity.pending?'Awaiting the effective ray marcher.':adaptivity.automatic
-            ?`${adaptivity.value?'On':'Off'} automatically for this marcher. The old adaptive amount is retained for Old adaptive.`
-            :volumeControlTooltip(id);
-        }
+        field.disabled=source.disabled;
         if(force!==true&&document.activeElement===field)return;
         const descriptor=readSourceControl(id),value=descriptor?(descriptor.rawValue??descriptor.value):source.type==='checkbox'?source.checked:source.value;
-        if(field.type==='checkbox')field.checked=typeof value==='boolean'?value:Number(value)>=.5;else field.value=String(adaptivity?(adaptivity.value??''):flameControlDisplayValue(id,value));
+        if(field.type==='checkbox')field.checked=typeof value==='boolean'?value:Number(value)>=.5;else field.value=String(flameControlDisplayValue(id,value));
       }
       const eventName=source.tagName==='SELECT'||field.type==='checkbox'?'change':'input';
       field.addEventListener(eventName,()=>{
@@ -426,7 +416,7 @@ export function createFlameInspector({ document, host, gridTuning, scopeDescript
     }
     if(group.name==='Combustion')section.append(appearanceStatus);
     if(group.name==='Carriers & added forces')section.append(byId('volume-appearance-model-state'));
-    if(group.name==='Ray marching')section.append(byId('volume-raymarch-status'),byId('volume-ray-step-stats'));
+    if(group.name==='Ray marching')section.append(byId('volume-reconstruction-comparison'),byId('volume-reconstruction-status'),byId('volume-raymarch-status'),byId('volume-ray-step-stats'));
     (group.quick||group.scope==='emitter'?host:panels.get(group.view)).append(section);
     sections.push({section,group,rows:sectionRows,open:!!group.open});
   }

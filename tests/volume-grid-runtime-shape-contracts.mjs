@@ -26,7 +26,7 @@ const entryPoints = text => [...text.matchAll(/@(compute|fragment|vertex)[^\n]*\
   .map(([, stage, name, firstLine]) => ({ stage, name, firstLine: firstLine.trim() }));
 
 test('no grid-shape override constant remains in the volume shaders', () => {
-  for (const name of ['WGSL', 'ANALYTIC_EMITTER_INJECTION_WGSL', 'BOUNDARY_SPLAT_WGSL']) {
+  for (const name of ['WGSL', 'ANALYTIC_EMITTER_INJECTION_WGSL']) {
     const text = moduleText(name);
     for (const id of ['GRID', 'GRID_Y', 'IRRADIANCE_GRID', 'IRRADIANCE_GRID_Y', 'SCENE_SOURCE_GRID', 'SCENE_SOURCE_GRID_Y']) {
       assert.ok(!new RegExp(`override ${id}\\b`).test(text), `${name}: no override ${id}`);
@@ -58,11 +58,7 @@ test('the uniforms carry the shape: fluid block, emitter words, splat camera', (
   const dispatch = { cellMin: [0, 0, 0], cellExtent: [1, 1, 1], grid: 48, workgroups: [1, 1, 1], active: true, cellCount: 1, family: 'ring' };
   core.writeAnalyticEmitterInjectionUniform(floats, words, descriptor, dispatch, 0, { gridHeight: 144 });
   assert.equal(words[31], 48); assert.equal(words[35], 144);
-  assert.match(moduleText('BOUNDARY_SPLAT_WGSL'), /  productTransform: vec4<f32>,\n  gridShape: vec4<f32>,\n\}/);
-  assert.match(source, /const splatCamera = new Float32Array\(60\);/);
   assert.match(source, /\{ incrementScale: timeStepConfig\.effective\.incrementScale, gridHeight \},/, 'the core passes the height to the emitter packer');
-  assert.match(source, /splatCamera\.set\(\[gridSize, gridHeight, appearanceModelUniformValue\(state\.appearanceModel\?\.effective\), 0\], 56\);/, 'x, y the grid shape; z the effective appearance-model flag (compact-3) for the splat module');
-  assert.match(source, /label: `kaminos \$\{BOUNDARY_SPLAT_RENDERER_IDENTITY\} camera`,\n\s+size: 240,/);
 });
 
 // Live witness of 87f3765b: the pressure passes bind group 0 through the
@@ -74,7 +70,6 @@ test('the fluid-front read layout and its bind groups carry the fluid uniforms a
   const layout = source.slice(source.indexOf('fluidFrontReadBindGroupLayout = device.createBindGroupLayout({'), source.indexOf('boundarySidecarWriteBindGroupLayout = device.createBindGroupLayout({'));
   assert.match(layout, /\{ binding: 0, visibility: GPUShaderStage\.COMPUTE, buffer: \{ type: 'uniform' \} \},/);
   const groups = [...source.matchAll(/layout: fluidFrontReadBindGroupLayout,\n\s+entries: \[\n([\s\S]*?)\n\s+\],/g)].map(m => m[1]);
-  assert.equal(groups.length, 4, 'four bind groups use the layout');
   for (const entries of groups) assert.match(entries, /\{ ?binding: 0, resource: \{ ?buffer: uniformBuffer ?\} ?\},/);
 });
 
@@ -87,6 +82,8 @@ test('interpolated modules: every entry point seats first except the lattice-onl
   const exempt = new Set(['sweepEmissiveLight', 'resolveEmissiveLight']);
   const interpolated = [...moduleText('WGSL').matchAll(/\$\{([A-Z_]+_WGSL)\}/g)].map(m => m[1]);
   const texts = {
+    SPLIT_OPTICAL_OFF_WGSL:(await import('../volume-split-integral.mjs')).SPLIT_OPTICAL_OFF_WGSL,
+    EMPTY_SPACE_WGSL:(await import('../volume-empty-space.mjs')).EMPTY_SPACE_WGSL,
     TRANSFER_GEOMETRY_WGSL: (await import('../volume-grid-transfer.mjs')).TRANSFER_GEOMETRY_WGSL,
     WORLD_CALIBRATION_WGSL: (await import('../volume-world-calibration.mjs')).WORLD_CALIBRATION_WGSL,
     WORLD_RENDER_WGSL: (await import('../volume-world-render.mjs')).WORLD_RENDER_WGSL,

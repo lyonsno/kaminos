@@ -26,7 +26,7 @@ assert.match(hostSurfaceWitnessSource, /sourceDowngrades/, 'generic witness asse
 assert.match(hostSurfaceWitnessSource, /sourceCustody/, 'generic witness asserts source-provided custody rows');
 assert.match(hostSurfaceWitnessSource, /primary_output_written/, 'generic witness writes durable reports even before screenshot success');
 assert.match(indexSource, /kaminosHostSurfaceDebugState/, 'browser exposes generic host-surface debug state');
-assert.match(indexSource, /kaminos_lerms_moving_timeline_host=1/, 'browser exposes a direct LERMS moving timeline host route');
+assert.match(indexSource, /params\.get\('kaminos_lerms_moving_timeline_host'\) === '1'/, 'browser exposes a direct LERMS moving timeline host route');
 
 const hostSurface = await import(hostSurfaceCorePath);
 const fingerJuice = await import(fingerJuiceCorePath);

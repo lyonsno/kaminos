@@ -50,6 +50,19 @@ export const REACTION_RGB = reactionRGB.map(v => v / linearLuminance(reactionRGB
 // Shared scene-source sampling resolution; independent of incident-light transport.
 export const SCENE_SOURCE_GRID = 32;
 
+export const EMISSIVE_CAMERA_WGSL = /* wgsl */`
+fn emissiveCamera(rgb: vec3<f32>) -> vec3<f32> {
+  let balanced = vec3<f32>(dot(u.emissive_white_r.xyz,rgb),dot(u.emissive_white_g.xyz,rgb),dot(u.emissive_white_b.xyz,rgb));
+  if (u.reserved_render_controls.z > 0.5) { return agxDisplay(balanced, u.physical_display.y); }
+  let exposed = max(vec3<f32>(0.0), balanced*exp2(u.physical_display.y));
+  let knee = u.physical_display.z;
+  let d = 1.0-knee;
+  let shoulder = vec3<f32>(1.0)-d*d/max(exposed+vec3<f32>(1.0-2.0*knee),vec3<f32>(d));
+  let linear = select(exposed, shoulder, exposed > vec3<f32>(knee));
+  return select(1.055*pow(linear,vec3<f32>(1.0/2.4))-vec3<f32>(0.055),linear*12.92,linear <= vec3<f32>(0.0031308));
+}
+`;
+
 export const EMISSIVE_TRANSPORT_WGSL = /* wgsl */`
 struct EmissiveMaterial { emission: vec3<f32>, absorption: f32, scattering: f32, }
 fn thermalRadiance(kelvin: f32) -> vec3<f32> {
@@ -112,16 +125,7 @@ fn fastEmissiveMaterialAt(p: vec3<f32>, smokeVisible: f32) -> EmissiveMaterial {
   let coverage = liveBoundarySupportAt(p, max(u.topology_shell_carriers,vec4<f32>(0.0)));
   return emissiveMaterial(r, coverage, smokeVisible);
 }
-fn emissiveCamera(rgb: vec3<f32>) -> vec3<f32> {
-  let balanced = vec3<f32>(dot(u.emissive_white_r.xyz,rgb),dot(u.emissive_white_g.xyz,rgb),dot(u.emissive_white_b.xyz,rgb));
-  if (u.reserved_render_controls.z > 0.5) { return agxDisplay(balanced, u.physical_display.y); }
-  let exposed = max(vec3<f32>(0.0), balanced*exp2(u.physical_display.y));
-  let knee = u.physical_display.z;
-  let d = 1.0-knee;
-  let shoulder = vec3<f32>(1.0)-d*d/max(exposed+vec3<f32>(1.0-2.0*knee),vec3<f32>(d));
-  let linear = select(exposed, shoulder, exposed > vec3<f32>(knee));
-  return select(1.055*pow(linear,vec3<f32>(1.0/2.4))-vec3<f32>(0.055),linear*12.92,linear <= vec3<f32>(0.0031308));
-}
+${EMISSIVE_CAMERA_WGSL}
 // No implicit incident-light producer. Distributed and point consumers replace
 // this call when attached; emission and extinction remain independently usable.
 fn incidentAt(p: vec3<f32>) -> vec3<f32> {

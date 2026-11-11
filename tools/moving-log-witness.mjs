@@ -29,14 +29,14 @@ try{
   gi:{steps:window.kaminosSceneGIDebugState().steps,slices:window.kaminosSceneGIDebugState().slices}}));
  const read=()=>page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
  const invoke=async(name,input)=>{report.inputs.push({name,input});return page.evaluate(({name,input})=>window.kaminosWorkbenchExperiments.invoke(name,input),{name,input});};
- const advance=async target=>{report.inputs.push({advanceTo:target});const receipt=await page.evaluate(target=>window.__kaminosVolumePrototype.pauseSelectiveHeadLiveAtSimStep(target),target);assert.equal(receipt.ok,true,JSON.stringify(receipt));assert.equal(receipt.effectiveSimStepCount,target);await invoke('pause');return receipt;};
+ const advance=async target=>{report.inputs.push({advanceTo:target});const receipt=await page.evaluate(target=>window.__kaminosVolumePrototype.pauseCaptureAtSimStep(target),target);assert.equal(receipt.ok,true,JSON.stringify(receipt));assert.equal(receipt.effectiveSimStepCount,target);await invoke('pause');return receipt;};
  async function sample(name){
   const raw=await page.evaluate(async()=>({state:await window.kaminosWorkbenchExperiments.read(),gas:await window.__kaminosVolumePrototype.sampleReactantFields(),runtime:window.__kaminosVolumePrototype.debugState(),gi:window.kaminosSceneGIDebugState()}));
   await fs.writeFile(path.join(out,name+'-raw.json'),JSON.stringify(raw));assert.equal(raw.gas.ok,true);assert.match(raw.runtime.backend,/WebGPU/);assert.equal(raw.runtime.simGrid,32);assert.equal(raw.runtime.gridHeight.heightCells,32);assert.equal(raw.gi.steps,4);assert.equal(raw.gi.slices,3);
   const f=new Float32Array(Uint8Array.from(Buffer.from(raw.gas.fluidBase64,'base64')).buffer),r=new Float32Array(Uint8Array.from(Buffer.from(raw.gas.reactantBase64,'base64')).buffer);
   assert.equal(f.length,32**3*16);assert.ok(f.every(Number.isFinite)&&r.every(Number.isFinite));
   let heat=0,burn=0;for(let i=0;i<f.length;i+=16)heat+=f[i+5];for(let i=1;i<r.length;i+=2)burn+=r[i];
-  await page.evaluate(()=>window.__kaminosVolumePrototype.setSelectiveHeadLiveCapturePaused(false));
+  await page.evaluate(()=>window.__kaminosVolumePrototype.setCapturePaused(false));
   await invoke('frame');
   const before=await page.evaluate(()=>window.kaminosSceneGIDebugState().sceneFrames);await page.waitForFunction(before=>window.kaminosSceneGIDebugState().sceneFrames>before,before);
   const camera=await page.evaluate(()=>window.kaminosCameraViews.current());

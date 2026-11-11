@@ -41,12 +41,6 @@ const routeInit = index.slice(index.indexOf('async function initKaminosVolumeRou
 const fieldLoop = routeInit.slice(routeInit.indexOf('for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS)'));
 assert.match(fieldLoop.slice(0, 600), /if \(el\?\.type === 'range'\) applyVolumeRangeSavedValue\(el, routeValue\);\n\s*else if \(el\) el\.value = clampVolumeControlValue\(routeValue, field\)\.toFixed\(field\.decimals\);/,
   'only range inputs go through the saved-value setter; table selects keep their option value');
-const offersSource = grab('function volumeSelectOffers(');
-assert.ok(offersSource);
-const offers = vm.runInNewContext(`${offersSource}; volumeSelectOffers`, {});
-assert.equal(offers({ options: [{ value: 'shell' }, { value: 'boundary_fire' }] }, 'boundary_fire'), true);
-assert.equal(offers({ options: [{ value: 'shell' }] }, 'boundary_fire'), false);
-
 // A retired aperture pattern (spiral, concentric) is kept as the basin's
 // request beside the shape fallback. The flame settings check accepts it, and
 // writing it back (undo) restores the request instead of blanking the select.

@@ -34,13 +34,13 @@ try{
  await page.evaluate(gain=>{for(const[id,value]of [['rendering-shared-gain',gain],['rendering-surface-gain',0],['rendering-source-softness',0],['rendering-surface-reconstruction',0]]){const e=document.getElementById(id);e.value=String(value);e.dispatchEvent(new Event('input',{bubbles:true}));}},report.scene.composition.lightGainStops);
  report.phase='held-source-pattern-comparison';await save();let heldHash,baseline,geometryBuilds;
  for(const [pattern,count]of [['source',12],['source',96],['guided',12],['guided',8],['guided',96],['source',12]]){
-  await page.evaluate(()=>window.__kaminosVolumePrototype.setSelectiveHeadLiveCapturePaused(false));
+  await page.evaluate(()=>window.__kaminosVolumePrototype.setCapturePaused(false));
   const started=performance.now();await page.selectOption('#rendering-angular-pattern',pattern);await page.selectOption('#rendering-angular-samples',String(count));
   await Promise.race([page.waitForFunction(({pattern,count})=>{const d=window.__kaminosSceneRadiance.debugState();return d.frame?.angularPattern===pattern&&d.frame?.directions===count&&!d.previewStale&&window.__kaminosSceneRadiance.canRender();},{pattern,count},{timeout:0}),broken]);
   const prepareElapsedMs=performance.now()-started;
   let profile={status:'unsupported'};
   if(await page.evaluate(()=>window.__beamingGatherDevice?.features.has('timestamp-query'))){await page.evaluate(()=>{window.__beamingGatherProfile={remaining:20,records:[],errors:[]};});await Promise.race([page.waitForFunction(()=>window.__beamingGatherProfile.errors.length||window.__beamingGatherProfile.records.length===20,null,{timeout:0}),broken]);profile=await page.evaluate(()=>window.__beamingGatherProfile);assert.deepEqual(profile.errors,[]);profile.status='measured';}
-  await page.evaluate(()=>window.__kaminosVolumePrototype.setSelectiveHeadLiveCapturePaused(true));
+  await page.evaluate(()=>window.__kaminosVolumePrototype.setCapturePaused(true));
   const capture=await page.evaluate(async()=>{const [fields,source]=await Promise.all([window.__kaminosSceneRadiance.readback(),window.__kaminosVolumePrototype.sampleSceneVolumeSource()]);return {lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState(),gi:window.kaminosSceneGIDebugState(),sourceGeneration:source.generation,sourceMetadata:{...source,values:undefined},primary:source.values,front:Array.from(fields.surface.data),back:Array.from(fields.surfaceBack.data),smoke:Array.from(fields.smoke.data),dimensions:{front:fields.surface.dimensions,back:fields.surfaceBack.dimensions,smoke:fields.smoke.dimensions}};});
   const name=`arm-${report.views.length}-${pattern}-${count}`;
   // Preserve the raw signal before admission: incomplete/nonfinite/blank fields

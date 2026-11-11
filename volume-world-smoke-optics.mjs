@@ -85,6 +85,34 @@ fn worldMinimumMaterialPitch()->f32{
  if(worldRender.middleHiEnabled.w>.5){return min(worldRender.loPitch.w,worldRender.middleLoPitch.w);}
  return worldRender.loPitch.w;
 }
+fn worldSmokeBlendWeight(p:vec3<f32>)->f32{
+ if(!worldSmokeOn()||any(p<worldRender.loPitch.xyz)||any(p>worldRender.hiEnabled.xyz)){return 0.0;}
+ let top=2.0*f32(GRID_Y)/f32(GRID)-1.0;
+ let d=min(min(1.0-abs(p.x),1.0-abs(p.z)),min(p.y+1.0,top-p.y));
+ return 1.0-smoothstep(0.0,min(.5,worldRender.loPitch.w),d);
+}
+fn worldCollarSupport(p:vec3<f32>)->f32{
+ if(worldRender.atlas.x>.5&&middleSmokeWeight(p)<=0.0){
+  var n=vec4<f32>(0);let leafBounds=worldResidentLeafBounds(p,&n);
+  if(leafBounds.w>0.5){return leafBounds.z;}
+ }
+ let m=worldSmokeMaterial(p,1.0,1.0);
+ return m.absorption+m.scattering+length(m.emission);
+}
+fn worldPointSupportAndStep(p:vec3<f32>,rd:vec3<f32>,pitch:f32,middleInterval:bool,emptyExit:ptr<function,f32>)->f32{
+ *emptyExit=0.0;
+ if(worldRender.atlas.x>.5&&!middleInterval&&middleSmokeWeight(p)<=0.0){
+  let n=lastWorldLeafNode;let leafBounds=lastWorldLeafBounds;
+  if(leafBounds.w>0.5&&leafBounds.z<=u.empty_space_controls.x){
+   *emptyExit=worldLeafExitDistance(p,rd,n);
+   return 0.0;
+  }
+  if(leafBounds.w>0.5){
+   return clamp(leafBounds.z*pitch,0.0,1.6);
+  }
+ }
+ return 0.0;
+}
 fn worldSmokeBlend(p:vec3<f32>,fine:EmissiveMaterial,smokeVisible:f32,fireVisible:f32)->EmissiveMaterial{
  let top=2.0*f32(GRID_Y)/f32(GRID)-1.0;
  var cappedFine=fine;
@@ -95,6 +123,7 @@ fn worldSmokeBlend(p:vec3<f32>,fine:EmissiveMaterial,smokeVisible:f32,fireVisibl
  if(!worldSmokeOn()||any(p<worldRender.loPitch.xyz)||any(p>worldRender.hiEnabled.xyz)){return near;}
  let d=min(min(1.0-abs(p.x),1.0-abs(p.z)),min(p.y+1.0,top-p.y));
  let weight=1.0-smoothstep(0.0,min(.5,worldRender.loPitch.w),d);
+ if(weight<=0.0){return near;}
  let coarse=worldSmokeDiagnostic(worldSmokeMaterial(p,smokeVisible,fireVisible),true);
  return EmissiveMaterial(mix(near.emission,coarse.emission,weight),mix(near.absorption,coarse.absorption,weight),mix(near.scattering,coarse.scattering,weight));
 }

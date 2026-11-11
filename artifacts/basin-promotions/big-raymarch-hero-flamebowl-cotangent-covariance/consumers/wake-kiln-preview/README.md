@@ -12,8 +12,7 @@ basin revision until the operator deliberately advances the channel.
 
 Mount schema v1 is deliberately world-up: the consumer anchor supplies a
 translation and a uniform scale. Rotation and nonuniform scale fail loud
-because the current caller-owned renderer cannot apply them coherently to both
-smoke and boundary splats.
+because the mount contract admits world-up placement only.
 
 Generate or verify the mount from the repository root:
 
@@ -31,6 +30,7 @@ node volume-fire-actor-mount.mjs mount \
   --out artifacts/basin-promotions/big-raymarch-hero-flamebowl-cotangent-covariance/consumers/wake-kiln-preview/mount.json
 ```
 
-Port `8399` is the source-identified Wake replacement runtime at mount
-generation time. A later runtime reseat regenerates the mount's loader URLs;
+Port `8399` is the recorded consumer origin; verify the current serving source before opening it. A runtime reseat regenerates the mount's loader URLs;
 it does not alter the basin, policy, or mount identity.
+
+The current mount uses the retained reference renderer. Historical splat policy remains in `policy.requested`; `policy.effective.splats.enabled` is false with an explicit retirement reason. The immutable basin package and authoring snapshot keep their original bytes and revision. The mutable mount and policy identities change when their effective renderer changes.

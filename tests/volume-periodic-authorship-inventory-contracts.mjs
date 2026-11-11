@@ -30,6 +30,11 @@ function explicitTrigAuthorities(line) {
 }
 
 const admitted = new Map([
+  ['volume-optical-particles.mjs', [
+    {class:'particle covariance footprint geometry',line:/let axis=vec2<f32>\(cos\(angle\),sin\(angle\)\)/,calls:2},
+    {class:'particle covariance footprint geometry',line:/let faxis=vec2<f32>\(cos\(theta\),sin\(theta\)\)/,calls:2},
+    {class:'particle diagnostic cell color',line:/color=\.3\+\.7\*fract\(sin\(c\*vec3<f32>/,calls:1},
+  ]],
   ['volume-core.js', [
     { class: 'operator-authored wind angle to direction', line: /windDirection = vec3<f32>\(cos\(windAngle\), 0\.0, sin\(windAngle\)\);/, calls: 2 },
     // Operator-authored immersed-source aim (yaw/pitch sliders) to a unit
@@ -48,23 +53,8 @@ const admitted = new Map([
     // once per pattern on the CPU; nothing here animates a uniform.
     { class: 'inflow aperture static coverage geometry', line: /Math\.(?:cos|sin)\((?:angle\) \* circle|direction\)|\(q\[0\] \* Math\.cos\(direction\))/, calls: 5 },
   ]],
-  ['selective-head-live-runtime.mjs', [
-    { class: 'frozen-model static Fourier coordinate representation', line: /standardize\((?:sin|cos)\(phase\), featureIndex\)/, calls: 2 },
-  ]],
   ['volume-exact-basin-support-probe.py', [
     { class: 'offline model-probe static Fourier coordinate representation', line: /fourier\.extend\(\[np\.sin\(phase\), np\.cos\(phase\)\]\)/, calls: 2 },
-  ]],
-  ['volume-residual-upscale-mlx.py', [
-    { class: 'offline trainer static Fourier x/y coordinate representation', line: /np\.(?:sin|cos)\((?:xx|yy) \* frequency\)/, calls: 4 },
-  ]],
-  ['volume-stage-b-analytical-rebake.mjs', [
-    { class: 'camera perspective projection geometry', line: /Math\.tan\((?:\(40 \* Math\.PI \/ 180\) \* 0\.5|20 \* Math\.PI \/ 180)\)/, calls: 2 },
-  ]],
-  ['volume-raymarch-filament-orbit-witness.mjs', [
-    { class: 'diagnostic camera orbit geometry', line: /originalCamera\.target\[[02]\] \+ d[xyz] \* Math\.(?:cos|sin)\(angle\) [+-] d[xyz] \* Math\.(?:sin|cos)\(angle\)/, calls: 4 },
-  ]],
-  ['volume-intrinsic-presentation-witness.mjs', [
-    { class: 'diagnostic camera holdout geometry', line: /cameraOriginalPose\.target\[[02]\] \+ d[xyz] \* Math\.(?:cos|sin)\(orbitAngle\) [+-] d[xyz] \* Math\.(?:sin|cos)\(orbitAngle\)/, calls: 4 },
   ]],
 ]);
 
@@ -105,13 +95,9 @@ function assertPeriodicAuthorshipInventory(entries) {
   assert.deepEqual(
     [...new Set(observedClasses)].sort(),
     [
-      'camera perspective projection geometry',
-      'diagnostic camera holdout geometry',
-      'diagnostic camera orbit geometry',
-      'frozen-model static Fourier coordinate representation',
+      'particle covariance footprint geometry',
+      'particle diagnostic cell color',
       'inflow aperture static coverage geometry',
-      'offline model-probe static Fourier coordinate representation',
-      'offline trainer static Fourier x/y coordinate representation',
       'operator-authored source aim to direction',
       'operator-authored wind angle to direction',
     ].sort(),
@@ -201,10 +187,7 @@ for (const [name, injectedPython] of [
     'periodic_gain = vars(np)["sin"]\nanimated_wind = periodic_gain(now * 0.001)',
   ],
 ]) {
-  const entries = sourceEntries.map(([file, source]) => [
-    file,
-    file === 'volume-exact-basin-support-probe.py' ? `${source}\n${injectedPython}\n` : source,
-  ]);
+  const entries = [...sourceEntries,['volume-negative-probe.py',injectedPython]];
   try {
     assertPeriodicAuthorshipInventory(entries);
     acceptedCrossLanguageFalseClosures.push(name);

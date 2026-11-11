@@ -10,6 +10,9 @@ import {pickFireSplats} from './fire-splat-picking.mjs';
 export function createFireProxySync({registry, createLayer, readDomain, now = () => performance.now(), onDirty = () => {}}) {
  let fireProxy = null;
  function sync({prototype, display: displayRequested, visible=true, required, pickable=false, camera, layerId, canvas, bridge, stepEvery = 1}) {
+  // Keep the pinned native presentation intact, including when a caller
+  // requests Proxy directly instead of going through the disabled controls.
+  if(prototype?.isIntegralEvaluationHeld?.())return;
   // A disabled volume shows no fire in any mode, so its proxy draws nothing;
   // pausing is different and keeps the held field on screen.
   const present = !!prototype && (prototype.isActive?.() ?? true);

@@ -57,7 +57,7 @@ try{
  report.phase='field-dispatch';await save();await control('volume-look-freeze',0);
  await page.waitForFunction(()=>{const s=window.__kaminosVolumePrototype?.debugState();if(s?.error)throw Error(s.error);return s?.worldSmoke?.effective==='one-way-world-field'&&s.simStepCount>=8;});
  await control('volume-look-freeze',1);
- report.frozen=await page.evaluate(()=>{window.__kaminosVolumePrototype.setSelectiveHeadLiveCapturePaused(true);return window.__kaminosVolumePrototype.debugState();});
+ report.frozen=await page.evaluate(()=>{window.__kaminosVolumePrototype.setCapturePaused(true);return window.__kaminosVolumePrototype.debugState();});
  await page.locator('#info-bar').evaluate(e=>e?.blur()).catch(()=>{});
  for(const mode of ['budgeted','joins','history']){
   report.phase='render-'+mode;await save();await control('volume-raymarch-mode',mode);
@@ -103,7 +103,7 @@ try{
   await control('volume-look-freeze',0);
   await page.waitForFunction(()=>{const s=window.__kaminosVolumePrototype.debugState();if(s.error)throw Error(s.error);return s.worldSmoke?.effective==='one-way-world-field'&&s.simStepCount>=1;});
   await control('volume-look-freeze',1);
-  await page.evaluate(()=>window.__kaminosVolumePrototype.setSelectiveHeadLiveCapturePaused(true));
+  await page.evaluate(()=>window.__kaminosVolumePrototype.setCapturePaused(true));
   const reopened=await page.evaluate(async()=>{const r=window.__kaminosVolumePrototype;await r.sampleFrame({advanceSim:false,now:4000});return {mode:document.getElementById('volume-raymarch-mode').value,state:r.debugState()};});
   assert.equal(reopened.mode,scene.mode);assert.equal(reopened.state.opticalStepping.effective,scene.mode);assert.equal(reopened.state.controls.raySteps,3);
   report.reopened.push(reopened);await save();

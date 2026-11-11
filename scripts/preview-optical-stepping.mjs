@@ -75,7 +75,7 @@ try {
   assert.equal(report.frozen.physicalColor.effective,'emissive-transport-v2');
   report.phase='gpu-arithmetic';await save();await checkOpticalStepGpu(page,async values=>{report.gpuArithmetic=values;await save();});
   report.frozenCamera=await page.evaluate(()=>window.kaminosCameraDebugState());
-  for(const [label,value,orbit=0] of [['current','current'],['fixed','fixed'],['numerical','numerical:0.001'],['numerical-loose','numerical:0.01'],['fixed-dense','fixed-dense'],['orbit-fixed','fixed',0.15],['orbit-numerical','numerical:0.001',0.15],['current-repeat','current']]) {
+  for(const [label,value,orbit=0] of [['fixed','fixed'],['numerical','numerical:0.001'],['numerical-loose','numerical:0.01'],['orbit-fixed','fixed',0.15],['orbit-numerical','numerical:0.001',0.15],['fixed-repeat','fixed']]) {
     report.phase=label;await save();
     const arm=await page.evaluate(async({value,step,camera,orbit,raySteps})=>{
       const r=window.__kaminosVolumePrototype;
@@ -100,8 +100,7 @@ try {
     await page.screenshot({path:out+'/'+label+'-scene.png'});
     report.arms.push({label,orbit,...arm,rgba:undefined,png:undefined,sha256:createHash('sha256').update(bytes).digest('hex')});await save();
   }
-  assert.equal(report.arms.at(-1).sha256,report.arms[0].sha256,'return to current must reproduce held pixels');
-  assert.notEqual(report.arms[1].sha256,report.arms[0].sha256,'reference must not silently return current pixels');
+  assert.equal(report.arms.at(-1).sha256,report.arms[0].sha256,'return to fixed reference must reproduce held pixels');
   assert.equal(report.errors.length,0,'native errors');
   await page.locator('[data-workspace-mode="workbench"]').click();
   await page.locator('.tab[data-tab="volume"]').click();

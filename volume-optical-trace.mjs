@@ -140,3 +140,18 @@ export function compareOpticalTraces(full, lean, plan) {
   return {ok:fields.every(f=>f.violations===0)&&transferViolations===0,
     criteria,fields,comparedRays,transferMaxAbsolute,transferViolations};
 }
+
+
+// Idle bindings keep the shared layout valid; the full row allocation belongs to
+// an explicit trace. These buffers are independent of every retired splat path.
+export function createOpticalTraceBuffers(device) {
+  let header,rows;
+  try {
+    header=device.createBuffer({label:'camera optical trace header',size:64,
+      usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC});
+    rows=device.createBuffer({label:'camera optical trace idle row',size:OPTICAL_TRACE_STRIDE*4,
+      usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST});
+    device.queue.writeBuffer(header,0,new Uint32Array(16));
+    return {header,rows};
+  }catch(error){header?.destroy();rows?.destroy();throw error;}
+}

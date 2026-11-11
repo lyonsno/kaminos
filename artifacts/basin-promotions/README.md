@@ -56,3 +56,5 @@ Mount validates the channel, package hash, exact revision, embedded preset, and
 source identity; installs the preset into the caller-selected store; and emits
 consumer-origin loader and visual URLs. Moving the current channel to a later
 immutable revision is the replacement operation.
+
+New packages use `kaminos.volume.basin-route-templates.v2` and route through the immutable-preset loader. Historical packages retain their original bytes, route templates, revision and hashes. Mount validates those original templates for identity, then generates current consumer URLs independently. Its `loader.retiredVisualViews` records removed historical views; their old splat renderers are unavailable. The consumer server applies the current settings migration and reports retired controls. Historical authoring snapshots describe their source revision, not the current runtime renderer.

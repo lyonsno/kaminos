@@ -25,7 +25,7 @@ test('disabled authored emission survives serialization and source registration'
     sceneObjectTransformState:()=>({position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}),getMaterialStateForObject:()=>[]};
   sceneContext(context);
   vm.runInContext(source.slice(source.indexOf('function registerSceneObject('),source.indexOf('window.selectSceneField='))+
-    source.slice(source.indexOf('function serializeSceneObject('),source.indexOf('function readNumberControl(')),context);
+    source.slice(source.indexOf('function serializeSceneObject('),source.indexOf('async function addSceneObjectFromSource(')),context);
   const object={userData:{}};
   const original=context.registerSceneObject(object,{id:'flame-emitter',type:FLAME_EMITTER_TYPE,emissionEnabled:false});
   const saved=context.serializeSceneObject(original);

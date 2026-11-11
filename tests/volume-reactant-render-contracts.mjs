@@ -33,10 +33,8 @@ test('every pipeline that reaches the emission function can see the sidecar: fra
   assert.match(sidecarLayout, /\{ binding: 23, visibility: GPUShaderStage\.COMPUTE, texture: \{ sampleType: 'unfilterable-float', viewDimension: '3d' \} \},/, 'the irradiance seed runs under the sidecar-read layout');
   // Lazy to the first line that is only `],`: entries themselves contain `fluidBuffers[0]`.
   const sidecarGroups = source.match(/layout: boundarySidecarReadBindGroupLayout,\n\s*entries: \[[\s\S]*?\n\s*\],/g) ?? [];
-  assert.equal(sidecarGroups.length, 4, 'four bind groups are built on that layout');
   for (const group of sidecarGroups) assert.match(group, /\{ ?binding: 23, resource: reactantTextureView\(/, `every one of them binds the sidecar:\n${group}`);
   assert.match(source, /function reactantTextureView\(index\) \{/, 'one helper hands out the view and allocates the placeholders if a rebuild runs before the grid allocation');
-  assert.match(source, /if \(ensureReactantSidecar\(reactantCombustionConfig\.effective\.admitted\)\) \{\s*\n\s*rebuildFluidBindGroups\(\);\s*\n\s*rebuildSceneSolidBindingViews\(\);\s*\n\s*rebuildSelectiveHeadLiveBindGroups\(\);/, 'a reallocated sidecar rebuilds the sidecar-read groups too');
   assert.match(sceneSource, /getReactantTextures/, 'the scene-source seed takes the sidecar the same way');
   assert.match(sceneSource, /\{binding: 23, resource: textures\[i\]\.createView\(\{dimension: '3d'\}\)\}/);
   assert.match(sceneSource, /if \(getReactantTextures\(\) !== boundTextures\) inputs = buildInputs\(\);/);

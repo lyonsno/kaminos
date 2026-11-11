@@ -77,7 +77,7 @@ python3 serve.py 8095 \
   --volume-settings-store /absolute/path/to/consumer-settings
 ```
 
-Use `loader.targetUrl` from the **written mount JSON** for the ordinary cockpit. The CLI's stdout wraps it under `mount.loader.targetUrl`. This target already contains the validated controls and preset identity. Do not replace it with a generic fire URL. The consumer server must use the same settings store passed to `mount`. Mount validates package provenance; it does not switch your running checkout to the package's source commit. Verify the effective server source separately.
+Use `loader.targetUrl` from the **written mount JSON** for the ordinary cockpit. The CLI's stdout wraps it under `mount.loader.targetUrl`. This target addresses the unchanged immutable preset through the loader; the consumer server validates and migrates its controls before entering the cockpit. Do not replace it with a generic fire URL. The consumer server must use the same settings store passed to `mount`. Mount validates package provenance; it does not switch your running checkout to the package's source commit. Verify the effective server source separately.
 
 The [promotion reference](../artifacts/basin-promotions/README.md) covers author-side export and revision replacement. Its committed historical example is not automatically the latest accepted emissive basin.
 
@@ -103,7 +103,8 @@ Preset loading and scheduling are separate responsibilities:
 
 - **Same device:** the fire and inference must receive the same `GPUDevice` object for a same-device claim. Two tabs, two `requestDevice()` calls, or matching adapter names do not establish that. `createKaminosVolumePrototype` accepts `sharedGpuContext: { device, queue: device.queue, adapter }` for its prototype-owned renderer. A custom host must supply the complete normalized controls through `getControls`; use the cockpit's route application/readback as the reference, not a hand-picked subset of old defaults.
 - **Frame ownership:** sharing a device does not make the prototype's private animation loop a kit foreground opportunity. The model host must wire the actual renderer's frame work into the runtime's foreground interface, or explicitly measure independent same-device rendering. Name which route was exercised.
-- **Do not substitute a different renderer:** `productFrameOwner: 'caller'`, `initializeProductFrame()` and `encodeProductFrame()` implement the separately named **smoke-raymarch-under-splats** product path. That API is not an interchangeable way to display the ordinary emissive raymarch basin. Matching controls do not establish matching appearance across those paths.
+- **Frame ownership API:** the retired `productFrameOwner: 'caller'` smoke-under-splats path and its encode methods are unavailable. The retained prototype owns its frame loop. A host that needs caller-controlled encoding requires a separate supported adapter; mounting a preset does not provide that adapter.
+
 - **Model duties:** use the kit's cooperative execution boundaries and [foreground-opportunity integration](../webgpu-inference-kit/docs/integration-reference.md#put-real-foreground-work-between-inference-duties). Runtime-owned boundaries service pending foreground work before the next inference encode. A browser yield by itself does not prove that fire was submitted or presented.
 
 The loader and mount commands do not create a model route, load weights, or install this scheduler wiring. Reuse the model port's existing host/adapter and record any missing connection as incomplete integration, not as a preset-loading success.

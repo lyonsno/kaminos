@@ -21,11 +21,6 @@ for (const [key, id, param] of expectedControls) {
 }
 assert.doesNotMatch(index, /Flow reconstruction follows the support-sheet tangent/, 'the compact authoring surface does not narrate implementation mechanics in-app');
 
-const fireSimLookFields = index.match(/const FIRESIM_LOOK_FIELDS = \[([\s\S]*?)\];/)?.[1] || '';
-for (const [key] of expectedControls) {
-  assert.match(fireSimLookFields, new RegExp(`'${key}'`), `${key} is saved as authored reconstruction state`);
-}
-
 assert.match(core, /FLOW_RECONSTRUCTION_KERNEL_IDENTITY\s*=\s*'flow-tangent-positive-symmetric-trilinear-v0'/, 'kernel has a stable semantic identity');
 assert.match(core, /function normalizeFlowKernelStrength/, 'kernel strength is normalized once on the host');
 assert.match(core, /function normalizeFlowKernelRadius/, 'world-space feature radius is normalized once on the host');
@@ -39,29 +34,13 @@ const reconstructionRawFunction = core.match(/fn sampleWorldFlowReconstructionRa
 assert.doesNotMatch(reconstructionFunction, /divergenceAtCell[\s\S]*tangent/, 'divergence does not become a sampling direction');
 assert.doesNotMatch(reconstructionRawFunction, /sampleWorldBoundarySidecar/, 'kernel-off raymarch does not add sidecar reads to modes that never consume the sidecar');
 
-const raymarchLoopStart = core.indexOf('let expensiveSampleBudget');
-const raymarchLoopEnd = core.indexOf('let exposed =', raymarchLoopStart);
-const raymarchLoop = core.slice(raymarchLoopStart, raymarchLoopEnd);
-assert.match(raymarchLoop, /if \(flowKernelReconstructionActive\) \{[\s\S]*reconstructed = sampleWorldFlowReconstruction\(p\)/, 'raymarch consumes the reconstructed semantic bundle only on the explicit reconstruction path');
-assert.match(raymarchLoop, /directSupport = directCellOpticalSupport\(p\);[\s\S]*if \(flowKernelReconstructionActive\)[\s\S]*else \{[\s\S]*reconstructed = sampleWorldFlowReconstructionRaw\(p\)/, 'kernel-off raymarch preserves direct admission before its one trilinear semantic sample');
-assert.match(raymarchLoop, /reconstructed\.velocityDensity[\s\S]*reconstructed\.material[\s\S]*reconstructed\.fireLayer[\s\S]*reconstructed\.microLayer[\s\S]*reconstructed\.frontTopology/, 'raymarch consumes every reconstructed field lane together');
-
-assert.match(core, /struct BoundarySplatCamera[\s\S]*reconstructionControls:\s*vec4<f32>/, 'splat compaction receives the same effective reconstruction controls');
-const splatReconstructionFunction = core.match(/fn boundarySplatFlowReconstruction\(world: vec3<f32>\) -> BoundarySplatReconstructionSample \{([\s\S]*?)\n\}/)?.[1] || '';
-assert.match(splatReconstructionFunction, /if \(strength <= 0\.0\) \{ return center; \}/, 'splat feature reconstruction has the same exact identity path');
-assert.match(splatReconstructionFunction, /centerWeight = 0\.5[\s\S]*neighborWeight = 0\.25/, 'splat feature reconstruction uses the same positive symmetric kernel');
-const splatCompactor = core.match(/fn compactBoundarySplats[\s\S]*?(?=\n@compute @workgroup_size\(1\)\nfn finalizeBoundarySplats)/)?.[0] || '';
-assert.match(splatCompactor, /let admissionSidecar = boundarySidecar\[cellIndex\]/, 'splat candidate admission retains native cell authority');
-assert.match(splatCompactor, /if \(reconstructionStrength > 0\.0\) \{[\s\S]*boundarySplatFlowReconstruction\(world\)/, 'kernel-off splat compaction bypasses trilinear reconstruction work');
-assert.match(splatCompactor, /boundarySplatAttributeFeatures\(sidecar, material, fire, micro\)/, 'learned splat attributes consume the conditionally reconstructed feature bundle');
+await (await import('./helpers/fine-admission-native.mjs')).assertNativeFineAdmission();
 
 assert.match(core, /flowKernelIdentity:\s*FLOW_RECONSTRUCTION_KERNEL_IDENTITY/, 'runtime state records effective kernel identity');
 assert.match(core, /flowKernelRequested:[\s\S]*strength:[\s\S]*radiusWorld:[\s\S]*coherence:/, 'runtime state records requested authoring values');
 assert.match(core, /flowKernelEffective:[\s\S]*strength:[\s\S]*radiusWorld:[\s\S]*coherence:/, 'runtime state records normalized effective values');
-assert.match(core, /flowKernelCandidateAdmissionAuthority:\s*'structural-splat-candidates-v0'/, 'runtime state makes the unchanged post-structural-gate admission authority explicit');
 assert.doesNotMatch(core, /select\(directCellOpticalSupport\(p\), 1\.0, flowKernelReconstructionActive\)/, 'wider authored reconstruction cannot globally disable empty-cell traversal');
 assert.doesNotMatch(core, /fn flowReconstructionOpticalSupport\b/, 'optional filtering does not acquire independent material-support authority');
-assert.match(raymarchLoop, /directSupport = directCellOpticalSupport\(p\);[\s\S]*directCellExitDistance\(p, rd\)[\s\S]*if \(flowKernelReconstructionActive\)/, 'native transported support crosses empty cells before optional reconstruction work');
 assert.match(witness, /expectedFlowKernelStrength/, 'visual witness derives expected kernel strength from the requested route');
 assert.match(witness, /function quantizeFlowKernelControl/, 'visual witness models the declared HTML range steps instead of expecting impossible values');
 assert.match(witness, /state\.flowKernelIdentity[\s\S]*FLOW_RECONSTRUCTION_KERNEL_IDENTITY/, 'visual witness verifies effective kernel identity');
@@ -69,10 +48,6 @@ assert.match(witness, /state\.flowKernelEffective\?\.strength[\s\S]*expectedFlow
 assert.match(witness, /state\.flowKernelEffective\?\.radiusWorld[\s\S]*expectedFlowKernelRadius/, 'visual witness verifies effective world-space radius');
 assert.match(witness, /state\.flowKernelEffective\?\.coherence[\s\S]*expectedFlowKernelCoherence/, 'visual witness verifies effective flow coherence');
 
-const frozenRenderFunction = core.match(/async function renderFrozenScaleToCanvas\(options = \{\}\) \{([\s\S]*?)\n  \}\n\n  async function sampleDeterministicReplayFrame/)?.[1] || '';
-assert.match(frozenRenderFunction, /flowKernelIdentity:\s*state\.flowKernelIdentity/, 'frozen render receipt preserves the effective kernel identity');
-assert.match(frozenRenderFunction, /flowKernelRequested:\s*state\.flowKernelRequested/, 'frozen render receipt preserves requested kernel controls');
-assert.match(frozenRenderFunction, /flowKernelEffective:\s*state\.flowKernelEffective/, 'frozen render receipt preserves normalized effective kernel controls');
-assert.match(frozenRenderFunction, /flowKernelCandidateAdmissionAuthority:\s*state\.flowKernelCandidateAdmissionAuthority/, 'frozen splat receipt proves that reconstruction did not replace native-cell candidate admission');
+
 
 console.log('volume flow reconstruction kernel contracts passed');

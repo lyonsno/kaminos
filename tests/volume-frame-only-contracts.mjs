@@ -57,10 +57,7 @@ for (const [name, candidate] of [
 const witness = readFileSync(new URL('../volume-witness.mjs', import.meta.url), 'utf8');
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 const frozen = core.slice(core.indexOf('async function renderFrozenScaleToCanvas('), core.indexOf('async function renderFrozenScaleToCanvas(') + 18000);
-assert.match(frozen, /enqueueCanvasReadback\(encoder, finalPresentationTexture/,
-  'copy of transient swap-chain texture must be encoded before the render submit');
-assert.match(frozen, /enqueueCanvasReadback\(retryEncoder, retryTexture/,
-  'capacity retry must copy its final swap-chain texture before submit');
+assert.match(frozen, /enqueueCanvasReadback\(encoder,\s*texture/, 'frozen render encodes its presentation readback before submission');
 assert.ok(witness.indexOf('if (frameOnlyRequested)') < witness.indexOf("phase = 'identity'"), 'frame-only route must precede broad physics gate');
 assert.match(witness, /phase = 'frame-only-capture'/);
 assert.match(witness, /writeFrameOnlyPreflightFailure\(/);

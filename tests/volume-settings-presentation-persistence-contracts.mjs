@@ -97,7 +97,7 @@ assert.equal(receipt.presentationControlCount, 1);
 const target = buildVolumeSettingsPresetTarget(receipt, 'http://127.0.0.1:18414');
 assert.equal(target.searchParams.get('volume_raymarch_smoke'), 'off', 'ordinary preset target restores Smoke Off');
 
-for (const view of ['splat-only', 'raymarch-only', 'smoke-hybrid', 'full-hybrid-diagnostic']) {
+for (const view of ['raymarch-only']) {
   const visualTarget = buildVolumeSettingsPresetVisualTarget(receipt, 'http://127.0.0.1:18414', view);
   assert.equal(
     validateVolumeSettingsPresetVisualTarget(receipt, visualTarget.searchParams),
@@ -106,28 +106,15 @@ for (const view of ['splat-only', 'raymarch-only', 'smoke-hybrid', 'full-hybrid-
   );
 }
 
-const diagnosticVisualTarget = buildVolumeSettingsPresetVisualTarget(
-  receipt,
-  'http://127.0.0.1:18414',
-  'smoke-hybrid',
-  { assayToolbar: true },
-);
-assert.equal(diagnosticVisualTarget.searchParams.get('assay_toolbar'), '1');
-assert.equal(
-  validateVolumeSettingsPresetVisualTarget(receipt, diagnosticVisualTarget.searchParams),
-  true,
-  'the strict visual target admits the explicit diagnostic-toolbar route without weakening preset identity',
-);
-assert.match(
-  loader,
-  /buildVolumeSettingsPresetVisualTarget\(receipt, location\.origin, view, \{ assayToolbar: assayToolbarRequested \}\)/,
-  'the preset loader forwards diagnostic-toolbar intent through its rebuilt selective-head target',
-);
-assert.match(
-  witness,
-  /effectiveAssayUrl[\s\S]*assay_toolbar[\s\S]*diagnosticAssayUrl:/,
-  'the browser witness records the effective selective-head route after loader forwarding',
-);
+for (const retired of ['splat-only', 'smoke-hybrid', 'full-hybrid-diagnostic']) {
+  assert.throws(() => buildVolumeSettingsPresetVisualTarget(receipt, 'http://localhost', retired), /unsupported/);
+}
+assert.throws(() => buildVolumeSettingsPresetVisualTarget(receipt, 'http://localhost', 'raymarch-only', {assayToolbar:true}), /retired/);
+const ordinaryVisualTarget = buildVolumeSettingsPresetVisualTarget(receipt, 'http://localhost', 'raymarch-only');
+assert.equal(ordinaryVisualTarget.pathname, '/');
+assert.equal(ordinaryVisualTarget.searchParams.get('volume_raymarch_smoke'), 'off');
+assert.equal(ordinaryVisualTarget.searchParams.has('composition'), false);
+assert.equal(ordinaryVisualTarget.searchParams.has('role'), false);
 
 const partialVisualTarget = buildVolumeSettingsPresetVisualTarget(receipt, 'http://127.0.0.1:18414', 'raymarch-only');
 partialVisualTarget.searchParams.delete('volume_scene');

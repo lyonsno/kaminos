@@ -143,6 +143,9 @@ def main():
         package = json.loads(package_path.read_text())
         channel = json.loads(channel_path.read_text())
         assert package["schema"] == "kaminos.volume.basin-promotion-package.v1"
+        assert package["routes"]["identity"] == "kaminos.volume.basin-route-templates.v2"
+        assert list(package["routes"]["visual"]) == ["raymarch-only"]
+        assert package["routes"]["loader"] == f"/volume-settings-preset.html?preset={package['settingsPreset']['presetId']}"
         assert package["handle"] == "api-basin"
         assert package["revision"] == channel["current"]["revision"]
         assert package["settingsPreset"]["presetId"] == receipt["settingsPreset"]["presetId"]

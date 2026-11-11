@@ -1,21 +1,27 @@
-export function opticalSteppingConfig({mode = 'numerical', tolerance = 0.001} = {}) {
-  const modes = ['current', 'fixed', 'numerical', 'fixed-dense', 'budgeted', 'joins', 'history'];
-  if (!modes.includes(mode)) throw new Error(`unknown optical stepping mode: ${mode}`);
-  if (!Number.isFinite(tolerance) || tolerance <= 0) throw new Error('positive finite optical tolerance required');
-  if (!Number.isFinite(Math.fround(tolerance)) || Math.fround(tolerance) <= 0) throw new Error('optical tolerance must fit a positive finite GPU coefficient');
-  return {mode, value: modes.indexOf(mode), tolerance,
-    authority: modes.indexOf(mode)>=4 ? 'experimental fixed-count nonuniform quadrature; no continuous-field error bound' : 'experimental nested quadrature; estimated E/T error, not a continuous-field bound',
-    floor: modes.indexOf(mode)>=4 ? 'one fresh material evaluation per allocated stratum' : 'four integration panels per authored base step',
-    jitter: modes.indexOf(mode)>=4 ? 'interior mass-stratum sampling; full ray interval retained' : 'spatiotemporal partition phase and weighted interior strata; both clipped endpoints retained'};
+export function emptySpaceThreshold(value=0){
+  const requested=Number(value),effective=Math.fround(requested);
+  if(!Number.isFinite(requested)||requested<0||!Number.isFinite(effective)||(requested>0&&effective===0))throw Error('Empty-space threshold must fit a finite nonnegative GPU coefficient');
+  return effective;
 }
 
-// The legacy amount changes step length. Fixed-count guidance adapts placement
-// automatically; its adaptation is on regardless of that retained legacy value.
-export function raymarchAdaptivity(mode, legacyAmount = 0.65) {
-  opticalSteppingConfig({mode});
-  if (mode === 'current') return {value:legacyAmount,automatic:false,label:'Adaptive rays'};
-  return {value:['numerical','joins','history'].includes(mode)?1:0,automatic:true,
-    label:mode==='numerical'?'Adaptive steps':'Adaptive placement'};
+export const RAYMARCH_MODES=Object.freeze({
+ numerical:{value:2,label:'Adaptive'},fixed:{value:1,label:'Fixed quadrature reference'},
+ budgeted:{value:4,label:'Fixed evaluation count'},joins:{value:5,label:'Guided count'},history:{value:6,label:'Guided count + history'},
+});
+export function opticalSteppingConfig({mode='numerical',tolerance=0.001}={}){
+ const retiredMode=mode==='current'||mode==='fixed-dense'?mode:null;
+ mode=mode==='current'?'numerical':mode==='fixed-dense'?'fixed':mode;
+ const definition=RAYMARCH_MODES[mode];if(!definition)throw Error(`unknown optical stepping mode: ${mode}`);
+ if(!Number.isFinite(tolerance)||tolerance<=0||!Number.isFinite(Math.fround(tolerance))||Math.fround(tolerance)<=0)throw Error('positive finite GPU optical tolerance required');
+ return {mode,...definition,tolerance,retiredMode,
+  authority:definition.value>=4?'fixed-budget nonuniform quadrature; no continuous-field error bound':'nested quadrature; estimated E/T error, not a continuous-field bound',
+  floor:definition.value>=4?'at most one fresh material evaluation per allocated stratum; certified empty strata spend none':'four integration panels per authored base step; certified empty panels spend none',
+  jitter:definition.value>=4?'interior mass-stratum sampling; full ray interval retained':'spatiotemporal partition phase and weighted interior strata; both clipped endpoints retained'};
+}
+export function raymarchAdaptivity(mode){
+ if(mode==='fallback-fixed')return {value:0,automatic:true,label:'Uniform fallback'};
+ const config=opticalSteppingConfig({mode});
+ return {value:['numerical','joins','history'].includes(config.mode)?1:0,automatic:true,label:config.mode==='numerical'?'Adaptive steps':'Adaptive placement'};
 }
 
 export function resolveRaymarchAdaptivity(requested, legacyAmount, receipt) {
@@ -25,14 +31,14 @@ export function resolveRaymarchAdaptivity(requested, legacyAmount, receipt) {
   return {...raymarchAdaptivity(receipt.effective,legacyAmount),pending:false};
 }
 
-export function resolveOpticalStepping(config, {emissive, trace = false, exterior = false, explicit = false}) {
-  const wrongExterior=config.value>=4 && !exterior;
-  if (config.mode !== 'current' && (!emissive || trace || wrongExterior)) {
-    if (explicit) throw new Error('optical stepping comparison requires lean emissive beauty, without trace capture or joined exterior');
-    return {...opticalSteppingConfig({mode:'current',tolerance:config.tolerance}),requested:config.mode,
-      reason:wrongExterior?(exterior?'joined-exterior':'requires-joined-exterior'):trace?'diagnostic-trace-capture':'non-emissive-renderer'};
-  }
-  return {...config,requested:config.mode,reason:null};
+export function resolveOpticalStepping(config,{emissive,trace=false,exterior=false,localSource=false,explicit=false}){
+ const wrongExterior=config.value>=4&&!exterior&&!localSource;
+ if(!emissive||trace||wrongExterior){
+  if(explicit)throw Error('optical stepping comparison requires lean emissive beauty, without trace capture or missing joined exterior');
+  if(wrongExterior&&emissive&&!trace)return {...opticalSteppingConfig({mode:'numerical',tolerance:config.tolerance}),requested:config.mode,reason:'requires-joined-exterior'};
+  return {...config,mode:'fallback-fixed',label:'Uniform fallback',value:0,requested:config.mode,reason:trace?'diagnostic-trace-capture':'non-emissive-renderer'};
+ }
+ return {...config,requested:config.mode,reason:null};
 }
 
 export function validateOpticalPreviewArm(sample, state, {mode, tolerance, step, raySteps}) {
@@ -83,7 +89,7 @@ fn opticalStepInit(start: f32, end: f32, base: f32) -> OpticalStepState {
   s.origin = start;
   s.cursor = 0.0;
   s.end = max(0.0, end - start);
-  s.minimum = base * select(1.0, 0.5, OPTICAL_STEP_MODE == 3u);
+  s.minimum = base;
   s.maximum = s.minimum * select(1.0, 4.0, OPTICAL_STEP_MODE == 2u);
   s.width = min(s.maximum, s.end);
   s.transfer = vec4<f32>(0.0, 0.0, 0.0, 1.0);
@@ -190,6 +196,14 @@ fn opticalStepObserveWithTolerance(s: ptr<function, OpticalStepState>, q: vec4<f
   (*s).mask = 1u;
   opticalStepResetPositions(s);
 }
+// The complete current panel was certified empty before any of its probes.
+// Do not carry a probe from a skipped interval into a differently owned region.
+fn opticalStepSkipEmpty(s:ptr<function,OpticalStepState>){
+ (*s).cursor=min((*s).end,(*s).cursor+(*s).width);
+ let nextWidth=select((*s).width*2.0,(*s).maximum,(*s).phased==1u);
+ (*s).phased=0u;(*s).width=min((*s).end-(*s).cursor,min((*s).maximum,nextWidth));
+ (*s).probes[0]=vec4<f32>(0);(*s).mask=1u;opticalStepResetPositions(s);
+}
 fn opticalStepObserve(s: ptr<function, OpticalStepState>, q: vec4<f32>) {
   opticalStepObserveWithTolerance(s, q, OPTICAL_STEP_TOLERANCE);
 }
@@ -207,7 +221,7 @@ export function installOpticalSteppingPreview(renderer, document) {
   const select = document.createElement('select');
   select.className = 'select-input';
   select.id = label.htmlFor;
-  for (const [value, text] of [['current','Current'],['fixed','Fixed reference'],['fixed-dense','Fixed reference 2x'],
+  for (const [value, text] of [['fixed','Fixed quadrature reference'],
     ['numerical:0.01','Numerical 0.01'],['numerical:0.001','Numerical 0.001'],['numerical:0.0001','Numerical 0.0001']]) {
     const option = document.createElement('option');
     option.value = value; option.textContent = text; select.append(option);
@@ -215,7 +229,7 @@ export function installOpticalSteppingPreview(renderer, document) {
   select.style.minWidth = '0';
   select.style.flex = '1';
   const initial = renderer.debugState?.().opticalStepping || opticalSteppingConfig();
-  select.value = initial.mode === 'numerical' ? `numerical:${initial.tolerance}` : initial.mode;
+  const effective=opticalSteppingConfig(initial);select.value=effective.mode==='numerical'?`numerical:${effective.tolerance}`:effective.mode;
   let previous = select.value;
   select.addEventListener('change', () => {
     const [mode, tolerance] = select.value.split(':');
