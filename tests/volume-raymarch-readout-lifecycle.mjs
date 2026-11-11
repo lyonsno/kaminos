@@ -37,7 +37,7 @@ for(const route of ['residual','splats','proxy'])test('leaving ordinary beauty f
     encodeBrowserResidualSourcePass:noop,encodeBrowserResidualPass:()=>true,sceneTransportConsumer:null,canvasPresentationSuppressed:route==='proxy',
     appearanceDecompositionActive:()=>false,encodeBoundarySplatTelemetry:noop,boundarySplatTelemetryCopyPending:false,pressureResidualCopyPending:false,
     selectiveHeadLiveExactPause:null,recordVolumeFrameTiming:noop,requestAnimationFrame:()=>1,render:noop,cancelAnimationFrame:noop,
-    canvas:{classList:{remove:noop}},emitStatus:noop,
+    canvas:{classList:{remove:noop}},surface:{setActive:noop},emitStatus:noop,
   });
   Object.assign(context,volumeSubmissionContext(context.device));
   vm.runInContext(invalidate+'\n'+prepare+'\n'+frame+'\nrenderOrdinaryFrame(1);',context);

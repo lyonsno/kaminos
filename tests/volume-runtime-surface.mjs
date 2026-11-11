@@ -3,24 +3,36 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import * as THREE from 'three';
+import {createKaminosVolumePrototype} from '../volume-core.js';
+import {createBrowserVolumeSurface,createOffscreenVolumeSurface} from '../volume-runtime-surface.mjs';
 
-// Execute the production constructor through surface selection, before any GPU
-// initialization. This establishes the DOM-free construction seam, not WebGPU
-// worker compatibility or a composed frame.
+// Import the complete production constructor. Scheduling and resize also have
+// isolated CPU checks below; no test here establishes native GPU compatibility.
 const source=readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
-const start=source.indexOf('export function createKaminosVolumePrototype(');
-const end=source.indexOf('  const productTransform =',start);
-const constructor=source.slice(start,end).replace('export function','function')+'return canvas;\n}';
-test('caller-supplied runtime surface constructs without page globals or mounting',()=>{
- const canvas={width:16,height:16};
- const presentationSurface={canvas};
- const context={PROTOTYPE_IDENTITY:'volume',ROUTE_IDENTITY:'route'};
- vm.createContext(context);
- vm.runInContext(constructor,context);
- assert.equal(context.createKaminosVolumePrototype({presentationSurface,productFrameOwner:'caller',externalDevice:{},externalColorFormat:'rgba8unorm'}),canvas);
+test('complete production runtime constructs and disposes without page globals or GPU admission',async()=>{
+ assert.equal(typeof document,'undefined');assert.equal(typeof window,'undefined');
+ const canvas={width:16,height:16,getContext(){throw Error('unexpected GPU admission');}};
+ const transparency=[];let disposed=0;
+ const presentationSurface=createOffscreenVolumeSurface({canvas,readViewport:()=>({width:32,height:32}),onTransparent:value=>transparency.push(value),onDispose:()=>disposed++});
+ const runtime=createKaminosVolumePrototype({THREE,camera:new THREE.PerspectiveCamera(),getControls:()=>({resolution:16}),presentationSurface,
+   transparentCanvas:true,frameScheduler:{requestAnimationFrame(){throw Error('unexpected frame admission');},cancelAnimationFrame(){}}});
+ assert.equal(runtime.canvasElement(),canvas);assert.equal(runtime.isActive(),false);
+ assert.deepEqual(transparency,[true]);runtime.setSceneCompositionPresentation(false);assert.deepEqual(transparency,[true,false]);
+ assert.equal(runtime.debugState().active,false);
+ await runtime.dispose();assert.equal(disposed,1);
 });
 
-const {createBrowserVolumeSurface,createOffscreenVolumeSurface}=await import('../volume-runtime-surface.mjs');
+test('offscreen viewport rejects missing or nonfinite host measurements explicitly',()=>{
+ const canvas={width:1,height:1,getContext(){}};let viewport=null;
+ const surface=createOffscreenVolumeSurface({canvas,readViewport:()=>viewport});
+ for(const value of [null,{}, {width:NaN,height:8},{width:8,height:-1},{width:8,height:8,pixelRatio:0}]){
+   viewport=value;assert.throws(()=>surface.viewport(),/invalid offscreen viewport/);assert.throws(()=>surface.bounds(),/invalid offscreen viewport/);
+ }
+ viewport={width:0,height:0,fallbackWidth:20,fallbackHeight:10};
+ assert.deepEqual(surface.bounds(),{left:0,top:0,width:0,height:0});assert.equal(surface.viewport().pixelRatio,1);
+});
+
 test('offscreen surface follows applied viewport updates without DOM state',()=>{
  const canvas={width:1,height:1,getContext(){}};
  let viewport={left:3,top:4,width:100,height:80,pixelRatio:2};
@@ -51,7 +63,7 @@ test('injected scheduler preserves its owning context and cancellation handle',(
  const body=source.slice(start,end).replace('export function','function')+'return {requestAnimationFrame,cancelAnimationFrame};\n}';
  const calls=[],scheduler={requestAnimationFrame(callback){assert.equal(this,scheduler);calls.push(callback);return 73;},cancelAnimationFrame(handle){assert.equal(this,scheduler);calls.push(handle);}};
  const c={PROTOTYPE_IDENTITY:'v',ROUTE_IDENTITY:'r'};vm.createContext(c);vm.runInContext(body,c);
- const runtime=c.createKaminosVolumePrototype({presentationSurface:{canvas:{}},frameScheduler:scheduler});
+ const runtime=c.createKaminosVolumePrototype({presentationSurface:{canvas:{},setTransparent(){}},frameScheduler:scheduler});
  const callback=()=>{};assert.equal(runtime.requestAnimationFrame(callback),73);runtime.cancelAnimationFrame(73);assert.deepEqual(calls,[callback,73]);
 });
 

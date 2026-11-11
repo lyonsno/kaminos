@@ -27,10 +27,18 @@ export function createBrowserVolumeSurface({viewport,identity,routeIdentity,moun
 // state updates come from that owner's scene facade, without a DOM imitation.
 export function createOffscreenVolumeSurface({canvas,readViewport,onActive=()=>{},onTransparent=()=>{},onDispose=()=>{}}) {
   if(!canvas||typeof canvas.getContext!=='function'||typeof readViewport!=='function')throw Error('offscreen volume surface requires canvas and viewport reader');
+  function viewport(){
+    const value=readViewport();
+    if(!value||![value.width,value.height].every(x=>Number.isFinite(x)&&x>=0)
+      ||['left','top'].some(key=>value[key]!==undefined&&!Number.isFinite(value[key]))
+      ||['fallbackWidth','fallbackHeight','pixelRatio'].some(key=>value[key]!==undefined&&(!Number.isFinite(value[key])||value[key]<=0)))throw Error('invalid offscreen viewport: finite dimensions and positive pixel ratio required');
+    return {...value,left:value.left??0,top:value.top??0,pixelRatio:value.pixelRatio??1,
+      fallbackWidth:value.fallbackWidth??Math.max(1,value.width),fallbackHeight:value.fallbackHeight??Math.max(1,value.height)};
+  }
   return {
     canvas,
-    viewport:readViewport,
-    bounds:()=>{const v=readViewport();return {left:v.left??0,top:v.top??0,width:v.width,height:v.height};},
+    viewport,
+    bounds:()=>{const v=viewport();return {left:v.left,top:v.top,width:v.width,height:v.height};},
     resize(width,height){canvas.width=width;canvas.height=height;},
     setActive:onActive,
     setTransparent:onTransparent,

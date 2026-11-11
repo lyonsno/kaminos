@@ -11298,6 +11298,7 @@ export function createKaminosVolumePrototype({
     viewport, identity:PROTOTYPE_IDENTITY, routeIdentity:ROUTE_IDENTITY, mount:productFrameOwner !== 'caller',
   });
   const canvas = surface.canvas;
+  surface.setTransparent(Boolean(transparentCanvas));
   const requestAnimationFrame = callback => frameScheduler.requestAnimationFrame(callback);
   const cancelAnimationFrame = handle => frameScheduler.cancelAnimationFrame(handle);
   const productTransform = {
