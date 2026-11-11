@@ -6,7 +6,7 @@ export function createVolumeWorkerFrameBinding({appHost,volume,applyFrameInputs=
  const device=appHost?.device,queue=appHost?.queue,context=volume?.foregroundGpuContext?.();
  if(!device||queue!==device.queue||context?.device!==device||context?.queue!==queue)throw Error('worker flame binding requires the app shared device and queue');
  if(context.renderer!=='ordinary-volume'||context.productFrameOwner!=='prototype')throw Error('worker flame binding requires the ordinary volume renderer');
- if(typeof appHost.requester!=='function'||typeof volume.renderSharedFrame!=='function'||typeof applyFrameInputs!=='function')throw Error('worker flame binding requires frame and input callbacks');
+ if(typeof appHost.requester!=='function'||typeof appHost.activateFrames!=='function'||typeof volume.renderSharedFrame!=='function'||typeof applyFrameInputs!=='function')throw Error('worker flame binding requires frame and input callbacks');
  const owner=++owners;let sequence=0,service=null,pending=0,requester=appHost.requester;
  function frame(payload,ctx){
   if(!service)throw Error('ordinary worker flame requires foreground admission');
@@ -19,6 +19,8 @@ export function createVolumeWorkerFrameBinding({appHost,volume,applyFrameInputs=
   return volume.renderSharedFrame({now:payload.now,service});
  }
  async function requestFrame(payload,ctx,draw){
+  ctx.assertCurrent();
+  await appHost.activateFrames();
   ctx.assertCurrent();if(!requester)throw Error('worker app foreground frame owner is detached');
   if(typeof draw!=='function')throw Error('worker frame draw callback required');
   pending++;let handle;

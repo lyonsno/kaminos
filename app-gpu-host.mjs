@@ -27,6 +27,9 @@ export function createAppGpuHost({sharedGpu,host,kit,frameOwner,install=null,ses
   }
   return {
     adapter:sharedGpu.adapter,device,queue,foreground,requester,frameOwner,
+    // Worker-owned ordinary frames use this host before any model beginRun.
+    // Reuse the same owner installation and scene activation as model runs.
+    activateFrames:ensureFrames,
     session(){
       return session||=kit.createWebGpuInferenceSession({sessionId,adapter:sharedGpu.adapter,device,queue,
         adapterName:sharedGpu.adapter?.info?.description||sharedGpu.adapter?.info?.device||'kaminos-shared-device',deviceOwnership:'borrowed'});

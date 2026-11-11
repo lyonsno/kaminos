@@ -59,7 +59,11 @@ applies camera/viewport/control snapshots synchronously at the admitted frame
 boundary; its callback and GPU resources stay inside the worker. It is not an
 asynchronous authored-scene loader. Model `beginRun` installs the common
 requester on this binding without starting another RAF loop on the volume.
-Frame cancellation waits for the actual foreground receipt before returning.
+The binding awaits `appHost.activateFrames()` before admission, using the
+same owner installation and scene activation as model `beginRun`. The first
+ordinary worker frame therefore works before any model has run; no separate
+manual `setForegroundServiceActive(true)` setup is required. Frame cancellation
+waits for the actual foreground receipt before returning.
 An inactive flame can return held while the common host still draws the scene.
 
 Factory failure cleanup before returning a runtime remains the factory's

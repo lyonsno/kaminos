@@ -8,7 +8,7 @@ const factory=()=>{assert.equal(typeof module.createVolumeWorkerFrameBinding,'fu
 function fixture({held=false,apply=()=>{}}={}){
  const submissions=[],calls=[];let sceneCount=0,binding;
  const device={queue:{submit:buffers=>submissions.push(...buffers)}};
- const scene=createSceneFrameComposition({readInputs:()=>({}),frameCount:()=>sceneCount,draw:()=>{calls.push('scene');sceneCount++;}});scene.setForegroundServiceActive(true);
+ const scene=createSceneFrameComposition({readInputs:()=>({}),frameCount:()=>sceneCount,draw:()=>{calls.push('scene');sceneCount++;}});
  const appHost=createAppGpuHost({sharedGpu:{device},host:scene,kit:{createWebGpuForegroundService},frameOwner:()=>binding});
  const volume={foregroundGpuContext:()=>({device,queue:device.queue,renderer:'ordinary-volume',productFrameOwner:'prototype'}),renderSharedFrame({now,service}){
   calls.push('flame');if(held)return {status:'held',reason:'inactive'};
