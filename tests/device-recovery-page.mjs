@@ -22,7 +22,7 @@ async function fixture({loading=false,fail=false,present=true,offscreen=false}={
  giOutputGraphs:new Map(),fireLightFieldPass:null,sceneFlameHDR:null,sceneBloom:{dispose:no},neutralEnvironmentMap:null,scene:{remove:()=>events.push('voxel-remove')},
  collisionVoxelMesh:{userData:{disposeGpuSolid:()=>events.push('voxel-dispose')},geometry:{dispose:no},material:{dispose:no}},collisionVoxelRevision:'old',
  pmremGenerator:{dispose:no},THREE:{Vector2:class{},WebGPURenderer:class{constructor({device}){return renderer(device);}},PMREMGenerator:class{dispose(){}}},
- combinedRequirements:{},sharedDeviceHostRequirements:o=>o,requestKaminosSharedWebGpuDevice:async options=>{events.push(['requirements',options]);const device={destroy:()=>events.push('device-destroy')};devices.push(device);return {device};},
+ combinedRequirements:{},sharedDeviceHostRequirements:o=>o,requestKaminosSharedWebGpuDevice:async options=>{events.push(['requirements',options]);const device={destroy(){this.destroyed=true;events.push('device-destroy');}};devices.push(device);return {device};},
  isFireLightFieldTimingRoute:()=>false,location:{search:''},sharedGpu:null,sharedGpuFailureReason:null,compositionHost:{},renderPipeline:{},sceneGI:{resetHistory:no,reflections:{setRenderer:no}},
  createPageVolumePrototype:()=>{ctx.volumePrototype=volume();},flameDomainTranslation:[],flameDomainScale:1,volumePrimitivesInFlameDomain:()=>[],applyFlameEmitterPose:no,flameEmitterPose:{},syncAuthoredFlameSources:no,createVolumeMainRendererBridge:()=>({dispose:no}),
  window:{__kaminosSceneRadiance:{debugState:()=>({live:7})}},fireLightFieldRouteParams:()=>new URLSearchParams('volume_light_field=1'),fireShadowSceneRoute:s=>({live:s.live}),syncSceneRadianceRoute:async route=>routes.push([...route]),
@@ -62,4 +62,27 @@ console.log('page recovery preserves passive SAM, pending water and live lightin
 {
  const f=await fixture({offscreen:true});await f.hooks.stop();await f.run();
  assert(f.ctx.renderer.backend.device===f.devices[0],'offscreen replacement must use the one supplied candidate device');
+}
+
+{
+ const f=await fixture({fail:true});await f.hooks.stop();
+ const release=f.ctx.sceneRenderResources.retireRenderer;let first=true;
+ f.ctx.sceneRenderResources.retireRenderer=async()=>{if(first){first=false;throw Error('renderer cleanup temporarily denied');}return release();};
+ await assert.rejects(f.run(),/renderer cleanup temporarily denied/);
+ assert.equal(f.devices[0].destroyed,undefined,'retain the failed candidate until renderer cleanup succeeds');
+ f.setFail(false);await f.run();
+ assert.equal(f.devices[0].destroyed,true,'Retry must release the retained failed candidate before acquiring another');
+ assert.equal(f.devices.length,2);assert.equal(f.ctx.renderer.backend.device,f.devices[1]);
+}
+{
+ const f=await fixture({fail:true});await f.hooks.stop();
+ const request=f.ctx.requestKaminosSharedWebGpuDevice;
+ f.ctx.requestKaminosSharedWebGpuDevice=async options=>{
+  const next=await request(options),destroy=next.device.destroy;let first=true;
+  next.device.destroy=function(){if(first){first=false;throw Error('device cleanup temporarily denied');}return destroy.call(this);};return next;
+ };
+ await assert.rejects(f.run(),/device cleanup temporarily denied/);
+ f.setFail(false);await f.run();
+ assert.equal(f.devices[0].destroyed,true,'Retry must retain and retry a failed device release');
+ assert.equal(f.events.filter(event=>event==='renderer-dispose').length,2,'released renderer handles cannot be disposed again');
 }
