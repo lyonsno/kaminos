@@ -60,7 +60,7 @@ export function createFireUnitObject({THREE,record,camera,controls,viewport,shar
   linkState:()=>({moveEmitterWithGrid:data.moveEmitterWithGrid,emissionEnabled:data.emissionEnabled!==false}),
   pose:()=>({position:root.position.toArray(),rotation:[root.rotation.x,root.rotation.y,root.rotation.z],scale:root.scale.toArray()}),
   finePose(){const frame=fineFrame();return {position:[...frame.translate],rotation:[0,0,0],scale:[frame.scale,frame.scale,frame.scale]};},
-  setFinePose(value){const next=checkedFireUnitPose(value);owner.setData({...owner.capture(),fineOffset:next.position.map((v,i)=>(v-accepted.position[i])/accepted.scale[0]),fineScale:next.scale[0]/accepted.scale[0],fineManualHold:true});coverage.hold(fineFrame());},
+  setFinePose(value,{manualHold=true}={}){if(typeof manualHold!=='boolean')throw Error('Fine manual hold must be boolean');const next=checkedFireUnitPose(value);owner.setData({...owner.capture(),fineOffset:next.position.map((v,i)=>(v-accepted.position[i])/accepted.scale[0]),fineScale:next.scale[0]/accepted.scale[0],fineManualHold:manualHold});if(manualHold)coverage.hold(fineFrame());else coverage.release();},
   pickComponent(event,{camera,canvas}){const rect=canvas.getBoundingClientRect(),raycaster=new THREE.Raycaster();raycaster.setFromCamera(new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,1-(event.clientY-rect.top)/rect.height*2),camera);root.updateMatrixWorld(true);if(raycaster.intersectObject(emitter).length)return 'emitter';const box=fine.box.clone().applyMatrix4(root.matrixWorld);return raycaster.ray.intersectsBox(box)?'fine':null;},
   setPose(value){const pose=checkedFireUnitPose(value);root.position.fromArray(pose.position);root.rotation.set(...pose.rotation);root.scale.fromArray(pose.scale);owner.syncPose();},
   capture(){owner.syncPose();const world=runtime.worldFrame();if(world)data.worldReferenceDims=world.referenceDims;return structuredClone(data);},
@@ -76,8 +76,8 @@ export function createFireUnitObject({THREE,record,camera,controls,viewport,shar
     runtime.setRaymarchSmokePresentationMode(data.settings?.presentationControls?.['raymarch-smoke-presentation']?.value??'on');
     if(changed||offsetChanged||data.emissionEnabled!==before.emissionEnabled)supply();following=nextFollowing;placeEmitter();updateBounds();authoringRevision++;
    }catch(error){data=before;following=beforeFollowing;if(changed)runtime.setControls({...before.controls,lookFreeze:0});if(offsetChanged){const frame=fineFrame();runtime.relocateOrdinaryDomain(frame.translate,[],frame.scale);}coverage.release();if(before.fineManualHold)coverage.hold(fineFrame());supply();placeEmitter();updateBounds();throw error;}},
-  setEmitter(value){const next=checkedFireUnitRecord({...record,transform:accepted,fireUnit:{...data,emitter:value}}).fireUnit.emitter;
-   const before=data.emitter;data.emitter=next;try{supply();placeEmitter();data.fineManualHold=false;coverage.release();}catch(error){data.emitter=before;placeEmitter();throw error;}},
+  setEmitter(value,{manualHold=false}={}){if(typeof manualHold!=='boolean')throw Error('Fine manual hold must be boolean');const next=checkedFireUnitRecord({...record,transform:accepted,fireUnit:{...data,emitter:value}}).fireUnit.emitter;
+   const before=data.emitter;data.emitter=next;try{supply();placeEmitter();data.fineManualHold=manualHold;coverage.release();if(manualHold)coverage.hold(fineFrame());}catch(error){data.emitter=before;placeEmitter();throw error;}},
   syncPose(){
    let next;try{next=checkedFireUnitPose({position:root.position.toArray(),rotation:[root.rotation.x,root.rotation.y,root.rotation.z],scale:root.scale.toArray()});}
    catch(error){root.position.fromArray(accepted.position);root.rotation.set(...accepted.rotation);root.scale.fromArray(accepted.scale);throw error;}

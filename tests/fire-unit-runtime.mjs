@@ -2,6 +2,8 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.core.js';
 import {createFireUnitObject} from '../fire-unit-runtime.mjs';
+import {mountFireUnitControls} from '../fire-unit-controls.mjs';
+import {createSceneEdits} from '../scene-edit-session.mjs';
 import {FINE_COVERAGE_FIELDS} from '../volume-fine-coverage-controls.mjs';
 const pose=()=>({position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]});
 function fixture(fireUnit={}){
@@ -89,4 +91,17 @@ test('a rejected manual Fine move restores automatic following instead of leavin
   owner.runtime.fineCoverageInputs=()=>({status:'active',frame:{translate:before.position,scale:1},dims:[16,16,16],world:{lo:[-3,-3,-3],hi:[3,3,3]},sources:[{id:'source',lo:[2,-.8,-.1],hi:[2.2,-.6,.1],weight:1}],demand:[]});
   owner.updateFineCoverage(1);assert.notEqual(owner.read().fineCoverage.status,'manual-hold');assert.notEqual(owner.capture().fineManualHold,true);
  }finally{restore();}
+});
+
+
+test('native Fine and emitter cancel and history restore the coupled manual following state',()=>{
+ const {owner,restore}=fixture({fineManualHold:false});const node=()=>({dataset:{},append(){},remove(){}}),document={createElement:node,createTextNode:()=>({})};
+ const edits=createSceneEdits({read(){},write(){}}),panel=mountFireUnitControls({document,owner,asset:{id:'fire-a',root:owner.root},edits,components:{register:()=>({dispose(){}})},mountObject:()=>({dispose(){}}),redraw(){},onError:e=>{throw e;}});
+ try{
+  const fine='@fire-unit-fine:fire-a',emitter='@fire-unit-emitter:fire-a',before=owner.finePose(),moved={...before,position:[.25,0,0]};
+  edits.begin(fine);edits.preview(moved);assert.equal(owner.capture().fineManualHold,true);edits.cancel();assert.equal(owner.capture().fineManualHold,false,'Fine cancel restores automatic following');assert.deepEqual(owner.finePose(),before);assert.equal(edits.state().undoCount,0);
+  edits.apply(fine,moved);edits.undo();assert.equal(owner.capture().fineManualHold,false,'Fine Undo restores automatic following');assert.deepEqual(owner.finePose(),before);edits.redo();assert.equal(owner.capture().fineManualHold,true);assert.deepEqual(owner.finePose(),moved);
+  const source=owner.capture().emitter,next={...source,position:[.1,-.76,0]};edits.begin(emitter);edits.preview(next);assert.equal(owner.capture().fineManualHold,false);edits.cancel();assert.equal(owner.capture().fineManualHold,true,'emitter cancel restores manual Fine hold');assert.deepEqual(owner.capture().emitter,source);
+  edits.apply(emitter,next);edits.undo();assert.equal(owner.capture().fineManualHold,true,'emitter Undo restores manual hold');edits.redo();assert.equal(owner.capture().fineManualHold,false);
+ }finally{edits.clear();panel.dispose();restore();}
 });

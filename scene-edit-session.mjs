@@ -21,8 +21,8 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
   let replaying = false;
   let settling = null;
   const targets = new Map();
-  const captureHistory=(id,value)=>clone(history(id)?.capture(clone(value))??value);
-  const restoreHistory=(id,value)=>clone(history(id)?.restore(clone(value))??value);
+  const captureHistory=(id,value)=>clone((targets.get(id)?.history??history(id))?.capture(clone(value))??value);
+  const restoreHistory=(id,value)=>clone((targets.get(id)?.history??history(id))?.restore(clone(value))??value);
   const listeners = new Set();
   const check = (id, value) => {
     const target = targets.get(id);

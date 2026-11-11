@@ -12,7 +12,7 @@ import {createSceneEdits} from '../scene-edit-session.mjs';
 import {checkedRepetition} from '../scene-repetition.mjs';
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const pose={position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]};
-function fixture(){
+function fixture({ready,onError}={}){
  const state=createWorkingScene(),scene=new THREE.Scene(),edits=createSceneEdits({read:()=>null,write(){}}),lights=new Map();let next=0,failAttach=null;
  const serialize=row=>({id:row.id,type:row.type,label:row.label,source:row.source,transform:pose});
  const mount=row=>{if(row.id===failAttach)throw Error('typed attachment failed');const light=lights.get(row.id);scene.add(row.object,light,light.target);};
@@ -29,7 +29,7 @@ function fixture(){
  });
  context.sceneMembershipBatch=createSceneMembershipBatch({scene:state,membership:operations,
   records:{serialize,reloadable:()=>true,apply(){}},groups:{serialize:()=>structuredClone(state.groups),create:group},
-  duplicate:{supported:()=>true,object:id=>context.duplicateSceneObject(id),groupId:context.makeSceneObjectId}});
+  duplicate:{supported:()=>true,object:id=>context.duplicateSceneObject(id),groupId:context.makeSceneObjectId,ready:()=>ready,onError}});
  context.sceneMembershipBatch.attachHistory(edits);
  const a=html.indexOf('function duplicateSceneGroup('),b=html.indexOf('function duplicateSceneSelection(',a);assert.ok(a>=0&&b>a);vm.runInContext(html.slice(a,b),context);
  add('lamp');group(['lamp'],'Lights',{id:'original',transform:pose});
@@ -101,4 +101,22 @@ test('duplicating a component inside assembly Edit Mode keeps membership and rol
  assert.equal(f.state.groups[0].assembly.roles['lamp-copy'],'outlet');
  await f.edits.undo();assert.deepEqual(f.state.groups[0].objectIds,['lamp']);assert.equal(f.state.find('lamp-copy'),undefined);
  await f.edits.redo();assert.deepEqual(f.state.groups[0].objectIds,['lamp','lamp-copy']);assert.equal(f.state.groups[0].assembly.roles['lamp-copy'],'outlet');
+});
+
+
+test('group and multiselection duplication roll back failed field construction before recording insertion',async()=>{
+ for(const group of [true,false]){let reject,error;const ready=new Promise((_resolve,r)=>{reject=r;}),f=fixture({ready,onError:e=>{error=e;}});f.add('second');
+  f.state.setGroups([{id:'original',label:'Lights',objectIds:['lamp','second'],transform:pose}]);
+  if(group)f.context.duplicateSceneGroup('original');else f.context.sceneMembershipBatch.duplicateSelection(['lamp','second'],['lamp','second']);
+  assert.equal(f.edits.state().undoCount,0,'pending GPU construction is not a completed insertion');reject(Error('GPU field rejected'));await new Promise(resolve=>setImmediate(resolve));
+  assert.match(error.message,/GPU field rejected/);assert.deepEqual(f.state.objects.map(x=>x.id),['lamp','second']);assert.deepEqual(f.state.groups.map(x=>x.id),['original']);assert.equal(f.edits.state().undoCount,0);
+ }
+});
+
+
+test('settled multiselection insertion and Undo preserve unrelated changes made during initialization',async()=>{
+ let resolve;const ready=new Promise(r=>{resolve=r;}),f=fixture({ready});f.add('second');f.add('unrelated');
+ f.context.sceneMembershipBatch.duplicateSelection(['lamp','second'],['lamp','second']);
+ let value=0;f.edits.register('@data:unrelated',{read:()=>({value}),check:v=>v,write:v=>{value=v.value;}});f.edits.apply('@data:unrelated',{value:7});f.group(['unrelated'],'Later group',{id:'later',transform:pose,select:false});
+ resolve();await new Promise(r=>setImmediate(r));assert.equal(f.edits.state().undoCount,2);await f.edits.undo();assert.equal(value,7);assert.ok(f.state.find('unrelated'));assert.ok(f.state.groups.some(g=>g.id==='later'));assert.equal(f.state.find('lamp-copy'),undefined);await f.edits.undo();assert.equal(value,0);await f.edits.redo();await f.edits.redo();assert.ok(f.state.find('lamp-copy'));assert.ok(f.state.find('second-copy'));assert.equal(value,7);assert.ok(f.state.groups.some(g=>g.id==='later'));
 });

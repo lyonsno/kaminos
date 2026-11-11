@@ -1,3 +1,4 @@
+import {createDuplicateCommit} from '../../scene-duplicate-commit.mjs';
 import {createSceneMaterials} from '../../scene-material-recipes.mjs';
 import {sceneMaterialPrograms} from '../../scene-material-programs.mjs';
 import {ASH_OBJECT_TYPE} from '../../ash/scene-record.mjs';
@@ -40,6 +41,7 @@ const interactionFunctions=['currentBeautyFrameOptions','interactiveSceneRoots',
 // while exercising extracted page consumers. Ownership/integration tests use
 // createWorkingScene itself; this double is not evidence for its invariants.
 export function sceneContext(context, options) {
+  context.createDuplicateCommit??=createDuplicateCommit;
   context.FIRE_UNIT_TYPE??=FIRE_UNIT_TYPE;context.checkedFireUnitPose??=checkedFireUnitPose;context.authoredFireUnits??=new Map();
   context.sceneMaterials??=createSceneMaterials({entries:()=>context.workingScene?.objects??[],definitions:sceneMaterialPrograms});
   context.restoreSceneReflectionSettings??=()=>{};

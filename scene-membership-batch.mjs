@@ -1,3 +1,4 @@
+import {createDuplicateCommit} from './scene-duplicate-commit.mjs';
 import {captureSceneMembership,resolveSceneMembershipTopology} from './scene-membership-history.mjs';
 import {checkedPose} from './scene-edit-session.mjs';
 import {checkedGroupPose} from './scene-group.mjs';
@@ -90,11 +91,11 @@ export function createSceneMembershipBatch({scene,membership,records,groups,
         }
       }});
     insertionTargets.add(target);for(const copy of copies)membership.retainForHistory(copy,target);
-    const complete=({commit})=>{
-      edits.discard(change=>change.id===`@group:${groupId}`||change.id===`@assembly:${groupId}`);
-      if(commit)edits.recordApplied(target,null,snapshot(),'Duplicate group');
-      else {for(const copy of copies)membership.remove(copy,{recordHistory:false});selectOriginal();}
-    };
+    const finish=createDuplicateCommit({edits,ready:duplicate.ready?.(copies),ids:[...copies,groupId,'@group:'+groupId],
+      commit:()=>edits.recordApplied(target,null,snapshot(),'Duplicate group'),
+      cancel:()=>{for(const copy of copies)membership.remove(copy,{recordHistory:false});selectOriginal();},
+      cancelPlacement:duplicate.cancelPlacement,onError:duplicate.onError});
+    const complete=result=>{edits.discard(change=>change.id===`@group:${groupId}`||change.id===`@assembly:${groupId}`);return finish(result);};
     if(interactive){if(!start('translate',complete)){complete({commit:false});throw Error('Could not start group placement');}}
     else complete({commit:true});return groupId;
   }
@@ -103,9 +104,9 @@ export function createSceneMembershipBatch({scene,membership,records,groups,
     if(scope&&(!owner||members.some(id=>!owner.objectIds.includes(id))))throw Error("Choose components inside the edited assembly");
     if(members.some(id=>!duplicate.supported(scene.find(id))))throw Error('This selection contains a source whose independent duplication is unsupported');
     const before=check(capture()),copies=new Map(),newRoots=[];edits.assertCanRecordApplied(selectionTarget);
-    const revert=()=>{for(const id of copies.values())detach(id);scene.setGroups(before.groups);select(before.selection.ids,before.selection.activeId);membership.releaseUnreferenced();};
+    const revert=()=>{const selected=scene.selection.ids.some(id=>newRoots.includes(id)||[...copies.values()].includes(id));for(const id of copies.values())detach(id);if(selected){const ids=before.selection.ids.filter(id=>id.startsWith('@group:')?scene.groups.some(g=>g.id===id.slice(7)):scene.find(id));select(ids,ids.includes(before.selection.activeId)?before.selection.activeId:ids.at(-1)??null);}membership.releaseUnreferenced();};
     try{
-      for(const id of members){const copy=duplicate.object(id);copies.set(id,copy);membership.retainForHistory(copy,selectionTarget);}
+      for(const id of members){const copy=duplicate.object(id);copies.set(id,copy);}
       for(const id of roots){
         if(id.startsWith('@group:')){const group=scene.groups.find(row=>row.id===id.slice(7)),copyId=duplicate.groupId();groups.create(group.objectIds.filter(id=>copies.has(id)).map(id=>copies.get(id)),`${group.label} copy`,{id:copyId,transform:structuredClone(group.transform),repetition:checkedRepetition(group.repetition),assembly:copyAssembly(group,copies)});newRoots.push('@group:'+copyId);}
         else newRoots.push(copies.get(id));
@@ -113,10 +114,16 @@ export function createSceneMembershipBatch({scene,membership,records,groups,
       if(owner)scene.setGroups(scene.groups.map(group=>group.id!==owner.id?group:{...group,objectIds:[...group.objectIds,...copies.values()],assembly:{...group.assembly,roles:{...group.assembly.roles,...copyAssembly(owner,copies).roles}}}));
       select(newRoots,newRoots.at(-1));
     }catch(error){revert();throw error;}
-    const complete=({commit})=>{
-      edits.discard(entry=>entry.id==='@selection-transform'&&Object.keys(entry.after?.roots||{}).some(id=>newRoots.includes(id)||[...copies.values()].includes(id))||[...copies.values()].includes(entry.id));
-      if(commit)edits.recordApplied(selectionTarget,before,capture(),`Duplicate ${members.length} selected`);else revert();
-    };
+    const target='@selection-insertion:'+encodeURIComponent([...copies.values()][0]),copyIds=[...copies.values()],groupIds=newRoots.filter(id=>id.startsWith('@group:')).map(id=>id.slice(7));
+    // Store only this insertion. GPU settlement may finish after unrelated edits.
+    const snapshot=()=>{const objects=copyIds.map(id=>scene.find(id)).filter(Boolean);if(!objects.length)return null;if(objects.length!==copyIds.length)throw Error('Incomplete selection insertion');return {objects:objects.map(records.serialize),groups:scene.groups.filter(g=>groupIds.includes(g.id)).map(g=>structuredClone(g)),owner:owner?{id:owner.id,roles:Object.fromEntries(copyIds.map(id=>[id,scene.groups.find(g=>g.id===owner.id)?.assembly?.roles[id]]))}:null};};
+    edits.register(target,{allowMissing:true,read:snapshot,check:value=>{if(value===null)return null;if(!Array.isArray(value.objects)||value.objects.length!==copyIds.length||new Set(value.objects.map(row=>row.id)).size!==copyIds.length||value.objects.some(row=>!copyIds.includes(row.id)||!records.reloadable(row))||!Array.isArray(value.groups)||value.groups.length!==groupIds.length||new Set(value.groups.map(g=>g.id)).size!==groupIds.length||value.groups.some(g=>!groupIds.includes(g.id)||g.objectIds.some(id=>!copyIds.includes(id)))||(owner?value.owner?.id!==owner.id||!value.owner.roles||copyIds.some(id=>typeof value.owner.roles[id]!=='string'):value.owner!==null))throw Error('Invalid selection insertion');return structuredClone(value);},
+      write:async value=>{if(value===null){revert();return;}const previous=capture();try{for(const record of value.objects)await membership.reconstruct(record);for(const group of value.groups)groups.create(group.objectIds,group.label,{...group,id:group.id});if(value.owner){const group=scene.groups.find(g=>g.id===value.owner.id);if(!group?.assembly)throw Error('Edited assembly no longer exists');scene.setGroups(scene.groups.map(g=>g.id!==group.id?g:{...g,objectIds:[...g.objectIds,...copyIds.filter(id=>!g.objectIds.includes(id))],assembly:{...g.assembly,roles:{...g.assembly.roles,...value.owner.roles}}}));}select(newRoots,newRoots.at(-1));changed();}catch(error){await apply(previous);throw error;}}});
+    insertionTargets.add(target);for(const id of copyIds)membership.retainForHistory(id,target);
+    const finish=createDuplicateCommit({edits,ready:duplicate.ready?.(copyIds),ids:[...copyIds,...newRoots,...groupIds],
+      commit:()=>edits.recordApplied(target,null,snapshot(),`Duplicate ${members.length} selected`),cancel:revert,
+      cancelPlacement:duplicate.cancelPlacement,onError:duplicate.onError});
+    const complete=result=>{edits.discard(entry=>entry.id==='@selection-transform'&&Object.keys(entry.after?.roots||{}).some(id=>newRoots.includes(id)||[...copies.values()].includes(id))||[...copies.values()].includes(entry.id));return finish(result);};
     if(interactive){if(!start('translate',complete)){complete({commit:false});throw Error('Could not start duplicate placement');}}
     else complete({commit:true});return newRoots;
   }

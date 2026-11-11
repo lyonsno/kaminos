@@ -3014,6 +3014,7 @@ import {createAuthoredWaterFeature} from './authored-water-feature.mjs';
 import { createWorkingScene } from './working-scene.mjs';
 import {createSceneObjectRecord} from './scene-object-record.mjs';
 import {createSceneRecordOperations} from './scene-record-operations.mjs';
+import {createDuplicateCommit} from './scene-duplicate-commit.mjs';
 import {FIRE_UNIT_TYPE,FIRE_UNIT_SOURCE,checkedFireUnitRecord,checkedFireUnitPose,moveLinkedFireEmitter} from './fire-unit-record.mjs';
 import {createFireUnitObject} from './fire-unit-runtime.mjs';
 import {mountFireUnitControls} from './fire-unit-controls.mjs';
@@ -27592,7 +27593,8 @@ function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
   if(!canDuplicateObject(entry))throw Error('This object does not support Duplicate');
   const copyId=makeSceneObjectId('mesh'),record={...serializeSceneObject(entry),id:copyId,label:`${sceneObjectDisplayLabel(entry)} copy`,groupId:null,createdAt:new Date().toISOString()};
   const target=ensureSceneObjectMembershipTarget(copyId);scenePlacementTools.edits.assertCanRecordApplied(target);
-  if(entry.type===FIRE_UNIT_TYPE){const unit=mountAuthoredFireUnitShell(record,{activate:!deferRecord});void unit.initialize().catch(error=>setInfo('Flame duplicate: '+error.message));}
+  let initialization=null;
+  if(entry.type===FIRE_UNIT_TYPE){const unit=mountAuthoredFireUnitShell(record,{activate:!deferRecord});initialization=unit.initialization=unit.initialize();void initialization.catch(()=>{});}
   else if(entry.type===FLAME_EMITTER_TYPE){requirePluralFlameSourceRuntime();ensureAuthoredFlameEmitter(record,{activate:!deferRecord});syncAuthoredFlameSources();}
   else if(entry.type===LOCAL_LIQUID_EMITTER_TYPE){const {object}=createLocalLiquidEmitterObject(THREE,record,{sampling:waterFeature.setup?.waterSampling});scene.add(object);registerSceneObject(object,record,{activate:!deferRecord});syncLocalLiquidHostEmitters();}
   else if(entry.type===ASH_SOURCE_TYPE)mountAuthoredAshSource(record);
@@ -27608,13 +27610,12 @@ function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
   if(sharedBindings.length){materialCopy.bindings.push(...sharedBindings);sceneMaterials.write(materialCopy);}
   if(!deferRecord&&entry.groupId){const group=workingScene.groups.find(g=>g.id===entry.groupId);if(group)workingScene.updateGroup(group.id,{objectIds:[...group.objectIds,copyId]});}
   if(!deferRecord)setActiveSceneObject(copyId);renderSceneObjectList();
-  const complete=({commit})=>{
-    scenePlacementTools.edits.discard(change=>change.id===copyId);
-    if(commit)recordSceneObjectInsertion(copyId);
-    else {removeSceneObjectInternal(copyId,{recordHistory:false});setActiveSceneObject(id);}
-  };
+  const finish=deferRecord?()=>{}:createDuplicateCommit({edits:scenePlacementTools.edits,ready:initialization,ids:[copyId],
+    commit:()=>recordSceneObjectInsertion(copyId),cancel:()=>{const selected=workingScene.activeObjectId===copyId;removeSceneObjectInternal(copyId,{recordHistory:false});if(selected)setActiveSceneObject(id);},
+    cancelPlacement:()=>scenePlacementTools.finish(false),onError:error=>setInfo('Flame duplicate: '+error.message)});
+  const complete=result=>{scenePlacementTools.edits.discard(change=>change.id===copyId);return finish(result);};
   if(interactive){if(!scenePlacementTools.start('translate',complete)){complete({commit:false});throw Error('Could not start duplicate placement');}}
-  else if(!deferRecord)recordSceneObjectInsertion(copyId);
+  else if(!deferRecord)finish({commit:true});
   return copyId;
 }
 const sceneMembershipBatch=createPageSceneMembershipBatch();
@@ -28301,7 +28302,7 @@ function createPageSceneMembershipBatch(){
     },
     select:(ids,id)=>ids.length?setSceneSelection(ids,id):clearActiveSceneObjectSelection(),
     detach:detachSelectionMember,
-    duplicate:{supported:canDuplicateObject,object:id=>duplicateSceneObject(id,{deferRecord:true}),groupId:()=>makeSceneObjectId('group')},
+    duplicate:{supported:canDuplicateObject,object:id=>duplicateSceneObject(id,{deferRecord:true}),groupId:()=>makeSceneObjectId('group'),ready:ids=>{const pending=ids.map(id=>authoredFireUnits.get(id)?.initialization).filter(Boolean);return pending.length?Promise.all(pending):null;},cancelPlacement:()=>scenePlacementTools.finish(false),onError:error=>setInfo('Duplicate: '+error.message)},
     changed(){renderSceneObjectList();updateTransformInspector();window._kaminosDirty?.();},
   });
 }
