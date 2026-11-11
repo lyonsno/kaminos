@@ -6,6 +6,7 @@ import {checkedViewportDisplay} from '../viewport-display-settings.mjs';
 import {createFireProxySync} from '../fire-proxy-sync.mjs';
 import {createProxySnapshotRegistry} from '../proxy-snapshot.mjs';
 import {localLiquidPresentationPlan} from '../local-liquid-presentation.mjs';
+import {installPageSceneDraw} from './helpers/page-scene-draw.mjs';
 
 test('saved viewport visibility rejects malformed target identity rather than accepting untracked hidden state',()=>{
  for(const hiddenIds of [false,{},[null],[17],['']])assert.throws(()=>checkedViewportDisplay({hiddenIds}),/hidden/i);
@@ -82,8 +83,10 @@ test('actual viewport submission masks mounted light and group illumination whil
  const record={id:'spot',type:'light',source:'kaminos:scene-spot-light',transform:{position:[2,3,2],rotation:[-.6,.7,0],scale:[1,1,1]},light:{kind:'spot',enabled:true,color:'#ffffff',intensity:120,angle:30,penumbra:.3,aimDistance:3}};
  const entry=c.mountSceneSpotLight(record),{light}=c.sceneSpotLights.get('spot');
  // Evaluate the runtime collection actually supplied at the render call site.
- const expression=/const shadingReceipt = withViewportVisibility\((.*?),isSceneItemVisible/.exec(html)[1];
- const objects=vm.runInContext(expression,c),scene={objects:c.sceneObjects,groups:[{id:'lights',objectIds:['spot']}]};
+ let objects;
+ c.withViewportVisibility=(rows,_visible,draw)=>{objects=rows;return draw();};
+ installPageSceneDraw(c)();
+ const scene={objects:c.sceneObjects,groups:[{id:'lights',objectIds:['spot']}]};
  for(const hidden of [['spot'],['@group:lights']]){
   assert.throws(()=>withViewportVisibility(objects,id=>sceneItemVisible(id,hidden,scene),()=>{assert.equal(entry.object.visible,false);assert.equal(light.visible,false,'hidden authored light must be absent from viewport lighting');throw Error('render failed');}),/render failed/);
   assert.equal(light.visible,true);assert.equal(light.intensity,120);assert.equal(entry.light.enabled,true);
