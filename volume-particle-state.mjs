@@ -31,7 +31,7 @@ export function validateParticleStateSettings(s){
  if(s.materialStateVersion!==1)throw Error("Unsupported particle material-state version");
  for(const k of ['exchangeStrength','stateLife','lifeFade','followFraction','emissionEdgeSoftness','extinctionEdgeSoftness'])if(!(s[k]>=0&&s[k]<=1))throw Error('Particle '+k+' must be between zero and one');
  for(const k of ['exchangeTime','exchangeCellSize','lifeFuel','lifeHeat','lifeSmoke','lifeQuiet','emissionFalloff','extinctionFalloff'])if(!(s[k]>0&&Math.fround(s[k])>0))throw Error('Particle '+k+' must be positive');
- if(!Number.isInteger(s.debugView)||s.debugView<0||s.debugView>7)throw Error('Unknown particle material view');
+ if(!Number.isInteger(s.debugView)||s.debugView<0||s.debugView>8)throw Error('Unknown particle material view');
  return s;
 }
 
