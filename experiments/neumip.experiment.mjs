@@ -1,11 +1,12 @@
 import {createNeumipCarrier,createNeumipCarrierGeometry,NEUMIP_CARRIER_SOURCE} from '../neumip-carrier.mjs';
 import {prepareNeumipParameters} from '../neumip-program.mjs';
 
-const rootURL='/api/read?root=image-inbox&path=neumip-author-models%2F';
+const AUTHOR_ROOT='/api/read?root=image-inbox&path=neumip-author-models%2F';
 const positive=(x,name)=>{if(!Number.isFinite(x)||x<=0)throw Error(`${name} must be positive`);return x;};
 export default {
   id:'neumip',title:'Neural surface materials',
   async create({host,inputs,record,updateInputs}) {
+    const rootURL=inputs.catalogRoot??AUTHOR_ROOT;if(typeof rootURL!=='string'||!rootURL)throw Error('Neural material catalog root required');
     const response=await fetch(rootURL+'catalog.json');if(!response.ok)throw Error('Install the author NeuMIP models first (tools/install_neumip_models.py)');
     const catalog=await response.json();if(catalog.schema!=='kaminos.neumip.author-models.v1')throw Error('Unknown NeuMIP model catalog');
     const source=name=>{const entry=catalog.materials[name];if(!entry)throw Error(`NeuMIP material is not installed: ${name}`);return {...entry,url:rootURL+encodeURIComponent(entry.filename)};};

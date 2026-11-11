@@ -197,3 +197,34 @@ barycentric UV interpolation, shading normals, source sidedness and the actual
 These establish the source/transport join, not equality to Three's full beauty
 renderer, global light transport, the quality of a learned material or a runtime
 speed advantage.
+
+
+## First source-to-student control
+
+The stacked trainer branch adds `tools/trellis-material-fit.mjs CONFIG_JSON OUT`.
+It requires Greenroom admission and explicit source path/hash, region, tile size,
+resolution, update/batch/heldout/sample counts and seed. It reuses the unchanged
+NeuMIP trainer plus its companion author-format writer from `1398ae8a6`.
+`trellis-training-source.mjs` uses the existing GLB reader and PNG decoder, admits
+one static identity-transformed indexed standard opaque UV0 source, clips the
+selected source region, and rotates positions/normals to the right-handed
+`(u,n,-v)` material frame. Unsupported channels/transforms are explicit refusals,
+not a claim to handle every TRELLIS output. Source textures are native GPU
+sRGB/linear textures with the admitted glTF wrap/filter settings.
+
+The source/config/code, all fresh query/label streams, heldout targets and
+predictions, source triangles, model checkpoints and matched comparison grids
+are retained in the caller output directory. Failures write a terminal report
+before GPU imports or source loading. Export/reload checks the actual runtime
+archive. A passed report means the run completed; `result.heldoutLossDecreased`
+is recorded separately and neither status certifies visual fidelity.
+
+The initial control trains only LOD0 on an interior panel tile, using the
+existing ground-fit near-hemisphere query distribution and one-bounce textured
+source transport. Higher independent mip fields remain untrained. Finite source
+boundaries and missing support coverage are still limits. The existing neural
+material experiment accepts an optional `catalogRoot` input so independently
+owned checkpoint catalogs can be inspected without editing the author catalog;
+the author catalog remains its default. Viewing this control on a folded sheet
+or sphere is an evaluator exercise, not the retained-geometry hybrid or proof
+that its material coordinates transfer to an arbitrary new shape.
