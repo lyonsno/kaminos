@@ -436,3 +436,22 @@ and refuses unsettled or starting model admission. After host retirement begins,
 new session/frame/run requests are refused. Device-loss reconstruction must use
 the agreed fresh ordinary recovery command; this initial factory does not yet
 implement replacement resource wiring or preserve causal simulation history.
+
+Frame snapshots carry `now` and the sending page's `timeOrigin` (both finite)
+so the worker converts the frame timestamp to its own performance clock before
+calling the ordinary volume. Worker-local callers may omit `timeOrigin` when
+`now` already uses that clock. A frame may include the current positive
+`viewport` and plain `camera` snapshot. The factory updates its owned viewport
+store; the actual scene input consumer still applies renderer resize/camera.
+Frame output includes `surfaces.volume.{active,transparent}` for page mounting
+and CSS projection. Those booleans describe requested surface state, not proof
+of browser presentation.
+
+Use the admitted synchronous `flame.controls` command for changed flame control
+fields. It invokes the actual volume `setControls` before updating the worker's
+accepted-controls store, returning `acceptedControls` (not a claim about effective
+GPU substitutions). Invalid controls retain the previous accepted snapshot.
+Settings are not reapplied on every RAF; a frame carrying `flameControls` is
+rejected with the named command to use. `createSceneResources` also receives
+`readFlameControls()` for current source/lighting guides. Neither applied store
+mutates the initialization invocation payload.

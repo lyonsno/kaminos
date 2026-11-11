@@ -27,7 +27,18 @@ export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imag
  return ({payload,lifecycle})=>{
   let shared=null,renderer=null,pmrem=null,sceneResources=null,volume=null,appHost=null,frames=null,mutations=null,image=null;
   let commands=null,foregroundCommands=null,started=false,queueSettled=false,appRetired=false;
-  const viewport=()=>payload.viewport;
+  let appliedViewport={...payload.viewport},appliedControls=structuredClone(payload.flameControls);
+  const surfaceState={active:false,transparent:false};
+  const viewport=()=>appliedViewport;
+  function applyFrameInputs(input,context){
+   if(Object.hasOwn(input,'flameControls'))throw Error('authored flame settings require the flame.controls command');
+   if(input.viewport){
+    const {width,height,pixelRatio}=input.viewport;
+    if(![width,height,pixelRatio].every(value=>Number.isFinite(value)&&value>0))throw Error('frame viewport requires positive finite dimensions and pixel ratio');
+    appliedViewport={...input.viewport};
+   }
+   return sceneResources.applyFrameInputs(input,context);
+  }
   function current(){if(!frames)throw Error('scene worker runtime is not initialized');}
   return {
    get host(){return appHost;},get commands(){return commands;},get foregroundCommands(){return foregroundCommands;},
@@ -50,7 +61,8 @@ export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imag
      throw error;
     }
     ctx.assertCurrent();
-    sceneResources=createSceneResources({...objects,THREE,renderer,pmremGenerator:pmrem,sharedGpu:shared,payload,lifecycle,viewport,readAppHost:()=>appHost});
+    sceneResources=createSceneResources({...objects,THREE,renderer,pmremGenerator:pmrem,sharedGpu:shared,payload,lifecycle,viewport,
+     readFlameControls:()=>appliedControls,readAppHost:()=>appHost});
     if(typeof sceneResources?.retire!=='function'||typeof sceneResources?.initialize!=='function')throw Error('scene resource shell requires initialize and retire');
     await sceneResources.initialize(ctx);ctx.assertCurrent();
     const sceneFrames=sceneResources.frames;
@@ -58,20 +70,33 @@ export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imag
     if(typeof sceneResources.applyFrameInputs!=='function')throw Error('scene worker requires the actual frame input consumer');
     appHost=createAppGpuHost({sharedGpu:shared,host:sceneFrames,kit,frameOwner:()=>frames});
     volume=(services.createVolume??api.createKaminosVolumePrototype)({...sceneResources.volumeOptions,
-     THREE,camera:objects.camera,getControls:()=>payload.flameControls,
-     presentationSurface:createOffscreenVolumeSurface({canvas:payload.volumeCanvas,readViewport:viewport}),
+     THREE,camera:objects.camera,getControls:()=>appliedControls,
+     presentationSurface:createOffscreenVolumeSurface({canvas:payload.volumeCanvas,readViewport:viewport,
+      onActive:value=>{surfaceState.active=Boolean(value);},onTransparent:value=>{surfaceState.transparent=Boolean(value);}}),
      sharedGpuContext:shared,frameScheduleOwner:'host',productFrameOwner:'prototype'});
     await volume.setActive(true);ctx.assertCurrent();
-    frames=createVolumeWorkerFrameBinding({appHost,volume,applyFrameInputs:(input,context)=>sceneResources.applyFrameInputs(input,context)});
+    frames=createVolumeWorkerFrameBinding({appHost,volume,applyFrameInputs});
     mutations=createSceneWorkerMutationBinding({appHost});
     if(typeof sceneResources.attachVolume!=='function')throw Error('scene worker requires actual scene/flame source and transport attachment');
     await sceneResources.attachVolume({volume,appHost,context:ctx});ctx.assertCurrent();
     if(imageOptions)image=createKleinSceneWorkerAdapter({...imageOptions,context:()=>({sharedGpu:shared,prototype:volume,host:sceneFrames}),appHost:()=>appHost,kit:()=>kit});
-    commands=register(sceneResources.commands,image?.commands);foregroundCommands=register(sceneResources.foregroundCommands);
+    commands=register(sceneResources.commands,image?.commands);
+    foregroundCommands=register({'flame.controls':(input,context)=>{
+     context.assertCurrent();volume.setControls(input);
+     appliedControls={...appliedControls,...structuredClone(input)};
+     return {acceptedControls:structuredClone(appliedControls)};
+    }},sceneResources.foregroundCommands);
     for(const name of Object.keys(foregroundCommands))if(Object.hasOwn(commands,name))throw Error(`scene worker command collision: ${name}`);
     ctx.assertCurrent();
    },
-   frame(input,ctx){current();return frames.frame(input,ctx);},
+   frame(input,ctx){
+    current();let local=input;
+    if(Object.hasOwn(input,'timeOrigin')){
+     if(!Number.isFinite(input.now)||!Number.isFinite(input.timeOrigin))throw Error('frame clock requires finite now and timeOrigin');
+     local={...input,now:input.now+input.timeOrigin-(services.timeOrigin??performance.timeOrigin)};
+    }
+    return {...frames.frame(local,ctx),surfaces:{volume:{...surfaceState}}};
+   },
    requestFrame(input,ctx,draw){current();return frames.requestFrame(input,ctx,draw);},
    requestMutation(operation,input,ctx,apply){current();return mutations.requestMutation(operation,input,ctx,apply);},
    control(action,input,ctx){current();if(!image)throw Error('scene worker has no image operation');return image.control(action,input,ctx);},

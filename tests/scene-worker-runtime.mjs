@@ -19,7 +19,7 @@ function fixture({failInitialize=false,failCleanup=false}={}){
  const options={THREE:{},createSceneResources:input=>{assert.equal(input.sharedGpu,shared);calls.push('scene.shell');return sceneResources;},imageOptions:null,
   services:{requestDevice:async()=>{calls.push('acquire');return shared;},kit:{createWebGpuForegroundService},
    createRenderObjects:()=>({scene:{},camera:{}}),createRenderer:async input=>{assert.equal(input.sharedGpu,shared);input.onConstructed(renderer);return {renderer,pmremGenerator:{dispose:()=>calls.push('pmrem.dispose')}};},
-   createVolume:input=>{volumeOptions=input;owner={setActive:async active=>calls.push(['volume.active',active]),dispose:()=>calls.push('volume.dispose'),
+   createVolume:input=>{volumeOptions=input;owner={setActive:async active=>{input.presentationSurface.setActive(active);calls.push(['volume.active',active]);},setControls:input=>{calls.push(['controls',input]);if(input.resolution===0)throw Error('invalid grid');},dispose:()=>calls.push('volume.dispose'),
     foregroundGpuContext:()=>({device,queue:device.queue,renderer:'ordinary-volume',productFrameOwner:'prototype'}),
     renderSharedFrame:({service})=>{assert.equal(service.device,device);calls.push('volume.frame');return {flameDrawn:true};}};return owner;},
   }};
@@ -32,7 +32,7 @@ test('factory retains a shell before any allocation and composes one admitted or
  const options=f.volumeOptions();assert.equal(options.sharedGpuContext.device,f.device);assert.equal(options.frameScheduleOwner,'host');assert.equal(options.productFrameOwner,'prototype');
  assert.deepEqual(options.getControls(),f.payload.flameControls);assert.equal(options.presentationSurface.canvas,f.payload.volumeCanvas);
  const payload={now:1};const receipt=await runtime.requestFrame(payload,f.context,()=>runtime.frame(payload,f.context));
- assert.equal(receipt.status,'completed');assert.equal(receipt.result.flameDrawn,true);assert.equal(receipt.result.sceneDrawn,true);
+ assert.equal(receipt.status,'completed');assert.equal(receipt.result.flameDrawn,true);assert.equal(receipt.result.sceneDrawn,true);assert.equal(receipt.result.surfaces.volume.active,true);
  assert.deepEqual(f.calls.filter(Array.isArray).at(-1),['input',payload]);
  const mutation=await runtime.requestMutation('scene.move',{},f.context,()=>runtime.foregroundCommands['scene.move']());
  assert.equal(mutation.mutationApplied,true);assert.equal(runtime.commands['scene.read']().registered,true);
@@ -74,6 +74,7 @@ test('the composed model adapter keeps ordinary frame and edit admission live on
  await started;assert.equal(runtime.host.device,f.device);assert.equal(runtime.host.unsettledRuns().length,1);
  const frame=await client.request('frame',{now:2}).completion;assert.equal(frame.output.result.flameDrawn,true);
  const edit=await client.request('scene.move',{}).completion;assert.equal(edit.output.mutationApplied,true);
+ const controls=await client.request('flame.controls',{resolution:32}).completion;assert.equal(controls.output.mutationApplied,true);assert.equal(controls.output.value.acceptedControls.resolution,32);
  finish();assert.equal((await model.completion).output.entry.source,'/saved/image.png');
  await client.request('retire').completion;assert.ok(f.calls.indexOf('model.dispose')<f.calls.indexOf('session.close'));
 });
@@ -81,4 +82,17 @@ test('the composed model adapter keeps ordinary frame and edit admission live on
 test('initialization cannot publish a scene without its frame-input consumer',async()=>{
  const f=fixture();delete f.sceneResources.applyFrameInputs;const runtime=factory(f.options)({payload:f.payload,lifecycle:{}});
  await assert.rejects(runtime.initialize(f.context),/frame input/);await runtime.retire(f.context);
+});
+
+test('frame viewport and authored controls reach the live readers without rewriting the boot payload',async()=>{
+ const f=fixture();f.options.services.timeOrigin=1000;const runtime=factory(f.options)({payload:f.payload,lifecycle:{}});await runtime.initialize(f.context);
+ const input={now:20,timeOrigin:1500,viewport:{width:80,height:40,pixelRatio:2},camera:{position:[1,2,3]}};
+ await runtime.requestFrame(input,f.context,()=>runtime.frame(input,f.context));
+ assert.equal(f.volumeOptions().presentationSurface.viewport().width,80);assert.equal(f.calls.findLast(row=>row[0]==='input')[1].now,520);
+ assert.equal(f.payload.viewport.width,32,'accepted state is not mutable invocation input');
+ assert.equal(typeof runtime.foregroundCommands['flame.controls'],'function');
+ const accepted=runtime.foregroundCommands['flame.controls']({resolution:32},f.context);assert.equal(accepted.acceptedControls.resolution,32);
+ assert.equal(f.volumeOptions().getControls().resolution,32);assert.equal(f.payload.flameControls.resolution,16);
+ assert.throws(()=>runtime.foregroundCommands['flame.controls']({resolution:0},f.context),/invalid grid/);assert.equal(f.volumeOptions().getControls().resolution,32);
+ await runtime.retire(f.context);
 });
