@@ -1,3 +1,4 @@
+import {sceneObjectTransformState as sharedSceneObjectTransformState, applySceneObjectTransformState as sharedApplySceneObjectTransformState, getMaterialStateForObject as sharedGetMaterialStateForObject, applyMaterialStateToObject as sharedApplyMaterialStateToObject} from '../../scene-object-state.mjs';
 import {createSceneMaterials} from '../../scene-material-recipes.mjs';
 import {sceneMaterialPrograms} from '../../scene-material-programs.mjs';
 import {ASH_OBJECT_TYPE} from '../../ash/scene-record.mjs';
@@ -39,6 +40,7 @@ const interactionFunctions=['currentBeautyFrameOptions','interactiveSceneRoots',
 // while exercising extracted page consumers. Ownership/integration tests use
 // createWorkingScene itself; this double is not evidence for its invariants.
 export function sceneContext(context, options) {
+  Object.assign(context,{sharedSceneObjectTransformState, sharedApplySceneObjectTransformState, sharedGetMaterialStateForObject, sharedApplyMaterialStateToObject});
   context.sceneMaterials??=createSceneMaterials({entries:()=>context.workingScene?.objects??[],definitions:sceneMaterialPrograms});
   context.restoreSceneReflectionSettings??=()=>{};
   context.ashMembershipEntry??=ashMembershipEntry;

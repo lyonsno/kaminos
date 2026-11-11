@@ -3477,6 +3477,7 @@ const {
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import {createSceneGltfLoaderClass} from './scene-gltf-loader.mjs';
+import {sceneObjectTransformState as sharedSceneObjectTransformState, applySceneObjectTransformState as sharedApplySceneObjectTransformState, getMaterialStateForObject as sharedGetMaterialStateForObject, applyMaterialStateToObject as sharedApplyMaterialStateToObject} from './scene-object-state.mjs';
 import {loadBrazierRoom} from './brazier-room.mjs';
 import { configureSurfelRendering } from './trellis-surfels.mjs';
 import { createGiProxyRegistry } from './scene-gi-proxies.mjs';
@@ -5672,11 +5673,7 @@ function removeGreenroomPreviewObject({ dispose = true } = {}) {
 }
 
 function sceneObjectTransformState(object) {
-  return {
-    position: object?.position?.toArray?.() || [0, 0, 0],
-    rotation: object?.rotation ? [object.rotation.x, object.rotation.y, object.rotation.z] : [0, 0, 0],
-    scale: object?.scale?.toArray?.() || [1, 1, 1],
-  };
+  return sharedSceneObjectTransformState(object);
 }
 
 function identitySceneTransform() {
@@ -5966,10 +5963,7 @@ function cloneTransformState(transform = {}) {
 }
 
 function applySceneObjectTransformState(object, transform = {}) {
-  if (!object) return;
-  object.position.fromArray(Array.isArray(transform.position) ? transform.position : [0, 0, 0]);
-  object.rotation.set(...(Array.isArray(transform.rotation) ? transform.rotation : [0, 0, 0]));
-  object.scale.fromArray(Array.isArray(transform.scale) ? transform.scale : [1, 1, 1]);
+  return sharedApplySceneObjectTransformState(object, transform);
 }
 
 function defaultSplatCorrection() {
@@ -26325,17 +26319,7 @@ function provenanceForSource(source) {
 }
 
 function getMaterialStateForObject(object) {
-  if (!object) return null;
-  const state = { side: THREE.FrontSide, transparent: true, opacity: 1 };
-  object.traverse(child => {
-    if (child.isMesh && child.material) {
-      const mat = Array.isArray(child.material) ? child.material[0] : child.material;
-      state.side = mat.side;
-      state.transparent = mat.transparent;
-      state.opacity = mat.opacity;
-    }
-  });
-  return state;
+  return sharedGetMaterialStateForObject(object);
 }
 
 function serializeSceneObject(entry) {
@@ -28169,21 +28153,7 @@ function getMaterialState() {
 }
 
 function applyMaterialStateToObject(object, state) {
-  if (!object || !state) return;
-  object.traverse(child => {
-    if (!child.isMesh) return;
-    const mats = Array.isArray(child.material) ? child.material : [child.material];
-    for (const mat of mats) {
-      if (state.side !== undefined) mat.side = state.side;
-      if (state.transparent !== undefined) mat.transparent = state.transparent;
-      if (state.opacity !== undefined) mat.opacity = state.opacity;
-      if (!state.transparent) {
-        mat.depthWrite = true;
-        mat.blending = THREE.NormalBlending;
-      }
-      mat.needsUpdate = true;
-    }
-  });
+  return sharedApplyMaterialStateToObject(object, state);
 }
 
 function applyMaterialState(state) {
