@@ -2571,6 +2571,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <button type="button" role="menuitem" data-scene-add="cylinder">Cylinder</button>
         <button type="button" role="menuitem" data-scene-add="annular">Annular plate</button>
         <button type="button" role="menuitem" data-scene-add="dock">Dock / deck</button>
+        <button type="button" role="menuitem" data-scene-add="place">Concrete place</button>
         <button type="button" role="menuitem" data-scene-add="camera">Camera</button>
         <div class="scene-menu-heading">Light</div>
         <button type="button" role="menuitem" data-scene-add="spot-light">Spot</button>
@@ -3550,13 +3551,15 @@ import {createSelectionFeedback} from './scene-selection-feedback.mjs';
 import {createSceneOwnerControls} from './scene-owner-controls.mjs';
 import {createDock,defaultDock,DOCK_SOURCE} from './stockroom-dock.mjs';
 import {createDockEditing} from './stockroom-dock-controls.mjs';
+import {createSpace,defaultSpace,SPACE_SOURCE} from './stockroom-space.mjs';
+import {createSpaceEditing} from './stockroom-space-controls.mjs';
 import {visibleSceneIntersections} from './scene-visible-picking.mjs';
 import {checkedSelection,changeSelection,selectionTransformRoots,selectionFrame,mixedSelectionValue,objectsInScreenBox,pointerHitsBoxOutline,createSelectionTransformTarget} from './scene-selection.mjs';
 
 let authoringWorkspace = null;
 let cameraViews=null,cameraViewsPanel=null;
 let sceneCameras=null,cameraAuthoring=null,cameraProjectionBase=null,viewPie=null;
-let sharedWorkbench=null,ownerExperimentEntry=null,workbenchSceneHost=null,sceneOwnerControls=null,dockEditing=null;
+let sharedWorkbench=null,ownerExperimentEntry=null,workbenchSceneHost=null,sceneOwnerControls=null,dockEditing=null,spaceEditing=null;
 let resolveWorkbenchViewerReady,rejectWorkbenchViewerReady;
 const workbenchViewerReady=new Promise((resolve,reject)=>{resolveWorkbenchViewerReady=resolve;rejectWorkbenchViewerReady=reject;});
 workbenchViewerReady.catch(()=>{});
@@ -6847,6 +6850,7 @@ function updateTransformInspector() {
   if (!inspector || !empty || !fields) return;
   const entry = selectedPlacementEntry();
   dockEditing?.sync();
+  spaceEditing?.sync();
   sceneOwnerControls?.update();
   inspector.dataset.selectedObjectId = workingScene.activeFieldId || entry?.id || '';
   inspector.dataset.selectedGroupId = workingScene.activeGroupId || '';
@@ -7479,6 +7483,7 @@ sceneAddMenuPopup.addEventListener('click', event => {
   }
   if(action.dataset.sceneAdd==='ash-source')addAuthoredAshSource().catch(error=>setInfo(error.message));
   if(action.dataset.sceneAdd==='dock')addStockroomDock().catch(error=>setInfo(error.message));
+  if(action.dataset.sceneAdd==='place')addStockroomSpace().catch(error=>setInfo(error.message));
   if(action.dataset.sceneAdd==='camera'){try{addAuthoredCamera();}catch(error){setInfo(error.message);}}
   if(action.dataset.sceneAdd==='spot-light'){try{addSceneSpotLight();}catch(error){setInfo(error.message);}}
   if(action.dataset.sceneAdd==='import-mesh')document.getElementById('scene-mesh-file').click();
@@ -12299,6 +12304,7 @@ async function initScene() {
         ...[['box','Cube',['box','mesh primitive']],['plane','Plane',['mesh primitive']],['sphere','Sphere',['mesh primitive']],['bowl','Bowl',['cup','basin','water container']],['cylinder','Cylinder',['mesh primitive']],['annular','Annular plate',['ring','mesh primitive']]].map(([kind,label,aliases])=>command('add.'+kind,'Add',label,()=>addProceduralMesh(kind),{aliases})),
         command('add.camera','Add','Camera',()=>addAuthoredCamera()),
         command('add.dock','Add','Dock / deck',()=>addStockroomDock(),{aliases:['platform','construction','jetty']}),
+        command('add.place','Add','Concrete place',()=>addStockroomSpace(),{aliases:['space','occupy','keep empty']}),
         command('add.light','Add','Spot Light',()=>addSceneSpotLight(),{aliases:['lamp','lighting']}),
         command('add.ash-source','Add','Ash source',()=>addAuthoredAshSource(),{aliases:['emitter','fallout']}),
         command('add.ash','Add','Ash field',()=>addAshFromMenu(),{aliases:['deposition','simulation']}),
@@ -14223,6 +14229,9 @@ async function installOwnerWorkbenchEntry() {
   sceneOwnerControls??=createSceneOwnerControls({document,viewport:document.getElementById('viewport'),inspector:document.getElementById('transform-inspector'),selected:selectedPlacementEntry,onContext:value=>sharedWorkbench?.setOwnerControlsActive(value)});
   dockEditing=createDockEditing({document,viewport:document.getElementById('viewport'),canvas:renderer.domElement,camera,navigation:controls,entries:()=>workingScene.objects,selected:selectedPlacementEntry,edits:scenePlacementTools.edits,ownerControls:sceneOwnerControls,components:sceneComponents,installNumberDrag:installRelativeNumberDrag,redraw:()=>{sceneRepetitionController?.sync();window._kaminosDirty?.();},onError:error=>setInfo(error.message)});
   dockEditing.sync();
+  spaceEditing=createSpaceEditing({document,viewport:document.getElementById('viewport'),canvas:renderer.domElement,camera,navigation:controls,entries:()=>workingScene.objects,selected:selectedPlacementEntry,edits:scenePlacementTools.edits,ownerControls:sceneOwnerControls,components:sceneComponents,nativeInteraction:()=>!!(transformControls?.axis||transformControls?.dragging||scenePlacementTools.edits.state().active),redraw:()=>{sceneRepetitionController?.sync();window._kaminosDirty?.();},onError:error=>setInfo(error.message)});
+  spaceEditing.sync();
+  window.kaminosSpaceAuthoring={add:addStockroomSpace,read:id=>spaceEditing.read(id),pull:(id,probe,amount,role)=>spaceEditing.apply(id,probe,amount,role)};
   const host={controls:{document,installNumberDrag:installRelativeNumberDrag,mountObject:sceneOwnerControls.mount,transformSettings:()=>({...transformPreferences}),components:{register:(id,adapter)=>sceneComponents.register(id,adapter)}},fluid:{
     async open(setup){
       await workbenchViewerReady;
@@ -14233,6 +14242,8 @@ async function installOwnerWorkbenchEntry() {
     async open(){await workbenchViewerReady;if(!workbenchSceneHost)throw Error('Shared scene host unavailable');setActiveTab('assets');return workbenchSceneHost.open();},
     refreshPresentation:refreshWorkbenchAssetPresentation,
     addDock:addStockroomDock,
+    addSpace:addStockroomSpace,spaces:{read:id=>spaceEditing.read(id),pull:(id,probe,amount,role)=>spaceEditing.apply(id,probe,amount,role)},
+    addMesh:addProceduralMesh,loadAsset:(url,options)=>window.kaminosWorkbenchLoadAsset(url,options),
     renderer:()=>renderer,objects:()=>workingScene.objects,select:id=>window.selectSceneObject(id),
     materials:{create:options=>materialInspector.create(options),edit:(id,patch)=>materialInspector.edit(id,patch),read:()=>sceneMaterials.read(),subscribe:fn=>scenePlacementTools.edits.subscribe(fn)},
     ground:()=>({center:[groundPlane.position.x,groundPlane.position.y,groundPlane.position.z],height:groundPlane.position.y,radius:5,visible:groundPlane.visible}),
@@ -27569,6 +27580,14 @@ async function addStockroomDock(recipe=defaultDock()) {
   catch(error){removeSceneObjectInternal(id,{recordHistory:false});throw error;}
   setActiveSceneObject(id);return workingScene.objects.find(entry=>entry.id===id);
 }
+async function addStockroomSpace(recipe=defaultSpace()) {
+  assertSceneConstructionAvailable();const id=makeSceneObjectId('place'),object=createSpace(recipe);
+  const target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
+  scene.add(object);
+  try{registerSceneObject(object,{id,type:'pbr',source:SPACE_SOURCE,label:'Concrete place',fileName:'Place',space:recipe,createdAt:new Date().toISOString()});await recordSceneObjectInsertion(id);}
+  catch(error){removeSceneObjectInternal(id,{recordHistory:false});throw error;}
+  setActiveSceneObject(id);spaceEditing?.sync();return workingScene.objects.find(entry=>entry.id===id);
+}
 function cloneSceneMaterial(material){const copy=originalBurnMaterial(material).clone();for(const key of Object.keys(copy))if(copy[key]?.isTexture)copy[key]=copy[key].clone();return copy;}
 async function addPromptLettering(prompt){
   assertSceneConstructionAvailable();
@@ -27599,7 +27618,7 @@ function addSceneSpotLight() {
     light:{kind:'spot',enabled:true,color:'#ffffff',intensity:30,angle:30,penumbra:.3,aimDistance:3}});
   recordSceneObjectInsertion(id);setActiveSceneObject(id);return id;
 }
-function canDuplicateObject(entry){return !!entry&&(entry.source===DOCK_SOURCE||['glb','light',CAMERA_TYPE,PROCEDURAL_MESH_TYPE,LOCAL_LIQUID_EMITTER_TYPE,FLAME_EMITTER_TYPE,ASH_SOURCE_TYPE].includes(entry.type));}
+function canDuplicateObject(entry){return !!entry&&([DOCK_SOURCE,SPACE_SOURCE].includes(entry.source)||['glb','light',CAMERA_TYPE,PROCEDURAL_MESH_TYPE,LOCAL_LIQUID_EMITTER_TYPE,FLAME_EMITTER_TYPE,ASH_SOURCE_TYPE].includes(entry.type));}
 function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
   assertSceneConstructionAvailable();const entry=workingScene.objects.find(o=>o.id===id);
   if(!canDuplicateObject(entry))throw Error('This object does not support Duplicate');
@@ -27612,6 +27631,7 @@ function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
   else if(entry.type===CAMERA_TYPE)mountAuthoredCamera(record);
   else if(entry.type==='light')mountSceneSpotLight(record);
   else if(entry.source===DOCK_SOURCE){const copy=createDock(record.dock);applySceneObjectTransformState(copy,record.transform);applyMaterialStateToObject(copy,record.materials);scene.add(copy);registerSceneObject(copy,record,{activate:!deferRecord});}
+  else if(entry.source===SPACE_SOURCE){const copy=createSpace(record.space);applySceneObjectTransformState(copy,record.transform);applyMaterialStateToObject(copy,record.materials);scene.add(copy);registerSceneObject(copy,record,{activate:!deferRecord});}
   else {
     const copy=sceneMaterials.withSource(entry.object,()=>withoutRepetitionCopies(entry.object,()=>cloneSceneObjectHierarchy(entry.object)));copy.traverse(child=>{if(child.geometry)child.geometry=child.geometry.clone();if(child.material)child.material=Array.isArray(child.material)?child.material.map(cloneSceneMaterial):cloneSceneMaterial(child.material);});
     const burnLabels=[];copy.traverse(child=>{if(child.userData.kaminosBurnIndicator)burnLabels.push(child);});for(const label of burnLabels){label.removeFromParent();disposeObjectTree(label);}
