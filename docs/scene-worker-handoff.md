@@ -49,6 +49,19 @@ returns this worker-local object:
 - `retire(context)`: asynchronous retirement/cleanup of owned runtime resources.
   Preserve borrowed-resource and actual GPU settlement semantics.
 
+`createVolumeWorkerFrameBinding` from `volume-worker-frame-binding.mjs` joins
+an initialized ordinary volume (`frameScheduleOwner: 'host'`) to this facade
+through the existing `createAppGpuHost` foreground service. Construct the app
+host with `frameOwner: () => flameFrames`, then assign `flameFrames` with
+`createVolumeWorkerFrameBinding({appHost, volume, applyFrameInputs})`. Return its
+`frame` and `requestFrame` methods from the worker runtime. `applyFrameInputs`
+applies camera/viewport/control snapshots synchronously at the admitted frame
+boundary; its callback and GPU resources stay inside the worker. It is not an
+asynchronous authored-scene loader. Model `beginRun` installs the common
+requester on this binding without starting another RAF loop on the volume.
+Frame cancellation waits for the actual foreground receipt before returning.
+An inactive flame can return held while the common host still draws the scene.
+
 Factory failure cleanup before returning a runtime remains the factory's
 responsibility. A returned runtime remains owned by the worker until explicit
 retirement; protocol errors and cancellation do not imply destruction.
