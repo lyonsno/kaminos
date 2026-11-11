@@ -23,3 +23,8 @@ test('experiment controls and URL follow native recipes, custom names and recons
   const replaced=make();entry.object=replaced;owner.operations.setSurface('folded');owner.operations.frame();assert.equal(framed[0],replaced);assert.equal(replaced.userData.kaminosSceneObject.neuralCarrier.surface,'folded');
  }finally{await owner?.dispose();assert.equal(listeners.size,0);globalThis.fetch=fetchBefore;}
 });
+
+test('pending choices can be disabled independently and become clickable when a checkpoint arrives',async()=>{
+ const {createChoiceButtons}=await import('../experiment-choice-buttons.mjs');const nodes=[],seen=[],document={createElement(){const n={style:{},dataset:{},setAttribute(){},append(){},addEventListener(_name,fn){this.click=fn;}};nodes.push(n);return n;}};
+ const choices=createChoiceButtons(document,{label:'Appearance',entries:[['source','Source'],['learned','Learned']],onChange:v=>seen.push(v)});choices.setUnavailable('learned',true);nodes[2].click();nodes[1].click();assert.deepEqual(seen,['source']);choices.setUnavailable('learned',false);nodes[2].click();assert.deepEqual(seen,['source','learned']);
+});

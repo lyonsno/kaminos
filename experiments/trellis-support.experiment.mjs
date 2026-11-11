@@ -1,3 +1,4 @@
+import {createTrellisPatchComparison} from '../trellis-patch-comparison.mjs';
 import {createChoiceButtons} from '../experiment-choice-buttons.mjs';
 import {BufferGeometry,BufferAttribute,Mesh,Group,MeshStandardMaterial,LineSegments,LineBasicMaterial,EdgesGeometry,Box3,Vector3,PerspectiveCamera} from '../lib/three.core.js';
 import {prepareSupportVolume,materializeFragments,supportVolumeMesh,worldPoint,supportSourceFromMesh,sampleSourceAddress} from '../trellis-local-support.mjs';
@@ -6,7 +7,8 @@ import {traceSupportRays} from '../trellis-support-rays.mjs';
 import {createSourceMaterialSampler} from '../trellis-source-material.mjs';
 import {evaluateSourceRegionLighting} from '../trellis-surface-teacher.mjs';
 
-const MODES=['partition','isolated','source','support','lod'];
+const MODES=['partition','isolated','source','support','lod','comparison'];
+const DEFAULT_COMPARISON_CATALOG='/api/read?root=image-inbox&path=trellis-patch-comparison%2Fcatalog.json';
 const DEFAULT_SOURCE='/api/read?root=generated-meshes&path=barycentric-support%2Fmachined-graphite-finished.glb';
 const PLATE_REGIONS={panel:{origin:[0,.112,.2],normal:[0,1,0],tangent:[1,0,0],radius:.06,depth:.04,top:.015},rim:{origin:[.12,.095,.48],normal:[0,1,1],tangent:[1,0,0],radius:.04,depth:.05,top:.03}};
 function geometry(part){const g=new BufferGeometry();g.setAttribute('position',new BufferAttribute(part.positions,3));if(part.normals)g.setAttribute('normal',new BufferAttribute(part.normals,3));else g.computeVertexNormals();if(part.uvs)g.setAttribute('uv',new BufferAttribute(part.uvs,2));return g;}
@@ -28,29 +30,36 @@ export default {
     const restoreLod=()=>lod.setSettings({enabled:previousLod.enabled});
     let asset,sourceMesh,source,candidate,group,patchMesh,patchTint,retainedMeshes=[],volumeMesh,wire,boundaryWire,resources=[],status,selector,disposed=false,pending=false,error=null,generation=0,loadGeneration=0,effective='source',projectedPixels=null,loadSession;
     let probeResult=null,probeLines,probeResources=[],probePending=false,probeVersion=0,sourceMaterial,lightingResult=null,lightingVersion=0,lightingPending=false;
-    const fields=new Map();let exampleSelector;
+    const fields=new Map();let exampleSelector,comparisonChoices,checkpointChoices,outlineButton,comparison=null,comparisonVersion=0,comparisonPending=false,checkpointId=null,sourceDigest=null;
+    let comparisonEntries=[],comparisonError=null,inspectionLight=null;const inspectionLights=new Set();
+    const comparisonCatalog=inputs.comparisonCatalog??DEFAULT_COMPARISON_CATALOG;
+    try{const response=await fetch(comparisonCatalog);if(!response.ok)throw Error(`Checkpoint catalog HTTP ${response.status}`);const catalog=await response.json();if(catalog.schema!=='kaminos.trellis-patch-comparison.v1'||!Array.isArray(catalog.checkpoints))throw Error('Unknown patch comparison catalog');comparisonEntries=catalog.checkpoints;}catch(e){comparisonError=e.message;}
     const clearProbe=(cancel=true)=>{lightingVersion++;lightingResult=null;lightingPending=false;if(cancel)probeVersion++;probeLines?.removeFromParent();for(const r of probeResources)r.dispose();probeResources=[];probeLines=null;probeResult=null;probePending=false;};
     const free=()=>{clearProbe();group?.removeFromParent();for(const r of resources)r.dispose();resources=[];group=null;};
     const read=()=>({objectId:asset?.id,sourceUrl,source:asset?.source,backend:'WebGPU',mode,effective,threshold,projectedPixels,pending,error,region:structuredClone(recipe),candidate:candidate?summary(candidate):null,probe:probeResult?structuredClone(probeResult):null,probePending,lightingPending,lighting:lightingResult?structuredClone(lightingResult):null,sourceMaterial:sourceMaterial?.read(),
       sourceRoute:{beautyLodEnabled:lod.read().enabled,previousBeautyLodEnabled:previousLod.enabled,scope:'page-local full-source inspection; restored when experiment closes'},
-      learnedMaterial:'absent: solid support is a geometry diagnostic',continuation:'Reopen using shareInputs; source and fitted geometry are reconstructed. Native scene transforms apply to the loaded asset.',shareInputs:{sourceUrl,region:structuredClone(recipe),mode,threshold}});
+      inspectionLight,sceneLights:host.scene.objects().filter(o=>o.type==='light').map(o=>({id:o.id,...o.light,position:o.object.position.toArray(),rotation:o.object.rotation.toArray().slice(0,3)})),comparison:{...(comparison?.read()??{available:false}),pending:comparisonPending,error:comparisonError,checkpoints:comparisonEntries.map(e=>({id:e.id,label:e.label})),view:session.readView()},learnedMaterial:comparison?(comparison.read().learnedAvailable?'trained checkpoint on its original section':'training pending; actual raw source section only'):'absent: solid support is a geometry diagnostic',continuation:'Reopen using shareInputs; source and fitted geometry are reconstructed. Native scene transforms apply to the loaded asset.',shareInputs:{sourceUrl,region:structuredClone(recipe),mode,threshold,comparisonCatalog,checkpoint:checkpointId,comparison:comparison?.read().requested??'source',outline:comparison?.read().outline??true}});
     const publish=()=>updateInputs(read().shareInputs);
     const sync=()=>{
       if(selector)selector.value=mode;
+      if(outlineButton){outlineButton.disabled=!comparison;outlineButton.setAttribute('aria-pressed',String(comparison?.read().outline??false));}
+      if(comparisonChoices){comparisonChoices.value=comparison?.read().requested??'source';comparisonChoices.disabled=!comparison||comparisonPending;comparisonChoices.setUnavailable('learned',!comparison?.read().learnedAvailable);}
+      if(checkpointChoices){checkpointChoices.value=checkpointId??'';checkpointChoices.disabled=comparisonPending||sourceUrl!==DEFAULT_SOURCE;}
       if(exampleSelector){exampleSelector.disabled=sourceUrl!==DEFAULT_SOURCE;exampleSelector.value=sourceUrl===DEFAULT_SOURCE?(Object.entries(PLATE_REGIONS).find(([,r])=>Object.entries(r).every(([k,v])=>JSON.stringify(recipe[k])===JSON.stringify(v)))?.[0]??'custom'):'custom';}
       for(const[k,field]of fields){const v=k.startsWith('origin')?recipe.origin[Number(k.at(-1))]:k==='threshold'?threshold:recipe[k];if(field.ownerDocument.activeElement!==field)field.value=String(v);}
       if(status){status.dataset.trellisSupportStatus=JSON.stringify({origin:recipe.origin,pending,error,probePending,probeSamples:probeResult?.samples.length??0});status.textContent=pending?'Constructing support in WebGPU…':error?`Retaining previous candidate: ${error}`:candidate?`${candidate.patch.length} source fragments from ${new Set(candidate.patch.map(t=>t.sourceTriangle)).size} original triangles; 12 support triangles; ${candidate.boundarySegments.length} addressed boundary segments. ${effective==='support'?'Solid support diagnostic — no learned material.':'Original material maps preserved.'}\nProjected support box: ${projectedPixels===null?'not measured':Math.round(projectedPixels)+' pixels across'}. LOD is a footprint routing preview; no performance crossover measured.`:'No candidate';if(probePending)status.textContent+=' Tracing source probes…';else if(probeResult){const hits=probeResult.samples.filter(s=>s.hit),range=k=>`${Math.min(...hits.map(s=>s.material[k])).toFixed(3)}–${Math.max(...hits.map(s=>s.material[k])).toFixed(3)}`;status.textContent+=` Probes: ${hits.length} source hits, ${probeResult.samples.filter(s=>!s.hit&&s.intersectsSupport).length} volume exits.`;if(hits.length)status.textContent+=` Material samples: roughness ${range('roughness')}, metalness ${range('metalness')}.`;status.textContent+=' Source-map LOD 0.';if(lightingPending)status.textContent+=' Evaluating directional lighting…';else if(lightingResult)status.textContent+=` Textured directional lighting: ${lightingResult.radiance.length} rays, ${lightingResult.bounces} bounce(s), clipped region only; no footprint integral.`;}}
+      if(status){if(comparisonPending)status.textContent+=' Loading section checkpoint…';else if(comparisonError)status.textContent+=' Section comparison: '+comparisonError;else if(mode==='comparison'&&comparison){const c=comparison.read();status.textContent=c.trainingPending?`${c.checkpoint.label}: actual high-detail source section; training pending, no learned result yet. Surrounding finished PBR unchanged. Section uses direct lights only.`:`${c.checkpoint.label}: ${c.checkpoint.resolution}² fields, ${(c.checkpoint.bytes/1024).toFixed(1)} KiB, trained LOD 0. ${c.effective==='learned'?'Learned section':c.effective==='source'?'Source section':'Source shown outside the trained viewing hemisphere'}. Surrounding PBR unchanged. Section comparison uses direct lights only; no environment/indirect response. ${c.geometry}`;}}
     };
     function applyVisibility(){
       if(!candidate)return;
       effective=mode==='lod'?(projectedPixels===null||projectedPixels>threshold?'source':'support'):mode;
-      sourceMesh.visible=effective==='source';group.visible=effective!=='source';
+      sourceMesh.visible=effective==='source';group.visible=effective!=='source'&&effective!=='comparison';if(comparison){comparison.root.visible=effective==='comparison';comparison.set(comparison.read().requested,new Vector3().fromArray(session.readView().position));}
       patchMesh.visible=effective==='partition'||effective==='isolated';patchMesh.material=effective==='isolated'?sourceMesh.material:patchTint;for(const mesh of retainedMeshes)mesh.visible=effective!=='isolated';volumeMesh.visible=effective==='support';wire.visible=effective==='partition';boundaryWire.visible=effective==='partition';
       session.redraw();sync();
     }
     function measure(){
       if(!candidate||!asset)return;
-      const view=session.readView();sourceMesh.updateWorldMatrix(true,false);const projectionKey=JSON.stringify([view,sourceMesh.matrixWorld.elements,renderer.domElement.width,renderer.domElement.height,mode,threshold,recipe]);if(projectionKey===lastProjectionKey)return;lastProjectionKey=projectionKey;
+      const view=session.readView();if(comparison){const before=comparison.read().effective;comparison.set(comparison.read().requested,new Vector3().fromArray(view.position));if(before!==comparison.read().effective){session.redraw();sync();}}sourceMesh.updateWorldMatrix(true,false);const projectionKey=JSON.stringify([view,sourceMesh.matrixWorld.elements,renderer.domElement.width,renderer.domElement.height,mode,threshold,recipe]);if(projectionKey===lastProjectionKey)return;lastProjectionKey=projectionKey;
       const cam=new PerspectiveCamera(view.fov,renderer.domElement.width/renderer.domElement.height,view.near,view.far);cam.position.fromArray(view.position);cam.up.fromArray(view.up);cam.zoom=view.zoom;cam.lookAt(new Vector3().fromArray(view.target));cam.updateMatrixWorld();cam.updateProjectionMatrix();
       let lo=[Infinity,Infinity],hi=[-Infinity,-Infinity],near=false;
       for(let z=0;z<2;z++)for(let y=0;y<2;y++)for(let x=0;x<2;x++){
@@ -79,6 +88,23 @@ export default {
         record({kind:'trellis-support.region',phase:'applied',target:asset.id,effective:read()});return read();
       }catch(e){if(request===generation){pending=false;error=e.message;sync();}throw e;}
     }
+    const clearComparison=()=>{comparisonVersion++;comparison?.dispose();comparison=null;checkpointId=null;comparisonPending=false;if(mode==='comparison')mode='partition';};
+    function frameRegion(){sourceMesh.updateWorldMatrix(true,false);const target=new Vector3().fromArray(recipe.origin).applyMatrix4(sourceMesh.matrixWorld),position=new Vector3().fromArray(worldPoint([3,-3,4.5],candidate.frame)).applyMatrix4(sourceMesh.matrixWorld),size=recipe.radius*sourceMesh.getWorldScale(new Vector3()).length();return session.setView({position:position.toArray(),target:target.toArray(),near:Math.max(size/10000,.00001)});}
+    function addComparisonLight(){
+      const app=host.controls.document.defaultView;if(!app.kaminosSceneAuthoring?.addLight||!app.kaminosSetSceneObjectTransform)throw Error('Native scene light editing is unavailable');
+      const prior=app.kaminosSelection.read(),f=candidate.frame,target=new Vector3().fromArray(recipe.origin);sourceMesh.updateWorldMatrix(true,false);
+      const position=target.clone().add(new Vector3().fromArray(f.u).multiplyScalar(-.5)).add(new Vector3().fromArray(f.v).multiplyScalar(.5)).add(new Vector3().fromArray(f.n).multiplyScalar(.8));sourceMesh.localToWorld(position);sourceMesh.localToWorld(target);
+      const aim=new PerspectiveCamera();aim.position.copy(position);aim.lookAt(target);
+      const id=app.kaminosSceneAuthoring.addLight();app.kaminosSceneAuthoring.setLight(id,{intensity:8,angle:65,penumbra:.3});app.kaminosSetSceneObjectTransform(id,{position:position.toArray(),rotation:[aim.rotation.x,aim.rotation.y,aim.rotation.z],scale:[1,1,1]});inspectionLight=id;inspectionLights.add(id);app.kaminosSelection.set(prior.ids,prior.activeId);record({kind:'trellis-support.light',phase:'applied',effective:{id,route:'native authored scene spot light; editable/removable/saveable'}});session.redraw();return read();
+    }
+    async function setCheckpoint(id){
+      const entry=comparisonEntries.find(e=>e.id===id);if(!entry)throw Error('Unknown section checkpoint');
+      const token=++comparisonVersion;comparisonPending=true;comparisonError=null;sync();let next;
+      try{next=await createTrellisPatchComparison({device,source,sourceMesh,entry,contextSourceUrl:sourceUrl,contextHash:sourceDigest});if(disposed||token!==comparisonVersion){next.dispose();return read();}
+        await rebuild(entry.region);if(disposed||token!==comparisonVersion){next.dispose();return read();}
+        const requested=next.read().learnedAvailable?(comparison?.read().requested??inputs.comparison??'source'):'source';comparison?.dispose();comparison=next;comparison.setOutline(inputs.outline??true);checkpointId=id;comparison.set(requested,new Vector3().fromArray(session.readView().position));mode='comparison';applyVisibility();publish();record({kind:'trellis-support.checkpoint',phase:'applied',effective:read().comparison});return read();
+      }catch(e){next?.dispose();if(token===comparisonVersion)comparisonError=e.message;throw e;}finally{if(token===comparisonVersion){comparisonPending=false;sync();}}
+    }
     async function load(url){
       if(typeof url!=='string'||!url.trim())throw Error('Source GLB URL required');
       const loadRequest=++loadGeneration,nextSession=await host.scene.open();let next,nextMaterial;
@@ -87,10 +113,11 @@ export default {
         if(meshes.length!==1||Array.isArray(meshes[0].material)||!meshes[0].geometry.index)throw Error('First support constructor requires one indexed mesh with one material');
         if(disposed||loadRequest!==loadGeneration){await nextSession.dispose();return read();}
         const nextSource=supportSourceFromMesh(meshes[0]);
+        const identityResponse=await fetch(url);if(!identityResponse.ok)throw Error('Source identity read failed');const identityBytes=await identityResponse.arrayBuffer(),identity=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',identityBytes)),x=>x.toString(16).padStart(2,'0')).join('');
         nextMaterial=createSourceMaterialSampler(renderer,meshes[0].material);
         const prepared=prepareSupportVolume(nextSource,recipe),clipped=await clipSupportVolume(device,prepared);
         if(disposed||loadRequest!==loadGeneration){nextMaterial.dispose();await nextSession.dispose();return read();}
-        free();sourceMaterial?.dispose();sourceMaterial=nextMaterial;if(loadSession)await loadSession.dispose();loadSession=nextSession;asset=next;sourceMesh=meshes[0];sourceUrl=url;
+        clearComparison();sourceDigest=identity;free();sourceMaterial?.dispose();sourceMaterial=nextMaterial;if(loadSession)await loadSession.dispose();loadSession=nextSession;asset=next;sourceMesh=meshes[0];sourceUrl=url;
         source=nextSource;await rebuild(recipe,{prepared,clipped});return read();
       }catch(e){if(loadSession!==nextSession){nextMaterial?.dispose();await nextSession.dispose();}throw e;}
     }
@@ -117,24 +144,31 @@ export default {
       }finally{if(token===lightingVersion){lightingPending=false;sync();}}return read();
     }
     try{await load(sourceUrl);}catch(e){sourceMaterial?.dispose();await loadSession?.dispose();await session.dispose();restoreLod();throw e;}
+    if(comparisonEntries.length&&sourceUrl===DEFAULT_SOURCE){try{await setCheckpoint(inputs.checkpoint??comparisonEntries[0].id);}catch(e){comparisonError=e.message;sync();}}
+    if(comparison&&inputs.inspectionLight!==false&&!host.scene.objects().some(o=>o.type==='light'))addComparisonLight();
+    if(inputs.frame==='region')frameRegion();
     const stop=session.onFrame(()=>measure());
     return {
       read,
       operations:{
-        setRegion:next=>rebuild({...recipe,...next}),load,probe,
-        selectExample(name){if(sourceUrl!==DEFAULT_SOURCE||!Object.hasOwn(PLATE_REGIONS,name))throw Error('Choose a named example on the finished plate source');return rebuild(structuredClone(PLATE_REGIONS[name]));},
-        setMode(value){if(!MODES.includes(value))throw Error('Unknown support display mode');mode=value;measure();applyVisibility();publish();return read();},
+        setRegion:next=>{clearComparison();return rebuild({...recipe,...next});},load,probe,setCheckpoint,addComparisonLight,setOutline(value){if(!comparison)throw Error('Choose a checkpoint first');comparison.setOutline(value);session.redraw();sync();publish();return read();},
+        setComparison(value){if(!comparison)throw Error('Choose a source-linked section checkpoint first');comparison.set(value,new Vector3().fromArray(session.readView().position));mode='comparison';applyVisibility();publish();record({kind:'trellis-support.comparison',phase:'applied',effective:read().comparison});return read();},
+        selectExample(name){if(sourceUrl!==DEFAULT_SOURCE||!Object.hasOwn(PLATE_REGIONS,name))throw Error('Choose a named example on the finished plate source');clearComparison();return rebuild(structuredClone(PLATE_REGIONS[name]));},
+        setMode(value){if(!MODES.includes(value))throw Error('Unknown support display mode');if(value==='comparison'&&!comparison)throw Error('Choose a source-linked checkpoint first');if(comparisonPending){comparisonVersion++;comparisonPending=false;}mode=value;measure();applyVisibility();publish();return read();},
         setThreshold(value){if(!Number.isFinite(value)||value<=0)throw Error('positive LOD threshold required');threshold=value;measure();applyVisibility();publish();return read();},
         frame(){const box=new Box3().setFromObject(asset.root),target=box.getCenter(new Vector3()),size=box.getSize(new Vector3()).length();return session.setView({position:target.clone().add(new Vector3(size*1.1,size*.8,size*1.25)).toArray(),target:target.toArray(),near:Math.max(size/10000,.0001)});},
-        frameRegion(){sourceMesh.updateWorldMatrix(true,false);const target=new Vector3().fromArray(recipe.origin).applyMatrix4(sourceMesh.matrixWorld),position=new Vector3().fromArray(worldPoint([3,-3,4.5],candidate.frame)).applyMatrix4(sourceMesh.matrixWorld),size=recipe.radius*sourceMesh.getWorldScale(new Vector3()).length();return session.setView({position:position.toArray(),target:target.toArray(),near:Math.max(size/10000,.00001)});},
+        frameRegion,
         probeLighting,
         inspectCandidate(){sourceMesh.updateWorldMatrix(true,false);group.updateWorldMatrix(true,false);return {state:read(),patch:candidate.patch,retained:candidate.retained,boundarySegments:candidate.boundarySegments,untouched:Array.from(candidate.untouched),frame:candidate.frame,lo:candidate.lo,hi:candidate.hi,transforms:{sourceWorld:sourceMesh.matrixWorld.elements,partitionWorld:group.matrixWorld.elements,sourceParentVisible:sourceMesh.parent.visible,sourceVisible:sourceMesh.visible,partitionVisible:group.visible,patchVisible:patchMesh.visible,wireVisible:wire.visible,partitionParent:group.parent.name,sourceParent:sourceMesh.parent.name}};},
       },
       mount({root:panel,document,invoke}){
-        const description=document.createElement('p');description.textContent='Local geometry partition on the original TRELLIS asset. Teal marks the source region, orange its closed support, pink the source/support boundary (x-ray). No neural material has been trained.';panel.append(description);
+        panel.dataset.trellisSupportControls='true';const description=document.createElement('p');description.textContent='Compare the learned square in its original place, with surrounding PBR unchanged. Checkpoints and section appearance are direct choices. Geometry diagnostics remain below.';panel.append(description);
+        const heading=text=>{const h=document.createElement('div');h.textContent=text;h.style.marginTop='10px';h.style.fontWeight='600';panel.append(h);};
+        heading('Section checkpoint');checkpointChoices=createChoiceButtons(document,{label:'Section checkpoint',entries:comparisonEntries.map(e=>[e.id,e.label]),onChange:value=>invoke('setCheckpoint',value).catch(e=>{comparisonError=e.message;sync();})});panel.append(checkpointChoices);
+        heading('Section appearance');comparisonChoices=createChoiceButtons(document,{label:'Section appearance',entries:[['source','Source section'],['learned','Learned section']],onChange:value=>invoke('setComparison',value).catch(e=>{comparisonError=e.message;sync();})});panel.append(comparisonChoices);outlineButton=document.createElement('button');outlineButton.textContent='Section outline';outlineButton.addEventListener('click',()=>invoke('setOutline',!comparison.read().outline).catch(e=>{comparisonError=e.message;sync();}));panel.append(outlineButton);const lightButton=document.createElement('button');lightButton.textContent='Add comparison light';lightButton.addEventListener('click',()=>invoke('addComparisonLight').catch(e=>{comparisonError=e.message;sync();}));panel.append(lightButton);
         const row=(text,node)=>{const label=document.createElement('label'),grip=document.createElement('span');grip.textContent=text+' ';label.append(grip,node);panel.append(label);return grip;};
-        selector=createChoiceButtons(document,{label:'Display',entries:[['partition','Region + outline'],['isolated','Isolated source'],['source','Original source'],['support','Support diagnostic'],['lod','LOD preview']],onChange:value=>invoke('setMode',value).catch(failed)});row('Display',selector);
-        exampleSelector=createChoiceButtons(document,{label:'Plate region example',entries:[['panel','Panel patch'],['rim','Rolled edge'],['custom','Custom region',true]],onChange:value=>invoke('selectExample',value).catch(failed)});row('Region',exampleSelector);
+        selector=createChoiceButtons(document,{label:'Display',entries:[['partition','Region + outline'],['isolated','Isolated source'],['source','Original source'],['support','Support diagnostic'],['lod','LOD preview'],['comparison','Section comparison']],onChange:value=>invoke('setMode',value).catch(failed)});heading('Geometry display');panel.append(selector);
+        exampleSelector=createChoiceButtons(document,{label:'Plate region example',entries:[['panel','Panel patch'],['rim','Rolled edge'],['custom','Custom region',true]],onChange:value=>invoke('selectExample',value).catch(failed)});heading('Source region');panel.append(exampleSelector);
         let timer;const failed=e=>{error=e.message;draftRecipe=structuredClone(recipe);sync();};
         for(const[k,label,step]of [['origin0','Region X',.005],['origin1','Region Y',.005],['origin2','Region Z',.005],['radius','Half width',.005],['depth','Inward depth',.005],['top','Outward extent',.005],['threshold','LOD switch footprint (pixels)',10]]){
           const field=document.createElement('input');field.type='number';field.step='any';field.className='transform-input';field.setAttribute('aria-label',label);const grip=row(label,field);fields.set(k,field);host.controls.installNumberDrag({input:field,grip,step});
@@ -145,7 +179,7 @@ export default {
         const frame=document.createElement('button');frame.textContent='Frame asset';frame.addEventListener('click',()=>invoke('frame').catch(failed));const close=document.createElement('button');close.textContent='Frame region';close.addEventListener('click',()=>invoke('frameRegion').catch(failed));const probeButton=document.createElement('button');probeButton.textContent='Probe region';probeButton.addEventListener('click',()=>invoke('probe').catch(failed));status=document.createElement('p');status.setAttribute('role','status');const lightingButton=document.createElement('button');lightingButton.textContent='Probe normal lighting';lightingButton.addEventListener('click',()=>invoke('probeLighting').catch(failed));panel.append(loadButton,frame,close,probeButton,lightingButton,status);sync();
         return ()=>clearTimeout(timer);
       },
-      async dispose(){disposed=true;generation++;loadGeneration++;stop();if(sourceMesh)sourceMesh.visible=true;free();sourceMaterial?.dispose();try{await loadSession?.dispose();await session.dispose();}finally{restoreLod();}},
+      async dispose(){disposed=true;generation++;loadGeneration++;clearComparison();stop();const app=host.controls.document.defaultView,owned=host.scene.objects().filter(o=>inspectionLights.has(o.id)).map(o=>o.id);if(owned.length){const prior=app.kaminosSelection.read();app.kaminosSelection.set(owned,owned[0]);await app.kaminosSelection.remove();const live=new Set(host.scene.objects().map(o=>o.id)),ids=prior.ids.filter(id=>live.has(id));app.kaminosSelection.set(ids,ids.includes(prior.activeId)?prior.activeId:ids[0]??null);}if(sourceMesh)sourceMesh.visible=true;free();sourceMaterial?.dispose();try{await loadSession?.dispose();await session.dispose();}finally{restoreLod();}},
     };
   },
 };
