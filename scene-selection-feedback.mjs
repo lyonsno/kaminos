@@ -14,7 +14,8 @@ export function createSelectionFeedback(camera) {
   const edges=dilation.sub(mask.sample(screenUV).rg).clamp(0,1).mul(enabled).mul(opacity);
   const pairs=[],masks=createSelectionMaskProxies(maskScene,{selected,active,pairs,camera});
   const update=masks.update;
-  return{update,setStyle(style){width.value=style.width;opacity.value=style.opacity;},suspend(value){enabled.value=value?0:1;},output:base=>mix(mix(base,vec4(1,.38,.04,1),edges.x),vec4(1,.72,.22,1),edges.y),state:()=>({meshCount:pairs.length,activeCount:pairs.filter(p=>p.active).length,suspended:enabled.value===0})};
+  const owned=[active,selected,maskPass];
+  return{dispose(){masks.update([],[]);while(owned.length){owned.at(-1).dispose();owned.pop();}},update,setStyle(style){width.value=style.width;opacity.value=style.opacity;},suspend(value){enabled.value=value?0:1;},output:base=>mix(mix(base,vec4(1,.38,.04,1),edges.x),vec4(1,.72,.22,1),edges.y),state:()=>({meshCount:pairs.length,activeCount:pairs.filter(p=>p.active).length,suspended:enabled.value===0})};
 }
 
 // The mask scene's proxies: one per drawn mesh of each selected object, sharing its geometry (and, for an
