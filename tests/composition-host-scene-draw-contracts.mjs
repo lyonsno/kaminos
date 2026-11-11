@@ -2,13 +2,13 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import {createSceneFrameComposition} from '../scene-frame-composition.mjs';
+import {createSceneFrameRuntime} from '../scene-frame-runtime.mjs';
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const start=html.indexOf('  const frameComposition=createSceneFrameComposition('),end=html.indexOf('  let sceneFrameCount',start);
+const start=html.indexOf('  const sceneFrameRuntime=createSceneFrameRuntime('),end=html.indexOf('  let sceneFrameCount',start);
 const hostStart=html.indexOf('  compositionHost = {'),hostEnd=html.indexOf('    async presentGlb(',hostStart);
 assert.ok(start>0&&end>start&&hostStart>0&&hostEnd>hostStart);
 function host({draws}){
- const context={deviceRecoveryHeld:()=>false,createSceneFrameComposition,sceneFrameCount:7,sceneLightingPreparation:null,
+ const context={deviceRecoveryHeld:()=>false,createSceneFrameRuntime,simFrameCoordinator:{},readSimFrameInputs:()=>({}),sceneFrameCount:7,sceneLightingPreparation:null,
   exclusiveInspectionRender:false,manualInspectionRender:false,authoredWaterFlameTransportActive:false,authoredFlameHDRActive:false,
   window:{__kaminosSceneRadiance:{canRender:()=>draws}},renderer:{backend:{device:{}}},
   syncViewportRendererSize(){},camera:{updateMatrixWorld(){}},fireLightFieldPass:null,

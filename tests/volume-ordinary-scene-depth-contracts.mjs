@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {createSceneFrameRuntime} from '../scene-frame-runtime.mjs';
 const core=readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
 // Fail first on the pre-fix ordinary fragment, which always marches to infinity.
 const fragment=core.match(/fn fs\(in: VSOut\)[\s\S]*?\n}/)[0];
@@ -20,10 +21,14 @@ assert.throws(()=>validateOrdinarySceneDepth({device,camera,texture:{...texture,
 // Exercise the actual host provider before any prepass can submit: a failed
 // shared-device acquisition must report its own refusal, not a null dereference.
 const shell=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const providerBody=shell.match(/ordinarySceneDepthProvider = \(\) => \{([\s\S]*?)\n  };/)[1];
+const providerStart=shell.indexOf('  ordinarySceneDepthProvider=');
+assert.ok(providerStart>0,'actual page depth delegate is present');
+const providerBody=shell.slice(providerStart,shell.indexOf('\n',providerStart));
 let sceneRenders=0;
-const provider=new Function('ordinaryDepthEnabled','sharedGpu','camera','syncViewportRendererSize','fireLightFieldPass','frameComposition','renderer','activeSceneDepth',`const deviceRecoveryHeld=()=>false;${providerBody}`);
-const invoke=enabled=>provider(enabled,null,{updateMatrixWorld(){}},()=>{},null,{renderDepth(){sceneRenders++;return true;}},{backend:{get:()=>({texture})}},{getTexture:()=>({})});
+const provider=new Function('sceneFrameRuntime','ordinaryDepthEnabled',`let ordinarySceneDepthProvider;const deviceRecoveryHeld=()=>false;${providerBody};return ordinarySceneDepthProvider();`);
+const runtime=createSceneFrameRuntime({readInputs:()=>({}),draw:()=>sceneRenders++,frameCount:()=>sceneRenders,
+  prepare(){},readSharedDevice:()=>null,readCamera:()=>camera,readDepth:()=>texture});
+const invoke=enabled=>provider(runtime,enabled);
 assert.throws(()=>invoke(true),/ordinary-scene-depth-shared-device-unavailable/);
 assert.equal(sceneRenders,0,'unavailable shared device must refuse before rendering scene depth');
 assert.equal(invoke(false),null,'disabled depth does not require the shared device');

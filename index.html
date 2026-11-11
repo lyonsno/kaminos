@@ -11566,7 +11566,7 @@ async function initScene() {
     sharedGpu:sharedGpu??(samHostContext?{device:samHostContext.device,queue:samHostContext.device.queue}:null),
     viewport:readSceneViewport,exposure:sceneEnvironment.read().exposure,updateStyle:true,allowIndependentDevice:true,
     trackTimestamp:!!sharedGpu?.device&&(isFireLightFieldTimingRoute()||new URLSearchParams(location.search).get('ash_timing')==='1'),
-    onConstructed:next=>{renderer=next;renderer.domElement.id='kaminos-host-renderer-canvas';vp.appendChild(renderer.domElement);window.kaminosStartup?.phase('Initializing renderer');},
+    onConstructed:next=>{renderer=next;renderer.domElement.id = 'kaminos-host-renderer-canvas';vp.appendChild(renderer.domElement);window.kaminosStartup?.phase('Initializing renderer');},
   });
   window.kaminosStartup?.phase('Building workspace');
   console.log('WebGPU renderer initialized, backend:', renderer.backend?.constructor?.name || 'unknown');
