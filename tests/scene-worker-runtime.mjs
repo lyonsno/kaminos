@@ -2,7 +2,8 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {MessageChannel} from 'node:worker_threads';
 import {createSceneWorkerClient,installSceneWorkerHost} from '../scene-worker-handoff.mjs';
-import {createWebGpuForegroundService} from '../webgpu-inference-kit/src/core.js';
+import * as realKit from '../webgpu-inference-kit/src/core.js';
+const {createWebGpuForegroundService}=realKit;
 const module=await import('../scene-worker-runtime.mjs').catch(error=>{if(error.code!=='ERR_MODULE_NOT_FOUND')throw error;return {};});
 function factory(options){assert.equal(typeof module.createSceneWorkerRuntimeFactory,'function','actual worker composition must return a retained shell before allocation');return module.createSceneWorkerRuntimeFactory(options);}
 function fixture({failInitialize=false,failCleanup=false}={}){
@@ -57,12 +58,12 @@ test('scene command collision cannot replace model or reserved lifecycle operati
 });
 
 test('the composed model adapter keeps ordinary frame and edit admission live on its same app host',async t=>{
- const f=fixture();f.device.features=new Set(['shader-f16']);let open,finish;
- const started=new Promise(resolve=>{open=resolve;}),gate=new Promise(resolve=>{finish=resolve;});
- const kit=f.options.services.kit;kit.createWebGpuInferenceSession=async()=>({
-  registerRoute:async()=>({runtime:{},enqueue:({execute})=>({completion:Promise.resolve().then(()=>execute({})).then(output=>({status:'succeeded',output}))}),drain:async()=>{}}),
-  unregisterRoute(){},close(){f.calls.push('session.close');},
- });kit.createWebGpuInferenceControl=()=>({close:async()=>{}});
+ const f=fixture();f.device.features=new Set(['shader-f16']);f.device.lost=new Promise(()=>{});let open,failStart,finish;
+ const started=new Promise((resolve,reject)=>{open=resolve;failStart=reject;}),gate=new Promise(resolve=>{finish=resolve;});
+ f.options.services.kit={...realKit,createWebGpuInferenceSession:async options=>{
+  const session=await realKit.createWebGpuInferenceSession(options);
+  return {...session,async close(){await session.close();f.calls.push('session.close');}};
+ }};
  const png=Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==','base64'));
  f.options.imageOptions={weights:async()=>'/weights',deliver:async()=>({source:'/saved/image.png'}),encodePng:async()=>new Blob([png],{type:'image/png'}),
   createPipeline:()=>({load:async()=>{},destroy:async()=>f.calls.push('model.dispose'),generate:async input=>{
@@ -76,7 +77,7 @@ test('the composed model adapter keeps ordinary frame and edit admission live on
  t.after(()=>{finish();client.disconnect();host.disconnect();port1.close();port2.close();});
  // Recording canvas services stay local; this is CPU composition evidence, not a native canvas witness.
  await client.initialize({viewport:f.payload.viewport,flameControls:f.payload.flameControls}).completion;
- const model=client.request('image.generate',{prompt:'lantern',seed:1,size:256});model.completion.catch(()=>{});
+ const model=client.request('image.generate',{prompt:'lantern',seed:1,size:256});model.completion.catch(failStart);
  await started;assert.equal(runtime.host.device,f.device);assert.equal(runtime.host.unsettledRuns().length,1);
  const frame=await client.request('frame',{now:2}).completion;assert.equal(frame.output.result.flameDrawn,true);assert.equal(frame.output.ui?.surfaces?.volume?.active,true);
  const edit=await client.request('scene.move',{}).completion;assert.equal(edit.output.mutationApplied,true);
