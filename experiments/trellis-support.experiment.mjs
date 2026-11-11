@@ -3,7 +3,7 @@ import {prepareSupportVolume,materializeFragments,supportVolumeMesh,worldPoint} 
 import {clipSupportVolume} from '../trellis-support-gpu.mjs';
 
 const MODES=['partition','source','support','lod'];
-const DEFAULT_SOURCE='/scratch/barycentric-support/weathered-timber-beam.glb';
+const DEFAULT_SOURCE='/api/read?root=generated-meshes&path=barycentric-support%2Fweathered-timber-beam.glb';
 function geometry(part){const g=new BufferGeometry();g.setAttribute('position',new BufferAttribute(part.positions,3));if(part.normals)g.setAttribute('normal',new BufferAttribute(part.normals,3));else g.computeVertexNormals();if(part.uvs)g.setAttribute('uv',new BufferAttribute(part.uvs,2));return g;}
 const summary=c=>({originalTriangles:c.sourceTriangleCount,broadPhaseTriangles:c.candidates.length,sourcePatchTriangles:c.patch.length,sourceTriangleIds:Array.from(new Set(c.patch.map(t=>t.sourceTriangle))),retainedCutTriangles:c.retained.length,untouchedTriangles:c.untouched.length,supportTriangles:12,diagnostics:c.diagnostics});
 

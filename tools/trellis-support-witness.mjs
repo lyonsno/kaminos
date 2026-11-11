@@ -4,6 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import assert from 'node:assert/strict';
+import {assertSupportInspection} from '../trellis-support-evidence.mjs';
 const [url,out,executable]=process.argv.slice(2);
 if(!url||!out||!executable)throw Error('usage: node tools/trellis-support-witness.mjs URL OUTPUT_DIRECTORY INDEPENDENT_CHROMIUM');
 await fs.mkdir(out,{recursive:true});const report={schema:'kaminos.trellis-support-witness.v1',url,executable,classification:'lightweight saved asset and local geometry inspection; no performance claim',status:'running',phase:'launch',captures:[],consoleErrors:[],pageErrors:[]};
@@ -36,9 +37,12 @@ try{
   await invoke('setMode','partition');await invoke('setThreshold',180);await invoke('frame');await shoot('whole-partition');
   report.phase='source-provenance';report.assets=await Promise.all(assets);report.sourceBytes=await page.evaluate(async url=>{const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw Error('Source fetch failed');const b=await r.arrayBuffer();const hash=await crypto.subtle.digest('SHA-256',b);return {url:r.url,bytes:b.byteLength,sha256:Array.from(new Uint8Array(hash),v=>v.toString(16).padStart(2,'0')).join('')};},report.initial.sourceUrl);assert.equal(report.sourceBytes.sha256,'7be0be2857ce5100ffa86f329e4068ba83ebb701c8582e2f982d28e68b8f8bdd');assert.equal(report.initial.candidate.originalTriangles,97670);
   report.runtime=await page.evaluate(()=>fetch('/api/runtime-config').then(r=>r.json()));
+  report.codeHashes={};for(const name of ['trellis-local-support.mjs','trellis-support-gpu.mjs','experiments/trellis-support.experiment.mjs']){
+    const local=await fs.readFile(new URL('../'+name,import.meta.url)),response=await fetch(new URL('/'+name,url));assert.ok(response.ok,'served module unavailable');const served=Buffer.from(await response.arrayBuffer()),hash=b=>crypto.createHash('sha256').update(b).digest('hex');assert.equal(hash(local),hash(served),'served module differs from witness checkout');report.codeHashes[name]=hash(served);
+  }
   report.final=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
   report.phase='cleanup';await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());
-  assert.deepEqual(report.pageErrors,[]);assert.deepEqual(report.consoleErrors,[]);
+  assertSupportInspection(report);
   report.status='passed';report.phase='complete';
 }catch(e){report.status='failed';report.error=String(e.stack??e);process.exitCode=1;const page=context?.pages().at(-1);if(page)try{await page.screenshot({path:path.join(out,'failure.png')});report.failureText=await page.locator('body').innerText();}catch{} }
 finally{await context?.close();await browser?.close();report.profile=profile;await fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,out}));}

@@ -22,8 +22,10 @@ Use the normal Workbench route:
 ```
 
 Inputs accept `sourceUrl`, `region`, `mode` and `threshold`. The default source is
-`/scratch/barycentric-support/weathered-timber-beam.glb`; make that path available
-in the served checkout or supply an existing mounted GLB URL. The source used
+`/api/read?root=generated-meshes&path=barycentric-support%2Fweathered-timber-beam.glb`;
+it reads a byte-identical prepared copy under the shared generated-meshes mount,
+with `source-receipt.json` recording its original location and hash. Supply an
+existing mounted GLB URL for another source. The source used
 for the first inspection is the stockroom weathered timber beam:
 
 ```text
