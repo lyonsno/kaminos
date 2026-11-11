@@ -56,5 +56,11 @@ test('actual fit command captures the requested physical window without rescalin
   assert.equal(failure.phase,'configuration','invalid comparison size reached the accelerator route');
   assert.match(failure.error,/comparison size/i);
   await assert.rejects(fs.access(probe));
+  const paired={sourceKind:'stone-transition',source:{cells:4,halo:0,width:.7,depth:.7},handoff:{cheapResolution:64},stages:{cheap:1,residual:1,joint:1},fit:{resolution:128,steps:3,batch:1,queries:1,heldout:1,samples:1,heldoutSamples:1,bounces:1}};
+  for(const [name,patch,message]of [['window',{window:{uvOrigin:[.375,.125],uvScale:.25}},/paired.*window/i],['null',{handoff:null},/handoff.*object/i],['array',{handoff:[]},/handoff.*object/i],['grid',{labels:'denoised-grid',grid:{width:1,height:1}},/paired.*raw/i]]){
+   await fs.writeFile(config,JSON.stringify({...paired,...patch}));const destination=path.join(dir,'invalid-paired-'+name);await fs.rm(probe,{force:true});
+   await assert.rejects(run(process.execPath,['--loader',loader,'tools/ground-material-fit.mjs',config,destination],{cwd:process.cwd(),env:{...process.env,GREENROOM_JOB_ID:'configuration-fixture-only',STONE_WINDOW_PROBE:probe}}));
+   const failed=JSON.parse(await fs.readFile(path.join(destination,'report.json'),'utf8'));assert.equal(failed.phase,'configuration',name+' reached the accelerator route');assert.match(failed.error,message);await assert.rejects(fs.access(probe));
+  }
  }finally{await fs.rm(dir,{recursive:true,force:true});}
 });

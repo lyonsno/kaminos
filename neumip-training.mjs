@@ -143,7 +143,7 @@ fn evaluate(q:u32)->vec3<f32>{
   let z=max(0.6,sqrt(max(0.0,1.0-dot(view,view))));
   let shifted=fract(uv)+a[${o}u]*view/z*0.05;
   let lod=clamp(queries[q*8u+6u]+cfg.lodBias,0.0,${(appearanceLevels-1).toFixed(1)});
-  let low=u32(floor(lod))+1u;let high=min(low+1u,${fields.length-1}u);let t=fract(lod);
+  let low=u32(floor(lod))+1u;let high=min(low+1u,${appearanceLevels}u);let t=fract(lod);
   a[${main.inputOffset}u]=queries[q*8u+4u];a[${main.inputOffset+1}u]=queries[q*8u+5u];
   a[${main.inputOffset+2}u]=view.x;a[${main.inputOffset+3}u]=view.y;
   for(var c=0u;c<8u;c++){a[${main.inputOffset+4}u+c]=mix(sampleField(low,shifted,c).x,sampleField(high,shifted,c).x,t);}
@@ -181,7 +181,7 @@ fn evaluate(q:u32)->vec3<f32>{
   let factor=view/max(0.6,sqrt(max(0.0,1.0-dot(view,view))))*0.05;
   let shifted=fract(uv)+a[${o}u]*factor;
   let lod=clamp(queries[q*8u+6u]+cfg.lodBias,0.0,${(appearanceLevels-1).toFixed(1)});
-  let low=u32(floor(lod))+1u;let high=min(low+1u,${fields.length-1}u);let t=fract(lod);
+  let low=u32(floor(lod))+1u;let high=min(low+1u,${appearanceLevels}u);let t=fract(lod);
   var depthGrad=0.0;
   for(var c=0u;c<8u;c++){
     let g=di[c+4u];let s0=sampleField(low,shifted,c);let s1=sampleField(high,shifted,c);

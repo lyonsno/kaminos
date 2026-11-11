@@ -1,5 +1,9 @@
 import {readNeumipModel,writeNeumipModel} from './neumip-model.mjs';
 export const STONE_HANDOFF_ARCHITECTURE='kaminos-stone-handoff-residual-v1';
+export function stoneHandoffCheckpointName(resolution,step){
+ if(!Number.isSafeInteger(resolution)||resolution<2||!Number.isSafeInteger(step)||step<0)throw Error('Invalid paired checkpoint coordinates');
+ return `stone-${resolution}-step-${step}.handoff.model`;
+}
 export function createHandoffState(spec,resolution){
  const {routing:r,material:m,cheapResolution=64}=spec??{};
  if(!r||![r.width,r.depth,r.inner,r.collar].every(Number.isFinite)||r.width<=0||r.depth<=0||r.inner<0||r.collar<=0||r.inner+r.collar>=Math.min(r.width,r.depth)/4)throw Error('Invalid handoff routing');

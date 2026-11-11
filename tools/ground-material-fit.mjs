@@ -1,4 +1,4 @@
-import {writeStoneHandoffModel,readStoneHandoffModel} from '../stone-handoff-model.mjs';
+import {writeStoneHandoffModel,readStoneHandoffModel,stoneHandoffCheckpointName} from '../stone-handoff-model.mjs';
 // kaminos-test: manual — explicit source/config/output; Greenroom accelerator job.
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -34,6 +34,9 @@ try{
  report.sourceRevision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();report.sourceStatus=execFileSync('git',['status','--porcelain'],{encoding:'utf8'});
  report.sourceFiles={};for(const name of ['ground-teacher-source.mjs','material-query-pool.mjs','grass-material-source.mjs','stone-transition-source.mjs','stone-material-window.mjs','masonry-source.mjs','surface-teacher-source.mjs','surface-teacher-wgsl.mjs','surface-teacher.mjs','surface-material-teacher.mjs','neumip-training.mjs','neumip-model.mjs','tools/ground-material-fit.mjs','stone-handoff-model.mjs']){const b=await fs.readFile(name);report.sourceFiles[name]=digest(b);await fs.writeFile(path.join(out,path.basename(name)),b);}
  const grass=config.sourceKind==='grass',stone=config.sourceKind==='stone-transition',paired=config.handoff!==undefined;
+ if(paired&&(!config.handoff||typeof config.handoff!=='object'||Array.isArray(config.handoff)))throw Error('Paired handoff must be an object');
+ if(paired&&config.window!==undefined)throw Error('Paired routing requires a full tile; reference window unsupported');
+ if(paired&&config.labels==='denoised-grid')throw Error('Paired routing currently requires raw labels');
  if(paired&&!stone)throw Error('Paired authored routing requires the stone source');if(config.sourceKind&&!['grass','ground','stone-transition'].includes(config.sourceKind))throw Error('Unknown material source kind');
  const grid=config.labels==='denoised-grid';if(config.labels&&!['denoised-grid','raw'].includes(config.labels))throw Error('Unknown label route');if(grid&&!options.fresh)throw Error('Denoised grids require fresh streaming');
  const gridWidth=config.grid?.width??32,gridHeight=config.grid?.height??64;
@@ -65,7 +68,7 @@ try{
    learner=await createNeumipTraining(ctx.device,student,{batchSize:Math.max(options.batch,options.heldout,size**2)});
    const checkpoint=async step=>{
     learner.setQueries(heldoutQueries);const {rgb}=await learner.evaluate();
-    const model=await learner.exportModel(),bytes=paired?writeStoneHandoffModel(model):writeNeumipModel(model),name=`${stone?'stone':grass?'grass':'ground'}-${options.resolution}-step-${step}.${paired?'handoff':'model'}`;
+    const model=await learner.exportModel(),bytes=paired?writeStoneHandoffModel(model):writeNeumipModel(model),name=paired?stoneHandoffCheckpointName(options.resolution,step):`${stone?'stone':grass?'grass':'ground'}-${options.resolution}-step-${step}.model`;
     // Round-trip the actual runtime artifact, not only training-resident state.
     (paired?readStoneHandoffModel:readNeumipModel)(bytes);await fs.writeFile(path.join(out,name),bytes);await raw(`heldout-${step}.f32`,rgb);
     const record={step,loss:loss(rgb,heldoutLabels),elapsedMs:performance.now()-start,file:name,sha256:digest(bytes),bytes:bytes.length};report.checkpoints.push(record);console.log(JSON.stringify(record));await publish();

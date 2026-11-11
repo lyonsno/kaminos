@@ -33,3 +33,8 @@ test('paired archive round trips both representations and refuses partial or cor
  assert.throws(()=>readStoneHandoffModel(bytes.subarray(0,bytes.length-1)),/length/);
  const corrupt=bytes.slice();new DataView(corrupt.buffer).setFloat32(corrupt.length-4,NaN,true);assert.throws(()=>readStoneHandoffModel(corrupt),/finite/);
 });
+import * as pairedFormat from '../stone-handoff-model.mjs';
+test('paired checkpoint names use the observed binary-serving model suffix',()=>{
+ assert.equal(typeof pairedFormat.stoneHandoffCheckpointName,'function','paired producer has no binary-safe filename contract');
+ assert.equal(pairedFormat.stoneHandoffCheckpointName(256,200),'stone-256-step-200.handoff.model');
+});
