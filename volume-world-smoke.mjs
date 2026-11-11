@@ -182,7 +182,15 @@ fn momentumDonor(c:vec3<i32>,a:u32)->bool{
 fn prescribedJoin()->bool{return u.momentumLo.w>.5;}
 fn prescribedFace(c:vec3<i32>,a:u32)->bool{
  let face=2*c+vec3<i32>(1)+axis(a);
- return all(face>=vec3<i32>(u.prescribedLo.xyz))&&all(face<=vec3<i32>(u.prescribedHi.xyz));
+ // Fine may move beyond anchored Middle. Transport still supplies those Fine
+ // faces, so protect the union, including its non-rectangular overlap.
+ return momentumDonor(c,a)||(all(face>=vec3<i32>(u.prescribedLo.xyz))&&all(face<=vec3<i32>(u.prescribedHi.xyz)));
+}
+fn boxFaceCoverage(p:vec3<f32>,pitch:f32,a:u32,lo:vec3<f32>,hi:vec3<f32>)->f32{
+ if(p[a]<lo[a]||p[a]>hi[a]){return 0.0;}
+ let overlap=clamp((min(p+vec3<f32>(pitch*.5),hi)-max(p-vec3<f32>(pitch*.5),lo))/pitch,vec3<f32>(0),vec3<f32>(1));
+ var covered=1.0;for(var k=0u;k<3u;k++){if(k!=a){covered*=overlap[k];}}
+ return covered;
 }
 // Fine supplies velocity, so the pressure correction has homogeneous Neumann
 // data there. Keep the supplied flux in the RHS; remove its pressure coupling.
@@ -193,12 +201,13 @@ fn pressureMobility(c:vec3<i32>,a:u32)->f32{
  if(u.pressureControl.y==1.0){return select(1.0,0.0,prescribedFace(c,a));}
  let pitch=u.pressureGrid.w;
  let p=u.lo.xyz+(vec3<f32>(c)+.5+vec3<f32>(axis(a))*.5)*pitch;
- let lo=select(fineLo(),u.bridgeLo.xyz,u.bridgeDims.w>.5);
- let hi=select(fineHi(),u.bridgeLo.xyz+u.bridgeDims.xyz*u.bridgeLo.w,u.bridgeDims.w>.5);
- if(p[a]<lo[a]||p[a]>hi[a]){return 1.0;}
- let overlap=clamp((min(p+vec3<f32>(pitch*.5),hi)-max(p-vec3<f32>(pitch*.5),lo))/pitch,vec3<f32>(0),vec3<f32>(1));
- var covered=1.0;for(var k=0u;k<3u;k++){if(k!=a){covered*=overlap[k];}}
- return 1.0-covered;
+ let fineMin=fineLo();let fineMax=fineHi();
+ var covered=boxFaceCoverage(p,pitch,a,fineMin,fineMax);
+ if(u.bridgeDims.w>.5){
+  let middleMin=u.bridgeLo.xyz;let middleMax=middleMin+u.bridgeDims.xyz*u.bridgeLo.w;
+  covered+=boxFaceCoverage(p,pitch,a,middleMin,middleMax)-boxFaceCoverage(p,pitch,a,max(fineMin,middleMin),min(fineMax,middleMax));
+ }
+ return clamp(1.0-covered,0.0,1.0);
 }
 fn prescribedInterior(c:vec3<i32>)->bool{
  if(!prescribedJoin()){return false;}

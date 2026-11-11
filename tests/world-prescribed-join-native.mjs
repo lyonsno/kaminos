@@ -10,6 +10,7 @@ import {withKaminosGpu} from '../tools/shader-herder.mjs';
 const transform = {translate:[0,0,0],scale:1};
 const index = (c,d) => c[0]+d[0]*(c[1]+d[1]*c[2]);
 function donor(c,a,plan,fineTransform=transform){
+  if(Array.isArray(fineTransform))return fineTransform.some(box=>donor(c,a,plan,box));
   return c.every((v,k)=>{
     const p=plan.min[k]+(v+.5+(k===a?.5:0))*plan.flowPitch;
     return p>=(fineTransform.lo?.[k]??fineTransform.translate[k]-fineTransform.scale)-1e-7
@@ -65,7 +66,7 @@ async function fixture(ctx,{pressure=8,iterations=160,join='prescribed-flow',fin
     const validation=await device.popErrorScope();assert.equal(validation,null,validation?.message);
     const before=arrays['world smoke flow 1'],after=arrays['world smoke flow 0'];
     assert.ok(after.every(Number.isFinite),'all projected faces finite');
-    return {plan,receipt,fineTransform,solid,middle,arrays,metrics:inspect(plan,before,after,intermediate?{lo:intermediate.plan.min,hi:intermediate.plan.max}:fineTransform)};
+    return {plan,receipt,fineTransform,solid,middle,arrays,fineMetrics:inspect(plan,before,after,fineTransform),metrics:inspect(plan,before,after,intermediate?[fineTransform,{lo:intermediate.plan.min,hi:intermediate.plan.max}]:fineTransform)};
   }finally{field?.destroy();intermediate?.destroy();for(const r of owned)r.destroy();}
 }
 const runs=[];
@@ -96,6 +97,14 @@ test('Fine supplied faces survive World projection and the surrounding solve rem
       const middle=await fixture(ctx,{middle:true});runs.push(middle);
       assert.ok(middle.metrics.donorChange<1e-7,'World preserves the supplied Middle field through projection');
       assert.ok(middle.metrics.exteriorAfter<middle.metrics.exteriorBefore*.1,JSON.stringify(middle.metrics));
+      for(const fineTransform of [{translate:[.875,.25,0],scale:1},{translate:[.75,0,0],scale:1.2}]){
+        const moved=await fixture(ctx,{middle:true,fineTransform});runs.push(moved);
+        assert.ok(moved.fineMetrics.donorCount>0);
+        assert.ok(moved.fineMetrics.donorChange<1e-7,`Fine crossing Middle must remain prescribed: ${JSON.stringify(moved.fineMetrics)}`);
+        assert.ok(moved.metrics.donorChange<1e-7,'union of actual supplied faces remains prescribed');
+        assert.ok(moved.metrics.exteriorBefore>0,'nonzero interface flux exercises pressure correction');
+        assert.ok(moved.metrics.exteriorAfter<moved.metrics.exteriorBefore*.1,JSON.stringify(moved.metrics));
+      }
     },{onEvidence:e=>runs.push({evidence:e})});
   }finally{if(process.env.KAMINOS_JOIN_TEST_REPORT)await writeFile(process.env.KAMINOS_JOIN_TEST_REPORT,JSON.stringify({runs},null,2));}
 });
