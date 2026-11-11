@@ -65,3 +65,20 @@ test('production worker facade consumes the binding and retires after actual rec
   await client.request('retire').completion;assert.equal(host.read().phase,'retired');
  }finally{client.disconnect();host.disconnect();port1.close();port2.close();await f.close();}
 });
+
+
+test('explicit dormant volume can draw an empty ordinary scene and validates its device when later activated',async()=>{
+ const f=fixture();let gpu=null,active=false;
+ f.volume.foregroundGpuContext=()=>({device:gpu,queue:gpu?.queue,active,renderer:'ordinary-volume',productFrameOwner:'prototype'});
+ try{
+  assert.throws(()=>factory()({appHost:f.appHost,volume:f.volume}),/shared device/);
+  const binding=factory()({appHost:f.appHost,volume:f.volume,allowDormant:true});
+  f.volume.renderSharedFrame=()=>active?{status:'submitted'}:{status:'held',reason:'inactive'};
+  const draw=()=>binding.frame({now:10},f.ctx);
+  assert.equal((await binding.requestFrame({},f.ctx,draw)).result.sceneDrawn,true);
+  gpu={queue:f.device.queue};active=true;
+  await assert.rejects(binding.requestFrame({},f.ctx,draw),/shared device/);
+  gpu=null;await assert.rejects(binding.requestFrame({},f.ctx,draw),/shared device/);
+  gpu=f.device;assert.equal((await binding.requestFrame({},f.ctx,draw)).result.status,'submitted');
+ }finally{await f.close();}
+});

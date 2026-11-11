@@ -131,3 +131,20 @@ test('saved initialization controls apply before volume allocation through the s
  assert.equal(f.volumeOptions().getControls().resolution,32);assert.equal(f.payload.flameControls.resolution,16);
  runtime.foregroundCommands['flame.controls']({resolution:48},f.context);assert.equal(inputs.readFlameControls().resolution,48);
 });
+
+
+test('saved volume resources are prepared before first activation, and preparation failure never activates',async()=>{
+ for(const fail of [false,true]){
+  const f=fixture();f.sceneResources.prepareVolume=async({volume,context})=>{context.assertCurrent();assert.equal(volume.foregroundGpuContext().device,f.device);assert.equal(f.calls.some(row=>Array.isArray(row)&&row[0]==='volume.active'),false);f.calls.push('volume.prepare');if(fail)throw Error('saved source preparation failed');};
+  const runtime=factory(f.options)({payload:f.payload,lifecycle:{}});
+  if(fail){await assert.rejects(runtime.initialize(f.context),/saved source preparation failed/);assert.equal(f.calls.some(row=>Array.isArray(row)&&row[0]==='volume.active'),false);}
+  else{await runtime.initialize(f.context);assert.ok(f.calls.indexOf('volume.prepare')<f.calls.findIndex(row=>Array.isArray(row)&&row[0]==='volume.active'));}
+  await runtime.retire(f.context);
+ }
+});
+
+test('scene without fire can keep its retained volume inactive at initialization',async()=>{
+ const f=fixture();f.sceneResources.initialVolumeActive=false;const runtime=factory(f.options)({payload:f.payload,lifecycle:{}});
+ await runtime.initialize(f.context);assert.deepEqual(f.calls.filter(row=>Array.isArray(row)&&row[0]==='volume.active'),[['volume.active',false]]);
+ await runtime.retire(f.context);
+});
