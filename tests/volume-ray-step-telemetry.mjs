@@ -9,7 +9,7 @@ function fixture(){
   globalThis.GPUTextureUsage={TEXTURE_BINDING:1,COPY_DST:2,RENDER_ATTACHMENT:4};
   navigator.gpu={getPreferredCanvasFormat:()=> 'bgra8unorm'};
   const buffers=[],calls=[];
-  const device={limits:{maxBufferSize:4096,maxStorageBufferBindingSize:2048,maxComputeWorkgroupsPerDimension:2},
+  const device={limits:{maxBufferSize:16384,maxStorageBufferBindingSize:8192,maxComputeWorkgroupsPerDimension:2},
     createBuffer(options){const buffer={...options,destroy(){this.destroyed=true;}};buffers.push(buffer);return buffer;},
     createShaderModule:()=>({}),createBindGroupLayout:()=>({}),createPipelineLayout:()=>({}),
     createComputePipeline:()=>({getBindGroupLayout:()=>({})}),createRenderPipeline:()=>({getBindGroupLayout:()=>({})}),
@@ -21,6 +21,13 @@ function fixture(){
   const meter=createRayStepTelemetry(device,{document});
   return {meter,canvas,buffers,calls};
 }
+
+test('diagnostic readback refuses counters until an instrumented draw exists',async()=>{
+ const {meter}=fixture();
+ assert.equal(typeof meter.sampleCounters,'function','actual interval-work counters require an explicit guarded readback');
+ assert.deepEqual(await meter.sampleCounters(),{ok:false,reason:'no-current-instrumented-draw'});
+ meter.dispose();
+});
 
 test('unavailable statistics cannot retain a live or stale display',()=>{
   const {meter,canvas,buffers}=fixture();meter.setCanvas(canvas);
@@ -35,7 +42,7 @@ test('unavailable statistics cannot retain a live or stale display',()=>{
 });
 test('instrumentation allocates the actual pixel population and releases counters when disabled',()=>{
   const {meter,canvas,buffers,calls}=fixture();meter.setCanvas(canvas);
-  assert.equal(meter.ensure(16,16,true),true);assert.equal(meter.counterBuffer.size,1024);
+  assert.equal(meter.ensure(16,16,true),true);assert.equal(meter.counterBuffer.size,4096);
   assert.equal(meter.active,true);assert.equal(meter.read().readback,false);
   assert.equal(canvas.style.visibility,'visible');assert.equal(meter.ensure(16,16,true),false);
   const counter=meter.counterBuffer;assert.equal(meter.ensure(16,16,false),true);
@@ -54,7 +61,7 @@ test('GPU work is encoded only on demand, with enough dispatch groups for every 
 test('resource preflight allocates without presenting an unrendered summary',()=>{
   const {meter,canvas}=fixture();meter.setCanvas(canvas);
   assert.equal(meter.ensure(8,8,true,{activate:false}),true);
-  const prepared=meter.counterBuffer;assert.equal(prepared.size,256);
+  const prepared=meter.counterBuffer;assert.equal(prepared.size,1024);
   assert.equal(meter.active,false);assert.equal(canvas.style.visibility,'hidden');
   assert.equal(meter.encode({}),false);
   assert.equal(meter.read().reason,'awaiting-instrumented-draw');

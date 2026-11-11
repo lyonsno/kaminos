@@ -37,7 +37,12 @@ function assertOccupancyRidgeContract(source) {
     assert.equal((arm.match(/\bcontinue\s*;/g) || []).length, 1,
       'each optical arm has one continuation after consumption');
   }
-  const raymarch = allRaymarch.replace(opticalStepArm, '').replace(opticalTraceArm, '').replace(worldArm, '');
+  // This legacy assertion analyzes the old point/cell path. Whole-interval
+  // certification is exercised numerically by the native support tests and
+  // actual on/off consumer witness, including logical probe progression.
+  const emptyIntervalArm=allRaymarch.includes('if(LEAN_EMISSIVE_RAYMARCH&&!fullGridCapture&&!opticalTrace&&u.occupancy_controls.x>0.0&&u.grid_overlay_debug.x<=0.0){')
+    ?balancedWgslBlock(allRaymarch,'if(LEAN_EMISSIVE_RAYMARCH&&!fullGridCapture&&!opticalTrace&&u.occupancy_controls.x>0.0&&u.grid_overlay_debug.x<=0.0){'):'';
+  const raymarch = allRaymarch.replace(emptyIntervalArm,'').replace(opticalStepArm, '').replace(opticalTraceArm, '').replace(worldArm, '');
   const reconstructionStart = raymarch.indexOf('var reconstructed: FlowReconstructionSample;');
   assert.ok(reconstructionStart >= 0, 'supported-sample reconstruction boundary is discoverable');
   const emptyCellBranch = raymarch.match(

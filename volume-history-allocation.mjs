@@ -168,7 +168,7 @@ struct GuidedRay {
   cursor:f32, end:f32, mass:f32, total:f32,
   segmentEnd:f32, weight:f32, left:f32, width:f32,
   start:f32, freshPoint:f32, candidate:f32, currentPoint:f32,
-  guidedCount:u32, guidedIndex:u32, freshPending:u32,
+  guidedCount:u32, guidedIndex:u32, freshPending:u32, intervalStart:f32,
 }
 fn guidedRayInit(ro:vec3<f32>,rd:vec3<f32>,start:f32,end:f32)->GuidedRay{
   var s:GuidedRay;s.cursor=start;s.left=start;s.start=start;s.end=end;
@@ -214,6 +214,7 @@ fn guidedPop(s:ptr<function,GuidedRay>,ro:vec3<f32>,rd:vec3<f32>,phase:f32)->f32
   return point;
 }
 fn guidedNext(s:ptr<function,GuidedRay>,ro:vec3<f32>,rd:vec3<f32>,index:u32,count:u32,phase:f32,freshPhase:f32)->f32{
+  (*s).intervalStart=(*s).left;
   if(OPTICAL_STEP_MODE==4u){
     let sample=guidedQuantile(s,ro,rd,(*s).total*(f32(index)+phase)/f32(count));
     var right=(*s).end;

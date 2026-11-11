@@ -20,7 +20,7 @@ fn histogram(@builtin(local_invocation_index) lane: u32,
   counts[lane]=0u;low[lane]=0u;high[lane]=0u;
   workgroupBarrier();
   let index=(group.x+group.y*groups.x)*256u+lane;
-  if(index<arrayLength(&samples)){
+  if(index<arrayLength(&samples)/4u){
     let value=samples[index];
     if(value!=0xffffffffu){
       counts[lane]=1u;low[lane]=value;
@@ -138,7 +138,7 @@ const DISPLAY_WGSL = /* wgsl */`
 export function createRayStepTelemetry(device,{document=globalThis.document}={}){
   let counterBuffer=device.createBuffer({label:'disabled ray sample counters',size:4,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
   let summaryBuffer=null,canvas=null,context=null,atlas=null,histogramPipelines,pickPipelines,computeGroup,displayGroup,displayPipeline;
-  let pixels=1,active=false,status={requested:false,active:false,reason:'off',readback:false};
+  let pixels=1,active=false,drawSerial=0,currentDraw=null,status={requested:false,active:false,reason:'off',readback:false};
   const limit=Math.min(device.limits.maxBufferSize,device.limits.maxStorageBufferBindingSize);
   function initialize(){
     if(summaryBuffer)return;
@@ -171,10 +171,10 @@ export function createRayStepTelemetry(device,{document=globalThis.document}={})
       context?.configure({device,format:navigator.gpu.getPreferredCanvasFormat(),alphaMode:'opaque'});}
   }
   function ensure(width,height,requested,{supported=true,reason='unsupported-renderer',allowResize=true,activate=true}={}){
-    active=false;let refusal=!requested?'off':!supported?reason:!context?'display-unavailable':
+    active=false;currentDraw=null;let refusal=!requested?'off':!supported?reason:!context?'display-unavailable':
       !canvas.getClientRects().length?'inspector-hidden':null;
     const count=width*height;
-    if(!refusal&&(!Number.isSafeInteger(count)||count<=0||count>=0xffffffff||count*4>limit))refusal='counter-buffer-exceeds-device-limits';
+    if(!refusal&&(!Number.isSafeInteger(count)||count<=0||count>=0xffffffff||count*16>limit))refusal='counter-buffer-exceeds-device-limits';
     if(!refusal&&!allowResize&&count!==pixels)refusal='counter-buffer-not-prepared';
     let changed=false;
     if(!refusal){
@@ -182,14 +182,14 @@ export function createRayStepTelemetry(device,{document=globalThis.document}={})
       // A control update can arrive after a fluid pass was encoded but before
       // submission. Drop our reference on replacement; encoded bind groups keep
       // the old buffer alive. Explicit destroy would invalidate that pending frame.
-      if(count!==pixels){counterBuffer=device.createBuffer({label:'per-pixel ray material evaluations',size:count*4,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});pixels=count;changed=true;computeGroup=null;}
+      if(count!==pixels||counterBuffer.size!==count*16){counterBuffer=device.createBuffer({label:'per-pixel ray material evaluations',size:count*16,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC});pixels=count;changed=true;computeGroup=null;}
       active=activate;
     }else if(!requested&&pixels!==1&&allowResize){counterBuffer=device.createBuffer({label:'disabled ray sample counters',size:4,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});pixels=1;changed=true;computeGroup=null;}
     if(canvas)canvas.style.visibility=active?'visible':'hidden';
-    status={requested,active,reason:refusal||(!activate?'awaiting-instrumented-draw':null),readback:false,scope:'material-evaluations-per-intersecting-ray',width,height};
+    status={requested,active,reason:refusal||(!activate?'awaiting-instrumented-draw':null),readback:false,scope:'material-evaluations-per-intersecting-ray',width,height,counterPlanes:['material-evaluations','certification-attempts','empty-intervals','support-footprints-or-leaves']};
     return changed;
   }
-  function encode(encoder){
+  function encode(encoder,source={}){
     if(!active)return false;
     computeGroup ||= device.createBindGroup({layout:histogramPipelines[0].getBindGroupLayout(0),entries:[
       {binding:0,resource:{buffer:counterBuffer}},{binding:1,resource:{buffer:summaryBuffer}},
@@ -204,10 +204,21 @@ export function createRayStepTelemetry(device,{document=globalThis.document}={})
       pick.setPipeline(pickPipelines[i]);pick.setBindGroup(0,computeGroup);pick.dispatchWorkgroups(1);pick.end();
     }
     const draw=encoder.beginRenderPass({label:'GPU-only ray statistics',colorAttachments:[{view:context.getCurrentTexture().createView(),loadOp:'clear',storeOp:'store',clearValue:{r:.105,g:.105,b:.105,a:1}}]});
-    draw.setPipeline(displayPipeline);draw.setBindGroup(0,displayGroup);draw.draw(3);draw.end();return true;
+    draw.setPipeline(displayPipeline);draw.setBindGroup(0,displayGroup);draw.draw(3);draw.end();currentDraw={...source,serial:++drawSerial,width:status.width,height:status.height};return true;
+  }
+  async function sampleCounters(){
+    if(!active||!currentDraw)return {ok:false,reason:'no-current-instrumented-draw'};
+    const draw={...currentDraw},buffer=counterBuffer,count=pixels,bytes=count*16;
+    const readback=device.createBuffer({label:'ray interval work readback',size:bytes,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+    try{
+      const encoder=device.createCommandEncoder();encoder.copyBufferToBuffer(buffer,0,readback,0,bytes);device.queue.submit([encoder.finish()]);await readback.mapAsync(GPUMapMode.READ);
+      const values=new Uint32Array(readback.getMappedRange().slice(0));readback.unmap();
+      if(buffer!==counterBuffer||!active||currentDraw?.serial!==draw.serial)return {ok:false,reason:'instrumented-draw-changed-during-readback'};
+      return {ok:true,draw,counts:Array.from(values.subarray(0,count)),certificationAttempts:Array.from(values.subarray(count,2*count)),emptyIntervals:Array.from(values.subarray(2*count,3*count)),supportTests:Array.from(values.subarray(3*count,4*count))};
+    }finally{readback.destroy();}
   }
   return {get counterBuffer(){return counterBuffer;},get summaryBuffer(){return summaryBuffer;},get active(){return active;},
-    read:()=>({...status}),setCanvas,ensure,encode,
+    read:()=>({...status,draw:currentDraw?{...currentDraw}:null}),setCanvas,ensure,encode,sampleCounters,
     dispose(){counterBuffer.destroy();summaryBuffer?.destroy();atlas?.destroy();context?.unconfigure();},
   };
 }

@@ -26,6 +26,7 @@ import { leanEmissiveRaymarchAdmission, RAYMARCH_NEIGHBORHOOD_WGSL, FLAME_GUIDAN
 import { OPTICAL_TRACE_IDENTITY, traceChunkPlan, validateTraceRows, createOpticalCaptureOwner } from './volume-optical-trace.mjs';
 import { raymarchAdaptivity, opticalSteppingConfig, resolveOpticalStepping, OPTICAL_STEPPING_WGSL } from './volume-optical-native.mjs';
 import { createRayStepTelemetry } from './volume-ray-step-telemetry.mjs';
+import {EMPTY_SPACE_WGSL,emptySpaceAdmission} from './volume-empty-space.mjs';
 import { createRayAllocationHistory, HISTORY_ALLOCATION_WGSL } from './volume-history-allocation.mjs';
 import { frameCadenceSummary } from './volume-frame-timing.mjs';
 import { applyPreviewQualityCaps } from './preview-quality.mjs';
@@ -6508,6 +6509,7 @@ ${HISTORY_ALLOCATION_WGSL}
 ${EMISSIVE_TRANSPORT_WGSL}
 ${WORLD_SMOKE_OPTICS_WGSL}
 ${WORLD_RENDER_WGSL}
+${EMPTY_SPACE_WGSL}
 ${DISPLAY_RECONSTRUCTION_WGSL}
 ${SOOT_BURNOUT_WGSL}
 ${SCENE_VOLUME_SOURCE_WGSL}
@@ -8094,7 +8096,8 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
   let fullGridCapture = !LEAN_STOCK_RAYMARCH && opticalCaptureMode >= 3u && opticalCaptureMode <= 4u;
   let opticalTrace = opticalCaptureMode == 5u;
   let traceRay = u32(in.pos.x) + u32(in.pos.y) * u32(u.viewport_steps_density.x);
-  if (RAY_STEP_STATS) { rayStepCounters[traceRay] = 0xffffffffu; }
+  let rayPixelCount=u32(u.viewport_steps_density.x)*u32(u.viewport_steps_density.y);
+  if (RAY_STEP_STATS) { rayStepCounters[traceRay] = 0xffffffffu;rayStepCounters[traceRay+rayPixelCount]=0u;rayStepCounters[traceRay+rayPixelCount*2u]=0u;rayStepCounters[traceRay+rayPixelCount*3u]=0u;emptyCertificateSupportTests=0u; }
   if (opticalTrace && (traceRay < nonRidgeOpticalCaptureHeader.firstRay || traceRay >= nonRidgeOpticalCaptureHeader.firstRay + nonRidgeOpticalCaptureHeader.rayCount)) {
     return makeRaymarchResult(vec4<f32>(0), 1.0, vec4<f32>(0), vec4<f32>(0), vec4<f32>(0), vec4<f32>(0));
   }
@@ -8289,16 +8292,19 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
   let maxTraversalSteps = GRID_Y * 3u + expensiveSampleBudget + 3u + select(0u,u32(ceil(max(0.0,endT-startT)/max(.0001,worldMarchStep(worldMinimumMaterialPitch(),steps,1.6,0.0))))+4u,worldActive);
   var expensiveSamples = 0u;
   var rayMaterialSamples = 0u;
+  var allocatedSamples = 0u;
+  var quadratureProbes = 0u;
+  var emptyCertificationAttempts=0u;var emptyIntervals=0u;
   var traversalSteps = 0u;
   var guidedRay:GuidedRay;
   if(guided){guidedRay=guidedRayInit(ro,rd,max(startT,sceneDepthStartT),endT);}
   loop {
-    if(guided && rayMaterialSamples>=expensiveSampleBudget){break;}
+    if(guided && allocatedSamples>=expensiveSampleBudget){break;}
     if (!opticalStepping && ((!worldActive && expensiveSamples >= expensiveSampleBudget) || traversalSteps >= maxTraversalSteps)) { break; }
     if (!opticalStepping && !fullGridCapture && !opticalTrace && (!guided && (raymarchEarlyTermination(trans) || t > endT))) { break; }
     if(guided){
       let phase=select(.5,.05+.9*rayNoiseSample(in.pos.xy,u.occupancy_controls.y,1u),u.reserved_render_controls.w>.5 && u.occupancy_controls.w>.5);
-      t=guidedNext(&guidedRay,ro,rd,rayMaterialSamples,expensiveSampleBudget,phase,rayPhase);
+      t=guidedNext(&guidedRay,ro,rd,allocatedSamples,expensiveSampleBudget,phase,rayPhase);
     }
     if (opticalStepping) {
       if (opticalStep.cursor >= opticalStep.end) { break; }
@@ -8330,9 +8336,25 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
       t = opticalStepPosition(opticalStep);
       let probeIndex = opticalStepIndex(opticalStep.mask);
       if (u.reserved_render_controls.w > 0.5 && u.occupancy_controls.w > 0.5 && (probeIndex == 1u || probeIndex == 3u)) {
-        t = opticalStepPositionJittered(&opticalStep, rayNoiseSample(in.pos.xy, u.occupancy_controls.y, rayMaterialSamples + 1u));
+        t = opticalStepPositionJittered(&opticalStep, rayNoiseSample(in.pos.xy, u.occupancy_controls.y, quadratureProbes + 1u));
       }
     }
+    if(LEAN_EMISSIVE_RAYMARCH&&!fullGridCapture&&!opticalTrace&&u.occupancy_controls.x>0.0&&u.grid_overlay_debug.x<=0.0){
+      if(guided){
+        if(RAY_STEP_STATS){emptyCertificationAttempts++;}
+        if(emptyOpticalInterval(ro,rd,guidedRay.intervalStart,guidedRay.left,t,worldActive,nearHit,middleHit)){
+          if(RAY_STEP_STATS){emptyIntervals++;}allocatedSamples++;continue;
+        }
+      }
+      if(opticalStepping&&opticalStep.mask<=1u&&(opticalStep.mask==0u||all(opticalStep.probes[0]==vec4<f32>(0)))){
+        if(RAY_STEP_STATS){emptyCertificationAttempts++;}
+        if(emptyOpticalInterval(ro,rd,opticalStep.origin+opticalStep.cursor,opticalStep.origin+opticalStep.cursor+opticalStep.width,t,worldActive,nearHit,middleHit)){
+          if(RAY_STEP_STATS){emptyIntervals++;}quadratureProbes+=select(4u,5u,opticalStep.mask==0u);opticalStepSkipEmpty(&opticalStep);continue;
+        }
+      }
+    }
+    if(guided){allocatedSamples++;}
+    if(opticalStepping){quadratureProbes++;}
     traversalSteps = traversalSteps + 1u;
     let sampleIndex = expensiveSamples;
     if (opticalTrace) {
@@ -9501,7 +9523,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
     clamp(1.0 - exp(-residualInterfaceAuthority * 0.90), 0.0, 1.0),
     clamp(1.0 - exp(-residualSmokeAuthority * 0.56), 0.0, 1.0)
   );
-  if (RAY_STEP_STATS) { rayStepCounters[traceRay] = rayMaterialSamples; }
+  if (RAY_STEP_STATS) { rayStepCounters[traceRay] = rayMaterialSamples;rayStepCounters[traceRay+rayPixelCount]=emptyCertificationAttempts;rayStepCounters[traceRay+rayPixelCount*2u]=emptyIntervals;rayStepCounters[traceRay+rayPixelCount*3u]=emptyCertificateSupportTests; }
   var result = makeRaymarchResult(
     vec4<f32>(outputColor, outputAlpha),
     trans,
@@ -12031,6 +12053,7 @@ export function createKaminosVolumePrototype({
     intermediateFlow=null;intermediateSolidProducer=null;intermediateKey=null;
   }
   let worldOpticalFallback = null, worldRenderUniform = null, worldRenderField = null;
+  let worldRenderProfileTimestampWrites = null;
   let worldSmokeOverlay = 'off';
   let adaptiveMaterialOptions = controlsSnapshot.adaptiveMaterial?validateAllocation(controlsSnapshot.adaptiveMaterial):null, adaptiveMaterialError = null;
   // All fluid bind groups include the optical texture, including compute passes
@@ -21554,8 +21577,13 @@ export function createKaminosVolumePrototype({
 
   function prepareVolumeRenderResources(encoder, displayTimestampWrites = null) {
     const simLevers=resolveSimulationLevers(controlsSnapshot);
-    const worldRenderChanged=worldRenderField.encode(encoder,state.worldSmoke?.effective==='one-way-world-field'?worldSmoke.renderResources():null,[uniforms[23],...uniforms.subarray(368,376),...uniforms.subarray(EMISSIVE_UNIFORM_OFFSET,EMISSIVE_UNIFORM_OFFSET+20),...uniforms.subarray(REACTANT_COMBUSTION_UNIFORM_OFFSET,REACTANT_COMBUSTION_UNIFORM_OFFSET+16)],{worldSmokeOnly:simLevers.worldSmokeOnly});
+    const worldTimestampWrites=worldRenderProfileTimestampWrites;worldRenderProfileTimestampWrites=null;
+    if(worldTimestampWrites)worldRenderField.invalidate();
+    const worldRenderChanged=worldRenderField.encode(encoder,state.worldSmoke?.effective==='one-way-world-field'?worldSmoke.renderResources():null,[uniforms[23],...uniforms.subarray(368,376),...uniforms.subarray(EMISSIVE_UNIFORM_OFFSET,EMISSIVE_UNIFORM_OFFSET+20),...uniforms.subarray(REACTANT_COMBUSTION_UNIFORM_OFFSET,REACTANT_COMBUSTION_UNIFORM_OFFSET+16)],{worldSmokeOnly:simLevers.worldSmokeOnly,certifyEmpty:uniforms[40]>0,timestampWrites:worldTimestampWrites});
     state.worldRenderField=worldRenderField.read();
+    const skipEmissive=emissiveRaymarchAdmission().eligible&&debugRaymarchShaderSpecialization!=='force-full';
+    const skipOptical=resolveOpticalStepping(debugOpticalStepping,{emissive:skipEmissive,exterior:state.worldSmoke?.effective==='one-way-world-field'});
+    state.emptySpaceAcceleration={...emptySpaceAdmission({strength:uniforms[40],emissive:skipEmissive,mode:skipOptical.mode,preparedFine:state.displayReconstruction?.effective===true,flowKernel:controlsSnapshot.flowKernelStrength??0,worldBound:state.worldRenderField.emptySpaceBound}),authority:'configured-certificate-route;actual-work-is-recorded-by-draw-counters',simStepCount:state.simStepCount,frameCount:state.frameCount,worldBuild:state.worldRenderField.builds??null,worldSourceSteps:state.worldRenderField.sourceSteps??null};
     if(state.displayReconstruction)state.displayReconstruction.outerFields=state.worldRenderField.effective;
     if(worldRenderChanged)rebuildFluidBindGroups();
     device.queue.writeBuffer(worldRenderUniform,80,new Float32Array([state.worldRenderField.effective==='inactive'?0:1,...(state.worldRenderField.materialDims??[0,0,0])]));
@@ -21767,7 +21795,7 @@ export function createKaminosVolumePrototype({
     if (distributedGroup) pass.setBindGroup(2,distributedGroup);
     pass.draw(3);
     pass.end();
-    rayStepTelemetry.encode(encoder);
+    rayStepTelemetry.encode(encoder,{simStepCount:state.simStepCount,frameCount:state.frameCount,mode:optical.mode,controls:JSON.stringify(controlsSnapshot)});
   }
 
   async function sampleOpticalTraceChunk(options = {}) {
@@ -21853,13 +21881,16 @@ export function createKaminosVolumePrototype({
     }
     ensureFrameTexture();
     const includePreparation = options.includeDisplayPreparation === true && state.displayReconstruction?.effective === true;
-    const queryCount = includePreparation ? 4 : 2;
+    const includeWorldPreparation=options.includeWorldPreparation===true&&state.worldSmoke?.effective==='one-way-world-field';
+    const worldQueryIndex=includePreparation?4:2;
+    const queryCount = 2+(includePreparation?2:0)+(includeWorldPreparation?2:0);
     const query = device.createQuerySet({ type: 'timestamp', count: queryCount });
     const resolved = device.createBuffer({ size: queryCount*8, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
     const readback = device.createBuffer({ size: queryCount*8, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
     device.pushErrorScope('validation');
     let errorScopeOpen = true;
     try {
+      if(includeWorldPreparation)worldRenderProfileTimestampWrites={querySet:query,beginningOfPassWriteIndex:worldQueryIndex,endOfPassWriteIndex:worldQueryIndex+1};
       let encoder = device.createCommandEncoder({ label: 'held emissive camera raymarch cost' });
       encoder = prepareSharedSceneConsumers(encoder);
       encodeBoundarySidecar(encoder);
@@ -21875,6 +21906,7 @@ export function createKaminosVolumePrototype({
         opticalStepping: { ...state.opticalStepping },
         incidentLight: { ...state.physicalColor.incidentLight },
         displayReconstruction: {...state.displayReconstruction},
+        worldRenderField: {...state.worldRenderField},
       };
       encoder.resolveQuerySet(query, 0, queryCount, resolved, 0);
       encoder.copyBufferToBuffer(resolved, 0, readback, 0, queryCount*8);
@@ -21889,12 +21921,18 @@ export function createKaminosVolumePrototype({
       if (includePreparation && (times[2]===0n || times[3]<=times[2])) {
         return {ok:false,reason:'missing-or-invalid-display-preparation-timestamps',timestamps:Array.from(times,String),...identity};
       }
+      if(includeWorldPreparation&&(times[worldQueryIndex]===0n||times[worldQueryIndex+1]<=times[worldQueryIndex]))return {ok:false,reason:'missing-or-invalid-world-preparation-timestamps',timestamps:Array.from(times,String),...identity};
+      const worldPreparationMs=includeWorldPreparation?Number(times[worldQueryIndex+1]-times[worldQueryIndex])/1e6:0;
       return { ok: true, scope: 'camera-raymarch-raster-only-not-lighting-simulation-or-frame',
         ms: Number(times[1] - times[0]) / 1e6,
+        worldPreparationRequested:options.includeWorldPreparation===true,worldPreparationEffective:includeWorldPreparation,worldPreparationMs,
+        cameraPlusWorldPreparationMs:Number(times[1]-times[0])/1e6+worldPreparationMs,
+        worldPreparationScope:'existing219-atlas-coefficients-and-optional-support-reduction;forced-same-state-preparation-not-lighting-or-frame',
         ...(includePreparation ? {...displayPreparationTiming(times),
           preparationScope:'seed-through-classified-field-and-camera-not-lighting-simulation-or-frame'} : {}),
         timestamps: Array.from(times, String), ...identity };
     } finally {
+      worldRenderProfileTimestampWrites=null;
       if (errorScopeOpen) await device.popErrorScope();
       query.destroy();
       resolved.destroy();
@@ -28448,6 +28486,12 @@ export function createKaminosVolumePrototype({
       return canvasPresentationSuppressed;
     },
     sampleRayAllocationHistory() { return rayAllocationHistory.sample(); },
+    async sampleRayStepStatistics(){
+      const result=await rayStepTelemetry.sampleCounters();if(!result.ok)return result;
+      if(result.draw.simStepCount!==state.simStepCount||result.draw.controls!==JSON.stringify(controlsSnapshot))return {ok:false,reason:'ray-statistics-source-or-config-changed'};
+      const intersecting=result.counts.filter(n=>n!==0xffffffff),sum=values=>values.reduce((a,b)=>a+b,0);
+      return {...result,backend:state.backend,mode:result.draw.mode,simStepCount:result.draw.simStepCount,rays:intersecting.length,totalSamples:sum(intersecting),totalCertificationAttempts:sum(result.certificationAttempts),totalEmptyIntervals:sum(result.emptyIntervals),totalSupportTests:sum(result.supportTests),emptySpaceAcceleration:state.emptySpaceAcceleration};
+    },
     setDebugOpticalStepping(config = {}) {
       const next = opticalSteppingConfig(config);
       if (next.mode !== 'current' && (!emissiveRaymarchAdmission().eligible || productFrameOwner !== 'prototype')) {

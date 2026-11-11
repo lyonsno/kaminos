@@ -13,8 +13,17 @@ function fixture(){
  const encoder={beginComputePass(x){passes.push(x);return {setPipeline(){},setBindGroup(i,g){for(const e of g.entries)assert.equal(e.resource?.texture?.dead??false,false);},dispatchWorkgroups(...v){x.dispatch=v;},dispatchWorkgroupsIndirect(buffer,offset){x.indirect={buffer,offset};},end(){}};}};
  const field=createWorldRenderField(device,{},{});
  const source={steps:1,gas:{},plan:{materialDims:[8,4,4],materialPitch:.5,min:[-2,-1,-1],max:[2,1,1]},hierarchy:null};
- return {field,source,groups,passes,textures,writes,encode:()=>field.encode(encoder,source,[1,2]),finish:()=>finish?.()};
+ return {field,source,groups,passes,textures,writes,encode:(options={})=>field.encode(encoder,source,[1,2],options),finish:()=>finish?.()};
 }
+test('warm atlas and source/grid changes cannot reuse an unprepared empty-space certificate',()=>{
+ const f=fixture();f.encode();assert.equal(f.field.read().emptySpaceBound.version,null);
+ const view=f.field.view;f.encode({certifyEmpty:true});assert.equal(f.passes.length,2,'enabling certificates must rebuild even with identical material and gas');assert.equal(f.field.view,view,'certificate metadata preserves the existing atlas allocation');assert.equal(f.field.read().emptySpaceBound.version,1);assert.equal(new Float32Array(f.writes.at(-1)[2])[7],16);
+ f.encode({certifyEmpty:true});assert.equal(f.passes.length,2,'same prepared observation reuses metadata');
+ f.encode({certifyEmpty:false});assert.equal(f.passes.length,3);assert.equal(f.field.read().emptySpaceBound.version,null);
+ f.source.gas={};f.encode({certifyEmpty:true});assert.equal(f.passes.length,4,'replacement resource has its own preparation');
+ f.source.plan={...f.source.plan,materialDims:[4,8,4]};f.encode({certifyEmpty:true});assert.equal(f.passes.length,5,'equal-capacity grid shape must refresh metadata');assert.deepEqual(f.field.read().materialDims,[4,8,4]);
+ f.field.invalidate();f.encode({certifyEmpty:true});assert.equal(f.passes.length,6,'explicit profiling preparation is authoritative');f.field.destroy();
+});
 test('atlas capacity packs every node without depending on maximum refinement depth',()=>{
  for(const n of [1,9,1024,8192]){const s=worldRenderShape(n,2048);assert.ok(s.every(v=>v<=2048));assert.ok(s.reduce((a,b)=>a*b)>=n*WORLD_RENDER_STRIDE);}
  assert.throws(()=>worldRenderShape(9,4),/capacity/);

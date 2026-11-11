@@ -193,6 +193,14 @@ fn opticalStepObserveWithTolerance(s: ptr<function, OpticalStepState>, q: vec4<f
 fn opticalStepObserve(s: ptr<function, OpticalStepState>, q: vec4<f32>) {
   opticalStepObserveWithTolerance(s, q, OPTICAL_STEP_TOLERANCE);
 }
+// Identical to accepting a complete zero panel through observe. Logical
+// probe/noise advancement belongs to the caller, independently of GPU work.
+fn opticalStepSkipEmpty(s:ptr<function,OpticalStepState>){
+ (*s).cursor=min((*s).end,(*s).cursor+(*s).width);
+ let nextWidth=select((*s).width*2.0,(*s).maximum,(*s).phased==1u);
+ (*s).phased=0u;(*s).width=min((*s).end-(*s).cursor,min((*s).maximum,nextWidth));
+ (*s).probes[0]=vec4<f32>(0);(*s).mask=1u;opticalStepResetPositions(s);
+}
 `;
 
 export function installOpticalSteppingPreview(renderer, document) {
