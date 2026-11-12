@@ -39,7 +39,8 @@ export function createRawFieldTeacherSurface(device){
   buffer=device.createBuffer({size:data.byteLength,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});device.queue.writeBuffer(buffer,0,data);
  },bind(pass,pipeline){pass.setBindGroup(1,device.createBindGroup({layout:pipeline.getBindGroupLayout(1),entries:[{binding:0,resource:{buffer}}]}));},dispose(){buffer?.destroy();}};
 }
-export async function createRawTrellisTrainingSource(device,source,{region,tileSize}){
+export async function createRawTrellisTrainingSource(device,source,{region,tileSize,samplingPlane='center-hit'}){
+ if(!['center-hit','support-top'].includes(samplingPlane))throw Error('Unknown raw sampling plane');
  if(!(source.positions instanceof Float32Array)||!(source.indices instanceof Uint32Array)||!(source.normals instanceof Float32Array)||!(source.materialRows instanceof Float32Array)||source.materialRows.length!==source.positions.length*2||!source.materialRows.every(Number.isFinite))throw Error('Aligned finite raw fields required');
  if(!Number.isFinite(tileSize)||tileSize<=0||tileSize>2*region.radius)throw Error('Raw material tile must fit inside support');
  if(source.provenance?.region){const canonical=r=>JSON.stringify({...supportFrame(r),top:r.top??.01});if(canonical(source.provenance.region)!==canonical(region))throw Error('Raw manifest region mismatch; use the recorded region or extract a matching raw bundle');}
@@ -56,9 +57,13 @@ export async function createRawTrellisTrainingSource(device,source,{region,tileS
   return {a:points[0],b:points[1],c:points[2],materialIndex:0,sourceColors:colors,sourceOptics:optics,sourceNormals:[0,1,2].map(k=>rotate(Array.from(materialized.normals.subarray(i*9+k*3,i*9+k*3+3)))),sourceTriangle:source.provenance?.originalTriangleIds?.[t.sourceTriangle]??t.sourceTriangle,sourceBarycentrics:t.vertices.flatMap(v=>v.b)};
  });
  const query={origin:worldPoint([0,0,candidate.hi[2]],f),direction:f.n.map(v=>-v)},probe=(await traceSupportRays(device,candidate,[query],{twoSided:true})).samples[0];
- if(!probe.hit)throw Error('Raw control requires a visible center surface');
- const referenceHeight=candidate.hi[2]*f.radius,samplingPlaneHeight=rotate(probe.position,true)[1],surface=createRawFieldTeacherSurface(device);let teacher;
+ if(samplingPlane==='center-hit'&&!probe.hit)throw Error('Raw control requires a visible center surface');
+ const referenceHeight=candidate.hi[2]*f.radius,samplingPlaneHeight=samplingPlane==='support-top'?referenceHeight:rotate(probe.position,true)[1];
+ const heights=triangles.flatMap(t=>[t.a[1],t.b[1],t.c[1]]),heightRange=heights.reduce((r,h)=>[Math.min(r[0],h),Math.max(r[1],h)],[Infinity,-Infinity]);
+ if(!Number.isFinite(samplingPlaneHeight)||!Number.isFinite(heightRange[0])||samplingPlane==='support-top'&&heightRange[1]>samplingPlaneHeight+1e-6*Math.max(1,f.radius))throw Error('Raw support-top carrier does not enclose its source');
+ const samplingPlaneSelection={method:samplingPlane==='support-top'?'support top; all clipped source vertices inset or flush':'first visible center hit',probe,sourceHeightRange:heightRange};
+ const surface=createRawFieldTeacherSurface(device);let teacher;
  try{teacher=new SurfaceMaterialTeacher(device,{triangles,materials:[SOURCE_TEACHER_UNIT_MATERIAL],surface,environment:0,bounces:1});}
  catch(e){surface.dispose();throw e;}
- return {teacher,triangles,capture:{tileSize,referenceHeight,samplingPlaneHeight},source:{route:'raw-aligned-fields',region,tileSize,sourceTriangles:source.indices.length/3,upstreamSourceTriangles:source.provenance?.triangles?.sourceCount??source.indices.length/3,clippedTriangles:triangles.length,coordinateFrame:f,samplingPlaneHeight,referenceHeight,samplingPlaneSelection:{method:'first visible center hit',probe},material:'existing raw-field mesh semantics; vertex sRGB linearized before interpolation; metallic/roughness clamped after interpolation; opaque control',scope:'raw local geometry and aligned material rows; no UV atlas or reduction; clipped local transport only'},dispose(){teacher.dispose();surface.dispose();}};
+ return {teacher,triangles,capture:{tileSize,referenceHeight,samplingPlaneHeight},source:{route:'raw-aligned-fields',region,tileSize,sourceTriangles:source.indices.length/3,upstreamSourceTriangles:source.provenance?.triangles?.sourceCount??source.indices.length/3,clippedTriangles:triangles.length,coordinateFrame:f,samplingPlaneHeight,referenceHeight,samplingPlaneSelection,material:'existing raw-field mesh semantics; vertex sRGB linearized before interpolation; metallic/roughness clamped after interpolation; opaque control',scope:'raw local geometry and aligned material rows; no UV atlas or reduction; clipped local transport only'},dispose(){teacher.dispose();surface.dispose();}};
 }

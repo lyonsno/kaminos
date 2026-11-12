@@ -13,8 +13,9 @@ const dot=(a,b)=>a.reduce((s,x,k)=>s+x*b[k],0);
 export function materialFrameVector(v,frame,{point=false}={}){
  const d=v.map((x,k)=>x-(point?frame.origin[k]:0));return [dot(d,frame.u),dot(d,frame.n),-dot(d,frame.v)];
 }
-export async function createTrellisTrainingSource(device,bytes,{region,tileSize,rawSource}){
- if(rawSource!==undefined)return createRawTrellisTrainingSource(device,rawSource,{region,tileSize});
+export async function createTrellisTrainingSource(device,bytes,{region,tileSize,rawSource,samplingPlane='center-hit'}){
+ if(rawSource!==undefined)return createRawTrellisTrainingSource(device,rawSource,{region,tileSize,samplingPlane});
+ if(samplingPlane!=='center-hit')throw Error('Explicit sampling-plane selection requires a raw-fields source');
  const {json,bin}=parseGlb(bytes),primitives=readTrianglePrimitives(bytes);
  if(json.extensionsUsed?.length||primitives.length!==1||json.skins?.length||json.animations?.length)throw Error('First trainer source requires one static extension-free glTF primitive');
  const p=primitives[0],primitive=json.meshes[p.mesh].primitives[p.primitive];

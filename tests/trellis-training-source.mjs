@@ -38,3 +38,21 @@ test('raw optics clamp after barycentric interpolation, like the existing raw-fi
   assert.ok(Math.abs(rgb[0]-.97/Math.PI)<1e-5,`center interpolates raw metallic to zero before clamping; expected ${.97/Math.PI}, received ${rgb[0]}`);
  }finally{source?.dispose();}});
 });
+
+test('an explicit support-top raw carrier encloses relief instead of passing through its center hit',async()=>{
+ await withKaminosGpu(async({device})=>{let source;try{
+  const rawSource={positions:new Float32Array([-1,.1,-1,1,.1,1,1,.1,-1,-1,.1,1]),indices:new Uint32Array([0,1,2,0,3,1]),normals:new Float32Array([0,1,0,0,1,0,0,1,0,0,1,0]),materialRows:new Float32Array([1,0,0,0,1,1,1,0,0,0,1,1,1,0,0,0,1,1,1,0,0,0,1,1])};
+  source=await createTrellisTrainingSource(device,shellFixture(),{rawSource,region:{origin:[0,0,0],normal:[0,1,0],tangent:[1,0,0],radius:.5,depth:.4,top:.2},tileSize:.5,samplingPlane:'support-top'});
+  assert.ok(Math.abs(source.capture.samplingPlaneHeight-.2)<1e-6,`support top .2, got ${source.capture.samplingPlaneHeight}`);
+  assert.equal(source.source.samplingPlaneSelection.method,'support top; all clipped source vertices inset or flush');
+  assert.ok(source.triangles.every(t=>[t.a,t.b,t.c].every(p=>p[1]<=source.capture.samplingPlaneHeight+1e-6)));
+  const labels=await source.teacher.evaluateMaterial(new Float32Array([.5,.5,0,0,0,0,0,0]),{...source.capture,resolution:32,samples:1,coverage:true});
+  assert.equal(labels[3],1);assert.ok(labels[0]>labels[1]*10,'explicit carrier keeps actual red source response');
+ }finally{source?.dispose();}});
+});
+
+test('unknown raw sampling-plane selections refuse before source work',async()=>{
+ const {createRawTrellisTrainingSource}=await import('../trellis-raw-training-source.mjs');
+ const rawSource={positions:new Float32Array([0,0,0]),indices:new Uint32Array([0,0,0]),normals:new Float32Array([0,1,0]),materialRows:new Float32Array([1,0,0,0,1,1])};
+ await assert.rejects(createRawTrellisTrainingSource({},rawSource,{region:{origin:[0,0,0],normal:[0,1,0],tangent:[1,0,0],radius:.5,depth:.4,top:.2},tileSize:.5,samplingPlane:'misspelled-top'}),/Unknown raw sampling plane/);
+});
