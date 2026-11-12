@@ -19,7 +19,7 @@ export default {
   const settings={rock:7,weatherDepth:.025,growthRate:.025,pushRadius:.55,pushSpeed:1.5,pushX:-.7,pushY:.4,pushZ:1.0,rockPushX:0,rockPushY:0,rockPushZ:2,shoveGain:2,...inputs.settings};
   const floor=new THREE.Mesh(new THREE.BoxGeometry(4.8,.12,4.8),new MeshStandardNodeMaterial({color:0x575f4d,roughness:1}));floor.position.set(0,-.07,.5);floor.receiveShadow=true;root.add(floor);
   const syncFloor=()=>{if(model.config.fixture!=='hundred-rocks'){floor.geometry.dispose();floor.geometry=new THREE.BoxGeometry(4.8,.12,4.8);floor.position.set(0,-.07,.5);}else{const c=model.config,w=c.dimensions[0]*c.cell,d=c.dimensions[2]*c.cell;floor.geometry.dispose();floor.geometry=new THREE.BoxGeometry(w,.12,d);floor.position.set(c.origin[0]+w/2,-.07,c.origin[2]+d/2);}};syncFloor();
-  let asset,renderObjects=[],attributes=[],nodes=[],status,playButton,growthToggle,contactToggle,rockSelect,soilHeightInput,soilHeightLabel,soilHeightDragging=false,soilHeightPending=false,scalePanel,scaleInfo,scaleWarning,scaleRejection,scaleDraft=false,scalePending=false,scaleFields=[];
+  let asset,renderObjects=[],attributes=[],nodes=[],status,playButton,growthToggle,contactToggle,rockSelect,soilHeightInput,soilHeightLabel,soilHeightDragging=false,soilHeightPending=false,scalePanel,scaleInfo,scaleMessage,scaleWarning,scaleRejection,scaleDraft=false,scalePending=false,scaleFields=[];
   const scaleValues=()=>model.config.scale??{width:model.config.dimensions[0]*model.config.cell,depth:model.config.dimensions[2]*model.config.cell,height:model.config.dimensions[1]*model.config.cell,cell:model.config.cell,spacing:model.config.spacing,rocks:model.bodies.length,freeRocks:0};
   const scaleConfig=patch=>{
    if(model.config.fixture!=='hundred-rocks')throw Error('Choose the rock pile to tune scale');
@@ -32,11 +32,12 @@ export default {
   };
   const syncScale=()=>{
    if(!scalePanel)return;
+   scaleMessage.textContent=scalePending?'Rebuilding specimen…':scaleRejection??'';
    scalePanel.style.display=model.config.fixture==='hundred-rocks'?'':'none';
    if(!scaleDraft&&!scalePending)for(const {key,input} of scaleFields)input.value=String(Number(scaleValues()[key].toPrecision(8)));
    if(solver&&!scaleDraft&&!scalePending){
     const g=solver.read(),free=model.bodies.reduce((n,b)=>n+Number(!b.anchored),0);
-    scaleInfo.textContent=scaleRejection??`${g.bodyCount} rocks · ${free} released · ${g.config.dimensions.join(' × ')} grid · ${(g.gpuBufferBytes/1048576).toFixed(0)} MiB GPU buffers · ${(g.config.dt*1000).toFixed(2)} ms step`;
+    scaleInfo.textContent=`${g.bodyCount} rocks · ${free} released · ${g.config.dimensions.join(' × ')} grid · ${(g.gpuBufferBytes/1048576).toFixed(0)} MiB GPU buffers · ${(g.config.dt*1000).toFixed(2)} ms step`;
    }
   };
   const anchorRecords=()=>{root.updateMatrixWorld(true);return volumePoseAnchors(model,solver?.read().drive.height??model.runtime?.driveHeight??0).map(a=>({...a,generation,worldPoint:a.specimenPoint?new THREE.Vector3(...a.specimenPoint).applyMatrix4(root.matrixWorld).toArray():null,worldFace:a.specimenFace.map(p=>new THREE.Vector3(...p).applyMatrix4(root.matrixWorld).toArray())}));};
@@ -125,23 +126,24 @@ export default {
    mount({root:panel,document,invoke}){
     const description=document.createElement('p');description.textContent='3D material specimen · frictional soil and rigid rock held by pose anchors. Start paused; inspect the initial bank, then advance or play.';panel.append(description);
     const fixtureSelect=document.createElement('select');fixtureSelect.setAttribute('aria-label','Material specimen');for(const [value,label] of [['outcrop','Small outcrop'],['hundred-rocks','Rock pile']]){const o=document.createElement('option');o.value=value;o.textContent=label;fixtureSelect.append(o);}fixtureSelect.value=model.config.fixture;fixtureSelect.addEventListener('change',()=>invoke('setFixture',fixtureSelect.value).catch(e=>{error=e.message;sync();}));panel.append(fixtureSelect);const soilControl=document.createElement('label');soilHeightLabel=document.createElement('span');soilHeightInput=document.createElement('input');soilHeightInput.type='range';soilHeightInput.min='.18';soilHeightInput.step='.01';soilHeightInput.setAttribute('aria-label','Initial soil height');soilHeightInput.addEventListener('input',()=>{soilHeightLabel.textContent='Initial soil height · '+Number(soilHeightInput.value).toFixed(2)+' m (resets on release)';});soilHeightInput.addEventListener('pointerdown',()=>{soilHeightDragging=true;});for(const type of ['pointerup','pointercancel','blur'])soilHeightInput.addEventListener(type,()=>{soilHeightDragging=false;});soilHeightInput.addEventListener('change',()=>{soilHeightPending=true;invoke('setSoilHeight',Number(soilHeightInput.value)).catch(e=>{error=e.message;}).finally(()=>{soilHeightPending=false;sync();});});soilControl.append(soilHeightLabel,soilHeightInput);panel.append(soilControl);
-    scalePanel=document.createElement('fieldset');const scaleTitle=document.createElement('legend');scaleTitle.textContent='Specimen scale';scalePanel.append(scaleTitle);
+    scalePanel=document.createElement('fieldset');Object.assign(scalePanel.style,{border:'1px solid #393b3f',borderRadius:'4px',minWidth:'0',padding:'6px 8px'});const scaleTitle=document.createElement('legend');scaleTitle.textContent='Specimen scale';scalePanel.append(scaleTitle);
     const scaleHint=document.createElement('p');scaleHint.textContent='Drag or type. Rebuilds paused on release or commit.';scalePanel.append(scaleHint);
-    scaleInfo=document.createElement('p');scalePanel.append(scaleInfo);panel.append(scalePanel);
+    scaleInfo=document.createElement('p');scaleMessage=document.createElement('div');scaleMessage.setAttribute('role','status');scalePanel.append(scaleInfo,scaleMessage);panel.append(scalePanel);
     for(const [key,label,step,min] of [['rocks','Rock count',1,1],['freeRocks','Initially released rocks',1,0],['width','Region width (m)',.08,.01],['depth','Region depth (m)',.08,.01],['height','Region height (m)',.08,.01],['cell','Grid cell size (m)',.002,.001],['spacing','Soil particle spacing (m)',.002,.001]]){
      const row=document.createElement('label'),grip=document.createElement('span'),input=document.createElement('input');
      grip.textContent=label;input.type='number';input.step=step>=1?'1':'any';input.min=String(min);input.className='transform-input';input.setAttribute('aria-label',label);
+     Object.assign(row.style,{display:'grid',gridTemplateColumns:'minmax(0, 1fr) 78px',alignItems:'center',gap:'6px'});
      const scrub=host.controls.installNumberDrag({input,grip,step});
      scaleFields.push({key,input,scrub});row.append(grip,input);scalePanel.insertBefore(row,scaleInfo);
      input.addEventListener('input',()=>{
-      scaleRejection=null;scaleDraft=true;const x=estimate({[key]:input.valueAsNumber});
+      scaleRejection=null;scaleMessage.textContent='';scaleDraft=true;const x=estimate({[key]:input.valueAsNumber});
       scaleInfo.textContent=x.ok?`Proposed · ${x.scale.rocks} rocks · ${x.dimensions.join(' × ')} grid · ≤${x.particleCapacity.toLocaleString()} soil samples · ${(x.majorBytes/1048576).toFixed(0)} MiB major arrays · ${(1000*x.dt).toFixed(2)} ms step`:x.reason;
      });
      input.addEventListener('pointercancel',()=>{scaleDraft=false;syncScale();});
      input.addEventListener('blur',()=>{if(scaleDraft&&!scalePending){scaleDraft=false;syncScale();}});
      input.addEventListener('change',()=>{
       const next=input.valueAsNumber;if(next===scaleValues()[key]){scaleDraft=false;syncScale();return;}
-      scalePending=true;scaleDraft=false;for(const f of scaleFields)f.input.disabled=true;
+      scalePending=true;scaleDraft=false;syncScale();for(const f of scaleFields)f.input.disabled=true;
       invoke('setScale',{[key]:next}).then(()=>{scalePending=false;sync();}).catch(e=>{scalePending=false;scaleRejection=(solver?'Kept previous settings · ':'Could not build specimen · ')+e.message;sync();}).finally(()=>{for(const f of scaleFields)f.input.disabled=false;});
      });
     }
