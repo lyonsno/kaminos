@@ -3420,6 +3420,8 @@ import {ENVIRONMENT_CONTROL_FIELDS,environmentLegacySettings,bindSceneEnvironmen
 import {installOwnerExperimentEntry,readOwnerExperimentAddress,writeOwnerExperimentAddress} from './owner-experiment-entry.mjs';
 import {createInvestigationEntry} from './investigation-entry.mjs';
 import {createWorkbenchFrameService,createWorkbenchSceneHost,disposeOwnedSceneTree} from './workbench-scene-host.mjs';
+import {captureViewFan,VIEW_FAN_SOURCE} from './view-fan.mjs';
+import {installViewFanTool} from './view-fan-tool.mjs';
 import { checkedSceneLightRecord } from './scene-spot-light.mjs';
 
 import {createAuthoringAssets,installAuthoringAssets} from './authoring-assets.mjs';
@@ -12731,6 +12733,50 @@ async function initScene() {
     // capturing() and idle() let a page reader avoid reading canvases while a sub picture holds the camera; watching() reports a watch in progress.
     window.kaminosAgentVantage={pageId:agentVantage.pageId,run:agentVantage.run,capturing:agentVantage.capturing,watching:agentVantage.watching,idle:agentVantage.idle};
   }catch(error){console.error('Agent vantage unavailable',error);}
+  // Contextual view fans use the ordinary compositor. Temporary camera draws
+  // and the final restored draw finish synchronously before browser presentation.
+  const captureFanBatch=(views,size)=>{
+    let begun=false,restoreDrawing=null,hiddenFans=[];
+    return captureViewFan({views,size,
+      snapshot:()=>({view:readAuthoredCameraView(),zoom:camera.zoom,pixelRatio:renderer.getPixelRatio(),manual:manualInspectionRender}),
+      begin(){
+        if(authoringBusy||vantageCaptureHeld||outputCaptureExtent||recordingExtent||deviceRecoveryHeld())throw Error('Finish the current scene or output action first');
+        if(viewProjection.state().orthographic)throw Error('View fans currently use the perspective viewport');
+        if(size>renderer.backend.device.limits.maxTextureDimension2D)throw Error('Fan resolution exceeds the active GPU texture dimension');
+        begun=true;outputCaptureExtent={width:size,height:size};manualInspectionRender=true;
+        restoreDrawing=suspendEditorDrawingForVantage();
+        hiddenFans=workingScene.objects.filter(e=>e.source===VIEW_FAN_SOURCE).map(e=>[e.object,e.object.visible]);
+        for(const [root] of hiddenFans)root.visible=false;
+        renderer.setPixelRatio(1);syncViewportRendererSize();
+      },
+      present(view){
+        camera.zoom=1;writeAuthoredCameraView(view);camera.aspect=1;camera.updateProjectionMatrix();
+        sceneGI.resetHistory('fan-camera');
+        const before=sceneFrameCount;
+        if(renderSceneFrame()===false||sceneFrameCount===before)throw Error('The viewport did not present the requested fan view');
+      },
+      copy(){const shot=captureComposedCanvases({host:renderer.domElement,document,label:'View fan'});return {image:shot.image,width:shot.width,height:shot.height};},
+      restore(previous){
+        if(!begun)return;
+        const errors=[],attempt=fn=>{try{fn();}catch(error){errors.push(error);}};
+        outputCaptureExtent=null;manualInspectionRender=previous.manual;
+        attempt(()=>{for(const [root,visible] of hiddenFans)root.visible=visible;});attempt(()=>restoreDrawing?.());
+        attempt(()=>{camera.zoom=previous.zoom;writeAuthoredCameraView(previous.view);});
+        attempt(()=>{renderer.setPixelRatio(previous.pixelRatio);syncViewportRendererSize();});
+        attempt(()=>{sceneGI.resetHistory('fan-restored');renderSceneFrame();});markDirty();
+        if(errors.length)throw new AggregateError(errors,'Fan viewport restoration failed');
+      }});
+  };
+  window.kaminosViewFans=installViewFanTool({THREE,document,viewport:viewportEl,camera,
+    entries:()=>workingScene.objects,readView:readAuthoredCameraView,writeView:view=>{writeAuthoredCameraView(view);markDirty();},
+    capture:captureFanBatch,readContext:()=>buildSceneData(),
+    async mount(root,metadata){scene.add(root);let entry;try{entry=registerSceneObject(root,metadata);await recordSceneObjectInsertion(entry.id);return entry;}catch(error){if(entry)removeSceneObjectInternal(entry.id,{recordHistory:false});else {root.removeFromParent();disposeOwnedSceneTree(root,sceneResourceConsumers());}throw error;}},
+    releaseTree:root=>disposeOwnedSceneTree(root,sceneResourceConsumers(),[scene.environment,scene.background]),
+    readSelected:()=>workingScene.activeGroupId?null:workingScene.objects.find(e=>e.id===workingScene.activeObjectId),
+    redraw:()=>{sceneDocument.authoringChanged();markDirty();},onFrame:workbenchSceneFrames.onFrame,
+    installNumberDrag:installRelativeNumberDrag,
+    openDocument:context=>loadSceneFile(new File([JSON.stringify(context)],'View fan source.json',{type:'application/json'})),
+  });
   // Notes: say something on the thing you mean and get answers where you look
   // (notes-panel.mjs, tools/notes.mjs, docs/notes.md). ?notes=0 leaves them off.
   const pageQuery=new URLSearchParams(location.search);

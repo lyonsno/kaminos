@@ -11,9 +11,10 @@ import {localLiquidRecordDomain} from './local-liquid-setup.mjs';
 import {promptReliefRecordDomain} from './inference-kiln-record.mjs';
 import {neumipCarrierRecordDomain} from './neumip-carrier.mjs';
 import {fireUnitRecordDomain} from './fire-unit-record.mjs';
+import {viewFanRecordDomain} from './view-fan.mjs';
 
 export const sceneRecordDomains=Object.freeze([
   ...sceneAssetRecordDomains,cameraRecordDomain,spotLightRecordDomain,proceduralMeshRecordDomain,
   {...proceduralMeshRecordDomain,type:'burner-bed'},fireSourceRecordDomain,fireDomainRecordDomain,
-  localLiquidRecordDomain,promptReliefRecordDomain,neumipCarrierRecordDomain,brazierRoomRecordDomain,ashRecordDomain,ashSourceRecordDomain,fireUnitRecordDomain,
+  localLiquidRecordDomain,promptReliefRecordDomain,neumipCarrierRecordDomain,brazierRoomRecordDomain,ashRecordDomain,ashSourceRecordDomain,fireUnitRecordDomain,viewFanRecordDomain,
 ]);

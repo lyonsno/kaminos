@@ -1,0 +1,46 @@
+// kaminos-test: node
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createSceneObjectRecord} from '../scene-object-record.mjs';
+import {buildSceneDocument,planSceneRestore,isReloadableSceneObjectRecord} from '../scene-persistence-core.js';
+import {Group} from '../lib/three.core.js';
+import * as viewFan from '../view-fan.mjs';
+
+const image='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=';
+const view={position:[0,0,3],target:[0,0,0],up:[0,1,0],near:.01,far:100,fov:40};
+const fan=()=>({schema:'kaminos.view-fan.v1',anchor:{objectId:'material',position:[0,0,0],normal:[0,0,1],uv:[.4,.6]},
+ sourceView:view,context:{version:9,objects:[],camera:view},radius:.4,spread:25,cardWidth:.8,
+ views:[{angle:0,view,image,width:1,height:1}],renderer:{route:'viewport',backend:'WebGPU'}});
+const record=()=>({id:'fan',type:'pbr',source:'kaminos:view-fan',label:'View fan',viewFan:fan(),
+ transform:{position:[1,2,3],rotation:[0,.2,0],scale:[1,1,1]}});
+
+test('a contextual view fan survives native admission and scene Save/Open with source context',()=>{
+ const raw=record(),entry=createSceneObjectRecord(new Group(),raw,{id:raw.id});
+ assert.deepEqual(entry.viewFan,raw.viewFan,'native admission must retain the fan views and original source context');
+ raw.viewFan.anchor.position[0]=99;
+ assert.equal(entry.viewFan.anchor.position[0],0,'the captured neighborhood must not alias live edits');
+ const document=buildSceneDocument({objects:[{...raw,viewFan:entry.viewFan}],activeObjectId:'fan'});
+ const restored=planSceneRestore(JSON.parse(JSON.stringify(document)));
+ assert.deepEqual(restored.objects[0].viewFan,entry.viewFan);
+ assert.equal(isReloadableSceneObjectRecord(restored.objects[0]),true,'a kept fan must have a real scene constructor');
+});
+
+test('missing source context or partial view pixels cannot masquerade as a reconstructible fan',()=>{
+ for(const alter of [r=>delete r.viewFan.context,r=>r.viewFan.views[0].image='data:image/png;base64,',r=>r.viewFan.views[0].width=2]){
+  const raw=record();alter(raw);assert.equal(isReloadableSceneObjectRecord(raw),false);
+ }
+});
+
+test('view capture restores the borrowed viewport after a draw or pixel-copy failure',()=>{
+ assert.equal(typeof viewFan.captureViewFan,'function','fan capture must preserve the current working viewport');
+ for(const phase of ['success','begin','draw','copy','restore']){
+  let state='original',restores=0;
+  const invoke=()=>viewFan.captureViewFan({views:[{angle:0,view}],size:64,snapshot:()=>state,
+   begin(){state='capture';if(phase==='begin')throw Error('begin failed');},
+   present(){if(phase==='draw')throw Error('draw failed');},
+   copy(){if(phase==='copy')throw Error('copy failed');return {image,width:1,height:1};},
+   restore(previous){restores++;state=previous;if(phase==='restore')throw Error('restore failed');}});
+  if(phase==='success')assert.equal(invoke()[0].image,image);else assert.throws(invoke,new RegExp(phase+' failed'));
+  assert.equal(state,'original');assert.equal(restores,1);
+ }
+});
