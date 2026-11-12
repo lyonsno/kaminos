@@ -1,5 +1,6 @@
 // kaminos-test: node
 import {createAuthoringAssets,assetPaneHeight} from '../authoring-assets.mjs';
+import {createTrellisLiveTelemetry,formatTrellisLiveTelemetry} from '../trellis-live-telemetry.mjs';
 import test from'node:test';import assert from'node:assert/strict';import{readFileSync}from'node:fs';
 class Element{
  constructor(tag,doc){this.tagName=tag;this.doc=doc;this.children=[];this.dataset={};this.attributes={};this.value='';this.title='';this.hidden=false;this.connected=true;this.style={};this.listeners={};this.classList={toggle(){},add(){},remove(){}};}
@@ -16,7 +17,7 @@ class Element{
 function fixture(thumbnails,providedController=null){
  const ids=new Map();let observer;
  const doc={ids,createElement:tag=>new Element(tag,doc),getElementById:id=>ids.get(id),activeElement:null,addEventListener(){},defaultView:{innerWidth:1500,addEventListener(){},IntersectionObserver:class{constructor(fn){this.fn=fn;this.watched=new Set();observer=this;}observe(e){this.watched.add(e);}unobserve(e){this.watched.delete(e);}disconnect(){this.watched.clear();}fire(e){if(this.watched.has(e))this.fn([{target:e,isIntersecting:true}]);}}}};doc.body=new Element('body',doc);doc.body.clientHeight=1050;doc.body.classList={add(){},remove(){}};doc.body.style={setProperty(){},removeProperty(){}};ids.set('authoring-header',new Element('header',doc));
- const source=readFileSync(new URL('../authoring-assets.mjs',import.meta.url),'utf8').replaceAll('export ','').replaceAll("import('./authoring-asset-previews.mjs')","getPreview()");const install=new Function('getPreview',source+'\nreturn installAuthoringAssets;')(()=>Promise.resolve({meshThumbnail:thumbnails}));
+ const source=readFileSync(new URL('../authoring-assets.mjs',import.meta.url),'utf8').replace("import {formatTrellisLiveTelemetry} from './trellis-live-telemetry.mjs';",'').replaceAll('export ','').replaceAll("import('./authoring-asset-previews.mjs')","getPreview()");const install=new Function('getPreview','formatTrellisLiveTelemetry',source+'\nreturn installAuthoringAssets;')(()=>Promise.resolve({meshThumbnail:thumbnails}),formatTrellisLiveTelemetry);
  const state={roots:[{id:'greenroom'}],root:'greenroom',path:'',catalog:true,listRevision:1,entries:[],results:[],warnings:[],unavailableCount:0};
  const generation={status:'idle'};let stops=0;const controller=providedController||{read:()=>state,generation:()=>generation,refresh:async()=>{},select(){},stop(){stops++;}};const ui=install({document:doc,controller,edits:{state:()=>({active:null})}});
  return{doc,state,ui,generation,stops:()=>stops,observer:()=>observer,mode:mode=>doc.getElementById('authoring-assets').modes.find(e=>e.dataset.assetsMode===mode).onclick()};
@@ -55,6 +56,15 @@ test('catalog loading has a visible subtle indicator and ends its busy state',()
 });
 test('generation remains controllable in the header when the authoring pane is outside Workbench',()=>{
  const f=fixture(async()=>null);Object.assign(f.generation,{status:'running',stage:'Two-stream',percent:40,canStop:true,progress:'Two-stream duties 1156/2922 (40%)'});f.doc.body.dataset.workspace='workbench';f.ui.render(f.state);const header=f.doc.getElementById('authoring-generation-header');assert.ok(header,'active inference needs a workspace-independent control');assert.equal(header.hidden,false);f.doc.getElementById('generation-header-stop').onclick();assert.equal(f.stops(),1);
+});
+
+test('Generate renders the actual telemetry formatter with raw operation and elapsed time',()=>{
+ const f=fixture(async()=>null);let now=0;const telemetry=createTrellisLiveTelemetry({now:()=>now,requestFrame:null});
+ telemetry.record({kind:'phase',phase:'dinov3-block7-attention'});telemetry.record({kind:'kernel',name:'attention',status:'started'});now=17000;
+ Object.assign(f.generation,{status:'running',canStop:true,telemetry:telemetry.summary()});f.ui.render(f.state);
+ assert.equal(f.doc.getElementById('asset-generation-telemetry').hidden,false);
+ const text=f.doc.getElementById('asset-generation-telemetry-text').textContent;
+ assert.match(text,/Elapsed: 17\.00s/);assert.match(text,/dinov3-block7-attention/);assert.match(text,/attention · started/);assert.match(text,/not GPU-exclusive/);
 });
 
 const selectedImage={kind:'image',name:'subject.png',source:'/api/read?root=image-inbox&path=subject.png'};
