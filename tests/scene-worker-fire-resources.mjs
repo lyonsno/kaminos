@@ -141,10 +141,11 @@ test('ordinary and fire replacements update the actual inactive volume surface p
 });
 
 
-test('water preview admission refuses unsupported continuous dynamics before mutation',()=>{
+test('water admission validates source shape before mutating the existing scene',()=>{
  const f=fixture();const source=createLocalLiquidEmitterSceneRecord({id:'water-source',transform:{position:[0,1,0],rotation:[0,0,0],scale:[1,1,1]},settings:{schema:LOCAL_LIQUID_EMITTER_SCHEMA,mode:'continuous',baseRadius:.08,strength:1.15,rate:1200}});
  const data={...f.document,objects:[...f.document.objects,source],localLiquid:defaultLocalLiquidSetup()},next=planSceneRestore(data);
- const before=f.calls.length;assert.throws(()=>f.resources.document.assertSupported(data,next),/Continuous water dynamics/);assert.equal(f.calls.length,before);assert.equal(f.resources.readDrawResources().waterFeature.setup,null);
+ source.localLiquidEmitter.baseRadius=0;next.objects.find(row=>row.id===source.id).localLiquidEmitter.baseRadius=0;
+ const before=f.calls.length;assert.throws(()=>f.resources.document.assertSupported(data,next),/baseRadius/);assert.equal(f.calls.length,before);assert.equal(f.resources.readDrawResources().waterFeature.setup,null);
 });
 
 test('reattachment prepares a replacement volume from the current authored plan without replaying startup',async()=>{
