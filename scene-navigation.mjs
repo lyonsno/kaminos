@@ -83,7 +83,7 @@ export function prepareNavigationGeometry(root) {
   const pending = [];
   root.traverse(object => {
     // An instanced mesh's triangles sit at its instance transforms, which a geometry index cannot see.
-    if (!object.isMesh || object.isInstancedMesh || object.isSkinnedMesh || object.morphTargetInfluences?.length) return;
+    if (!object.isMesh || object.isInstancedMesh || object.isSkinnedMesh || object.userData?.analyticalSpherePicking || object.morphTargetInfluences?.length) return;
     const geometry = object.geometry;
     if (!geometry?.getAttribute('position') || geometry.getAttribute('position').isInterleavedBufferAttribute) return;
     let entry = depthIndexes.get(geometry);
