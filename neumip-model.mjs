@@ -1,3 +1,4 @@
+import {CHART_PREFIX,validateNeumipChart} from './neumip-chart.mjs';
 // Author format: straintensor/NeuMIP cpputils/storage_model.h (Cereal PortableBinary).
 // Keep the source float32 values and independent authored mip levels intact.
 export function readNeumipModel(input) {
@@ -27,7 +28,8 @@ export function readNeumipModel(input) {
     const l=layers.find(l=>l.name===`${prefix}.mpl${i}`);
     if(!l||l.input!==widths[i]||l.output!==widths[i+1]||l.relu!==(i<3))throw Error(`Unsupported NeuMIP layer shape: ${prefix}.mpl${i}`);
   }
-  return {offset,mips,layers,architecture,byteLength:bytes.length};
+  let tag=architecture,chart;if(tag.startsWith(CHART_PREFIX)){const metadata=JSON.parse(tag.slice(CHART_PREFIX.length));tag=metadata.architecture;if(typeof tag!=='string'||!tag)throw Error('Invalid chart architecture');chart=validateNeumipChart(metadata.chart);}
+  return {offset,mips,layers,architecture:tag,...(chart?{chart}:{}),byteLength:bytes.length};
 }
 
 export async function loadNeumipModel(url,{signal,sha256}={}) {
@@ -51,7 +53,7 @@ export function writeNeumipModel(model) {
     v.setFloat32(i*4,a[i],true);
   }});};
   const texture=t=>{i32(t.height);i32(t.width);i32(t.channels);floats(t.data);};
-  chunks.push(new Uint8Array([1]));texture(model.offset);text(model.architecture);
+  chunks.push(new Uint8Array([1]));texture(model.offset);text(model.chart?CHART_PREFIX+JSON.stringify({architecture:model.architecture,chart:validateNeumipChart(model.chart)}):model.architecture);
   count(model.mips.length);for(const t of model.mips)texture(t);
   count(model.layers.length);for(const l of model.layers){text(l.name);i32(l.input);i32(l.output);
     i32(l.biases.length?1:0);i32(l.relu?1:0);floats(l.weights);floats(l.biases);}

@@ -1,6 +1,6 @@
 import {buildHandoffMath,STONE_HANDOFF_ARCHITECTURE} from './stone-handoff-model.mjs';
 import {MeshStandardNodeMaterial,DataTexture,RGBAFormat,FloatType,NearestFilter,NearestMipmapNearestFilter,RepeatWrapping,NoColorSpace,DoubleSide} from './lib/three.webgpu.js';
-import {Fn,uniform,texture,wgslFn,uv,positionViewDirection,TBNViewMatrix,normalView,dFdx,dFdy,sqrt,log2,max,If,vec3} from './lib/three.tsl.js';
+import {Fn,uniform,texture,wgslFn,uv,positionViewDirection,TBNViewMatrix,normalView,dFdx,dFdy,sqrt,log2,max,If,vec3,vec2} from './lib/three.tsl.js';
 import {buildNeumipWGSL} from './neumip-shader.mjs';
 
 function pack(level,block) {
@@ -26,11 +26,11 @@ export function createNeumipMaterial(model,{uvScale=3,gain=4,richEnabled=true,di
   const textures=[latentTexture([model.offset],0,'NeuMIP offset0'),latentTexture([model.offset],1,'NeuMIP offset1'),latentTexture(model.mips,0,'NeuMIP appearance0'),latentTexture(model.mips,1,'NeuMIP appearance1')];
   const bilinear=wgslFn(shaders.bilinear),offset=wgslFn(shaders.offset),featuresFn=wgslFn(shaders.features,[bilinear,offset]),mainFn=wgslFn(shaders.main);
   const paired=!!model.handoff,richSwitch=uniform(richEnabled?1:0);
-  const math=paired?buildHandoffMath(model.handoff,model.offset.width):null;
+  const math=paired?buildHandoffMath(model.handoff,[model.offset.width,model.offset.height]):null;
   if(paired)textures.push(latentTexture(model.handoff.cheap,0,'Stone cheap correction'));
   const tex=textures.map(t=>texture(t));
   const coords=uv().mul(scale),view=positionViewDirection.mul(TBNViewMatrix).negate().toVar('neumipView');
-  const lod=Fn(()=>{const dx=dFdx(coords).mul(model.mips[0].width),dy=dFdy(coords).mul(model.mips[0].height);return max(0,log2(sqrt(dx.dot(dx).add(dy.dot(dy))).div(1.2)));})().toVar('neumipLOD');
+  const lod=Fn(()=>{const size=vec2(model.mips[0].width,model.mips[0].height),dx=dFdx(coords).mul(size),dy=dFdy(coords).mul(size);return max(0,log2(sqrt(dx.dot(dx).add(dy.dot(dy))).div(1.2)));})().toVar('neumipLOD');
   const support=paired?wgslFn(math.weight)(coords,lod).mul(richSwitch).toVar('stoneRichSupport'):null;
   const features=featuresFn(coords,view,lod,...(paired?[display==='residual'?uniform(1):support]:[]),...tex.slice(0,4)).toVar('neumipFeaturesShared');
   const cheapFn=paired?wgslFn(`fn stoneCheapResponse(uv:vec2<f32>,view:vec2<f32>,light:vec2<f32>,lod:f32,map:texture_2d<f32>)->vec3<f32>{let l=clamp(lod+${Math.log2(model.handoff.cheap[0].width/model.offset.width).toFixed(1)},0.0,f32(textureNumLevels(map)-1u));let lo=i32(floor(l));let hi=min(lo+1,i32(textureNumLevels(map)-1u));let logScale=mix(nmBilinear(map,uv,lo).rgb,nmBilinear(map,uv,hi).rgb,fract(l));return stoneFlatResponse(view,light)*exp(logScale);}`,[bilinear,wgslFn(math.flat)]):null;

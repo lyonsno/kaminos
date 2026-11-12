@@ -1,3 +1,4 @@
+import {createShoulderStripSource} from '../shoulder-strip-source.mjs';
 import {writeStoneHandoffModel,readStoneHandoffModel,stoneHandoffCheckpointName} from '../stone-handoff-model.mjs';
 // kaminos-test: manual — explicit source/config/output; Greenroom accelerator job.
 import fs from 'node:fs/promises';
@@ -28,44 +29,45 @@ try{
  const config=JSON.parse(await fs.readFile(configPath,'utf8'));
  const size=config.comparisonSize??128;
  if(!Number.isSafeInteger(size)||size<1)throw Error('Positive integer comparison size required');
- report.comparisonSize=size;
+ report.comparisonSize=size;const imageHeight=config.comparisonHeight??size;if(!Number.isSafeInteger(imageHeight)||imageHeight<1)throw Error('Invalid comparison height');report.comparisonHeight=imageHeight;
  const options={resolution:64,steps:2000,batch:2048,queries:65536,heldout:2048,samples:8,heldoutSamples:32,bounces:3,seed:41,fresh:true,...config.fit};report.options=options;
  for(const [k,v]of Object.entries(options))if(k==='fresh'?typeof v!=='boolean':!Number.isSafeInteger(v)||v<1)throw Error(`Invalid fit option ${k}`);
  report.sourceRevision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();report.sourceStatus=execFileSync('git',['status','--porcelain'],{encoding:'utf8'});
- report.sourceFiles={};for(const name of ['ground-teacher-source.mjs','material-query-pool.mjs','grass-material-source.mjs','stone-transition-source.mjs','stone-material-window.mjs','masonry-source.mjs','surface-teacher-source.mjs','surface-teacher-wgsl.mjs','surface-teacher.mjs','surface-material-teacher.mjs','neumip-training.mjs','neumip-model.mjs','tools/ground-material-fit.mjs','stone-handoff-model.mjs']){const b=await fs.readFile(name);report.sourceFiles[name]=digest(b);await fs.writeFile(path.join(out,path.basename(name)),b);}
- const grass=config.sourceKind==='grass',stone=config.sourceKind==='stone-transition',paired=config.handoff!==undefined;
+ report.sourceFiles={};for(const name of ['ground-teacher-source.mjs','material-query-pool.mjs','grass-material-source.mjs','stone-transition-source.mjs','stone-material-window.mjs','masonry-source.mjs','surface-teacher-source.mjs','surface-teacher-wgsl.mjs','surface-teacher.mjs','surface-material-teacher.mjs','neumip-training.mjs','neumip-model.mjs','tools/ground-material-fit.mjs','stone-handoff-model.mjs','shoulder-strip-source.mjs','neumip-chart.mjs']){const b=await fs.readFile(name);report.sourceFiles[name]=digest(b);await fs.writeFile(path.join(out,path.basename(name)),b);}
+ const strip=config.sourceKind==='shoulder-strip',grass=config.sourceKind==='grass',stone=config.sourceKind==='stone-transition',paired=config.handoff!==undefined;
  if(paired&&(!config.handoff||typeof config.handoff!=='object'||Array.isArray(config.handoff)))throw Error('Paired handoff must be an object');
  if(paired&&config.window!==undefined)throw Error('Paired routing requires a full tile; reference window unsupported');
  if(paired&&config.labels==='denoised-grid')throw Error('Paired routing currently requires raw labels');
- if(paired&&!stone)throw Error('Paired authored routing requires the stone source');if(config.sourceKind&&!['grass','ground','stone-transition'].includes(config.sourceKind))throw Error('Unknown material source kind');
+ if(paired&&!stone&&!strip)throw Error('Paired authored routing requires the stone source');if(config.sourceKind&&!['grass','ground','stone-transition','shoulder-strip'].includes(config.sourceKind))throw Error('Unknown material source kind');
  const grid=config.labels==='denoised-grid';if(config.labels&&!['denoised-grid','raw'].includes(config.labels))throw Error('Unknown label route');if(grid&&!options.fresh)throw Error('Denoised grids require fresh streaming');
  const gridWidth=config.grid?.width??32,gridHeight=config.grid?.height??64;
  if(grid&&(![gridWidth,gridHeight].every(v=>Number.isSafeInteger(v)&&v>0)||gridWidth*gridHeight!==options.batch||gridWidth>options.resolution||gridHeight>options.resolution||options.queries<options.batch))throw Error('Grid extent must be positive integers, equal batch, fit student resolution and rolling pool');
  report.receiver=config.receiver??report.receiver;report.claim=grass?`Preliminary fit of finite frozen grass ribbons, ${grid?'geometry-guided denoised':'raw box-footprint-averaged'} directional responses; no periodic or convergence claim`:report.claim;
+ if(strip)report.claim='Authored marked shoulder fit; numerical deviations are comparison-relative, not a material quality verdict';
  if(stone)report.claim='First ordinary NeuMIP fit of authored stone relief joining flat centers over a continuous backing; no simulated mortar, hybrid handoff, curved coverage or speedup established';
  if(config.window!==undefined&&!stone)throw Error('Reference windows currently require a stone source');
- const source=stone?stoneMaterialWindow(createStoneTransitionSource(config.source),config.window):grass?createGrassMaterialSource(config.source):createGroundTeacherSource(config.source);report.sourceKind=stone?'stone-transition':grass?'grass':'ground';report.ground={config:source.config,triangles:source.triangles.length,materials:source.materials,boundary:source.boundary,referenceHeight:source.referenceHeight,sha256:digest(JSON.stringify(source)),window:source.window,captureDomain:source.captureDomain};
+ const source=strip?createShoulderStripSource(config.source):stone?stoneMaterialWindow(createStoneTransitionSource(config.source),config.window):grass?createGrassMaterialSource(config.source):createGroundTeacherSource(config.source);report.sourceKind=strip?'shoulder-strip':stone?'stone-transition':grass?'grass':'ground';report.ground={config:source.config,triangles:source.triangles.length,materials:source.materials,boundary:source.boundary,referenceHeight:source.referenceHeight,sha256:digest(JSON.stringify(source)),window:source.window,captureDomain:source.captureDomain};
  const stages=paired?(config.stages??{cheap:200,residual:600,joint:200}):null;
  if(paired&&(!['cheap','residual','joint'].every(k=>Number.isSafeInteger(stages[k])&&stages[k]>0)||Object.values(stages).reduce((a,b)=>a+b,0)!==options.steps))throw Error('Paired stage counts must be positive and sum to steps');
  if(paired){report.stages=stages;report.querySampling='Paired batches: one quarter each rich interior, transition collar, cheap interior and uniform UV; continuous hemisphere directions;60%LOD0 and40%continuous coarse LOD. Heldout uses the same stratification with independent draws. Optimizer moments reset at each phase.';report.claim='Authored footprint-routed cheap GGX response correction plus signed NeuMIP residual, trained through composed response; current source area is a convergence fixture, not a sparse budget or speed proof';}
  await fs.writeFile(path.join(out,'config.json'),JSON.stringify(config,null,2));await fs.writeFile(path.join(out,'source.json'),JSON.stringify(source));
  let state=options.seed>>>0;const random=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return (state+.5)/4294967296;};
- const queries=n=>{const data=new Float32Array(n*8);for(let i=0;i<n;i++){const q=i*8;data[q]=random();data[q+1]=random();if(paired){const kind=i%4;if(kind<3){const inner=Math.max(source.config.margin,source.config.bevel),outer=inner+.04;let distance;do{data[q]=random();data[q+1]=random();const x=(data[q]*2)%1,y=(data[q+1]*2)%1;distance=Math.min(Math.min(x,1-x)*source.config.width/2,Math.min(y,1-y)*source.config.depth/2);}while(kind===0?inner>0&&distance>inner:kind===1?(distance<=inner||distance>=outer):distance<outer);}}for(const d of [2,4]){const r=Math.sqrt(random()*.99),t=random()*Math.PI*2;data[q+d]=r*Math.cos(t);data[q+d+1]=r*Math.sin(t);}data[q+6]=random()<.6?0:random()*Math.log2(options.resolution/2);}return data;};
- const student=createNeumipStudent({resolution:options.resolution,seed:options.seed,...(paired?{handoff:{cheapResolution:config.handoff.cheapResolution??64,routing:{width:source.config.width,depth:source.config.depth,inner:Math.max(source.config.margin,source.config.bevel),collar:.04},material:source.materials[0]}}:{})});
+ const queries=n=>{const data=new Float32Array(n*8);for(let i=0;i<n;i++){const q=i*8;data[q]=random();data[q+1]=random();if(paired&&strip){const kind=i%4;const lo=[0,source.routing.inner,source.routing.inner+source.routing.collar,0][kind],hi=[source.routing.inner,source.routing.inner+source.routing.collar,source.config.width,source.config.width][kind];data[q]=(lo+(hi-lo)*random())/source.config.width;}else if(paired){const kind=i%4;if(kind<3){const inner=Math.max(source.config.margin,source.config.bevel),outer=inner+.04;let distance;do{data[q]=random();data[q+1]=random();const x=(data[q]*2)%1,y=(data[q+1]*2)%1;distance=Math.min(Math.min(x,1-x)*source.config.width/2,Math.min(y,1-y)*source.config.depth/2);}while(kind===0?inner>0&&distance>inner:kind===1?(distance<=inner||distance>=outer):distance<outer);}}for(const d of [2,4]){const r=Math.sqrt(random()*.99),t=random()*Math.PI*2;data[q+d]=r*Math.cos(t);data[q+d+1]=r*Math.sin(t);}data[q+6]=random()<.6?0:random()*Math.log2(options.resolution/2);}return data;};
+ const student=createNeumipStudent({resolution:options.resolution,seed:options.seed,...(strip?{height:options.height??options.resolution/2,chart:source.chart}:{}),...(paired?{handoff:{cheapResolution:config.handoff.cheapResolution??(strip?options.resolution:64),...(strip?{cheapHeight:config.handoff.cheapHeight??options.height??options.resolution/2}:{}),routing:source.routing??{width:source.config.width,depth:source.config.depth,inner:Math.max(source.config.margin,source.config.bevel),collar:.04},material:source.materials[0]}}:{})});
  const trainingQueries=grid?null:queries(options.queries),heldoutQueries=queries(options.heldout);
- const buffers=neumipTrainingBufferSizes(neumipTrainingLayout(student),Math.max(options.batch,options.heldout,size**2));
+ const buffers=neumipTrainingBufferSizes(neumipTrainingLayout(student),Math.max(options.batch,options.heldout,size*imageHeight));
  const largest=Math.max(...Object.values(buffers),options.queries*32,source.triangles.length*48);
  const requiredLimits={maxStorageBufferBindingSize:Math.max(128*1024**2,largest),maxBufferSize:Math.max(256*1024**2,largest)};
- report.phase='capture';await publish();
+ report.chart=student.chart??null;report.modelShape=[student.offset.width,student.offset.height];report.phase='capture';await publish();
  await withKaminosGpu(async ctx=>{
   report.adapter=ctx.adapterInfo;let teacher,learner;const start=performance.now();
   try{
    teacher=new SurfaceMaterialTeacher(ctx.device,{...source,lights:[],environment:0,bounces:options.bounces});
-   const capture={tileSize:source.captureDomain?.width??source.config.width??source.config.tileSize,tileDepth:source.captureDomain?.depth??source.config.depth??source.config.tileSize,referenceHeight:source.referenceHeight,resolution:options.resolution,samples:options.samples,seed:options.seed};
+   const capture={tileSize:source.captureDomain?.width??source.config.width??source.config.tileSize,tileDepth:source.captureDomain?.depth??source.config.depth??source.config.tileSize,referenceHeight:source.referenceHeight,resolution:options.resolution,resolutionHeight:options.height??options.resolution,samples:options.samples,seed:options.seed};
    const labels=grid?null:await withGpuErrorScopes(ctx.device,'ground-label-capture',()=>teacher.evaluateMaterial(trainingQueries,capture));
    const heldoutLabels=await teacher.evaluateMaterial(heldoutQueries,{...capture,samples:options.heldoutSamples,seed:options.seed+1});
-   report.captureMs=performance.now()-start;report.dataset={queries:trainingQueries?await raw('training-queries.f32',trainingQueries):null,labels:labels?await raw('training-labels.f32',labels):null,heldoutQueries:await raw('heldout-queries.f32',heldoutQueries),heldoutLabels:await raw('heldout-labels.f32',heldoutLabels),filter:'square box in normalized UV, world reference-plane extent (2^LOD/resolution)*[tileWidth,tileDepth]',response:'linear outgoing radiance under unit directional irradiance divided by macro light cosine; live material multiplies it back'};
-   learner=await createNeumipTraining(ctx.device,student,{batchSize:Math.max(options.batch,options.heldout,size**2)});
+   report.captureMs=performance.now()-start;report.dataset={queries:trainingQueries?await raw('training-queries.f32',trainingQueries):null,labels:labels?await raw('training-labels.f32',labels):null,heldoutQueries:await raw('heldout-queries.f32',heldoutQueries),heldoutLabels:await raw('heldout-labels.f32',heldoutLabels),filter:'box in normalized UV with independent resolution axes; world reference-plane extent 2^LOD*[tileWidth/resolution,tileDepth/resolutionHeight]' ,response:'linear outgoing radiance under unit directional irradiance divided by macro light cosine; live material multiplies it back'};
+   learner=await createNeumipTraining(ctx.device,student,{batchSize:Math.max(options.batch,options.heldout,size*imageHeight)});
    const checkpoint=async step=>{
     learner.setQueries(heldoutQueries);const {rgb}=await learner.evaluate();
     const model=await learner.exportModel(),bytes=paired?writeStoneHandoffModel(model):writeNeumipModel(model),name=paired?stoneHandoffCheckpointName(options.resolution,step):`${stone?'stone':grass?'grass':'ground'}-${options.resolution}-step-${step}.model`;
@@ -83,7 +85,7 @@ try{
    const pool=grid?createMaterialQueryPool(options.queries):null;
    const captureGrid=async()=>{
     const direction=queries(1),uvScale=[gridWidth/options.resolution,gridHeight/options.resolution];
-    const recipe={width:gridWidth,height:gridHeight,uvScale,uvOrigin:[random()*(1-uvScale[0]),random()*(1-uvScale[1])],tileWidth:capture.tileSize,tileDepth:capture.tileDepth,referenceHeight:source.referenceHeight,resolution:options.resolution,samples:options.samples,seed:options.seed+gridCount+3,view:Array.from(direction.subarray(2,4)),light:Array.from(direction.subarray(4,6)),lod:direction[6]};
+    const recipe={width:gridWidth,height:gridHeight,uvScale,uvOrigin:[random()*(1-uvScale[0]),random()*(1-uvScale[1])],tileWidth:capture.tileSize,tileDepth:capture.tileDepth,referenceHeight:source.referenceHeight,resolution:options.resolution,resolutionHeight:options.height??options.resolution,samples:options.samples,seed:options.seed+gridCount+3,view:Array.from(direction.subarray(2,4)),light:Array.from(direction.subarray(4,6)),lod:direction[6]};
     const captured=await teacher.evaluateMaterialGrid(recipe);pool.add(captured);gridCount++;
     await gridRawStream.writeFile(Buffer.from(captured.raw.buffer));await gridLabelStream.writeFile(Buffer.from(captured.filtered.buffer));await gridRecipes.writeFile(JSON.stringify({grid:gridCount,...recipe})+'\n');report.capturedGridCount=gridCount;
    };
@@ -112,13 +114,13 @@ try{
    // Matched material-domain images: same UV, footprint, directions and
    // gain; these diagnose fitting, not projective camera or silhouette behavior.
    report.phase='comparison';await publish();const images=[];
-   for(const [name,view,light]of [['front',[0,0],[.5,.3]],['oblique',[.75,.2],[-.5,.5]]])for(const lod of (paired?[0,1.5,3,Math.log2(options.resolution/2)]:[0])){
-    const q=new Float32Array(size*size*8);for(let y=0;y<size;y++)for(let x=0;x<size;x++)q.set([(x+.5)/size,(y+.5)/size,...view,...light,lod,0],(y*size+x)*8);
+   for(const [name,view,light]of [['front',[0,0],[.5,.3]],['oblique',[.75,.2],[-.5,.5]]])for(const lod of ((paired||strip)?[0,1.5,3,Math.log2(options.resolution/2)]:[0])){
+    const q=new Float32Array(size*imageHeight*8);for(let y=0;y<imageHeight;y++)for(let x=0;x<size;x++)q.set([(x+.5)/size,(y+.5)/imageHeight,...view,...light,lod,0],(y*size+x)*8);
     const reference=await teacher.evaluateMaterial(q,{...capture,samples:32,seed:options.seed+2});learner.setQueries(q);const predicted=(await learner.evaluate()).rgb;
-    const tag=paired?name+'-lod-'+String(lod).replace('.','p'):name,cheap=paired?(await learner.evaluate({richEnabled:false})).rgb:null;images.push({name,width:size,height:size,view,light,lod,reference:await raw(`${tag}-source.f32`,reference),student:await raw(`${tag}-student.f32`,predicted),...(paired?{cheap:await raw(`${tag}-cheap.f32`,cheap)}:{})});
+    const tag=(paired||strip)?name+'-lod-'+String(lod).replace('.','p'):name,cheap=paired?(await learner.evaluate({richEnabled:false})).rgb:null;images.push({name,width:size,height:imageHeight,view,light,lod,reference:await raw(`${tag}-source.f32`,reference),student:await raw(`${tag}-student.f32`,predicted),...(paired?{cheap:await raw(`${tag}-cheap.f32`,cheap)}:{})});
    }
    report.images=images;report.elapsedMs=performance.now()-start;
-   if(!(report.checkpoints.at(-1).loss<report.checkpoints[0].loss))throw Error('Held-out response did not improve');
+   if(!strip&&!(report.checkpoints.at(-1).loss<report.checkpoints[0].loss))throw Error('Held-out response did not improve');
   }finally{learner?.dispose();teacher?.dispose();}
  },{requiredLimits,onEvidence:e=>report.evidence=e});
  report.status='passed';report.phase='complete';

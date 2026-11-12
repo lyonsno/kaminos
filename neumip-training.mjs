@@ -1,23 +1,26 @@
+import {validateNeumipChart,chartOffsetScale} from './neumip-chart.mjs';
 import {createHandoffState,buildHandoffMath,STONE_HANDOFF_ARCHITECTURE} from './stone-handoff-model.mjs';
 // Browser/native WebGPU training for Kaminos's released NeuMIP web format.
 // Parameters remain float32; all levels are independent learned fields.
 const TARGET_STATE=Symbol('NeuMIP current target batch');
-export function createNeumipStudent({resolution=64,seed=1,handoff}={}) {
+export function createNeumipStudent({resolution=64,height=resolution,seed=1,handoff,chart}={}) {
   if(!Number.isInteger(resolution)||resolution<2||!Number.isInteger(Math.log2(resolution)))throw Error('NeuMIP resolution must be a power of two >= 2');
+  if(!Number.isInteger(Math.log2(height))||height<2)throw Error('NeuMIP height must be a power of two >= 2');
+  if(chart)chart=validateNeumipChart(chart);
   let state=seed>>>0;
   const random=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return (state+.5)/4294967296;};
   const normal=()=>Math.sqrt(-2*Math.log(random()))*Math.cos(2*Math.PI*random());
-  const texture=(size,channels)=>({width:size,height:size,channels,data:Float32Array.from({length:size*size*channels},()=>normal()*.05)});
-  const offset=texture(resolution,6),mips=[];
-  for(let n=resolution;n>=2;n/=2)mips.push(texture(n,8));
+  const texture=(width,height,channels)=>({width,height,channels,data:Float32Array.from({length:width*height*channels},()=>normal()*.05)});
+  const offset=texture(resolution,height,6),mips=[];
+  for(let w=resolution,h=height;Math.max(w,h)>=2;w=Math.max(1,w/2),h=Math.max(1,h/2))mips.push(texture(w,h,8));
   const layers=[];
   for(const [prefix,sizes] of [['offset_network',[8,24,24,24,1]],['main',[12,24,24,24,6]]])for(let k=0;k<4;k++){
     const input=sizes[k],output=sizes[k+1],scale=k===3?.03:Math.sqrt(2/input);
     const biases=new Float32Array(output);if(prefix==='main'&&k===3)biases[0]=.05;
     layers.push({name:`${prefix}.mpl${k}`,input,output,relu:k<3,weights:Float32Array.from({length:input*output},()=>normal()*scale),biases});
   }
-  const model={offset,mips,layers,architecture:'kaminos-neumip-web-distillation-v1'};
-  if(handoff){model.handoff=createHandoffState(handoff,resolution);model.architecture=STONE_HANDOFF_ARCHITECTURE;const head=layers.find(l=>l.name==='main.mpl3');head.weights.fill(0);head.biases.fill(0);}
+  const model={offset,mips,layers,architecture:'kaminos-neumip-web-distillation-v1',...(chart?{chart}:{})};
+  if(handoff){model.handoff=createHandoffState(handoff,[resolution,height]);model.architecture=STONE_HANDOFF_ARCHITECTURE;const head=layers.find(l=>l.name==='main.mpl3');head.weights.fill(0);head.biases.fill(0);}
   return model;
 }
 
@@ -41,7 +44,7 @@ export function neumipTrainingLayout(model) {
   const values=new Float32Array(at);
   for(const net of Object.values(networks))for(const l of net.layers){values.set(l.weights,l.weightsOffset);values.set(l.biases,l.biasesOffset);}
   for(const f of fields)values.set(f.data,f.offset);
-  return {handoff:model.handoff,appearanceLevels:model.mips.length,cheapStartField:1+model.mips.length,networks,fields,weightCount,count:at,actCount:act,deltaCount:delta,scratchStride:act+delta+4,values};
+  return {chart:model.chart,handoff:model.handoff,appearanceLevels:model.mips.length,cheapStartField:1+model.mips.length,networks,fields,weightCount,count:at,actCount:act,deltaCount:delta,scratchStride:act+delta+4,values};
 }
 
 // Exact storage requirements, shared by device admission and allocation.
@@ -62,8 +65,9 @@ export function restoreNeumipParameters(model,layout,values) {
 }
 
 export function buildNeumipTrainingWGSL(layout) {
-  const {networks,fields,weightCount,actCount,deltaCount,scratchStride,handoff,appearanceLevels,cheapStartField}=layout;
-  const paired=!!handoff,math=paired?buildHandoffMath(handoff,fields[0].width):null;
+  const {networks,fields,weightCount,actCount,deltaCount,scratchStride,handoff,appearanceLevels,cheapStartField,chart}=layout;
+  const scales=chartOffsetScale(chart),shiftScale=`vec2<f32>(${scales.map(x=>Number.isInteger(x)?x+'.0':x).join(',')})`;
+  const paired=!!handoff,math=paired?buildHandoffMath(handoff,[fields[0].width,fields[0].height]):null;
   const cheapSample=paired?`let cheapLod=clamp(queries[q*8u+6u]+cfg.lodBias+${Math.log2(fields[cheapStartField].width/fields[0].width).toFixed(1)},0.0,${(fields.length-cheapStartField-1).toFixed(1)});let cheapLo=u32(floor(cheapLod))+${cheapStartField}u;let cheapHi=min(cheapLo+1u,${fields.length-1}u);let cheapT=fract(cheapLod);var cheapLog=vec3<f32>(0.0);for(var c=0u;c<3u;c++){cheapLog[c]=mix(sampleField(cheapLo,uv,c).x,sampleField(cheapHi,uv,c).x,cheapT);}let cheap=stoneFlatResponse(view,vec2<f32>(queries[q*8u+4u],queries[q*8u+5u]))*exp(cheapLog);let support=stoneHandoffWeight(uv,queries[q*8u+6u]+cfg.lodBias)*cfg.richEnabled;`:``;
   const off=networks.offset_network,main=networks.main;
   const o=off.layers[3].actOffset,m=main.layers[3].actOffset;
@@ -108,7 +112,7 @@ var<private> a:array<f32,${actCount}>;
 var<private> d:array<f32,${deltaCount}>;
 var<private> di:array<f32,12>;
 fn address(f:u32,xy:vec2<i32>,c:u32)->u32 {
-  let size=vec2<i32>(i32(WIDTH[f]),i32(HEIGHT[f]));let q=((xy%size)+size)%size;
+  let size=vec2<i32>(i32(WIDTH[f]),i32(HEIGHT[f]));let q=${chart?.boundary==='clamp'?'clamp(xy,vec2<i32>(0),size-1)':'((xy%size)+size)%size'};
   return FIELD[f]+(u32(q.y)*WIDTH[f]+u32(q.x))*CHANNELS[f]+c;
 }
 fn sampleField(f:u32,uv:vec2<f32>,c:u32)->vec3<f32>{
@@ -141,7 +145,7 @@ fn evaluate(q:u32)->vec3<f32>{
   for(var c=0u;c<6u;c++){a[${off.inputOffset}u+c]=sampleField(0u,uv,c).x;}
   a[${off.inputOffset+6}u]=view.x;a[${off.inputOffset+7}u]=view.y;offsetForward();
   let z=max(0.6,sqrt(max(0.0,1.0-dot(view,view))));
-  let shifted=fract(uv)+a[${o}u]*view/z*0.05;
+  let shifted=${chart?'uv':'fract(uv)'}+a[${o}u]*view/z*${shiftScale};
   let lod=clamp(queries[q*8u+6u]+cfg.lodBias,0.0,${(appearanceLevels-1).toFixed(1)});
   let low=u32(floor(lod))+1u;let high=min(low+1u,${appearanceLevels}u);let t=fract(lod);
   a[${main.inputOffset}u]=queries[q*8u+4u];a[${main.inputOffset+1}u]=queries[q*8u+5u];
@@ -178,8 +182,8 @@ fn evaluate(q:u32)->vec3<f32>{
 
   mainBackward();
   ${paired?"":"let uv=vec2<f32>(queries[q*8u],queries[q*8u+1u]);let view=vec2<f32>(queries[q*8u+2u],queries[q*8u+3u]);"}
-  let factor=view/max(0.6,sqrt(max(0.0,1.0-dot(view,view))))*0.05;
-  let shifted=fract(uv)+a[${o}u]*factor;
+  let factor=view/max(0.6,sqrt(max(0.0,1.0-dot(view,view))))*${shiftScale};
+  let shifted=${chart?'uv':'fract(uv)'}+a[${o}u]*factor;
   let lod=clamp(queries[q*8u+6u]+cfg.lodBias,0.0,${(appearanceLevels-1).toFixed(1)});
   let low=u32(floor(lod))+1u;let high=min(low+1u,${appearanceLevels}u);let t=fract(lod);
   var depthGrad=0.0;
