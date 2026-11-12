@@ -3,7 +3,7 @@ import {retainMaterial,packMaterial,refineMaterial} from './material.mjs';
 export async function createEarthGpuSolver({device,state,bodyBuffer=null,iterations=6,dt=1/480,gravity=9.81,friction=.65,damping=1.5,shaderCode=EARTH_GPU_WGSL}){
  if(!device||!Number.isSafeInteger(iterations)||iterations<1||!(dt>0&&Number.isFinite(dt))||![gravity,friction,damping].every(x=>Number.isFinite(x)&&x>=0))throw Error('Valid GPU device and physical solver settings required');
  const owned=[],count=state.floats.length/24,grainCount=state.grainCount,cell=state.radius*4.2;
- let disposed=false,pending=false,failure=null,stepsDone=state.physicalSteps??0,capturing=0,lastTool=[0,0,0,0],capacity=1,uniform,group;
+ let disposed=false,pending=false,failure=null,stepsDone=state.physicalSteps??0,capturing=0,lastTool=[0,0,0,0],capacity=1,uniform,group,completion=Promise.resolve();
  const dims=[Math.ceil(state.width/cell),Math.ceil(Math.max(...Array.from({length:count},(_,i)=>state.floats[i*24+1]))/cell)+8,Math.ceil(state.depth/cell)],cells=dims.reduce((a,b)=>a*b,1);
  const allocate=(size,label,usage=GPUBufferUsage.STORAGE)=>{if(size>device.limits.maxStorageBufferBindingSize||size>device.limits.maxBufferSize)throw Error(label+' exceeds effective GPU buffer capacity');const b=device.createBuffer({size:Math.max(16,size),usage:usage|GPUBufferUsage.COPY_DST|((usage&GPUBufferUsage.MAP_READ)?0:GPUBufferUsage.COPY_SRC),label});owned.push(b);return b;};
  let bodies=bodyBuffer;
@@ -37,8 +37,9 @@ export async function createEarthGpuSolver({device,state,bodyBuffer=null,iterati
      }encodeStage(encoder,'finish',count,s);encodeStage(encoder,'plastic',state.material.tets.length,s);
     }
     device.queue.submit([encoder.finish()]);lastTool=nextTool;pending=true;
-    device.queue.onSubmittedWorkDone().then(()=>{stepsDone+=steps;}).catch(e=>{failure=String(e);}).finally(()=>{pending=false;});return true;
+    completion=device.queue.onSubmittedWorkDone().then(()=>{stepsDone+=steps;}).catch(e=>{failure=String(e);}).finally(()=>{pending=false;});return true;
    },
+   async wait(){await completion;if(failure)throw Error(failure);},
    async capture(){if(disposed||failure)throw Error(failure||'Earth GPU disposed');capturing++;const read=allocate(bodies.size+tets.size,'Earth complete state snapshot',GPUBufferUsage.MAP_READ);try{const encoder=device.createCommandEncoder();encoder.copyBufferToBuffer(bodies,0,read,0,bodies.size);encoder.copyBufferToBuffer(tets,0,read,bodies.size,tets.size);device.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);const bytes=read.getMappedRange(),floats=new Float32Array(bytes.slice(0,bodies.size)),plastic=new Float32Array(bytes.slice(bodies.size));if(failure)throw Error(failure);if(!floats.every(Number.isFinite)||!plastic.every(Number.isFinite))throw Error('Nonfinite GPU material state');return {...retainMaterial(state,floats,plastic),physicalSteps:stepsDone,physicalTime:stepsDone*dt};}finally{capturing--;read.unmap();read.destroy();owned.splice(owned.indexOf(read),1);}},
    async refined(selected){const current=await this.capture();current.material=refineMaterial(current.material,selected);return packMaterial(current);},
    read(){return {route:'webgpu/rigid-sphere-pairs/yielding-tetrahedra',bodies:count,grains:grainCount,materialPoints:state.material.nodes.length,tetrahedra:state.material.tets.length,surfaceTriangles:state.faceCount,transitionConstraints:state.tieCount,generation:state.material.generation,steps:stepsDone,simulatedSeconds:stepsDone*dt,pending,failure,configuration:this.configuration,runtimeReadbacks:0};},
