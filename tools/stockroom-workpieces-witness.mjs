@@ -34,6 +34,8 @@ try{
   const shaped=await read();assert.notDeepEqual(shaped.display[piece],start.display[piece],'Unheld pointer changes '+piece);
   await page.mouse.click(target.x+65,target.y-55);const held=await read();assert.equal(held.stage,'choosing');assert.deepEqual(held.display[piece],shaped.display[piece]);
   const entry={piece,start,shaped,held,previews:[]};report.cases.push(entry);
+  await page.locator(`[data-workpiece-choice="${choices[0]}"]`).click({button:'right'});assert.equal((await read()).stage,'shaping','Secondary click over a choice returns context');
+  await page.mouse.click(target.x+65,target.y-55);assert.equal((await read()).stage,'choosing');
   await shot(piece+'-choices');
   for(const choice of choices){await page.locator(`[data-workpiece-choice="${choice}"]`).hover();const state=await read();assert.equal(state.highlighted,choice);assert.deepEqual(state.models,held.models,'Preview does not commit');entry.previews.push({choice,state});await shot(piece+'-'+choice);}
   assert.notDeepEqual(entry.previews[0].state.plans[piece],entry.previews[1].state.plans[piece],'Different choices change actual geometry');

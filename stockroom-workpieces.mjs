@@ -64,13 +64,13 @@ export function installWorkpieces({host,session,view,asset,record}){
    author[frame.stage==='shaping'?'shape':'tune'](next);sync();
   }else if(frame.stage==='idle'&&event.target===canvas){if(view.hover(hit(event)))session.redraw();}
  }
- listen(viewport,'pointerdown',event=>{if(event.target!==canvas)return;if(event.button===2){secondary={id:event.pointerId,x:event.clientX,y:event.clientY,moved:false};anchor=null;}if(event.button===1){middle=true;anchor=null;}left(event);},true);
+ listen(viewport,'pointerdown',event=>{if(event.target!==canvas&&!overlay.contains(event.target))return;if(event.button===2){secondary={id:event.pointerId,x:event.clientX,y:event.clientY,moved:false};anchor=null;}if(event.button===1&&event.target===canvas){middle=true;anchor=null;}left(event);},true);
  listen(viewport,'pointermove',move,true);
  listen(window,'pointerup',event=>{if(event.button===2&&secondary?.id===event.pointerId){const click=!secondary.moved;secondary=null;anchor=null;if(click&&author.read().depth){navigation.cancel();event.preventDefault();event.stopImmediatePropagation();goBack();}}
   if(event.button===1){middle=false;anchor=null;}if(event.button===0&&consumed&&event.target===canvas){event.preventDefault();event.stopImmediatePropagation();}
  },true);
  listen(viewport,'click',event=>{if(consumed&&event.target===canvas){consumed=false;event.preventDefault();event.stopImmediatePropagation();}},true);
- listen(viewport,'contextmenu',event=>{if(event.target===canvas){event.preventDefault();event.stopImmediatePropagation();}},true);
+ listen(viewport,'contextmenu',event=>{if(event.target===canvas||overlay.contains(event.target)){event.preventDefault();event.stopImmediatePropagation();}},true);
  listen(viewport,'wheel',()=>anchor=null,true);listen(viewport,'pointerenter',()=>hovered=true);listen(viewport,'pointerleave',()=>{hovered=false;anchor=null;view.hover(null);session.redraw();});
  listen(window,'pointercancel',()=>{secondary=null;middle=false;anchor=null;});listen(window,'blur',()=>{secondary=null;middle=false;anchor=null;});
  listen(window,'keydown',event=>{if(event.target.closest?.('input,textarea,select,[contenteditable="true"]'))return;if(event.key==='Escape'&&author.read().depth){event.preventDefault();event.stopImmediatePropagation();goBack();}if(event.key==='Tab'&&hovered&&!event.ctrlKey&&!event.metaKey&&!event.altKey){event.preventDefault();event.stopImmediatePropagation();}},true);

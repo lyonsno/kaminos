@@ -5,9 +5,12 @@ fixtures compare construction decisions with the same click-through rhythm as
 the separate fold/receive study. No image generation, mesh fitting, camera input
 or hand inference is needed.
 
-The attached stairs offer a rigid flight swing or a reconstructed run. The
+The attached stairs offer a rigid flight swing or a reconstructed run whose
+level treads and landing retain dock-aligned edges. The
 forked trough distinguishes moving an outlet, carrying the junction and
-reshaping one route while retaining the inlet and opposite outlet. The kitchen
+reshaping one route while retaining the inlet, opposite outlet and the held
+outlet bearing. Converting route dimensions back to angular posing uses the
+displayed endpoint, not a metres-to-radians reinterpretation. The kitchen
 corner distinguishes carrying its vertical return, leaving that return behind,
 and continuing a split from the counter up the return. Its canopy stays fixed.
 Materials and members are proxies; they do not claim generated-stock fitting,

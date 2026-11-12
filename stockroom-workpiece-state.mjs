@@ -21,6 +21,7 @@ export const choiceFor=(piece,kind)=>WORKPIECES[piece]?.choices.find(c=>c.id===k
 export function validateWorkpiece(piece,model){
  const choice=choiceFor(piece,model?.kind);
  if(!choice)throw Error('Unknown construction choice');
+ if(model.bearing!==undefined&&!Number.isFinite(model.bearing))throw Error('Finite route bearing required');
  for(const [i,key]of ['u','v'].entries()){
   const [,min,max]=choice.parameters[i];
   if(!Number.isFinite(model[key])||model[key]<min||model[key]>max)throw Error('Parameters must fit this prepared workpiece');
@@ -30,15 +31,19 @@ export function validateWorkpiece(piece,model){
 export function initialWorkpieces(){return {stairs:{kind:'rebuild',u:0,v:2.2},trough:{kind:'branch',u:0,v:0},corner:{kind:'carry',u:0,v:0}};}
 export function interpretWorkpiece(piece,kind,intent){
  if(kind===intent.kind)return validateWorkpiece(piece,intent);
- let u=intent.u,v=intent.v;
+ let u=intent.u,v=intent.v,extra={};
  if(piece==='stairs'){
   const plan=stairPlan(intent);
-  if(kind==='swing'){u=plan.yaw;v=0;}else{u=plan.foot[0];v=plan.foot[2];}
+  if(kind==='swing'){u=plan.heading;v=0;}else{u=plan.foot[0];v=plan.foot[2];}
  }
- if(piece==='trough'&&kind==='route'){u=2;v=Math.sin(v)*2;}
+ if(piece==='trough'){
+  const end=troughPlan(intent).right;
+  if(kind==='route'){u=Math.hypot(end[0],end[2]);v=end[1]-.85;extra.bearing=Math.atan2(end[0],-end[2]);}
+  else{const z=kind==='carry'?-3.05:-1.45,dz=end[2]-(kind==='carry'?1.6:0);v=Math.asin(clamp((end[1]-.85)/-z,-1,1));u=Math.atan2(1.45,-z*Math.cos(v))-Math.atan2(end[0],-dz);}
+ }
  if(piece==='corner'&&(kind==='wrap'||intent.kind==='wrap'))v=kind==='wrap'?.6:0;
  const choice=choiceFor(piece,kind);if(!choice)throw Error('Unknown construction choice');
- return validateWorkpiece(piece,{kind,u:clamp(u,...choice.parameters[0].slice(1,3)),v:clamp(v,...choice.parameters[1].slice(1,3))});
+ return validateWorkpiece(piece,{kind,...extra,u:clamp(u,...choice.parameters[0].slice(1,3)),v:clamp(v,...choice.parameters[1].slice(1,3))});
 }
 export function createWorkpieceAuthoring(){
  let frame={stage:'idle',models:initialWorkpieces(),piece:null,intent:null,highlighted:null,choice:null,parameters:null},parents=[];
@@ -64,11 +69,16 @@ export function createWorkpieceAuthoring(){
 const vector=p=>new T.Vector3(...p),matrix=(point,u,v)=>new T.Matrix4().makeTranslation(...point).multiply(new T.Matrix4().makeRotationY(u)).multiply(new T.Matrix4().makeRotationX(v));
 export function stairPlan(model){
  validateWorkpiece('stairs',model);const top=[0,1.3,0],n=7,points=[],treads=[];
- const yaw=model.kind==='swing'?model.u:Math.atan2(model.u,model.v),run=model.kind==='swing'?2.2:Math.hypot(model.u,model.v),tilt=model.kind==='swing'?model.v:0;
+ const heading=model.kind==='swing'?model.u:Math.atan2(model.u,model.v),yaw=model.kind==='swing'?heading:0,run=model.kind==='swing'?2.2:Math.hypot(model.u,model.v),tilt=model.kind==='swing'?model.v:0;
+ if(model.kind==='rebuild'){
+  for(let i=0;i<=n;i++)points.push([model.u*i/n,1.3*(1-i/n),model.v*i/n]);
+  for(let i=0;i<n;i++)treads.push({point:[model.u*(i+.5)/n,1.3*(1-(i+1)/n),model.v*(i+.5)/n],yaw:0,tilt:0,depth:model.v/n});
+  return {top,foot:points.at(-1),points,treads,yaw,heading,tilt,run,retained:[top],mode:model.kind};
+ }
  const transform=matrix(top,yaw,-tilt);
  for(let i=0;i<=n;i++)points.push(vector([0,-1.3*i/n,run*i/n]).applyMatrix4(transform).toArray());
  for(let i=0;i<n;i++)treads.push({point:vector([0,-1.3*(i+1)/n,run*(i+.5)/n]).applyMatrix4(transform).toArray(),yaw,tilt,depth:run/n});
- return {top,foot:points.at(-1),points,treads,yaw,tilt,run,retained:[top],mode:model.kind};
+ return {top,foot:points.at(-1),points,treads,yaw,heading,tilt,run,retained:[top],mode:model.kind};
 }
 export function troughPlan(model){
  validateWorkpiece('trough',model);const junction=[0,.85,0],stem=[0,.85,1.6],left=[-1.45,.85,-1.45],right=[1.45,.85,-1.45];
@@ -77,7 +87,7 @@ export function troughPlan(model){
  let center=junction,inlet=stem,leftEnd=left,rightEnd=right;
  if(model.kind==='carry'){center=turn(junction);inlet=turn(stem);leftEnd=turn(left);rightEnd=turn(right);}
  else if(model.kind==='branch')rightEnd=turn(right);
- else rightEnd=[model.u/Math.SQRT2,.85+model.v,-model.u/Math.SQRT2];
+ else{const bearing=model.bearing??Math.PI/4;rightEnd=[model.u*Math.sin(bearing),.85+model.v,-model.u*Math.cos(bearing)];}
  const routes=[[inlet,center],[center,leftEnd]];
  if(model.kind==='route'){
   const control=vector(center).lerp(vector(rightEnd),.5).add(new T.Vector3(.15,.35+Math.abs(model.v)*.25,.2));

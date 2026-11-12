@@ -13,6 +13,8 @@ author.highlight('rebuild');const rebuilt=author.display().stairs;
 assert.equal(stairPlan(swing).run,2.2,'Rigid flight retains its length');
 assert.ok(stairPlan(rebuilt).run>2.8,'Rebuilt flight changes member length');
 assert.deepEqual(stairPlan(swing).top,stairPlan(rebuilt).top,'Both retain the upper relationship');
+assert.equal(stairPlan(rebuilt).treads[0].yaw,0,'Reconstruction keeps tread edges aligned with the dock rather than rigidly yawing the flight');
+assert.notEqual(stairPlan(swing).treads[0].yaw,0,'Rigid swing carries tread orientation');
 assert.deepEqual(interpretWorkpiece('stairs','swing',{kind:'swing',u:.3,v:.2}),{kind:'swing',u:.3,v:.2},'Reentering a chosen interpretation retains its parameters');
 author.choose();author.tune({u:1.5,v:3});const tuned=author.read();author.enter();
 assert.equal(author.read().stage,'idle');assert.equal(author.read().models.stairs.u,1.5);
@@ -28,6 +30,9 @@ assert.deepEqual(branch.left,[-1.45,.85,-1.45]);assert.notDeepEqual(carry.left,b
 assert.deepEqual(branch.inlet,carry.inlet);assert.deepEqual(route.left,branch.left);
 assert.equal(branch.routes[2].length,2);assert.equal(route.routes[2].length,13);
 assert.ok(route.right[1]>.85);
+assert.ok(Math.abs(Math.atan2(route.right[0],-route.right[2])-Math.atan2(branch.right[0],-branch.right[2]))<1e-9,'Route preserves the held outlet bearing');
+const branchAgain=troughPlan(interpretWorkpiece('trough','branch',author.display().trough));
+assert.ok(Math.abs(branchAgain.right[0]-branch.right[0])<1e-9,'Reinterpreting route dimensions does not clamp metres into radians');
 author.reset();author.begin('corner');author.shape({u:.5,v:.2});author.hold();
 author.highlight('carry');const carryCorner=cornerPlan(author.display().corner);
 author.highlight('leave');const leaveCorner=cornerPlan(author.display().corner);
@@ -40,7 +45,7 @@ author.enter();author.begin('stairs');assert.equal(author.read().piece,'stairs',
 const view=createWorkpieceView();
 for(const id of Object.keys(WORKPIECES))assert.ok(view.targets().some(m=>m.userData.workpiece===id));
 view.update({stairs:rebuilt,trough:{kind:'carry',u:.2,v:.5},corner:{kind:'wrap',u:.5,v:.6}},'corner');
-assert.deepEqual(view.plans().trough,carry);assert.equal(view.plans().corner.band,.6);
+assert.deepEqual(view.plans().trough,troughPlan({kind:'carry',u:.2,v:.5}));assert.equal(view.plans().corner.band,.6);
 const meshes=[];view.root.traverse(m=>{if(m.isMesh)meshes.push(m);});
 view.update(initial);
 const again=[];view.root.traverse(m=>{if(m.isMesh)again.push(m);});
