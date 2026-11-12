@@ -160,7 +160,7 @@ assert.deepEqual(
 assert.deepEqual(packageDocument.settingsPreset.schema, schema);
 assert.equal(Object.hasOwn(packageDocument.effectiveState, 'capturedAt'), false);
 assert.equal(packageDocument.effectiveState.renderer.backend, 'WebGPU:apple');
-assert.equal(packageDocument.routes.loader, `/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_flow_kernel_strength=0.56&volume_quality_reason=promotion-roundtrip&settings_preset=${presetArtifact.presetId}&settings_preset_authority=shared-volume-settings-preset-v2`);
+assert.equal(packageDocument.routes.loader, `/volume-settings-preset.html?preset=${presetArtifact.presetId}`);
 assert.equal(packageDocument.routing.controlPlane.schema, 'kaminos.volume.basin-promotion-routing.v1');
 assert.equal(packageDocument.routing.controlPlane.sourceCommit, packageDocument.sourceCommit);
 assert.equal(packageDocument.routing.consumer.mountContract, 'kaminos.volume.basin-promotion-mount.v1');
@@ -228,7 +228,7 @@ assert.equal(mount.handle, 'cheap-firebowl');
 assert.equal(mount.revision, exportReceipt.revision);
 assert.equal(mount.currentChannel.revision, exportReceipt.revision);
 assert.equal(mount.sourcePackage.sha256, exportReceipt.packageSha256);
-assert.equal(mount.loader.targetUrl, `https://product.example/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_flow_kernel_strength=0.56&volume_quality_reason=promotion-roundtrip&settings_preset=${presetArtifact.presetId}&settings_preset_authority=shared-volume-settings-preset-v2`);
+assert.equal(mount.loader.targetUrl, `https://product.example/volume-settings-preset.html?preset=${presetArtifact.presetId}`);
 assert.equal(mount.consumerContract.replaceRevisionByUpdatingChannel, true);
 assert.equal(JSON.stringify(mount).includes(fixtureRoot), false, 'consumer mount must use relocatable source locators');
 assert.deepEqual(

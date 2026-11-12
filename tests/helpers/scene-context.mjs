@@ -12,6 +12,7 @@ import {checkedBurnAppearance} from '../../scene-burning-settings.mjs';
 import {promptReliefRecord,PROMPT_RELIEF_SOURCE} from '../../inference-kiln-record.mjs';
 import {assertSceneSourcesReloadable} from '../../scene-persistence-core.js';
 import vm from 'node:vm';
+import {FIRE_UNIT_TYPE,checkedFireUnitPose} from '../../fire-unit-record.mjs';
 import {checkedAssembly,assemblySelection} from '../../scene-assembly.mjs';
 import {createSceneAOState} from '../../scene-ao-state.mjs';
 import {createSceneRecordOperations} from '../../scene-record-operations.mjs';
@@ -44,6 +45,7 @@ export function sceneContext(context, options) {
   Object.assign(context,{sharedSceneObjectTransformState, sharedApplySceneObjectTransformState, sharedGetMaterialStateForObject, sharedApplyMaterialStateToObject});
   context.registerAuthoredSceneObject??=registerAuthoredSceneObject;
   context.restoreAuthoredSceneRecord??=restoreAuthoredSceneRecord;
+  context.FIRE_UNIT_TYPE??=FIRE_UNIT_TYPE;context.checkedFireUnitPose??=checkedFireUnitPose;context.authoredFireUnits??=new Map();
   context.sceneMaterials??=createSceneMaterials({entries:()=>context.workingScene?.objects??[],definitions:sceneMaterialPrograms});
   context.restoreSceneReflectionSettings??=()=>{};
   context.ashMembershipEntry??=ashMembershipEntry;

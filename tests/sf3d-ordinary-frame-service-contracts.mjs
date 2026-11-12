@@ -11,7 +11,7 @@ const make = new Function('state','device','requestAnimationFrame','cancelAnimat
 let deviceRetired = false;
 let foregroundRequester = null, foregroundPending = null, foregroundSequence = 0, raf = 0;
 let sceneLightingRebuildPending = false, stillPresentationHeld = false, foregroundDrain = Promise.resolve();
-let selectiveHeadLiveCapturePaused = false;
+let capturePaused = false;
 const productFrameOwner = 'prototype';
 const frameScheduleOwner = 'runtime';
 const boundarySplatRequested = () => false, browserResidualCanApply = () => false;
@@ -54,7 +54,7 @@ assert.equal(state.active, false);
 assert.match(state.error, /renderer failed/);
 assert.equal(scheduled.length, heldSchedules+1, 'failed frame cannot silently reschedule');
 const body = core.slice(core.indexOf('  function renderOrdinaryFrame('), core.indexOf('  function pumpLookLabFrozenFrame('));
-assert.match(body, /submitVolumeCommands\(\[finishVolumeEncoder\(encoder\)\], commands=>foregroundService\.submit\(commands/);
+assert.match(body, /foregroundService\?submitVolumeCommands\(commands, list=>foregroundService\.submit\(list/);
 assert.doesNotMatch(body, /device\.queue\.submit\(/,'ordinary frames must retain foreground-service ownership through the thermal bridge');
 assert.match(body, /encodeFireIrradianceLightField\(encoder\)/);
 assert.match(body, /updateUniforms\(now\)/);

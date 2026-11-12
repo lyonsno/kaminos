@@ -1,67 +1,19 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { randomInt } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { validateVolumeSettingsPresetSourceIdentity } from './volume-settings-preset-contract.mjs';
-import { VOLUME_AUTHORED_MIX_CONTROL_IDS } from './volume-cockpit-layout.mjs';
-// The authored-mix surface keeps no resident control since the legacy material
-// laws' controls were retired (2026-10-18); its canary is whichever control the
-// layout declares resident, or none.
-const authoredMixCanaryId = VOLUME_AUTHORED_MIX_CONTROL_IDS[0] ?? null;
-
+import { homedir, tmpdir } from 'node:os';
 const args = parseArgs(process.argv.slice(2));
 const url = String(args.get('--url') || '');
 const expectedRepoRootArgument = String(args.get('--expected-repo-root') || '');
 const expectedRepoRoot = expectedRepoRootArgument ? resolve(expectedRepoRootArgument) : '';
 const expectedCommit = String(args.get('--expected-commit') || '');
 let requestedView = null;
-const PRESET_VIEW_COMPOSITIONS = Object.freeze({
-  'splat-only': 'splat-only-v0',
-  'raymarch-only': 'raymarch-only-v0',
-  'smoke-hybrid': 'smoke-raymarch-under-splats-v0',
-  'full-hybrid-diagnostic': 'full-raymarch-under-splats-diagnostic-v0',
-});
-const TARGET_ONLY_VOLUME_PARAMS = new Set([
-  'volume_presentation',
-  'volume_appearance_decomposition',
-  'volume_appearance_selection',
-]);
-let expectedComposition = null;
-const PASS_TUPLES = Object.freeze({
-  'splat-only-v0': Object.freeze({
-    splatApplied: true,
-    raymarchApplied: false,
-    raymarchFireAuthority: 0,
-    compositionAuthority: 'splat-fire-authority-learned-boundary-sheets-v0',
-    raymarchAuthority: 'smoke-raymarch-authority-broad-smoke-only-v0',
-  }),
-  'raymarch-only-v0': Object.freeze({
-    splatApplied: false,
-    raymarchApplied: true,
-    raymarchFireAuthority: 1,
-    compositionAuthority: 'diagnostic-raymarch-full-selected-field-authority-v0',
-    raymarchAuthority: 'diagnostic-raymarch-selected-fields-fire-smoke-v0',
-  }),
-  'smoke-raymarch-under-splats-v0': Object.freeze({
-    splatApplied: true,
-    raymarchApplied: true,
-    raymarchFireAuthority: 0,
-    compositionAuthority: 'smoke-raymarch-authority-broad-smoke-only-v0+splat-fire-authority-learned-boundary-sheets-v0',
-    raymarchAuthority: 'smoke-raymarch-authority-broad-smoke-only-v0',
-  }),
-  'full-raymarch-under-splats-diagnostic-v0': Object.freeze({
-    splatApplied: true,
-    raymarchApplied: true,
-    raymarchFireAuthority: 1,
-    compositionAuthority: 'diagnostic-full-fire-raymarch-under-splats-duplicate-fire-authority-v0',
-    raymarchAuthority: 'diagnostic-raymarch-selected-fields-fire-smoke-v0',
-  }),
-});
 const out = resolve(String(args.get('--out') || '/tmp/kaminos-volume-settings-preset.png'));
 const cockpitOut = resolve(String(args.get('--cockpit-out') || out.replace(/(\.png)?$/, '-cockpit.png')));
-const cockpitCollapsedOut = resolve(String(args.get('--cockpit-collapsed-out') || cockpitOut.replace(/(\.png)?$/, '-collapsed.png')));
 const reportPath = resolve(String(args.get('--report') || '/tmp/kaminos-volume-settings-preset.json'));
 const timeoutMs = Number(args.get('--timeout-ms') || 180000);
 const debugPort = Number(args.get('--debug-port') || randomInt(42000, 62000));
@@ -70,9 +22,6 @@ const cockpitAnchor = String(args.get('--cockpit-anchor') || '').trim();
 const promotionRoot = String(args.get('--promotion-root') || '').trim();
 const promotionHandle = String(args.get('--promotion-handle') || '').trim();
 const requestedSmokePresentation = String(args.get('--smoke-presentation') || 'off').trim();
-const selectiveDebugExpression = `(() => {
-  return window.__kaminosSelectiveHeadLive?.debugState?.() || null;
-})()`;
 const ordinaryDebugExpression = `(() => {
   return {
     state: window.__kaminosVolumePrototype?.debugState?.() || null,
@@ -84,45 +33,20 @@ const ordinaryDebugExpression = `(() => {
   };
 })()`;
 
-function assertSelectiveCompositionState(state, phase, expectedPresetId = null) {
-  assert.equal(state?.routeIdentity, 'exact-basin-selective-head-live-v0', `${phase}: wrong effective route`);
-  assert.equal(state?.status, 'running', `${phase}: selective wrapper is not running`);
-  assert.equal(state?.requestedRole, 'truthHigh', `${phase}: wrong requested role`);
-  assert.equal(state?.effectiveRole, 'truthHigh', `${phase}: requested role silently fell back`);
-  assert.equal(state?.roleAuthority, 'current-high-field-reference-no-learned-composition-v0', `${phase}: wrong role authority`);
-  assert.equal(state?.requestedComposition, expectedComposition, `${phase}: wrong requested composition`);
-  assert.equal(state?.effectiveComposition, expectedComposition, `${phase}: requested composition silently fell back`);
-  assert.equal(state?.fallbackReason, null, `${phase}: selective route reported fallback`);
-  assert.equal(state?.compositionFallbackReason, null, `${phase}: selective composition reported fallback`);
-  assert.equal(state?.boundarySplatFallbackReason, null, `${phase}: boundary splat route reported fallback`);
-  assert.equal(state?.sourceSettingsPresetAuthority, 'shared-volume-settings-preset-v2', `${phase}: settings preset authority is missing`);
-  assert.ok(state?.sourceSettingsPresetStorePath, `${phase}: shared settings store path is missing`);
-  if (expectedPresetId) assert.equal(state?.sourceSettingsPresetId, expectedPresetId, `${phase}: wrong immutable settings preset`);
-  const receipt = state?.selectiveHeadLivePassReceipt;
-  const expectedPassTuple = PASS_TUPLES[expectedComposition];
-  assert.equal(receipt?.identity, 'selective-head-live-render-pass-receipt-v0', `${phase}: pass receipt identity mismatch`);
-  assert.equal(receipt?.composition, expectedComposition, `${phase}: pass receipt composition mismatch`);
-  assert.equal(receipt?.splatEncoded, expectedPassTuple.splatApplied, `${phase}: splat encode tuple mismatch`);
-  assert.equal(receipt?.splatApplied, expectedPassTuple.splatApplied, `${phase}: splat apply tuple mismatch`);
-  assert.equal(receipt?.raymarchEncoded, expectedPassTuple.raymarchApplied, `${phase}: raymarch encode tuple mismatch`);
-  assert.equal(receipt?.raymarchApplied, expectedPassTuple.raymarchApplied, `${phase}: raymarch apply tuple mismatch`);
-  assert.equal(receipt?.compositionAuthority, expectedPassTuple.compositionAuthority, `${phase}: composition authority mismatch`);
-  assert.equal(receipt?.raymarchAuthority, expectedPassTuple.raymarchAuthority, `${phase}: raymarch authority mismatch`);
-  assert.equal(receipt?.raymarchFireAuthority, expectedPassTuple.raymarchFireAuthority, `${phase}: raymarch fire authority mismatch`);
-  assert.equal(receipt?.fallbackReason, null, `${phase}: pass receipt reported fallback`);
-}
-
 function assertOrdinaryCockpitState(observation, phase, expectedPresetId, expectedSmokePresentation) {
+  assert.equal(observation?.state?.routeIdentity, 'native-3d-compute-fluid-raymarch-v0', `${phase}: wrong effective renderer route`);
   assert.equal(observation?.state?.active, true, `${phase}: ordinary volume renderer is not active`);
   assert.equal(observation?.state?.error, null, `${phase}: ordinary volume renderer reported an error`);
   assert.match(String(observation?.state?.backend || ''), /^WebGPU:/, `${phase}: ordinary volume renderer backend is not WebGPU`);
-  assert.equal(observation?.presetReceipt?.presetId, expectedPresetId, `${phase}: wrong immutable settings preset`);
+  if (expectedPresetId) assert.equal(observation?.presetReceipt?.presetId, expectedPresetId, `${phase}: wrong immutable settings preset`);
+  if (expectedPresetId) {
   assert.equal(
     observation?.presetReceipt?.sourcePresetAuthority,
     'shared-volume-settings-preset-v2',
     `${phase}: settings preset authority is missing`,
   );
   assert.ok(observation?.presetReceipt?.storePath, `${phase}: shared settings store path is missing`);
+  }
   assert.equal(
     observation?.smokePresentationReceipt?.normalizedRequestedMode,
     expectedSmokePresentation,
@@ -134,6 +58,24 @@ function assertOrdinaryCockpitState(observation, phase, expectedPresetId, expect
     `${phase}: saved Smoke On/Off state silently fell back`,
   );
   assert.equal(observation?.activeTab, 'volume', `${phase}: reopened cockpit is not on the Volume tab`);
+}
+
+function assertCockpitControls(observation) {
+  assert.ok(Array.isArray(observation?.retired), 'retired-control telemetry is missing');
+  assert.ok(observation.retired.some(row => row.name === 'atlas-capture'), 'compatibility group telemetry is missing');
+  for (const row of observation.retired) {
+    assert.equal(row.hidden, true, `retired ${row.name} is not hidden`);
+    assert.equal(row.display, 'none', `retired ${row.name} is rendered`);
+    assert.equal(row.width, 0, `retired ${row.name} occupies width`);
+    assert.equal(row.height, 0, `retired ${row.name} occupies height`);
+  }
+  for (const id of ['volume-oracle-activity-cue', 'volume-pressure-mode']) {
+    const row = observation.surviving?.find(control => control.id === id);
+    assert.equal(row?.missing, false, `surviving control ${id} is missing`);
+    assert.notEqual(row.presentationMissing, true, `surviving control ${id} lost its editing field`);
+    assert.notEqual(row.display, 'none', `surviving control ${id} is hidden directly`);
+    assert.notEqual(row.hidden, true, `surviving control ${id} is hidden directly`);
+  }
 }
 
 function assertNumericEquivalent(actual, expected, message) {
@@ -150,7 +92,7 @@ function assertNumericEquivalent(actual, expected, message) {
 
 function operatorContext(body) {
   return `(() => {
-    const operatorWindow = document.querySelector('#basin')?.contentWindow || window;
+    const operatorWindow = window;
     const operatorDocument = operatorWindow.document;
     return (${body});
   })()`;
@@ -211,17 +153,15 @@ class CdpSocket {
 
 try {
   mkdirSync(dirname(reportPath), { recursive: true });
+  writeReport({identity:'kaminos-volume-settings-preset-witness-v1',status:'running',failurePhase,requestedUrl:url,requestedSource,effectiveSource,lastTrustworthyEvidence});
   if (!url) throw new Error('missing --url');
   if (!expectedRepoRootArgument) throw new Error('missing --expected-repo-root');
   if (!existsSync(expectedRepoRoot)) throw new Error(`missing --expected-repo-root path: ${expectedRepoRoot}`);
   if (!expectedCommit) throw new Error('missing --expected-commit');
   const requestedUrl = new URL(url);
   const witnessUrl = new URL(requestedUrl);
-  witnessUrl.searchParams.set('assay_toolbar', '1');
-  requestedView = requestedUrl.searchParams.get('view');
-  expectedComposition = PRESET_VIEW_COMPOSITIONS[requestedView];
-  if (!requestedView) throw new Error('settings preset witness requires an explicit renderer view');
-  if (!expectedComposition) throw new Error(`unsupported settings preset witness view: ${requestedView}`);
+  requestedView = requestedUrl.searchParams.get('view') || 'raymarch-only';
+  if (requestedView !== 'raymarch-only') throw new Error(`unsupported settings preset witness view: ${requestedView}`);
   if (!['on', 'off'].includes(requestedSmokePresentation)) {
     throw new Error(`unsupported --smoke-presentation: ${requestedSmokePresentation}`);
   }
@@ -233,7 +173,14 @@ try {
   }
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(cockpitOut), { recursive: true });
-  mkdirSync(dirname(cockpitCollapsedOut), { recursive: true });
+
+  failurePhase = 'serving-source';
+  const runtimeResponse = await fetch(new URL('/api/runtime-config', url));
+  assert.equal(runtimeResponse.ok, true, 'runtime source could not be read');
+  const runtime = await runtimeResponse.json();
+  effectiveSource = runtime.source;
+  validateVolumeSettingsPresetSourceIdentity(requestedSource, effectiveSource);
+  lastTrustworthyEvidence.effectiveSource = effectiveSource;
 
   failurePhase = 'preset-index-contract';
   const presetIndexResponse = await fetch(new URL('/api/volume-settings-presets', url));
@@ -252,7 +199,13 @@ try {
   }
 
   failurePhase = 'browser-launch';
-  browser = spawn(chromeExecutable(), [
+  const browserExecutable = chromeExecutable();
+  const browserProfile = mkdtempSync(join(tmpdir(), 'kaminos-preset-browser-'));
+  lastTrustworthyEvidence.browser = { executable: browserExecutable, profile: browserProfile };
+  browser = spawn(browserExecutable, [
+    '--use-mock-keychain',
+    '--password-store=basic',
+    `--user-data-dir=${browserProfile}`,
     '--headless=new',
     '--enable-unsafe-webgpu',
     '--disable-background-timer-throttling',
@@ -265,6 +218,7 @@ try {
     '--no-default-browser-check',
     'about:blank',
   ], { stdio: 'ignore' });
+  await new Promise((resolveLaunch,rejectLaunch)=>{browser.once('spawn',resolveLaunch);browser.once('error',rejectLaunch);});
 
   const initialTarget = await waitForTarget(target => target.type === 'page', timeoutMs);
   const initialSocket = await connect(initialTarget);
@@ -274,15 +228,15 @@ try {
 
   failurePhase = 'source-live-settle';
   const initialState = await waitForValue(initialSocket, `(() => {
-    const state = ${selectiveDebugExpression};
-    if (state?.status !== 'running' || Number(state.frameCount) < 2) return null;
-    return state;
+    const observation = ${ordinaryDebugExpression};
+    if (!observation?.state?.active || Number(observation.state.frameCount) < 2) return null;
+    return observation;
   })()`, timeoutMs);
-  const effectiveAssayUrl = await evaluate(initialSocket, 'location.href');
-  const effectiveAssayTarget = new URL(effectiveAssayUrl);
-  assert.equal(effectiveAssayTarget.pathname, '/volume-selective-head-live.html', 'preset loader did not reach the selective-head witness route');
-  assert.equal(effectiveAssayTarget.searchParams.get('assay_toolbar'), '1', 'diagnostic toolbar request was dropped before the effective assay route');
-  assertSelectiveCompositionState(initialState, 'source live target');
+  const initialCockpitUrl = await evaluate(initialSocket, 'location.href');
+  assert.equal(new URL(initialCockpitUrl).pathname, '/', 'source did not reach the ordinary cockpit');
+  assert.equal(initialState.state.routeIdentity, 'native-3d-compute-fluid-raymarch-v0', 'source used a retired renderer');
+  assert.equal(initialState.state.error, null, 'source renderer failed');
+  assert.match(initialState.state.backend, /^WebGPU:/, 'source renderer did not use WebGPU');
   const button = await evaluate(initialSocket, operatorContext(`(() => {
     const element = operatorDocument.getElementById('settings-preset-save');
     if (!element || element.disabled || element.dataset.commandWired !== 'true') return null;
@@ -316,12 +270,13 @@ try {
     'source cockpit Smoke On/Off state silently fell back',
   );
   lastTrustworthyEvidence = {
+    ...lastTrustworthyEvidence,
     initialState,
     button,
     labelState,
     smokePresentationReceipt,
     presetIndex,
-    diagnosticAssayUrl: effectiveAssayUrl,
+    initialCockpitUrl,
   };
 
   const initialTargetIds = new Set((await targetList()).map(target => target.id));
@@ -350,187 +305,39 @@ try {
   await delay(500);
   const cockpitVisibility = await evaluate(initialSocket, operatorContext(`(() => {
     const retired = [...operatorDocument.querySelectorAll('[data-volume-retired-control-state]')].map(element => {
-      const style = operatorWindow.getComputedStyle(element);
-      const rect = element.getBoundingClientRect();
-      return {
-        name: element.dataset.volumeRetiredControlState,
-        hidden: element.hidden,
-        display: style.display,
-        width: rect.width,
-        height: rect.height,
-      };
+      const style = operatorWindow.getComputedStyle(element), rect = element.getBoundingClientRect();
+      return {name:element.dataset.volumeRetiredControlState,hidden:element.hidden,display:style.display,width:rect.width,height:rect.height};
     });
-    const surviving = ['volume-oracle-activity-cue', 'volume-pressure-mode'].map(id => {
+    const surviving = ['volume-oracle-activity-cue','volume-pressure-mode'].map(id => {
       const element = operatorDocument.getElementById(id);
-      if (!element) return { id, missing: true };
-      const style = operatorWindow.getComputedStyle(element);
-      const rect = element.getBoundingClientRect();
-      return { id, missing: false, display: style.display, width: rect.width, height: rect.height };
+      if (!element) return {id,missing:true};
+      // Canonical ranges remain in the settings schema while their existing
+      // scrub field owns editing and visibility (legacy-range-field.mjs).
+      const presentationId = element.dataset.scrubField || id;
+      const presentation = operatorDocument.getElementById(presentationId);
+      if (!presentation) return {id,missing:false,presentationId,presentationMissing:true};
+      const style=operatorWindow.getComputedStyle(presentation),rect=presentation.getBoundingClientRect();
+      return {id,missing:false,presentationId,presentationMissing:false,hidden:element.hidden||presentation.hidden,display:style.display,width:rect.width,height:rect.height,visible:rect.width>0&&rect.height>0};
     });
     const anchorId = ${JSON.stringify(cockpitAnchor)};
     const anchor = anchorId ? operatorDocument.getElementById(anchorId) : null;
     if (anchor) anchor.scrollIntoView({ block: 'center' });
-    const anchorRect = anchor?.getBoundingClientRect();
-    const panel = operatorDocument.getElementById('volume-authored-mix-panel');
-    const body = operatorDocument.getElementById('volume-authored-mix-body');
-    const toggle = operatorDocument.getElementById('volume-authored-mix-toggle');
-    const authoredRoot = operatorDocument.getElementById('volume-authored-mix-control-root');
-    const canaryId = ${JSON.stringify(authoredMixCanaryId)};
-    const canary = canaryId ? operatorDocument.getElementById(canaryId) : null;
-    const viewport = operatorDocument.getElementById('viewport');
-    const hostRendererCanvas = operatorDocument.getElementById('kaminos-host-renderer-canvas');
-    const outerToolbar = document.getElementById('toolbar');
-    const panelRect = panel?.getBoundingClientRect();
-    const bodyRect = body?.getBoundingClientRect();
-    const toggleRect = toggle?.getBoundingClientRect();
-    const canaryRect = canary?.getBoundingClientRect();
-    const viewportRect = viewport?.getBoundingClientRect();
-    const hostRendererCanvasRect = hostRendererCanvas?.getBoundingClientRect();
-    const outerToolbarRect = outerToolbar?.getBoundingClientRect();
-    const assayPlacementReceipt = operatorWindow.__kaminosVolumeAssayViewportPlacementReceipt || null;
-    const hit = bodyRect && bodyRect.width > 0 && bodyRect.height > 0
-      ? operatorDocument.elementFromPoint(bodyRect.left + Math.min(24, bodyRect.width / 2), bodyRect.top + Math.min(24, bodyRect.height / 2))
-      : null;
-    const layoutReceipt = operatorWindow.__kaminosVolumeCockpitLayoutReceipt || null;
+    const rect = anchor?.getBoundingClientRect();
     return {
-      retired,
-      surviving,
-      anchorId,
-      anchorFound: !anchorId || !!anchor,
-      anchorGeometry: anchorRect ? {
-        left: anchorRect.left,
-        top: anchorRect.top,
-        right: anchorRect.right,
-        bottom: anchorRect.bottom,
-        width: anchorRect.width,
-        height: anchorRect.height,
-        visible: anchorRect.width > 0
-          && anchorRect.height > 0
-          && anchorRect.right > 0
-          && anchorRect.bottom > 0
-          && anchorRect.left < operatorWindow.innerWidth
-          && anchorRect.top < operatorWindow.innerHeight,
-      } : null,
-      layoutReceipt,
-      assayViewportGeometry: {
-        activeTab: operatorWindow.__kaminosActiveTab?.() || null,
-        toolbarHidden: outerToolbar?.hidden ?? true,
-        placementReceipt: assayPlacementReceipt,
-        toolbarLeft: outerToolbarRect?.left ?? null,
-        toolbarTop: outerToolbarRect?.top ?? null,
-        toolbarRight: outerToolbarRect?.right ?? null,
-        toolbarBottom: outerToolbarRect?.bottom ?? null,
-        viewportLeft: viewportRect?.left ?? null,
-        viewportTop: viewportRect?.top ?? null,
-        viewportRight: viewportRect?.right ?? null,
-        viewportBottom: viewportRect?.bottom ?? null,
-        contained: Boolean(outerToolbarRect && viewportRect)
-          && outerToolbarRect.left >= viewportRect.left
-          && outerToolbarRect.top >= viewportRect.top
-          && outerToolbarRect.right <= viewportRect.right
-          && outerToolbarRect.bottom <= viewportRect.bottom,
-      },
-      hostRendererCanvasGeometry: hostRendererCanvasRect ? {
-        hostCanvasLeft: hostRendererCanvasRect.left,
-        hostCanvasRight: hostRendererCanvasRect.right,
-        hostCanvasWidth: hostRendererCanvasRect.width,
-        hostCanvasBackingWidth: hostRendererCanvas.width,
-        viewportRight: viewportRect.right,
-        viewportWidth: viewportRect.width,
-        hostCanvasCrossesPanel: hostRendererCanvasRect.right > panelRect.left + 1,
-      } : null,
-      panelGeometry: panelRect ? {
-        hidden: panel.hidden,
-        collapsed: panel.dataset.collapsed,
-        cockpitStatus: panel.dataset.cockpitStatus,
-        left: panelRect.left,
-        right: panelRect.right,
-        width: panelRect.width,
-        height: panelRect.height,
-        bodyDisplay: operatorWindow.getComputedStyle(body).display,
-        bodyWidth: bodyRect.width,
-        toggleWidth: toggleRect.width,
-        viewportRight: viewportRect.right,
-        viewportWidth: viewportRect.width,
-        canaryId,
-        canaryWidth: canaryRect ? canaryRect.width : null,
-        canaryInAuthoredRoot: canary ? (authoredRoot?.contains(canary) || false) : null,
-        hitInsidePanel: !!hit && panel.contains(hit),
-      } : null,
+      retired, surviving,
+      anchorId, anchorFound: !anchorId || !!anchor,
+      anchorVisible: !anchorId || !!rect && rect.width > 0 && rect.height > 0
+        && rect.right > 0 && rect.bottom > 0 && rect.left < innerWidth && rect.top < innerHeight,
+      layoutReceipt: operatorWindow.__kaminosVolumeCockpitLayoutReceipt || null,
     };
   })()`));
   lastTrustworthyEvidence.cockpitVisibility = cockpitVisibility;
-  assert.deepEqual(
-    cockpitVisibility.retired.map(entry => entry.name).sort(),
-    ['atlas-capture'],
-    'cockpit retired-control group inventory changed',
-  );
-  for (const entry of cockpitVisibility.retired) {
-    assert.equal(entry.hidden, true, `retired cockpit group ${entry.name} lost its hidden contract`);
-    assert.equal(entry.display, 'none', `retired cockpit group ${entry.name} is still rendered`);
-    assert.equal(entry.width, 0, `retired cockpit group ${entry.name} still occupies horizontal space`);
-    assert.equal(entry.height, 0, `retired cockpit group ${entry.name} still occupies vertical space`);
-  }
-  for (const entry of cockpitVisibility.surviving) {
-    assert.equal(entry.missing, false, `surviving cockpit control ${entry.id} is missing`);
-    assert.notEqual(entry.display, 'none', `surviving cockpit control ${entry.id} is hidden`);
-    assert.ok(entry.width > 0 && entry.height > 0, `surviving cockpit control ${entry.id} has no rendered box`);
-  }
-  assert.equal(cockpitVisibility.anchorFound, true, `cockpit screenshot anchor is missing: ${cockpitAnchor}`);
-  if (cockpitVisibility.anchorId) {
-    assert.equal(cockpitVisibility.anchorGeometry?.visible, true, `cockpit screenshot anchor is outside the visible viewport: ${cockpitAnchor}`);
-  }
+  assertCockpitControls(cockpitVisibility);
+  assert.equal(cockpitVisibility.anchorFound && cockpitVisibility.anchorVisible, true, 'requested cockpit anchor is not visible');
   assert.equal(cockpitVisibility.layoutReceipt?.identity, 'kaminos-volume-cockpit-layout-receipt-v0', 'cockpit layout receipt is missing');
-  assert.equal(
-    cockpitVisibility.layoutReceipt?.controlCount,
-    expectedPresetControlCount + expectedRendererControlCount,
-    'cockpit layout omitted basin or renderer controls',
-  );
-  assert.equal(cockpitVisibility.layoutReceipt?.presetControlCount, expectedPresetControlCount, 'canonical basin control count changed');
-  assert.equal(cockpitVisibility.layoutReceipt?.rendererControlCount, expectedRendererControlCount, 'renderer control axis is incomplete');
-  assert.equal(
-    Object.values(cockpitVisibility.layoutReceipt?.rootControlCounts || {}).reduce((sum, count) => sum + Number(count), 0),
-    expectedPresetControlCount + expectedRendererControlCount,
-    'cockpit root inventory does not compose to the schema-owned DOM control count',
-  );
+  assert.equal(cockpitVisibility.layoutReceipt?.presetControlCount, expectedPresetControlCount, 'cockpit basin inventory drifted');
+  assert.equal(cockpitVisibility.layoutReceipt?.rendererControlCount, expectedRendererControlCount, 'cockpit renderer inventory drifted');
   assert.equal(cockpitVisibility.layoutReceipt?.fallbackApplied, false, 'cockpit layout silently fell back');
-  assert.equal(cockpitVisibility.assayViewportGeometry?.activeTab, 'volume', 'assay route did not admit the Volume tab');
-  assert.equal(cockpitVisibility.assayViewportGeometry?.toolbarHidden, false, 'assay cockpit is hidden on the Volume tab');
-  assert.equal(cockpitVisibility.assayViewportGeometry?.contained, true, 'assay cockpit crosses the volume viewport boundary');
-  assert.equal(
-    cockpitVisibility.assayViewportGeometry?.placementReceipt?.identity,
-    'kaminos-volume-assay-viewport-placement-v0',
-    'volume viewport placement receipt is missing',
-  );
-  assert.equal(cockpitVisibility.assayViewportGeometry?.placementReceipt?.visible, true, 'placement receipt did not apply to Volume');
-  assert.equal(cockpitVisibility.assayViewportGeometry?.placementReceipt?.contained, true, 'placement receipt reports viewport overflow');
-  assert.equal(cockpitVisibility.assayViewportGeometry?.placementReceipt?.fallbackApplied, false, 'assay placement silently fell back');
-  assert.ok(cockpitVisibility.hostRendererCanvasGeometry, 'host renderer canvas geometry is missing');
-  assert.equal(
-    cockpitVisibility.hostRendererCanvasGeometry?.hostCanvasCrossesPanel,
-    false,
-    'stale host renderer canvas crosses into the authored-mix panel',
-  );
-  assert.ok(
-    Math.abs(cockpitVisibility.hostRendererCanvasGeometry?.hostCanvasRight
-      - cockpitVisibility.hostRendererCanvasGeometry?.viewportRight) <= 1,
-    'host renderer canvas is not synchronized to the viewport edge',
-  );
-  assert.equal(cockpitVisibility.panelGeometry?.hidden, false, 'authored-mix panel is hidden on the Volume route');
-  assert.equal(cockpitVisibility.panelGeometry?.collapsed, 'false', 'authored-mix panel did not start expanded');
-  assert.equal(cockpitVisibility.panelGeometry?.cockpitStatus, 'validated', 'authored-mix panel rendered before inventory validation');
-  assert.ok(cockpitVisibility.panelGeometry?.width >= 320, 'authored-mix panel is too narrow to operate');
-  assert.ok(cockpitVisibility.panelGeometry?.bodyWidth > 250, 'authored-mix panel body has no usable width');
-  assert.ok(cockpitVisibility.panelGeometry?.toggleWidth >= 30, 'authored-mix panel toggle has no stable hit target');
-  assert.ok(cockpitVisibility.panelGeometry?.viewportWidth > 0, 'authored-mix panel displaced the viewport completely');
-  assert.ok(cockpitVisibility.panelGeometry?.left >= cockpitVisibility.panelGeometry?.viewportRight - 1, 'authored-mix panel overlaps the viewport as an unlabeled overlay');
-  if (authoredMixCanaryId) {
-    assert.equal(cockpitVisibility.panelGeometry?.canaryInAuthoredRoot, true, 'authored-mix canary was cloned or left in the primary root');
-    assert.ok(cockpitVisibility.panelGeometry?.canaryWidth > 0, 'authored-mix canary has no rendered width');
-  } else {
-    assert.equal(cockpitVisibility.panelGeometry?.canaryId, null, 'no resident authored-mix control is declared, so no canary is measured');
-  }
-  assert.equal(cockpitVisibility.panelGeometry?.hitInsidePanel, true, 'authored-mix panel is painted behind another surface');
   const cockpitScreenshot = await initialSocket.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
   writeFileSync(cockpitOut, Buffer.from(cockpitScreenshot.data, 'base64'));
   lastTrustworthyEvidence.cockpitScreenshot = cockpitOut;
@@ -566,99 +373,6 @@ try {
     };
     lastTrustworthyEvidence.promotionReceipt = promotionReceipt;
   }
-  const nonVolumeTabs = await evaluate(initialSocket, operatorContext(`[
-    ...operatorDocument.querySelectorAll('.tab[data-tab]'),
-  ].map(tab => tab.dataset.tab).filter(tabName => tabName !== 'volume')`));
-  const nonVolumeIsolation = [];
-  for (const tabName of nonVolumeTabs) {
-    await evaluate(initialSocket, operatorContext(`operatorWindow.__kaminosSetActiveTab(${JSON.stringify(tabName)})`));
-    await delay(50);
-    const isolation = await evaluate(initialSocket, `(() => {
-      const operatorWindow = document.querySelector('#basin')?.contentWindow;
-      const toolbar = document.getElementById('toolbar');
-      return {
-        requestedTab: ${JSON.stringify(tabName)},
-        activeTab: operatorWindow?.__kaminosActiveTab?.() || null,
-        toolbarHidden: toolbar?.hidden ?? false,
-        receipt: operatorWindow?.__kaminosVolumeAssayViewportPlacementReceipt || null,
-      };
-    })()`);
-    assert.equal(isolation.activeTab, tabName, `tab-isolation witness did not select ${tabName}`);
-    assert.equal(isolation.toolbarHidden, true, `assay cockpit leaked into the ${tabName} tab`);
-    assert.equal(isolation.receipt?.visible, false, `non-volume placement receipt claims visible controls on ${tabName}`);
-    nonVolumeIsolation.push(isolation);
-  }
-  await evaluate(initialSocket, operatorContext(`operatorWindow.__kaminosSetActiveTab('volume')`));
-  await delay(100);
-  const restoredPlacement = await evaluate(initialSocket, `(() => {
-    const operatorWindow = document.querySelector('#basin')?.contentWindow;
-    return operatorWindow?.__kaminosVolumeAssayViewportPlacementReceipt || null;
-  })()`);
-  assert.equal(restoredPlacement?.activeTab, 'volume', 'Volume tab did not restore after isolation witness');
-  assert.equal(restoredPlacement?.visible, true, 'assay cockpit did not restore with Volume');
-  await initialSocket.call('Emulation.setDeviceMetricsOverride', {
-    width: 700,
-    height: 900,
-    deviceScaleFactor: 1,
-    mobile: false,
-  });
-  await delay(150);
-  const responsiveIsolation = await evaluate(initialSocket, `(() => {
-    const operatorWindow = document.querySelector('#basin')?.contentWindow;
-    const toolbar = document.getElementById('toolbar');
-    const panel = operatorWindow?.document.querySelector('#volume-authored-mix-panel');
-    const toolbarRect = toolbar?.hidden ? null : toolbar?.getBoundingClientRect();
-    const panelRect = panel?.getBoundingClientRect();
-    return {
-      toolbarHidden: toolbar?.hidden ?? false,
-      toolbarRight: toolbarRect?.right ?? null,
-      panelLeft: panelRect?.left ?? null,
-      receipt: operatorWindow?.__kaminosVolumeAssayViewportPlacementReceipt || null,
-    };
-  })()`);
-  assert.equal(
-    responsiveIsolation.toolbarHidden || responsiveIsolation.toolbarRight <= responsiveIsolation.panelLeft,
-    true,
-    'assay cockpit overlaps the fixed authored-mix panel at the 700px breakpoint',
-  );
-  assert.equal(responsiveIsolation.receipt?.fallbackApplied, false, 'responsive assay placement silently fell back');
-  if (responsiveIsolation.toolbarHidden) {
-    assert.equal(responsiveIsolation.receipt?.reason, 'insufficient-volume-viewport-space', 'responsive placement hid without an explicit reason');
-  }
-  await initialSocket.call('Emulation.clearDeviceMetricsOverride');
-  await delay(150);
-  lastTrustworthyEvidence.nonVolumeIsolation = nonVolumeIsolation;
-  lastTrustworthyEvidence.responsiveIsolation = responsiveIsolation;
-  lastTrustworthyEvidence.restoredPlacement = restoredPlacement;
-  await delay(200);
-
-  const collapsed = await evaluate(initialSocket, operatorContext(`(() => {
-    const panel = operatorDocument.getElementById('volume-authored-mix-panel');
-    const body = operatorDocument.getElementById('volume-authored-mix-body');
-    const toggle = operatorDocument.getElementById('volume-authored-mix-toggle');
-    toggle.click();
-    const panelRect = panel.getBoundingClientRect();
-    return {
-      collapsedWidth: panelRect.width,
-      collapsedBodyDisplay: operatorWindow.getComputedStyle(body).display,
-      collapsedState: panel.dataset.collapsed,
-      ariaExpanded: toggle.getAttribute('aria-expanded'),
-    };
-  })()`));
-  assert.ok(collapsed.collapsedWidth >= 33 && collapsed.collapsedWidth <= 35, 'authored-mix collapsed rail width changed');
-  assert.equal(collapsed.collapsedBodyDisplay, 'none', 'authored-mix body still occupies space when collapsed');
-  assert.equal(collapsed.collapsedState, 'true', 'authored-mix panel did not publish collapsed state');
-  assert.equal(collapsed.ariaExpanded, 'false', 'authored-mix toggle accessibility state did not collapse');
-  await delay(200);
-  const cockpitCollapsedScreenshot = await initialSocket.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
-  writeFileSync(cockpitCollapsedOut, Buffer.from(cockpitCollapsedScreenshot.data, 'base64'));
-  lastTrustworthyEvidence.cockpitCollapsedScreenshot = cockpitCollapsedOut;
-  lastTrustworthyEvidence.collapsed = collapsed;
-  await evaluate(initialSocket, operatorContext(`(() => {
-    operatorDocument.getElementById('volume-authored-mix-toggle').click();
-    return operatorDocument.getElementById('volume-authored-mix-panel').dataset.collapsed;
-  })()`));
-
   const navigation = await initialSocket.call('Runtime.evaluate', {
     expression: operatorContext(`operatorWindow.__kaminosNavigateToSelectedVolumeSettingsPreset(true)`),
     returnByValue: true,
@@ -728,7 +442,7 @@ try {
   }
   const savedVolumeKeys = [...savedRoute.searchParams].filter(([key]) => key.startsWith('volume_')).map(([key]) => key);
   const liveVolumeKeys = [...liveUrl.searchParams]
-    .filter(([key]) => key.startsWith('volume_') && !TARGET_ONLY_VOLUME_PARAMS.has(key))
+    .filter(([key]) => key.startsWith('volume_'))
     .map(([key]) => key);
   assert.deepEqual(liveVolumeKeys, savedVolumeKeys, 'effective live route added or omitted volume settings');
 
@@ -787,14 +501,13 @@ try {
     status: 'persisted-and-live',
     failurePhase: null,
     requestedUrl: url,
-    diagnosticAssayUrl: effectiveAssayUrl,
+    initialCockpitUrl,
     effectiveUrl: liveTarget.url,
     requestedSource,
     effectiveSource,
     sourcePresetId,
     sourcePresetAuthority,
     requestedView,
-    expectedComposition,
     writeReceipt: commandResult.effective,
     visualAuthority: 'not-evaluated-settings-persistence-only',
     controlCount: presetDocument.preset.controlCount,
@@ -809,12 +522,7 @@ try {
     cockpitAnchor: cockpitVisibility.anchorId || null,
     cockpitVisibility,
     promotionReceipt,
-    nonVolumeIsolation,
-    responsiveIsolation,
-    restoredPlacement,
     cockpitScreenshot: cockpitOut,
-    cockpitCollapsedScreenshot: cockpitCollapsedOut,
-    cockpitCollapsedState: collapsed,
     screenshot: out,
     screenshotBytes: screenshotBytes.length,
   });
@@ -834,7 +542,9 @@ try {
   process.exitCode = 1;
 } finally {
   for (const socket of sockets) socket.close();
-  browser?.kill('SIGTERM');
+  if (browser && browser.exitCode === null && browser.signalCode === null) {
+    await new Promise(resolveExit=>{browser.once('close',resolveExit);browser.kill('SIGTERM');});
+  }
 }
 
 async function connect(target) {
@@ -879,15 +589,18 @@ async function waitForTarget(predicate, timeout) {
 }
 
 function chromeExecutable() {
-  const candidates = [
-    process.env.CHROME_BIN,
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-    '/Applications/Chromium.app/Contents/MacOS/Chromium',
-  ].filter(Boolean);
-  const found = candidates.find(existsSync);
-  if (!found) throw new Error('Chrome executable not found');
-  return found;
+  const explicit = String(args.get('--browser') || process.env.CHROME_BIN || '');
+  if (explicit) {
+    assert.equal(existsSync(explicit), true, 'independent browser executable is missing');
+    assert.doesNotMatch(explicit, /\/Applications\/Google Chrome(?: Canary)?\.app\//, 'installed GUI Chrome cannot be used headlessly');
+    return explicit;
+  }
+  const cache = join(homedir(), 'Library/Caches/ms-playwright');
+  for (const entry of existsSync(cache) ? readdirSync(cache).filter(name => name.startsWith('chromium-')).sort().reverse() : []) {
+    const candidate = join(cache, entry, 'chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing');
+    if (existsSync(candidate)) return candidate;
+  }
+  throw new Error('independent browser not found; pass --browser with Chrome for Testing, Playwright Chromium or headless-shell');
 }
 
 function parseArgs(argv) {

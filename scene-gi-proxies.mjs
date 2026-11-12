@@ -38,6 +38,8 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
   function describe(root){
     const object=root.userData?.kaminosSceneObject,assetSha=shaOf(object?.source),surfels=surfelRootIn(root);
     if(!assetSha)return {state:'not-generated',reason:'not a stored generated mesh'};
+    let surfaceSplats=false;root.traverse(node=>{if(node.isSurfaceSplatObject)surfaceSplats=true;});
+    if(surfaceSplats)return {representation:'surface-splats',assetSha,heroSha:assetSha};
     if(surfels){
       const levels=surfels.surfelOptions?.levels??[1];
       const heroSha=object.generation?.meshSha256??null;

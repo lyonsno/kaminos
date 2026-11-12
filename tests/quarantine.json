@@ -6,30 +6,6 @@
     "date": "2026-10-12"
   },
   "entries": {
-    "tests/boundary-splat-feature-capture-contracts.mjs": {
-      "class": "regression",
-      "owner": "operlocutor",
-      "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-07-18 a8f53c6f Add full-support sparse instance consumer; the owner decides whether the source or the test is wrong; the first-bad commit came from pyro-control-path-parity-auditor-0717, a closed lane, so this needs a domain owner",
-      "signature": "AssertionError [ERR_ASSERTION]: witness readback uses the exact accepted instance count without a hidden row cap",
-      "testLastChanged": "2026-07-12 c9817cd5"
-    },
-    "tests/boundary-splat-renderer-contracts.mjs": {
-      "class": "regression",
-      "owner": "sexy",
-      "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-09-23 dfc13f7a Expand smoke volume upward; the owner decides whether the source or the test is wrong; owner is the lane prefix of the first-bad commit's branch",
-      "signature": "AssertionError [ERR_ASSERTION]: capacity growth is bounded by physical grid cells and otherwise rounds up to avoid repeated reallocations",
-      "testLastChanged": "2026-09-15 bef9d69f"
-    },
-    "tests/boundary-splat-support-covariance-composition-contracts.mjs": {
-      "class": "regression",
-      "owner": "operlocutor",
-      "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-07-18 62ea1154 Adjudicate Stage B optical recurrence; the owner decides whether the source or the test is wrong; the first-bad commit came from pyro-cadence-hellmouth-resurrection-0718, a closed lane, so this needs a domain owner",
-      "signature": "AssertionError [ERR_ASSERTION]: tuned heat, reaction, front, and interface support must remain upstream of baked sidecar structure",
-      "testLastChanged": "2026-07-17 db060b42"
-    },
     "tests/finger-fluid-analytic-carrier-optics-contracts.mjs": {
       "class": "regression",
       "owner": "operlocutor",
@@ -53,22 +29,6 @@
       "reason": "passed at its last change and first fails at 2026-09-27 d748c4f9 Put the scalar rates on the uniform time step and add a height profile to the probe; same failure then as now; the owner decides whether the source or the test is wrong; owner is the lane prefix of the first-bad commit's branch",
       "signature": "AssertionError [ERR_ASSERTION]: persistent wetness suppresses flame only in locally wetted cells",
       "testLastChanged": "2026-09-27 0ae47036"
-    },
-    "tests/residual-boundary-sidecar-aux-contracts.mjs": {
-      "class": "regression",
-      "owner": "sexy",
-      "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-08-31 232944e4 perf: specialize production volume raymarch; same failure then as now; the owner decides whether the source or the test is wrong; owner is the lane prefix of the first-bad commit's branch",
-      "signature": "AssertionError [ERR_ASSERTION]: instrumented runtime must carry the source-owned RGB-upscale replay preset before paired capture",
-      "testLastChanged": "2026-07-11 ebf04eba"
-    },
-    "tests/residual-upscale-contracts.mjs": {
-      "class": "regression",
-      "owner": "operlocutor",
-      "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-07-11 3ab32810 kaminos: align neural fit crop witnesses; same failure then as now; the owner decides whether the source or the test is wrong; the first-bad commit came from pyro-timestamp-offal-accountant-0712, a closed lane, so this needs a domain owner",
-      "signature": "AssertionError [ERR_ASSERTION]: residual trainer must expose explicit full-frame preview mode instead of relying on oversized crop accidents",
-      "testLastChanged": "2026-07-10 1769320f"
     },
     "tests/scene-authoring-integration-contracts.mjs": {
       "class": "regression",
@@ -142,30 +102,6 @@
       "signature": "node:test failing: the residual probe also reduces enstrophy so confinement can be calibrated against a measurement :: AssertionError: enstrophy is reported per cell",
       "testLastChanged": "2026-10-06 0740886f"
     },
-    "tests/volume-frozen-composition-contracts.mjs": {
-      "class": "regression",
-      "owner": "operlocutor",
-      "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-07-18 f0b9a49a renderer: match splat HDR presentation to raymarch; same failure then as now; the owner decides whether the source or the test is wrong; the first-bad commit came from pyro-cadence-hellmouth-resurrection-0718, a closed lane, so this needs a domain owner",
-      "signature": "AssertionError [ERR_ASSERTION]: frozen render composites requested splats over any requested raymarch pass",
-      "testLastChanged": "2026-07-15 304a1c4e"
-    },
-    "tests/volume-periodic-excitation-controls-contracts.mjs": {
-      "class": "regression",
-      "owner": "flame-doctor",
-      "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-09-25 799886ed Add an opt-in confinement mode that retires Curl as the confinement driver; same failure then as now; the owner decides whether the source or the test is wrong; owner corrected by the lane first named: the first-bad commit is this owner's, and nearest-branch attribution had named a lane that only rebased over it",
-      "signature": "AssertionError [ERR_ASSERTION]: field-derived vorticity confinement remains independent",
-      "testLastChanged": "2026-09-05 cd7484a4"
-    },
-    "tests/volume-scalar-advection-periodicity-contracts.mjs": {
-      "class": "regression",
-      "owner": "sexy",
-      "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-09-26 55666ca9 Keep kiln mask out of optical shader sampling; same failure then as now; the owner decides whether the source or the test is wrong; owner is the lane prefix of the first-bad commit's branch",
-      "signature": "AssertionError [ERR_ASSERTION]: thermal material advection must not hide analytic slip behind helper calls: sampleFluidSlotMasked",
-      "testLastChanged": "2026-09-05 cd7484a4"
-    },
     "tests/volume-settings-preset-contracts.mjs": {
       "class": "environment",
       "owner": "operlocutor",
@@ -189,14 +125,6 @@
       "reason": "not run by the suite: a browser-kind test that has not opted in to the KAMINOS_BROWSER route, which is its owner's call; run with KAMINOS_BROWSER it fails on main. On main's first-parent line both failing subtests passed at 2026-09-26 db84a597d. The stepRate subtest first fails at 2026-10-01 1e81dc53a Integrate authored kiln collision with current flame domain and timestep (merge from sexy-kiln-land) and fails at every later commit sampled. The 57b45f72-review subtest last passes at 2026-10-13 712ffb485 and first fails at its child f689a44cc volume: joined boundary producer hook, slice 1 (pressure-level join, opt-in). The owner decides whether the source or the test is wrong",
       "signature": "node:test failing: every per-step decay of a transported channel goes through stepRate :: AssertionError: the transported front topology decays on the same law | review of 57b45f72: relaxation blends and the wall velocity sponge follow the step; scene selectors and floors are the only exceptions :: AssertionError: the vertical velocity floor stays a floor",
       "testLastChanged": "2026-10-13 43046b943"
-    },
-    "tests/volume-transported-detail-force-periodicity-contracts.mjs": {
-      "class": "regression",
-      "owner": "flame-doctor",
-      "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-09-25 799886ed Add an opt-in confinement mode that retires Curl as the confinement driver; same failure then as now; the owner decides whether the source or the test is wrong; owner corrected by the lane first named: the first-bad commit is this owner's, and nearest-branch attribution had named a lane that only rebased over it",
-      "signature": "AssertionError [ERR_ASSERTION]: missing source marker:   let confinement =",
-      "testLastChanged": "2026-09-05 cd7484a4"
     }
   }
 }

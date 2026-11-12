@@ -8,7 +8,7 @@ struct Params {reconstruction_kernel_controls:vec4<f32>,occupancy_controls:vec4<
 struct EmissiveMaterial {value:f32};struct RaymarchNeighborhood {value:f32};struct FlowReconstructionSample {value:f32};
 const LEAN_EMISSIVE_RAYMARCH=true;var<private> display:bool;var<private> support:f32;var<private> raw:u32;var<private> filtered:u32;var<private> prepared:u32;
 fn displayReconstructionActive()->bool{return display;}
-fn sampleDisplayMaterial(p:vec3<f32>,weight:f32)->EmissiveMaterial{prepared++;return EmissiveMaterial(1.0);}
+fn sampleDisplayMaterialWithSupport(p:vec3<f32>,weight:f32,outSupport:ptr<function,f32>)->EmissiveMaterial{prepared++;*outSupport=support;return EmissiveMaterial(1.0);}
 fn sampleRaymarchNeighborhood(p:vec3<f32>)->RaymarchNeighborhood{return RaymarchNeighborhood(support);}
 fn raymarchNeighborhoodSupport(n:RaymarchNeighborhood)->f32{return n.value;}
 fn directCellOpticalSupport(p:vec3<f32>)->f32{return support;}
@@ -18,7 +18,7 @@ fn reconstructRaymarchNeighborhood(n:RaymarchNeighborhood)->FlowReconstructionSa
 fn sampleWorldFlowReconstructionRaw(p:vec3<f32>)->FlowReconstructionSample{raw++;return FlowReconstructionSample(1.0);}
 `;
 const body=`display=arg0>0.0;support=arg1;u.reconstruction_kernel_controls=vec4<f32>(arg2,0,0,0);u.occupancy_controls=vec4<f32>(1,0,0,0);raw=0u;filtered=0u;prepared=0u;
- let p=vec3<f32>(0);let rd=vec3<f32>(1,0,0);let worldActive=false;let opticalStepping=arg3>0.0;let fullGridCapture=false;let opticalTrace=false;let dtBase=.1;let endT=2.0;var t=0.0;var expensiveSamples=0u;var rayMaterialSamples=0u;var iteration=0u;
+ let p=vec3<f32>(0);let rd=vec3<f32>(1,0,0);let worldActive=false;let opticalStepping=arg3>0.0;let fullGridCapture=false;let opticalTrace=false;let guided=false;let SPLIT_INTEGRAL=false;let dtBase=.1;let endT=2.0;var t=0.0;var expensiveSamples=0u;var rayMaterialSamples=0u;var iteration=0u;
  loop {if(iteration>0u){break;}iteration++;${block} }
  return vec4<f32>(f32(rayMaterialSamples),f32(raw),f32(filtered),f32(prepared));`;
  const options={preamble,argTypes:['f32','f32','f32','f32'],returnType:'vec4<f32>',body,inputs:[[0,0,0,0],[0,1,0,0],[0,1,1,0],[1,0,0,0],[1,0,0,1],[0,0,0,1]]};

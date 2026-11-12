@@ -196,7 +196,7 @@ function request(route, requestId, inputs, outputs, routeConfig = {}, requestIds
   return value;
 }
 
-async function runFrameTrunk({ frameIndex, manifest, tensorsByRole, weightsByRole, rgba, patchProjection, prefixWeights, blockWeights, blockWeightsHash, adapter, device, commit, update, loadFloat32, verificationAttached, residentTensorResolver, invocationTag, requestIds, userAgent }) {
+async function runFrameTrunk({ frameIndex, manifest, tensorsByRole, weightsByRole, rgba, patchProjection, prefixWeights, blockWeights, blockWeightsHash, adapter, device, commit, update, loadFloat32, verificationAttached, residentTensorResolver, invocationTag, requestIds, userAgent, schedule }) {
   const source = sourceArtifact(manifest, frameIndex);
   const model = modelFor(manifest);
   const preprocessShape = { batch: 1, height: manifest.shape.imageHeight, width: manifest.shape.imageWidth, channels: manifest.shape.imageChannels };
@@ -217,7 +217,7 @@ async function runFrameTrunk({ frameIndex, manifest, tensorsByRole, weightsByRol
       'source-image': source,
       'sam3-image-preprocess-tensors': { artifactId: `sam31-two-image:frame-${frameIndex}:preprocess-input`, sha256: source.sha256 },
     }, { 'pixel-values': { artifactId: scopedArtifactId(`sam31-two-image:frame-${frameIndex}:pixel-values`, invocationTag), shape: [1, preprocessShape.height, preprocessShape.width, 3] } }, {}, requestIds),
-    route: preprocessRoute, adapter, device, queue: device.queue, adapterName: adapter.info?.description || 'browser-webgpu-adapter', browser: userAgent,
+    route: preprocessRoute, adapter, device, queue: device.queue, schedule, adapterName: adapter.info?.description || 'browser-webgpu-adapter', browser: userAgent,
     model: { ...model, weightsHash: 'none', dtype: 'u8-to-fp32' }, kernel: preprocessRoute.kernel, tensors: { rgba, shape: preprocessShape }, includeReadback: true,
   });
   timing.preprocessMs = performance.now() - preprocessStarted;
@@ -234,7 +234,7 @@ async function runFrameTrunk({ frameIndex, manifest, tensorsByRole, weightsByRol
       'source-image': source, 'pixel-values': pixelOutput,
       'sam3-image-patch-embed-weights': { artifactId: 'sam31-two-image:patch-weights', sha256: weightsByRole.get('patch-embed-projection-weight').sha256 },
     }, { 'patch-embeddings': { artifactId: scopedArtifactId(`sam31-two-image:frame-${frameIndex}:patch-embeddings`, invocationTag), shape: [1, manifest.shape.patchTokens, manifest.shape.visionHiddenSize] } }, {}, requestIds),
-    route: patchRoute, adapter, device, queue: device.queue, adapterName: adapter.info?.description || 'browser-webgpu-adapter', browser: userAgent,
+    route: patchRoute, adapter, device, queue: device.queue, schedule, adapterName: adapter.info?.description || 'browser-webgpu-adapter', browser: userAgent,
     model: { ...model, weightsHash: weightsByRole.get('patch-embed-projection-weight').sha256 }, kernel: patchRoute.kernel, tensors: { pixelValues, weights: { projection: patchProjection }, shape: patchShape }, residentTensorResolver, includeReadback: true,
   });
   timing.patchEmbedMs = performance.now() - patchStarted;
@@ -252,7 +252,7 @@ async function runFrameTrunk({ frameIndex, manifest, tensorsByRole, weightsByRol
       'source-image': source, 'patch-embeddings': patchOutput,
       'sam3-image-vit-prefix-weights': { artifactId: 'sam31-two-image:prefix-weights', sha256: prefixHash },
     }, { 'vit-prefix-hidden-states': { artifactId: scopedArtifactId(`sam31-two-image:frame-${frameIndex}:vit-prefix`, invocationTag), shape: [1, manifest.shape.patchHeight, manifest.shape.patchWidth, manifest.shape.visionHiddenSize] } }, {}, requestIds),
-    route: prefixRoute, adapter, device, queue: device.queue, adapterName: adapter.info?.description || 'browser-webgpu-adapter', browser: userAgent,
+    route: prefixRoute, adapter, device, queue: device.queue, schedule, adapterName: adapter.info?.description || 'browser-webgpu-adapter', browser: userAgent,
     model: { ...model, weightsHash: prefixHash }, kernel: prefixRoute.kernel, tensors: { patchEmbeddings, weights: prefixWeights.values, shape: prefixShape }, residentTensorResolver, includeReadback: true,
   });
   timing.vitPrefixMs = performance.now() - prefixStarted;
@@ -281,7 +281,7 @@ async function runFrameTrunk({ frameIndex, manifest, tensorsByRole, weightsByRol
       'source-image': source, 'vit-prefix-hidden-states': prefixOutput,
       'sam3-image-vit-block-stack-weights': { artifactId: 'sam31-two-image:block-stack-weights', sha256: blockWeightsHash },
     }, { 'vit-block-stack-hidden-states': { artifactId: scopedArtifactId(`sam31-two-image:frame-${frameIndex}:vit-backbone`, invocationTag), shape: [1, manifest.shape.patchHeight, manifest.shape.patchWidth, manifest.shape.visionHiddenSize] } }, {}, requestIds),
-    route: stackRoute, adapter, device, queue: device.queue, adapterName: adapter.info?.description || 'browser-webgpu-adapter', browser: userAgent,
+    route: stackRoute, adapter, device, queue: device.queue, schedule, adapterName: adapter.info?.description || 'browser-webgpu-adapter', browser: userAgent,
     model: { ...model, weightsHash: blockWeightsHash }, kernel: stackRoute.kernel, tensors: { hiddenStates: prefixHiddenStates, weights: blockWeights, shape: blockShape }, residentTensorResolver, expectedLayerCheckpoints, includeReadback: true, validateFiniteCheckpoints: true,
   });
   timing.vitBlockStackMs = performance.now() - stackStarted;
@@ -298,7 +298,7 @@ async function runFrameTrunk({ frameIndex, manifest, tensorsByRole, weightsByRol
   return { backboneHiddenStates, backboneOutput: routeOutput(stackResult, 'vit-block-stack-hidden-states'), receipts, routes, parity, layerDiagnostics, source, timing };
 }
 
-async function runNeck({ branch, frameIndex, manifest, tensorsByRole, weightsByRole, weights, backbone, adapter, device, commit, update, loadFloat32, verificationAttached, residentTensorResolver, invocationTag, requestIds, userAgent }) {
+async function runNeck({ branch, frameIndex, manifest, tensorsByRole, weightsByRole, weights, backbone, adapter, device, commit, update, loadFloat32, verificationAttached, residentTensorResolver, invocationTag, requestIds, userAgent, schedule }) {
   update(`frame-${frameIndex}-${branch}-neck`);
   const isInteractive = branch === 'interactive';
   const factory = isInteractive ? createSam31InteractiveNeckPhaseProgramRouteDefinition : createSam31ImagePropagationNeckPhaseProgramRouteDefinition;
@@ -315,7 +315,7 @@ async function runNeck({ branch, frameIndex, manifest, tensorsByRole, weightsByR
       'source-image': backbone.source, 'sam31-vit-backbone-hidden-states': backbone.backboneOutput,
       [`sam31-${branch}-neck-weights`]: { artifactId: `sam31-two-image:${branch}-neck-weights`, sha256: weightsHash },
     }, outputs, {}, requestIds),
-    route, adapter, device, queue: device.queue, adapterName: adapter.info?.description || 'browser-webgpu-adapter', browser: userAgent,
+    route, adapter, device, queue: device.queue, schedule, adapterName: adapter.info?.description || 'browser-webgpu-adapter', browser: userAgent,
     model: { ...modelFor(manifest), weightsHash }, kernel: route.kernel,
     tensors: { backboneHiddenStates: backbone.backboneHiddenStates, weights, shape: { batch: 1, backboneHeight: manifest.shape.patchHeight, backboneWidth: manifest.shape.patchWidth, backboneChannels: manifest.shape.visionHiddenSize, fpnHiddenSize: 256, levels: manifest.shape.fpnLevels } }, residentTensorResolver, includeReadback: true,
   });
@@ -331,7 +331,7 @@ async function runNeck({ branch, frameIndex, manifest, tensorsByRole, weightsByR
   return { result, route, features, position2, parity, durationMs };
 }
 
-async function runHighResolution({ branch, frameIndex, manifest, tensorsByRole, weightsByRole, weights, neck, adapter, device, commit, update, loadFloat32, verificationAttached, residentTensorResolver, invocationTag, requestIds, userAgent }) {
+async function runHighResolution({ branch, frameIndex, manifest, tensorsByRole, weightsByRole, weights, neck, adapter, device, commit, update, loadFloat32, verificationAttached, residentTensorResolver, invocationTag, requestIds, userAgent, schedule }) {
   update(`frame-${frameIndex}-${branch}-high-resolution`);
   const route = createSam31DecoderHighResolutionProjectionPhaseProgramRouteDefinition({ model: modelFor(manifest), kernel: kernel('sam31-decoder-high-resolution-projection-phase-program-v0', commit) });
   const weightsHash = await sha256Text(['decoder-high-resolution-s0-weight', 'decoder-high-resolution-s0-bias', 'decoder-high-resolution-s1-weight', 'decoder-high-resolution-s1-bias'].map(role => `${role}:${weightsByRole.get(role).sha256}`).join('\n'));
@@ -350,7 +350,7 @@ async function runHighResolution({ branch, frameIndex, manifest, tensorsByRole, 
     }, {}, requestIds),
     route, adapter, device, queue: device.queue, adapterName: adapter.info?.description || 'browser-webgpu-adapter', browser: userAgent,
     model: { ...modelFor(manifest), weightsHash }, kernel: route.kernel,
-    tensors: { feature0: neck.features[0], feature1: neck.features[1], shape: { batch: 1, feature0Height: manifest.shape.fpnLevels[0].height, feature0Width: manifest.shape.fpnLevels[0].width, feature1Height: manifest.shape.fpnLevels[1].height, feature1Width: manifest.shape.fpnLevels[1].width, inputChannels: 256, s0Channels: 32, s1Channels: 64 }, weights }, residentTensorResolver, includeReadback: true,
+    tensors: { feature0: neck.features[0], feature1: neck.features[1], shape: { batch: 1, feature0Height: manifest.shape.fpnLevels[0].height, feature0Width: manifest.shape.fpnLevels[0].width, feature1Height: manifest.shape.fpnLevels[1].height, feature1Width: manifest.shape.fpnLevels[1].width, inputChannels: 256, s0Channels: 32, s1Channels: 64 }, weights }, residentTensorResolver, includeReadback: true, schedule,
   });
   const durationMs = performance.now() - started;
   const highResolutionS0 = new Float32Array(result.debugReadback.highResolutionS0);
@@ -364,6 +364,110 @@ async function runHighResolution({ branch, frameIndex, manifest, tensorsByRole, 
     },
   };
 }
+
+async function createSingleFrameBackbone({ manifest, loadWeights, runTrunk, runNeck: neckRunner,
+  runHighResolution: projectionRunner, errors, ...context }) {
+  let weights = await loadWeights();
+  let status = 'open';
+  return Object.freeze({
+    async run({ rgba, frameIndex, conditioning, invocationTag, schedule }) {
+      if (status !== 'open') throw new Error(`single-frame backbone is ${status}`);
+      if (!Number.isSafeInteger(frameIndex) || frameIndex < 0) throw new Error('frameIndex must be a nonnegative safe integer');
+      if (typeof conditioning !== 'boolean') throw new Error('conditioning must be boolean');
+      if (typeof invocationTag !== 'string' || !invocationTag) throw new Error('invocationTag is required');
+      if (!(rgba instanceof Uint8Array) || rgba.length !== manifest.shape.imageHeight * manifest.shape.imageWidth * 4) {
+        throw new Error('single-frame RGBA geometry does not match the model');
+      }
+      const captured = new Uint8Array(rgba);
+      status = 'running';
+      const started = performance.now();
+      try {
+        if (errors.length) throw new Error(`single-frame backbone WebGPU errors: ${errors.join('; ')}`);
+        const sourceImageSha256 = await sha256Bytes(captured);
+        // An indexed object avoids allocating a frame-index-sized sparse array for a live stream.
+        const currentManifest = { ...manifest, sourceImages: { [frameIndex]: { rgbaSha256: sourceImageSha256 } } };
+        const requestIds = [];
+        const input = { ...context, ...weights, manifest: currentManifest, frameIndex,
+          rgba: captured, invocationTag, requestIds, verificationAttached: false, schedule,
+          tensorsByRole: new Map() };
+        const trunk = await runTrunk(input);
+        const propagation = await neckRunner({ ...input, branch: 'propagation', weights: weights.propagationWeights, backbone: trunk });
+        const receipts = [...trunk.receipts, propagation.result.receipt];
+        const requestedRouteIds = [...trunk.routes, propagation.route.routeId];
+        const frame = { propagationEmbedding: propagation.features[2], propagationPosition: propagation.position2 };
+        const timing = { kind: 'host-wall', trunk: trunk.timing, propagationNeckMs: propagation.durationMs };
+        if (conditioning) {
+          const interactive = await neckRunner({ ...input, branch: 'interactive', weights: weights.interactiveWeights, backbone: trunk });
+          frame.interactiveEmbedding = interactive.features[2];
+          frame.interactivePosition = interactive.position2;
+          receipts.push(interactive.result.receipt);
+          requestedRouteIds.push(interactive.route.routeId);
+          timing.interactiveNeckMs = interactive.durationMs;
+        } else {
+          const high = await projectionRunner({ ...input, branch: 'propagation', weights: weights.projectionWeights, neck: propagation });
+          frame.highResolutionS0 = high.highResolutionS0;
+          frame.highResolutionS1 = high.highResolutionS1;
+          receipts.push(high.result.receipt);
+          requestedRouteIds.push(high.route.routeId);
+          timing.highResolutionMs = high.durationMs;
+        }
+        const routeChainPassed = receipts.length === requestIds.length
+          && receipts.length === requestedRouteIds.length
+          && receipts.every((r, i) => r.status === 'real' && r.fallbackReason == null
+            && r.requestedRouteId === requestedRouteIds[i] && r.effectiveRouteId === requestedRouteIds[i]
+            && r.outputs?.length > 0 && r.outputs.every(output => output.artifactId.endsWith(`:${invocationTag}`)));
+        if (!routeChainPassed) throw new Error('single-frame backbone route chain failed');
+        if (errors.length) throw new Error(`single-frame backbone WebGPU errors: ${errors.join('; ')}`);
+        timing.wallMs = performance.now() - started;
+        return { frameIndex, sourceImageSha256, frame, timing, receipts, requestIds, requestedRouteIds,
+          effectiveRouteIds: receipts.map(r => r.effectiveRouteId), routeChainPassed,
+          verificationAttached: false, parityPassed: null };
+      } finally { status = 'open'; }
+    },
+    close() {
+      if (status === 'running') throw new Error('single-frame backbone is running');
+      weights = null;
+      status = 'closed';
+      return { status };
+    },
+  });
+}
+
+export async function createSam31SingleFrameBackbone({ packageRuntime, adapter, device, errors,
+  commit = null, update = () => {}, userAgent = 'unknown-browser' }) {
+  if (!packageRuntime || typeof packageRuntime.loadFloat32 !== 'function') throw new Error('single-frame backbone requires a model package runtime');
+  if (!adapter || !device || !Array.isArray(errors)) throw new Error('single-frame backbone requires a WebGPU execution context');
+  const manifest = packageRuntime.manifests?.ingress || packageRuntime.modelPackage?.components?.ingress;
+  if (manifest?.schema !== 'kaminos.sam31-two-image-ingress-meta-packet.v0') throw new Error('unsupported single-frame ingress model');
+  const weightsByRole = entryMap(manifest.weights);
+  const loadFloat32 = entry => packageRuntime.loadFloat32(entry);
+  return createSingleFrameBackbone({ manifest, adapter, device, errors, commit, update, userAgent,
+    weightsByRole, loadFloat32, residentTensorResolver: packageRuntime.residentTensorResolver || null,
+    runTrunk: runFrameTrunk, runNeck, runHighResolution,
+    async loadWeights() {
+      const patchProjection = await loadFloat32(weightsByRole.get('patch-embed-projection-weight'));
+      const positionEntry = weightsByRole.get('vit-position-embeddings');
+      const spatial = resolveSam31SpatialPositionEmbeddings({ values: await loadFloat32(positionEntry),
+        shape: positionEntry.shape, hiddenSize: manifest.shape.visionHiddenSize });
+      const prefixWeights = { pretrainGridSize: spatial.pretrainGridSize, values: {
+        positionEmbeddings: spatial.positionEmbeddings,
+        layerNormWeight: await loadFloat32(weightsByRole.get('vit-backbone-layernorm-weight')),
+        layerNormBias: await loadFloat32(weightsByRole.get('vit-backbone-layernorm-bias')),
+      } };
+      const blockWeights = await loadBlockWeights(loadFloat32, weightsByRole);
+      const blockWeightsHash = await sha256Text(blockWeightRoles().map(role => `${role}:${weightsByRole.get(role).sha256}`).join('\n'));
+      const interactiveWeights = await loadNeckWeights(loadFloat32, weightsByRole, 'interactive');
+      const propagationWeights = await loadNeckWeights(loadFloat32, weightsByRole, 'propagation');
+      const projectionWeights = {
+        s0: { weight: await loadFloat32(weightsByRole.get('decoder-high-resolution-s0-weight')), bias: await loadFloat32(weightsByRole.get('decoder-high-resolution-s0-bias')) },
+        s1: { weight: await loadFloat32(weightsByRole.get('decoder-high-resolution-s1-weight')), bias: await loadFloat32(weightsByRole.get('decoder-high-resolution-s1-bias')) },
+      };
+      return { patchProjection, prefixWeights, blockWeights, blockWeightsHash, interactiveWeights, propagationWeights, projectionWeights };
+    },
+  });
+}
+
+export const createSam31SingleFrameBackboneForTest = createSingleFrameBackbone;
 
 export async function runSam31TwoImageBackbone({
   packageRuntime,

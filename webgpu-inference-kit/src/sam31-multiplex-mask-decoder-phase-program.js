@@ -1,3 +1,4 @@
+import { withSamPhaseCleanup } from './sam-phase-cleanup.js';
 import {
   assertAuthoritativeRouteWorkerResult,
   createRouteWorkerResult,
@@ -670,6 +671,7 @@ export async function runSam31MultiplexMaskDecoderPhaseProgramRoute(input = {}) 
     requiredStages: requiredStages(), timingSource: 'queue-submit-wait', waitForSubmittedWorkDone: true, yieldMs: 0,
     residentTensorResolver: input.residentTensorResolver,
   });
+  return withSamPhaseCleanup(runtime, async () => {
   const pointEmbedding = buildPointEmbedding(weights, extraPerObjectEmbedding);
   const imageValues = shape.imageTokens * 256;
   const intermediateHeight = shape.imageHeight * 2;
@@ -954,6 +956,6 @@ export async function runSam31MultiplexMaskDecoderPhaseProgramRoute(input = {}) 
     samTokens: Array.from(new Float32Array(samTokens)), maskLogits: Array.from(new Float32Array(maskLogits)), selectedMasks: Array.from(new Float32Array(selectedMasks)), iou: Array.from(new Float32Array(run.outputs.iou)), objectScores: Array.from(new Float32Array(run.outputs.objectScores)),
     bestMaskIndices: Array.from(new Float32Array(run.outputs.bestMaskIndices)), projectedPointers: Array.from(new Float32Array(run.outputs.projectedPointers)), objectPointers: Array.from(new Float32Array(objectPointers)),
   };
-  authoritative.resourceDisposal = runtime.dispose();
   return authoritative;
+  }, input.schedule);
 }

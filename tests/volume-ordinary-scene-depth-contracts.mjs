@@ -25,7 +25,7 @@ const providerStart=shell.indexOf('  ordinarySceneDepthProvider=');
 assert.ok(providerStart>0,'actual page depth delegate is present');
 const providerBody=shell.slice(providerStart,shell.indexOf('\n',providerStart));
 let sceneRenders=0;
-const provider=new Function('sceneFrameRuntime','ordinaryDepthEnabled',`let ordinarySceneDepthProvider;const deviceRecoveryHeld=()=>false;${providerBody};return ordinarySceneDepthProvider();`);
+const provider=new Function('sceneFrameRuntime','ordinaryDepthEnabled',`let ordinarySceneDepthProvider;const deviceRecoveryHeld=()=>false,authoredFireUnits=new Map();${providerBody};return ordinarySceneDepthProvider();`);
 const runtime=createSceneFrameRuntime({readInputs:()=>({}),draw:()=>sceneRenders++,frameCount:()=>sceneRenders,
   prepare(){},readSharedDevice:()=>null,readCamera:()=>camera,readDepth:()=>texture});
 const invoke=enabled=>provider(runtime,enabled);

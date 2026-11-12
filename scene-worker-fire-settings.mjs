@@ -1,5 +1,5 @@
-import {projectFireSettingsToSchema} from './scene-fire-domain.mjs';
-import {readAuthoredVolumeRuntimeControls} from './volume-runtime-control-values.mjs';
+import {projectFireSettingsToSchema,runtimeFireSettings} from './scene-fire-domain.mjs';
+import {readAuthoredVolumeRuntimeControls,volumePressureConfigForMode} from './volume-runtime-control-values.mjs';
 import {validateVolumeSettingsPresetDocument} from './volume-settings-preset-contract.mjs';
 import {flamePresetForLocalControls} from './flame-authoring.mjs';
 import {flamePoseToDomain} from './scene-flame-emitter.mjs';
@@ -67,33 +67,38 @@ export function createSceneWorkerFireSettingsLoader({definitions,mappingOptions,
   const response=await request('/volume-settings-preset-schema-v2.json',{cache:'no-store'});
   if(!response.ok)throw Error('Fire settings schema lookup failed');return response.json();
  })().catch(error=>{schemaPromise=null;throw error;});
- return Object.freeze({async prepare(plan,context){
-  context.assertCurrent();
-  if(!plan.composition&&!plan.fireSettings)return null;
-  const canonical=await schema();context.assertCurrent();
-  let receipt=null;
-  const presetId=plan.composition?.flame?.presetId;
-  if(presetId){
-   let pending=receipts.get(presetId);
-   if(!pending){
-    pending=(async()=>{
-     const response=await request(`/api/volume-settings-preset?id=${encodeURIComponent(presetId)}`,{cache:'no-store',signal:context.signal});
-     const artifact=await response.json();
-     if(!response.ok)throw Error(artifact.error||'Basin lookup failed');
-     return validateVolumeSettingsPresetDocument(artifact,presetId,canonical);
-    })();
-    receipts.set(presetId,pending);
-    pending.catch(()=>{if(receipts.get(presetId)===pending)receipts.delete(presetId);});
-   }
-   receipt=await pending;context.assertCurrent();
-   if(receipt.preset.domControls['emitter-assay-family']?.value==='cluster')throw Error('Cluster basins have no placeable flame source; use Workbench for that route');
+ async function readReceipt(presetRef,canonical,context){
+  let pending=receipts.get(presetRef);
+  if(!pending){
+   pending=(async()=>{
+    const response=await request(`/api/volume-settings-preset?runtime=1&id=${encodeURIComponent(presetRef)}`,{cache:'no-store',signal:context.signal});
+    const artifact=await response.json();if(!response.ok)throw Error(artifact.error||'Basin lookup failed');
+    return validateVolumeSettingsPresetDocument(artifact,presetRef,canonical);
+   })();receipts.set(presetRef,pending);pending.catch(()=>{if(receipts.get(presetRef)===pending)receipts.delete(presetRef);});
   }
+  const receipt=await pending;context.assertCurrent();
+  if(receipt.preset.domControls['emitter-assay-family']?.value==='cluster')throw Error('Cluster basins have no placeable flame source; use Workbench for that route');
+  return receipt;
+ }
+ return Object.freeze({async prepare(plan,context){
+  context.assertCurrent();if(!plan.composition&&!plan.fireSettings)return null;
+  const canonical=await schema();context.assertCurrent();
+  let receipt=null;const presetId=plan.composition?.flame?.presetId;
+  if(presetId)receipt=await readReceipt(presetId,canonical,context);
   const primary=plan.flameSources?.find(record=>record.id==='flame-emitter')??plan.flameSources?.[0];
   const localScale=primary?flamePoseToDomain(primary.transform,plan.flameDomainTranslation??[0,0,0],plan.flameDomainScale??1).scale[0]:1;
-  const saved=plan.fireSettings??(receipt?.preset?flamePresetForLocalControls(receipt.preset,localScale):null);if(!saved)throw Error('Saved fire composition has no basin or authored fire settings');
+  let saved=plan.fireSettings??(receipt?.preset?flamePresetForLocalControls(receipt.preset,localScale):null);if(!saved)throw Error('Saved fire composition has no basin or authored fire settings');
   const options=typeof mappingOptions==='function'?mappingOptions(plan):mappingOptions;
+  let warning=receipt?.runtimeFallback?.warning??null;
+  const admission=runtimeFireSettings(saved,canonical,{pressureIterations:volumePressureConfigForMode(saved.domControls?.['volume-pressure-mode']?.value,DEFAULT_VOLUME_SCENE,options.route).pressureIterations});
+  if(admission.settings)saved=admission.settings;
+  else{
+   receipt=await readReceipt('@reactant-preview',canonical,context);
+   saved=flamePresetForLocalControls(receipt.preset,localScale);
+   warning=`SAVED FIRE REPLACED: ${admission.reason}. Loaded cheap Reactant preview; scene objects and emitter pose are preserved. Original saved file is unchanged.`;
+  }
   const prepared=prepareSceneWorkerFireSettings(saved,{schema:canonical,definitions,mappingOptions:options,
    volumeSceneRequested:receipt?.serverProjection?.sceneMigration?.requested??DEFAULT_VOLUME_SCENE});
-  context.assertCurrent();return {...prepared,source:receipt};
+  context.assertCurrent();return {...prepared,source:receipt,warning};
  }});
 }

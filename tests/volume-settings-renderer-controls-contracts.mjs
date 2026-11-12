@@ -31,11 +31,10 @@ const expectedRendererControls = [
   ['volume-flow-kernel-coherence', 'volume_flow_kernel_coherence'],
 ];
 
-assert.deepEqual(
-  (schema.rendererControls || []).map(({ key, param }) => [key, param]),
-  expectedRendererControls,
-  'cotangent covariance authoring values have an explicit renderer-control persistence axis',
-);
+for (const [key, param] of expectedRendererControls) {
+  assert.equal(schema.rendererControls.find(control => control.key === key)?.param, param,
+    `${key} retains its renderer-control persistence axis`);
+}
 for (const [key] of expectedRendererControls) {
   assert.match(
     index,
@@ -114,12 +113,13 @@ const artifact = {
 };
 
 const receipt = validateVolumeSettingsPresetDocument(artifact, artifact.presetId, contractSchema);
-const target = buildVolumeSettingsPresetVisualTarget(receipt, 'http://127.0.0.1:18780', 'splat-only');
+const target = buildVolumeSettingsPresetVisualTarget(receipt, 'http://127.0.0.1:18780', 'raymarch-only');
 assert.equal(target.searchParams.get('volume_flow_kernel_strength'), '1');
 assert.equal(target.searchParams.get('volume_flow_kernel_radius'), '0.03');
 assert.equal(target.searchParams.get('volume_flow_kernel_coherence'), '1');
 assert.equal(target.searchParams.get('volume_tone_mapping'), 'agx');
-assert.equal(receipt.rendererControlCount, expectedRendererControls.length);
+assert.equal(receipt.rendererControlCount, schema.rendererControls.length,
+  'all current renderer controls survive the round trip, including additive controls');
 assert.equal(target.searchParams.get('volume_ray_start_noise'), 'true');
 
 for (const kernel of ['positive','interpolating','monotone']) {
@@ -131,7 +131,7 @@ for (const kernel of ['positive','interpolating','monotone']) {
     artifact.preset.route=route.href;
   }
   const saved=validateVolumeSettingsPresetDocument(artifact,artifact.presetId,contractSchema);
-  const reopened=buildVolumeSettingsPresetVisualTarget(saved,'http://127.0.0.1:18780','splat-only');
+  const reopened=buildVolumeSettingsPresetVisualTarget(saved,'http://127.0.0.1:18780','raymarch-only');
   assert.equal(reopened.searchParams.get('volume_emission_interpolation'),kernel);
   assert.equal(reopened.searchParams.get('volume_smoke_interpolation'),kernel);
 }

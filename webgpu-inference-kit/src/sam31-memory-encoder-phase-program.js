@@ -1,3 +1,4 @@
+import { withSamPhaseCleanup } from './sam-phase-cleanup.js';
 import {
   assertAuthoritativeRouteWorkerResult,
   createRouteWorkerResult,
@@ -989,6 +990,7 @@ export async function runSam31MemoryEncoderPhaseProgramRoute(input = {}) {
     now: input.now,
     residentTensorResolver: input.residentTensorResolver,
   });
+  return withSamPhaseCleanup(runtime, async () => {
   const maxComputeWorkgroupsPerDimension = input.device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535;
 
   const downsampleShapes = normalizedWeights.downsampleLayers.map(layer => layer.outputShape);
@@ -1289,8 +1291,8 @@ export async function runSam31MemoryEncoderPhaseProgramRoute(input = {}) {
       memoryPositionEncoding: Array.from(new Float32Array(readback.memoryPositionEncoding)),
     };
   }
-  authoritative.resourceDisposal = runtime.dispose();
   return authoritative;
+  }, input.schedule);
 }
 
 export const SAM31_MEMORY_ENCODER_WEBGPU_CONTRACT = Object.freeze({

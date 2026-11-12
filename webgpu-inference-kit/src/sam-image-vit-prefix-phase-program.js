@@ -464,5 +464,5 @@ export async function runSam3ImageVitPrefixPhaseProgramRoute(input = {}) {
       };
     }
     return authoritative;
-  });
+  }, input.schedule);
 }

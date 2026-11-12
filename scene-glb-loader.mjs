@@ -1,3 +1,4 @@
+import {isSurfaceSplatResolve} from './surface-splat-object.mjs';
 // The ordinary GLB preparation/publication path shared by page and scene worker.
 // GPU/material/geometry and membership services stay with the local scene owner;
 // UI installation and status are callbacks, never DOM reads in this loader.
@@ -96,7 +97,7 @@ export function createSceneGlbLoader({GLTFLoader,workingScene,readScene,readAsse
       const arrivalPlacement = applyAssetArrival(model, arrival, preparedGeometry);
       model.traverse(child => {
         if (child.isMesh) {
-          child.castShadow = true;
+          child.castShadow = !isSurfaceSplatResolve(child);
           child.receiveShadow = true;
           if (child.material && typeof prepareArrivedMeshMaterials !== 'function') {
             for (const mat of [].concat(child.material)) {

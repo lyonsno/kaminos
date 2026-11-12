@@ -139,3 +139,12 @@ test('while the splats stand in, the light field rebuilds only with snapshots an
  h.frame(true); h.prototype.setActive(false); h.frame(true);
  assert.equal(h.prototype.pacing, null, 'a disabled volume carries no pacing');
 });
+
+test('held integral rejects proxy reconciliation before any canvas, layer or pacing mutation',()=>{
+ const h=harness();h.frame(false,true);h.prototype.readback(.8);
+ const before={visibility:h.canvas.style.visibility,bridge:h.bridge.mesh.visible,proxy:h.sync.state(),layers:[...h.enabled]};
+ h.prototype.isIntegralEvaluationHeld=()=>true;
+ h.prototype.setCanvasPresentationSuppressed=()=>{throw Error('Resume history comparison before changing canvas presentation');};
+ for(let i=0;i<3;i++)assert.doesNotThrow(()=>h.frame(true,true));
+ assert.deepEqual({visibility:h.canvas.style.visibility,bridge:h.bridge.mesh.visible,proxy:h.sync.state(),layers:[...h.enabled]},before);
+});

@@ -10,7 +10,8 @@ const source = fs.readFileSync(new URL('../volume-core.js', import.meta.url), 'u
 const method = source.match(/    relocateOrdinaryDomain\([\s\S]*?\n    },/)[0].replace(/,$/, '');
 let rebuilds = 0;
 const context = {
-  followingDomain: null, productFrameOwner: 'prototype', device: {}, gridSize: 32,
+  gpuPipelines:{resolve:p=>p,compute:p=>p},
+  assertIntegralSourceEditable(){},invalidateIntegralReconstruction(){}, followingDomain: null, productFrameOwner: 'prototype', device: {}, gridSize: 32,
   productTransform: {translate: [0, 0, 0], scale: 1}, volumePrimitives: [],
   state: {}, pendingDomainRemap: null, structuredClone, lastResidualPartials: null,
   normalizePrimitiveRecord: x => x, publishVolumePrimitiveState() {}, getPrimitiveSource() {},
@@ -50,6 +51,7 @@ ui.authoredFlamePresent=false;vm.runInNewContext(`${preview}; writeFlameDomainPr
 // without stranding the map guard or replacing a still-mapped buffer.
 let finishMap, unmaps = 0;
 const residual = {
+  gpuPipelines:{resolve:p=>p,compute:p=>p},
   resolveWorldCalibration,
   pressureResidualCopyPending: true, pressureResidualMapPending: false,
   pressureResidualMapGeneration: 0, pressureResidualMapStartedFrame: 0,

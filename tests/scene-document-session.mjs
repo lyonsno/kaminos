@@ -145,7 +145,7 @@ test('navigation retains the restore invocation address while file reading is pe
 test('animate render hold pauses ordinary rendering while sceneDocument is applying and resumes after success or failure',async()=>{
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
  const animStart=html.indexOf('  function animate() {');
- const guardMatch=html.slice(animStart,animStart+400).match(/if\((sceneLightingPreparation\?\.state\(\)\.held.+?)\)\{controls\.update\(\);return;\}/);
+ const guardMatch=html.slice(animStart,animStart+400).match(/if\((sceneLightingPreparation\?\.state\(\)\.held.+?)\)\{[^}]*return;\}/);
  assert.ok(guardMatch,'animate() must contain the scene-restore render hold predicate');
  const predicate=guardMatch[1];
  const isHeld=session=>Boolean(vm.runInNewContext(predicate,{sceneLightingPreparation:null,sceneDocument:session,startupRestorePending:false}));

@@ -19,13 +19,13 @@ const device={limits:{maxBufferSize:256,maxStorageBufferBindingSize:256},
   createCommandEncoder:()=>({copyBufferToBuffer(){},finish(){return {};}}),queue:{writeBuffer(){},submit(){}}};
 const uniforms=new Float32Array(400);uniforms[368]=2;
 const environment={state:{active:true,simStepCount:151,physicalColor:{incidentLight:{}},raymarchShaderSpecialization:{}},
-  device,selectiveHeadLiveCapturePaused:true,opticalTraceCaptureActive:false,
+  device,capturePaused:true,opticalTraceCaptureActive:false,
   nonRidgeOpticalCaptureSession:null,nonRidgeSourceBasisCaptureSession:null,
-  nonRidgeOpticalCaptureRowBuffer:{},debugRaymarchShaderSpecialization:'auto',
+  opticalTraceRowBuffer:{},debugRaymarchShaderSpecialization:'auto',
   updateUniforms(){},uniforms,boundarySplatRequested:()=>false,browserResidualCanApply:()=>false,
   productFrameOwner:'prototype',ensureFrameTexture(){},frameTexture:{width:1,height:1,createView(){}},
   traceChunkPlan,OPTICAL_TRACE_IDENTITY,GPUBufferUsage:{STORAGE:1,COPY_SRC:2,COPY_DST:4,MAP_READ:8},GPUMapMode:{READ:1},
-  rebuildNonRidgeOpticalCaptureBindGroups(){},nonRidgeOpticalCaptureHeaderBuffer:{},prepareSharedSceneConsumers:x=>x,
+  rebuildOpticalTraceBindGroups(){},opticalTraceHeaderBuffer:{},prepareSharedSceneConsumers:x=>x,
   distributedGroup:{},encodeBoundarySidecar(){},encodeDraw(){},readbackPipeline:{},controlsSnapshot:{},validateTraceRows};
 Object.assign(environment,volumeSubmissionContext(device));
 const result=await new AsyncFunction(...Object.keys(environment),'options',body)(...Object.values(environment),{

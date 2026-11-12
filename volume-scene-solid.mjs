@@ -98,6 +98,7 @@ export function countEmitterChemicalSupport(descriptor, dispatch, solidCells, gr
 function visibleInScene(object) {
   for (let current = object; current; current = current.parent) {
     if (current.visible === false) return false;
+    if (current.userData?.kaminosBeautyLodProxy || current.userData?.kaminosNonSolidVisual || current.userData?.kaminosEditorOnly || current.userData?.kaminosEditorHelper) return false;
   }
   return true;
 }

@@ -29,7 +29,7 @@ try{
  // exception. Observe that channel throughout exact-step and frame waits.
  page.waitForFunction(()=>window.__kaminosVolumePrototype?.debugState().error).then(async handle=>{const message=await handle.jsonValue();await handle.dispose();fail('Volume runtime: '+message);}).catch(()=>{});
  const invoke=async(name,input)=>{report.inputs.push({name,input});return guarded(page.evaluate(({name,input})=>window.kaminosWorkbenchExperiments.invoke(name,input),{name,input}));};
- const advance=async target=>{report.inputs.push({advanceTo:target});const r=await guarded(page.evaluate(target=>window.__kaminosVolumePrototype.pauseSelectiveHeadLiveAtSimStep(target),target));assert.equal(r.ok,true,JSON.stringify(r));assert.equal(r.effectiveSimStepCount,target);await invoke('pause');};
+ const advance=async target=>{report.inputs.push({advanceTo:target});const r=await guarded(page.evaluate(target=>window.__kaminosVolumePrototype.pauseCaptureAtSimStep(target),target));assert.equal(r.ok,true,JSON.stringify(r));assert.equal(r.effectiveSimStepCount,target);await invoke('pause');};
  report.effective=await page.evaluate(()=>({backend:window.__kaminosVolumePrototype.debugState().backend,grid:window.__kaminosVolumePrototype.debugState().simGrid,gi:window.kaminosSceneGIDebugState(),rays:Number(document.getElementById('volume-steps').value),radius:Number(document.getElementById('volume-immersed-radius').value)}));
  assert.match(report.effective.backend,/WebGPU/);assert.equal(report.effective.grid,32);assert.equal(report.effective.rays,28);assert.equal(report.effective.radius,.1);assert.equal(report.effective.gi.steps,4);assert.equal(report.effective.gi.slices,3);
  report.sources=[];for(const name of ['index.html','volume-core.js','live-log-experiment.mjs','live-log-heat-core.mjs','live-log-heat-gpu.mjs','live-log-surface-mask.mjs','burn-table-material.mjs','scene-solid-gpu.mjs','scene-resident-coverage.mjs','scene-local-visibility.mjs','scene-bvh-reproject.mjs','scene-light-visibility.mjs','scene-light-geometry.mjs','fire-light-field-shadow.mjs','scene-persistence-core.js','log-consumption.mjs','log-debris-gpu.mjs','workbench-scene-host.mjs','burnable-target.mjs','burnable-selection.mjs','bear-altar.mjs','experiments/sinter/live-log-heat.experiment.mjs','experiments/sinter/disintegrating-log.experiment.mjs','experiments/sinter/bear-altar.experiment.mjs']){
@@ -49,7 +49,7 @@ try{
   }
   assert.ok(Math.abs(gas+attachedFuel+residue-snapshot.initial.reduce((a,b)=>a+b,0))<.002,'Gas/attached/residue accounting');
   assert.ok(snapshot.particles.every(Number.isFinite)&&snapshot.material.every(Number.isFinite));assert.equal(new Set(ids).size,ids.length);
-  await page.evaluate(()=>window.__kaminosVolumePrototype.setSelectiveHeadLiveCapturePaused(false));await invoke('frame');
+  await page.evaluate(()=>window.__kaminosVolumePrototype.setCapturePaused(false));await invoke('frame');
   const frame=await page.evaluate(()=>window.kaminosSceneGIDebugState().sceneFrames);await guarded(waitSceneFrame(page,frame));
   await page.screenshot({path:path.join(out,name+'.png')});
   const row={name,attached,detached,gas,attachedFuel,residue,solidCells:collision.cells?.reduce((a,b)=>a+b,0),state};report.frames.push(row);await save();return row;

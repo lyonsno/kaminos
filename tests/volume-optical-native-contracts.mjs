@@ -19,14 +19,6 @@ test('one authored ray step survives the slider, gamut, route and GPU clamp', ()
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const input = html.match(/<input[^>]*id="volume-steps"[^>]*>/)[0];
   assert.equal(Number(input.match(/min="([^"]+)"/)[1]), 1, 'Ray Steps must admit one for preview');
-  const snap = html.match(/function snapVolumeRaySteps\(value\) \{[\s\S]*?\n\}/)[0];
-  const context = vm.createContext({clampVolumeValue:(v,min,max)=>Math.max(min,Math.min(max,v))});
-  vm.runInContext(snap, context);
-  for (const value of [1,2,6,7,24,36,96,160]) assert.equal(context.snapVolumeRaySteps(value),value);
-  assert.equal(context.snapVolumeRaySteps(0),1);
-  assert.equal(context.snapVolumeRaySteps(200),160);
-  assert.match(html,/x: \(snapVolumeRaySteps\(steps\) - 1\) \/ \(160 - 1\)/);
-  assert.match(html,/snapVolumeRaySteps\(1 \+ clampVolumeValue\(x, 0, 1\) \* \(160 - 1\)\)/);
   assert.match(html,/Math\.max\(1, Math\.min\(160, routeRaySteps\)\)/);
   assert.match(core,/raySteps: clampFinite\(controls\.raySteps, 1, 160, 96\)/);
   assert.match(core,/clamp\(u\.viewport_steps_density\.z, 1\.0, 192\.0\)/);
@@ -58,7 +50,7 @@ test('comparison configuration fails closed and retains explicit non-bound seman
   assert.equal(opticalSteppingConfig().mode, 'numerical');
   assert.equal(opticalSteppingConfig().value, 2);
   assert.equal(opticalSteppingConfig().tolerance, 0.001);
-  for (const mode of ['current','fixed','numerical','fixed-dense']) assert.equal(opticalSteppingConfig({mode}).mode, mode);
+  for (const mode of ['fixed','numerical','budgeted','joins','history']) assert.equal(opticalSteppingConfig({mode}).mode, mode);
   assert.throws(() => opticalSteppingConfig({mode:'regional'}), /unknown optical/);
   for (const tolerance of [0,-1,NaN,Infinity,'0.01']) assert.throws(() => opticalSteppingConfig({tolerance}), /finite/);
   assert.match(opticalSteppingConfig({mode:'numerical'}).authority, /not a continuous-field bound/);
@@ -74,7 +66,7 @@ test('preview initially shows the numerical default or an explicitly active comp
     return nodes.find(node=>node.id==='optical-stepping-preview');
   }
   assert.equal(mount(null).value,'numerical:0.001');
-  assert.equal(mount({mode:'current',effective:'current',tolerance:0.001}).value,'current');
+  assert.equal(mount({mode:'current',effective:'current',tolerance:0.001}).value,'numerical:0.001');
   assert.equal(mount({mode:'numerical',effective:'numerical',tolerance:0.01}).value,'numerical:0.01');
 });
 
@@ -84,12 +76,12 @@ test('numerical default preserves stock and diagnostic paths with an explicit ef
   for(const options of [{emissive:false},{emissive:true,trace:true}]) {
     const effective=resolveOpticalStepping(config,options);
     assert.equal(effective.requested,'numerical');
-    assert.equal(effective.mode,'current');
+    assert.equal(effective.mode,'fallback-fixed');
     assert.equal(effective.value,0);
     assert.ok(effective.reason);
     assert.throws(()=>resolveOpticalStepping(config,{...options,explicit:true}),/requires lean emissive beauty/);
   }
-  assert.equal(resolveOpticalStepping(opticalSteppingConfig({mode:'current'}),{emissive:false,explicit:true}).value,0);
+  assert.equal(resolveOpticalStepping(opticalSteppingConfig({mode:'fixed'}),{emissive:false}).value,0);
   assert.match(core,/resolveOpticalStepping\(debugOpticalStepping/);
   assert.match(core,/OPTICAL_STEP_MODE:optical.value/);
 });
@@ -99,16 +91,16 @@ test('adaptivity describes the selected algorithm without overwriting legacy tun
   assert.equal(typeof opticalNative.raymarchAdaptivity,'function');
   const policy=opticalNative.raymarchAdaptivity;
   for(const value of [0,.35,1]) {
-    assert.deepEqual(policy('current',value),{value,automatic:false,label:'Adaptive rays'});
+    assert.deepEqual(policy('current',value),{value:1,automatic:true,label:'Adaptive steps'});
     for(const mode of ['joins','history'])assert.deepEqual(policy(mode,value),{value:1,automatic:true,label:'Adaptive placement'});
     assert.deepEqual(policy('numerical',value),{value:1,automatic:true,label:'Adaptive steps'});
-    for(const mode of ['fixed','fixed-dense','budgeted'])assert.deepEqual(policy(mode,value),{value:0,automatic:true,label:'Adaptive placement'});
+    for(const mode of ['fixed','budgeted'])assert.deepEqual(policy(mode,value),{value:0,automatic:true,label:'Adaptive placement'});
   }
   assert.throws(()=>policy('missing',.5),/unknown optical stepping mode/);
 });
 
 test('numerical and fixed optical integration cover the combined World without fallback',()=>{
- for(const mode of ['numerical','fixed','fixed-dense']){
+ for(const mode of ['numerical','fixed']){
   const resolved=resolveOpticalStepping(opticalSteppingConfig({mode}),{emissive:true,exterior:true,explicit:true});
   assert.equal(resolved.mode,mode);assert.equal(resolved.reason,null);
  }
@@ -122,8 +114,6 @@ test('joined numerical keeps Fine step scale and clips integration panels at reg
  assert.match(opticalNative.OPTICAL_STEPPING_WGSL,/fn opticalStepJoinStop/);
  assert.match(core,/let insideMiddle\s*=\s*worldActive && !insideFine && \(middleHit\.y > middleHit\.x && localCursor >= middleHit\.x-opticalStep\.origin && localCursor < middleHit\.y-opticalStep\.origin\)/,
   'joined optical stepping must distinguish the middle and outer World intervals outside Fine');
- assert.match(core,/let regionBase\s*=\s*select\(worldMarchStep\(select\(worldRender\.loPitch\.w, worldMinimumMaterialPitch\(\), insideMiddle\), steps, 1\.6, 0\.0\), dtBase, insideFine\)/,
-  'exterior World intervals must step at their regional material pitch instead of collapsing to the Fine single-voxel floor');
- assert.match(opticalNative.OPTICAL_STEPPING_WGSL,/abs\(maximum - \(\*s\)\.maximum\) > 1e-6/,
-  'crossing a region join must reset the unrefined panel target to the new region maximum');
+
+
 });

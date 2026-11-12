@@ -27,7 +27,10 @@ for(const [id,key,valid,invalid] of [
   assert.equal(check({value:invalid}).value,invalid,'supported equal-width layout remains selectable');
 });
 
-const previewSource=body.slice(body.indexOf("    if(['volume-velocity-staggering','volume-pressure-solver'].includes(control.id))"),body.indexOf("    if(['volume-immersed-radius','volume-emitter-source-law','volume-optical-tolerance'].includes(control.id))",body.indexOf('controls:[control,')));
+const previewStart=body.indexOf("    if(['volume-velocity-staggering','volume-pressure-solver'].includes(control.id))");
+const previewEnd=body.indexOf("      control.addEventListener('change',validateGridPreview,true);",previewStart)+"      control.addEventListener('change',validateGridPreview,true);".length;
+const previewSource=body.slice(previewStart,previewEnd)+'\n}';
+
 for(const focused of [false,true]) test(`rejected DOM choice restores source and focused alias; gesture=${focused}`,()=>{
   const listeners=new Map();let value='collocated',alias='collocated',active=focused?{id:'@flame-settings'}:null;
   let cancelled=0,stopped=0,warning='',labelUpdates=0;

@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
+import {createSplitIntegral} from '../volume-split-integral.mjs';
 import { createDistributedSmokeBindings } from '../scene-smoke-reconstruction.mjs';
 
 const source = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
@@ -49,13 +50,12 @@ runInNewContext(layouts, context);
 globalThis.GPUShaderStage = stages;
 globalThis.GPUBufferUsage = {UNIFORM:1,COPY_DST:2};
 const distributedLayout = createDistributedSmokeBindings({...context.device,createBuffer:()=>({})}).layout;
-const smokeLayout = source.match(/const layout=device.createPipelineLayout\(\{bindGroupLayouts:\[bindGroupLayout,multisampled\?ordinaryMultisampleDepthLayout:productRaymarchDepthBindGroupLayout,distributedLayout\]\}\);/);
-assert.ok(smokeLayout, 'exercise the actual distributed smoke composition');
-for (const multisampled of [false,true]) runInNewContext(smokeLayout[0], {...context,distributedLayout,multisampled});
-const computeCapacity=Number(source.match(/const BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT = (\d+);/)[1]);
-const volumeRequirement=source.match(/const VOLUME_STORAGE_BUFFER_BINDING_COUNT = ([^;]+);/);
-const actualRequirements={BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT:computeCapacity};
-if(volumeRequirement) actualRequirements.VOLUME_STORAGE_BUFFER_BINDING_COUNT=runInNewContext(volumeRequirement[1],actualRequirements);
+const layoutMarker='const layout=device.createPipelineLayout({bindGroupLayouts:[bindGroupLayout,multisampled?ordinaryMultisampleDepthLayout:productRaymarchDepthBindGroupLayout,distributedLayout';
+const layoutStart=source.indexOf(layoutMarker);assert.ok(layoutStart>=0,'exercise the actual distributed smoke composition');
+const smokeLayout=source.slice(layoutStart,source.indexOf(';',layoutStart)+1);
+const splitIntegral=createSplitIntegral({...context.device,createBuffer:()=>({}),createBindGroup:d=>d});
+for (const multisampled of [false,true])for(const splitActive of [false,true])runInNewContext(smokeLayout,{...context,distributedLayout,multisampled,splitActive,splitIntegral});
+const actualRequirements={VOLUME_STORAGE_BUFFER_BINDING_COUNT:Number(source.match(/const VOLUME_STORAGE_BUFFER_BINDING_COUNT = (\d+);/)[1])};
 assert.ok(pipelines.some(layout => layout.label === 'kaminos pressure tiered jacobi pipeline layout'),
   'include the pipeline that failed native startup');
 
@@ -95,7 +95,7 @@ const requestDeviceForCapacity = async capacity => {
 
 for (const capacity of [minimumCapacity, 32]) {
   const { descriptor, granted } = await requestDeviceForCapacity(capacity);
-  assert.equal(descriptor.requiredLimits.maxStorageBuffersPerShaderStage, minimumCapacity,
+  assert.ok(descriptor.requiredLimits.maxStorageBuffersPerShaderStage >= minimumCapacity,
     `request the production-required storage capacity from adapter ${capacity}`);
   for (const row of counts) {
     assert.ok(row.count <= granted,

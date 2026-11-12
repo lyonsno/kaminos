@@ -76,3 +76,20 @@ test('shared scene consumers prepare resident World optics and record stepping r
   f.source.steps++;const bank={...f.source.hierarchy,state:{},work:{},nodes:{}};f.source.hierarchy=bank;f.encode();const count=f.groups.length;
   f.source.steps++;f.source.hierarchy={...bank,state,work,nodes};f.encode();assert.equal(f.groups.length,count,'returning to a live buffer bank reuses its binding');assert.deepEqual(f.passes.at(-1).indirect,{buffer:state,offset:64});f.field.destroy();
  });
+// The same held gas must switch representations without stale atlas addressing.
+test('dual-mode prepared World atlas keeps 2x emission and packed smoke at the same material observation',()=>{
+ const f=fixture();f.source.hierarchy={nodes:{},work:{},nodeCount:10,leafCount:9,capacity:10,revision:1,steps:2};
+ f.encode();const emissive=f.textures.at(-1);
+ assert.ok(emissive.width*emissive.height*emissive.depthOrArrayLayers>=10*1003, "2x emitted RGB plus extinction must fit for every resident brick");
+ assert.equal(f.field.read().atlasStride,1003);
+ assert.equal(f.field.read().subcellsPerAxis,2);
+ const encoder={beginComputePass(){return {setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};}};
+ assert.equal(f.field.encode(encoder,f.source,[1,2],{worldSmokeOnly:true}),true);
+ const smoke=f.textures.at(-1);assert.notEqual(smoke,emissive);
+ assert.equal(f.field.read().atlasStride,253);assert.equal(f.field.read().smokeOnly,true);
+ assert.ok(f.field.read().bytes<emissive.width*emissive.height*emissive.depthOrArrayLayers*16/2);
+ assert.equal(f.field.encode(encoder,f.source,[1,2],{worldSmokeOnly:true}),false);
+ assert.equal(f.field.encode(encoder,f.source,[1,2],{worldSmokeOnly:false}),true);
+ assert.equal(f.field.read().atlasStride,1003);assert.equal(f.field.read().smokeOnly,false);
+ f.field.destroy();
+});

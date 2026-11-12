@@ -209,9 +209,9 @@ test('the diagnostic separates burning, too cold, no contact, depleted and ambie
 
 test('the single simulator admits the reactant law with an inflow or immersed source', () => {
   const off = rc.resolveReactantCombustionConfig({});
-  assert.equal(off.requested.law, rc.REACTION_LAW_AUTHORED);
+  assert.equal(off.requested.law, rc.REACTION_LAW_REACTANT);
   assert.equal(off.effective.admitted, false);
-  assert.equal(off.effective.reason, 'reaction-law-is-authored');
+  assert.equal(off.effective.reason, 'reactant-law-requires-inflow-or-immersed-source');
   const base = { reactionLaw: rc.REACTION_LAW_REACTANT, volumeScene: 'tall_plume', emitterSourceLaw: 'inflow-boundary' };
   const on = rc.resolveReactantCombustionConfig(base, { grid: 32 });
   assert.equal(on.effective.admitted, true);
@@ -233,7 +233,9 @@ test('the single simulator admits the reactant law with an inflow or immersed so
   const clamped = rc.resolveReactantCombustionConfig({ ...base, reactantMixingTime: 1e6, reactantCoolingTime: -3 }, { grid: 32 });
   assert.equal(clamped.effective.mixingTimeSteps, rc.REACTANT_CONTROL_RANGES.mixingTimeSteps[1]);
   assert.equal(clamped.effective.coolingTimeSteps, rc.REACTANT_CONTROL_RANGES.coolingTimeSteps[0]);
-  assert.equal(rc.resolveReactantCombustionConfig({ ...base, reactionLaw: 'nonsense' }).requested.law, rc.REACTION_LAW_AUTHORED, 'an unknown law request reads as the authored law');
+  const unsupported=rc.resolveReactantCombustionConfig({ ...base, reactionLaw: 'nonsense' });
+  assert.equal(unsupported.requested.law,'nonsense');
+  assert.equal(unsupported.effective.law,null,'a retired law must not quietly execute an authored model');
 });
 
 test('the uniform block packs the admitted law and zeros otherwise', () => {

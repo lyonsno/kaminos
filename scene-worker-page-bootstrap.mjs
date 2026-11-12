@@ -70,11 +70,12 @@ export function mountSceneWorkerPage({document,window,THREE,createControls,insta
     finally{controls.enableDamping=damping;}
    }
    if(value.environmentLoading){const state=value.environmentLoading,label=document.getElementById('env-loading');if(label){label.style.display=state.quality==='full'?'none':'block';label.textContent=state.pending?`${state.name??'Environment'} · lighting loading…`:`${state.name??'Environment'} · ${state.quality==='preview'?'preview lighting':'neutral fallback'} · full map unavailable`;}}
+   if(value.fireSettingsWarning&&value.fireSettingsWarning!==ui?.fireSettingsWarning)report(value.fireSettingsWarning);
    ui=next;if(Object.keys(value).some(key=>['objects','selection','groups','history','document'].includes(key)))editor?.render(ui);
   },
   onPhase(value){
    for(const canvas of Object.values(canvases))canvas.dataset.sceneWorkerState=value;
-   if(value==='active')report('Scene loaded');
+   if(value==='active')report(ui?.fireSettingsWarning??'Scene loaded');
    if(['held','retiring','retired','closed'].includes(value)){ui=null;editor?.render(null);report(`Worker scene ${value}; previous scene metadata is unavailable`);}
   },
   onProgress,onError:error=>report(`Worker scene: ${error.message}`)});

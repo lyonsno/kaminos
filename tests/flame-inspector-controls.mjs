@@ -10,7 +10,7 @@ test('the contextual inspector includes current appearance, structure, motion an
   const ids=flame.FLAME_PROPERTY_GROUPS.flatMap(group=>group.fields.map(([id])=>id));
   for(const id of ['volume-tone-mapping','volume-physical-kelvin-per-heat',
     'volume-physical-soot-burnout-rate','volume-physical-soot-burnout-kelvin','volume-physical-ambient',
-    'volume-boundary-sidecar-ridge','volume-microdetail','volume-fire-licks',
+    'volume-boundary-sidecar-ridge','volume-interface-shred',
     'volume-wind-model','volume-wind-gust-period','volume-reactant-mixing-time','volume-reactant-cooling-time',
     'volume-heat-release-expansion','volume-ray-start-noise','volume-occupancy-skip',
     'volume-emitter-fuel-fraction','volume-emitter-aperture-pattern','volume-emitter-inlet-turbulence']){
@@ -19,7 +19,9 @@ test('the contextual inspector includes current appearance, structure, motion an
   assert.equal(new Set(ids).size,ids.length);
   const schema=JSON.parse(fs.readFileSync(new URL('../volume-settings-preset-schema-v2.json',import.meta.url)));
   const supported=new Set([...schema.controls,...schema.rendererControls].map(entry=>entry.key));
-  for(const id of ids)assert.ok(supported.has(id),`no invented source control ${id}`);
+  const transientPresentation=new Set(['integral-guide-view','integral-guide-gain']);
+  for(const id of transientPresentation){assert.ok(ids.includes(id),`transient inspection control ${id}`);assert.equal(supported.has(id),false,'guide inspection does not enter scene persistence');}
+  for(const id of ids)assert.ok(supported.has(id)||transientPresentation.has(id),`no invented source control ${id}`);
   assert.ok(!ids.some(id=>id.startsWith('volume-pyro-')||id==='volume-emitter-aperture-ratio'),'retired appearance and aperture experiments stay out');
 });
 
@@ -75,9 +77,9 @@ test('actual inspector synchronization follows effective fallback and marks unma
   const resolved=optical.resolveOpticalStepping(optical.opticalSteppingConfig({mode:'numerical'}),{emissive:true,exterior:true});
   const fallback={...resolved,effective:resolved.mode}; // Runtime publishes the effective mode after resolution.
   for(const [requested,receipt,expected] of [
-    ['numerical',fallback,{value:'1',disabled:true,label:'Adaptive steps'}],
-    ['history',fallback,{value:'',disabled:true,label:'Adaptivity'}],
-    ['history',{requested:'history',effective:'history'},{value:'1',disabled:true,label:'Adaptive placement'}],
+    ['numerical',fallback,{value:'0.35',disabled:true,label:undefined}],
+    ['history',fallback,{value:'0.35',disabled:true,label:undefined}],
+    ['history',{requested:'history',effective:'history'},{value:'0.35',disabled:true,label:undefined}],
   ]) {
     const field={type:'number',value:'',setAttribute(){}};const grip={};
     vm.runInNewContext(body+';syncField(true);',{

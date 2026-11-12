@@ -88,9 +88,8 @@ function currentPresetArtifact() {
   return current;
 }
 
-const additiveFineBreakupLocalization = schema.controls.find(control => control.key === 'volume-fine-breakup-localization');
-assert.equal(additiveFineBreakupLocalization?.additiveSinceControlCount, 210,
-  'the Fine Breakup localization control declares the exact schema count at which it became additive');
+const additiveFineBreakupLocalization = schema.retiredControls.find(control => control.key === 'volume-fine-breakup-localization');
+assert.ok(additiveFineBreakupLocalization, 'Fine Breakup localization is explicitly retired');
 const legacyFineBreakupArtifact = currentPresetArtifact();
 const legacyFineBreakupRoute = new URL(legacyFineBreakupArtifact.preset.route);
 const additionsSinceFineBreakup = schema.controls.filter(control => control.additiveSinceControlCount >= 210);
@@ -111,8 +110,8 @@ const legacyFineBreakupReceipt = validateVolumeSettingsPresetDocument(
   schema,
 );
 assert.deepEqual(legacyFineBreakupReceipt.retirementMigration?.addedControlIds, additionsSinceFineBreakup.map(control => control.key));
-assert.equal(legacyFineBreakupReceipt.preset.domControls[additiveFineBreakupLocalization.key].value, 0);
-assert.equal(legacyFineBreakupReceipt.presetRoute.searchParams.get(additiveFineBreakupLocalization.param), '0');
+assert.equal(legacyFineBreakupReceipt.preset.domControls[additiveFineBreakupLocalization.key], undefined);
+assert.equal(legacyFineBreakupReceipt.presetRoute.searchParams.has(additiveFineBreakupLocalization.param), false);
 assert.equal(legacyFineBreakupReceipt.preset.controlCount, schema.controlCount,
   'the original basin traverses successive declared additions before exact current-schema validation');
 
@@ -130,7 +129,7 @@ for (const control of additionsSinceCommonGas) {
 }
 legacyTransportArtifact.preset.route = legacyTransportRoute.href;
 const legacyTransportCount = Object.keys(legacyTransportArtifact.preset.domControls).length;
-assert.ok(legacyTransportCount < 211 && legacyTransportCount > legacyFineBreakupCount, 'the fixture predates common gas transport and follows the Fine Breakup addition');
+assert.equal(legacyTransportCount, legacyFineBreakupCount, 'retiring the sole intermediate addition collapses these active inventories');
 legacyTransportArtifact.controlCount = legacyTransportCount;
 legacyTransportArtifact.preset.controlCount = legacyTransportCount;
 const legacyTransportReceipt = validateVolumeSettingsPresetDocument(legacyTransportArtifact, legacyTransportArtifact.presetId, schema);
@@ -141,11 +140,11 @@ assert.equal(legacyFineBreakupReceipt.preset.domControls[commonGasTransport.key]
   'both 209- and 210-control basins retain the legacy gas transport law');
 assert.equal(validateVolumeSettingsPresetDocument(currentPresetArtifact(), parentArtifact.presetId, schema)
   .preset.domControls[commonGasTransport.key].value, false);
-const flameDoctorControls = ['volume-pressure-solver', 'volume-pressure-solver-iterations', 'volume-advection-scheme', 'volume-confinement', 'volume-time-step', 'volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-grid-height-ratio', 'volume-reaction-law', 'volume-reactant-mixing-time', 'volume-reactant-cooling-time', 'volume-physical-kelvin-per-heat', 'volume-physical-soot-burnout-rate', 'volume-physical-soot-burnout-kelvin', 'volume-appearance-model', 'volume-wavelet-turbulence', 'volume-wavelet-octaves', 'volume-wavelet-strength', 'volume-reactant-soot-yield', 'volume-swirl-jostle']
+const flameDoctorControls = ['volume-pressure-solver', 'volume-pressure-solver-iterations', 'volume-advection-scheme', 'volume-confinement', 'volume-time-step', 'volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-grid-height-ratio', 'volume-reaction-law', 'volume-reactant-mixing-time', 'volume-reactant-cooling-time', 'volume-physical-kelvin-per-heat', 'volume-physical-soot-burnout-rate', 'volume-physical-soot-burnout-kelvin', 'volume-appearance-model', 'volume-wavelet-turbulence', 'volume-wavelet-octaves', 'volume-wavelet-strength', 'volume-reactant-soot-yield']
   .map(key => schema.controls.find(control => control.key === key));
-assert.deepEqual(flameDoctorControls.map(control => control?.additiveSinceControlCount), [212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 1, 1],
+assert.deepEqual(flameDoctorControls.map(control => control?.additiveSinceControlCount), [212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 1],
   'the pressure solver, solver sweeps, advection scheme, confinement mode, time-step mode, the inflow-boundary emitter controls (fuel fraction, inlet temperature), the aperture pattern controls and swirl, the wind model controls, the grid height ratio, the reaction-law controls and the physics-appearance controls and the appearance model declare successive additive counts after common gas transport');
-assert.deepEqual(flameDoctorControls.slice(-2).map(c=>c.additiveLineage), ['reactant-soot-yield','swirl-jostle'], 'independent additions do not renumber legacy history');
+assert.equal(flameDoctorControls.at(-1).additiveLineage, 'reactant-soot-yield', 'independent additions do not renumber legacy history');
 // A hole is not history: a record that still carries a control introduced later
 // (wavelet strength, 259) cannot be missing one introduced earlier (pressure solver, 212).
 {
@@ -309,3 +308,14 @@ console.log('volume retired-control migration contracts passed');
   }
 }
 console.log('grid height cells control retirement contracts passed');
+
+// A saved obsolete selection is migrated at the document boundary, with a receipt;
+// no removed menu option or old GPU algorithm is reconstructed.
+for(const [before,after] of [['current','numerical'],['fixed-dense','fixed']]){
+ const artifact=currentPresetArtifact();const descriptor=artifact.preset.rendererControls['volume-raymarch-mode'];descriptor.value=before;
+ const route=new URL(artifact.preset.route);route.searchParams.set('volume_raymarch_mode',before);artifact.preset.route=route.href;
+ const receipt=validateVolumeSettingsPresetDocument(artifact,artifact.presetId,schema);
+ assert.equal(receipt.preset.rendererControls['volume-raymarch-mode'].value,after);
+ assert.equal(receipt.presetRoute.searchParams.get('volume_raymarch_mode'),after);
+ assert.deepEqual(receipt.retirementMigration.retiredModeChanges,[{before,after}]);
+}

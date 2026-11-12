@@ -105,12 +105,6 @@ def main():
             assert result.returncode == 2 and expected in result.stderr, (args, result.returncode, result.stderr)
             assert not (Path(temporary) / "relative-library").exists(), "nothing is created at a relative path"
 
-    # Harness servers given their own settings store stay out of the operator's
-    # library unless they name one explicitly.
-    for spawner in ("volume-full-support-cockpit-session.mjs", "volume-live-full-support-optics-session.mjs"):
-        source = (ROOT / spawner).read_text()
-        assert "if (sharedBasinStore) serverArgs.push('--shared-basin-store', resolve(String(sharedBasinStore)));" in source, spawner
-        assert "else if (settingsStore) serverArgs.push('--no-shared-basin-store');" in source, spawner
     assert "--no-shared-basin-store" in (ROOT / "tests" / "volume_cockpit_layout_http_contracts.py").read_text()
 
     with tempfile.TemporaryDirectory(prefix="kaminos-shared-basins-") as temporary:

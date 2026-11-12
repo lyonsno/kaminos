@@ -145,7 +145,7 @@ test('GI-PROXY-01: the page clears the registry when it clears a scene, and rele
   const {createWorkingScene}=await import('../working-scene.mjs'),{createSceneLifecycle}=await import('../scene-lifecycle.mjs'),vm=await import('node:vm');
   const {registry}=world(),{root}=sceneObject(heroSource);await registry.attach(root);let disposed=0;
   registry.get(root).proxyRoot.traverse(node=>node.geometry?.addEventListener('dispose',()=>disposed++));
-  const h=vm.createContext({createSceneLifecycle,prepareSavedSceneAssets:async()=>null,workingScene:createWorkingScene(),scene:{remove(){}},disposeObjectTree(){},setSceneObjectMounted(){},restoreLoadedSceneRecord(){},setSceneGroupsFromRecords(){},setSceneSelection(){},setActiveSceneObject(){},setActiveSceneGroup(){},
+  const h=vm.createContext({authoredFireUnits:new Map(),createSceneLifecycle,prepareSavedSceneAssets:async()=>null,workingScene:createWorkingScene(),scene:{remove(){}},disposeObjectTree(){},setSceneObjectMounted(){},restoreLoadedSceneRecord(){},setSceneGroupsFromRecords(){},setSceneSelection(){},setActiveSceneObject(){},setActiveSceneGroup(){},
     volumePrototype:null,setVolumePrimitivesState(){},VOLUME_PRIMITIVE_SCHEMA:"kaminos.volume-primitives.v0",clearSceneEditingState(){},clearSceneTransient(){},projectClearedScene(){},sceneGiProxies:registry,waterFeature:{clear(){}},authoredAsh:new Map(),retireSceneFlame:async()=>{},flameFeature:{clear:async()=>{}},setInfo(){},sceneSpotLights:new Map()});
   const extract=name=>{const a=html.indexOf('function '+name+'('),b=html.indexOf('\n}',a)+2;assert.ok(a>=0&&b>a);return html.slice(a,b);};
   vm.runInContext(extract('createPageSceneLifecycle')+'\n'+extract('clearSceneDomains'),h);

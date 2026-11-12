@@ -5,7 +5,6 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import {
   buildVolumeSettingsPresetTarget,
-  buildVolumeSettingsPresetVisualTarget,
   validateVolumeSettingsPresetDocument,
 } from './volume-settings-preset-contract.mjs';
 
@@ -14,7 +13,13 @@ export const BASIN_PROMOTION_CHANNEL_SCHEMA = 'kaminos.volume.basin-promotion-ch
 export const BASIN_PROMOTION_MOUNT_SCHEMA = 'kaminos.volume.basin-promotion-mount.v1';
 export const BASIN_PROMOTION_ROUTING_SCHEMA = 'kaminos.volume.basin-promotion-routing.v1';
 
-const VIEWS = Object.freeze(['splat-only', 'raymarch-only', 'smoke-hybrid', 'full-hybrid-diagnostic']);
+export const BASIN_PROMOTION_ROUTE_IDENTITY = 'kaminos.volume.basin-route-templates.v2';
+const LEGACY_VISUAL_COMPOSITIONS = Object.freeze({
+  'splat-only': 'splat-only-v0',
+  'raymarch-only': 'raymarch-only-v0',
+  'smoke-hybrid': 'smoke-raymarch-under-splats-v0',
+  'full-hybrid-diagnostic': 'full-raymarch-under-splats-diagnostic-v0',
+});
 const GIT_COMMIT = /^[0-9a-f]{40}$/;
 const REVISION = /^basinrev-[a-f0-9]{64}$/;
 const ROUTE_ORIGIN = 'http://kaminos.invalid';
@@ -152,10 +157,34 @@ function relativeTarget(target) {
 }
 
 function buildRouteTemplates(settingsReceipt) {
+  // Resolve through the consumer server's schema migration. Embedded historical
+  // schemas remain immutable and need not match this checkout's live controls.
+  const loader = new URL('/volume-settings-preset.html', ROUTE_ORIGIN);
+  loader.searchParams.set('preset', settingsReceipt.presetId);
+  return {
+    identity: BASIN_PROMOTION_ROUTE_IDENTITY,
+    loader: relativeTarget(loader),
+    visual: { 'raymarch-only': relativeTarget(loader) },
+    sourcePresetAuthority: settingsReceipt.sourcePresetAuthority,
+  };
+}
+
+// Historical package hashes bind these exact URL templates. This serializer
+// validates their original identity only; mounts never execute these routes.
+function historicalRouteTemplates(settingsReceipt) {
   const loaderTarget = buildVolumeSettingsPresetTarget(settingsReceipt, ROUTE_ORIGIN);
   const visual = {};
-  for (const view of VIEWS) {
-    visual[view] = relativeTarget(buildVolumeSettingsPresetVisualTarget(settingsReceipt, ROUTE_ORIGIN, view));
+  for (const [view, composition] of Object.entries(LEGACY_VISUAL_COMPOSITIONS)) {
+    const target = new URL('/volume-selective-head-live.html', ROUTE_ORIGIN);
+    for (const [key, value] of settingsReceipt.routeVolumeEntries) target.searchParams.set(key, value);
+    target.searchParams.set('role', 'truthHigh');
+    target.searchParams.set('composition', composition);
+    target.searchParams.set('warmup_steps', '0');
+    target.searchParams.set('volume_presentation', 'beauty');
+    target.searchParams.set('volume_raymarch_smoke', view === 'splat-only' ? 'off' : 'on');
+    target.searchParams.set('settings_preset', settingsReceipt.presetId);
+    target.searchParams.set('settings_preset_authority', settingsReceipt.sourcePresetAuthority);
+    visual[view] = relativeTarget(target);
   }
   return {
     loader: relativeTarget(loaderTarget),
@@ -305,7 +334,12 @@ export function validateBasinPromotionPackage(packageDocument) {
   assertSettingsPresetSummary(document.settingsPreset, settingsReceipt);
   const effectiveState = normalizeEffectiveState(document.effectiveState);
   assertEffectiveStatePresetBinding(effectiveState, settingsReceipt.presetId);
-  const expectedRoutes = buildRouteTemplates(settingsReceipt);
+  if (document.routes?.identity !== undefined && document.routes.identity !== BASIN_PROMOTION_ROUTE_IDENTITY) {
+    throw new Error('basin promotion package route identity is unsupported');
+  }
+  const expectedRoutes = document.routes?.identity === undefined
+    ? historicalRouteTemplates(settingsReceipt)
+    : buildRouteTemplates(settingsReceipt);
   if (canonicalJson(document.routes) !== canonicalJson(expectedRoutes)) {
     throw new Error('basin promotion package route templates do not match embedded preset');
   }
@@ -486,7 +520,12 @@ export function mountBasinPromotionPackage(options = {}) {
   if (channel.current.packageSha256 !== packageSha256) throw new Error('basin promotion channel package hash mismatch');
 
   const presetPath = installPresetArtifact(settingsStoreInput, packageDocument);
-  const materializedRoutes = materializeRoutes(packageDocument.routes, options.origin);
+  const materializedRoutes = {
+    ...materializeRoutes(buildRouteTemplates(packageDocument.settingsPreset), options.origin),
+    identity: BASIN_PROMOTION_ROUTE_IDENTITY,
+    sourceRouteIdentity: packageDocument.routes.identity || 'kaminos.volume.basin-route-templates.v1',
+    retiredVisualViews: Object.keys(packageDocument.routes.visual).filter(view => view !== 'raymarch-only'),
+  };
   const mountPathInput = options.outPath || options.out;
   const mountPath = mountPathInput ? resolve(mountPathInput) : null;
   const locatorBase = mountPath ? dirname(mountPath) : dirname(channelPath);

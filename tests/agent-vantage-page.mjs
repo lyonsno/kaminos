@@ -797,7 +797,7 @@ test('the lighting probe never picks through the sub panel or a borrowed camera'
   globalThis.location ??= {href: 'http://127.0.0.1/index.html'};
   mountLightingDebugView({document, renderer, camera, held: () => held, drawFrame() {}, beginSceneInspection: () => () => {},
     getLighting: () => ({inspectSurface: async () => ({}), inspectionMeshes: () => [], debugState: () => ({})}),
-    getPrototype: () => ({debugState: () => ({}), setSelectiveHeadLiveCapturePaused() {}})});
+    getPrototype: () => ({debugState: () => ({}), setCapturePaused() {}})});
   document.getElementById('rendering-light-debug-pick').onclick();
   const status = () => document.getElementById('rendering-light-debug-status').textContent;
   const armedText = status();

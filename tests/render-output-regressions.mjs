@@ -5,12 +5,12 @@ import {captureStill} from '../render-output.mjs';
 import SceneGIHistory from '../scene-gi-history.mjs';
 const source=readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
 function heldFixture(){
- const at=source.indexOf('    async holdPresentationForStill('),end=source.indexOf('    setSelectiveHeadLiveCapturePaused(',at);
+ const at=source.indexOf('    async holdPresentationForStill('),end=source.indexOf('    setCapturePaused(',at);
  const start=source.indexOf('  function render(now) {'),stop=source.indexOf('\n  function invalidateRaymarchReadouts(',start);
  let admitted,complete;
- const calls=[];const queue={},device={queue,limits:{maxTextureDimension2D:8192}},scope={deviceRetired:false,state:{active:true,width:320,height:240,frameCount:0,simStepCount:0},device,productFrameOwner:'prototype',boundarySplatRequested:()=>false,browserResidualCanApply:()=>false,canvasPresentationSuppressed:false,sceneTransportConsumer:null,sceneLightingRebuildPending:false,selectiveHeadLiveExactPause:null,selectiveHeadLiveCapturePaused:false,stillPresentationHeld:false,controlsSnapshot:{renderScale:1,raySteps:160},cancelAnimationFrame(){},requestAnimationFrame(){calls.push('scheduled');return 1;},raf:0,foregroundPending:null,foregroundSequence:0,foregroundDrain:Promise.resolve(),performance:{now:()=>100},canvas:{classList:{remove(){calls.push('removed');}}},emitStatus:s=>calls.push(s),resize(){},sampleFrame:async()=>({ok:true,image:{width:320,height:240,rgba:[]}})};
+ const calls=[];const queue={},device={queue,limits:{maxTextureDimension2D:8192}},scope={deviceRetired:false,state:{active:true,width:320,height:240,frameCount:0,simStepCount:0},device,productFrameOwner:'prototype',boundarySplatRequested:()=>false,browserResidualCanApply:()=>false,canvasPresentationSuppressed:false,sceneTransportConsumer:null,sceneLightingRebuildPending:false,exactCapturePause:null,capturePaused:false,stillPresentationHeld:false,controlsSnapshot:{renderScale:1,raySteps:160},cancelAnimationFrame(){},requestAnimationFrame(){calls.push('scheduled');return 1;},raf:0,foregroundPending:null,foregroundSequence:0,foregroundDrain:Promise.resolve(),performance:{now:()=>100},canvas:{classList:{remove(){calls.push('removed');}}},emitStatus:s=>calls.push(s),resize(){},sampleFrame:async()=>({ok:true,image:{width:320,height:240,rgba:[]}})};
  scope.foregroundRequester=request=>{admitted=request;return {completion:new Promise(resolve=>{complete=resolve;})};};
- scope.renderOrdinaryFrame=()=>{if(scope.selectiveHeadLiveCapturePaused)return;scope.state.frameCount++;scope.state.simStepCount++;return {status:'submitted'};};
+ scope.renderOrdinaryFrame=()=>{if(scope.capturePaused)return;scope.state.frameCount++;scope.state.simStepCount++;return {status:'submitted'};};
  scope.state.ordinaryForeground={completedFrames:0};vm.createContext(scope);vm.runInContext(source.slice(start,stop)+'\nglobalThis.hold=({'+source.slice(at,end)+'}).holdPresentationForStill;',scope);
  return {scope,calls,async queue(){scope.render(0);await Promise.resolve();return ()=>{const result=admitted.run({device,queue,submit(){}});complete({status:'completed',result});};}};
 }
@@ -18,13 +18,13 @@ test('capture acquisition lets an admitted foreground frame finish and blocks ne
  const f=heldFixture(),finish=await f.queue(),pending=f.scope.hold();
  finish();const hold=await pending;assert.equal(f.scope.state.active,true);assert.equal(f.scope.state.ordinaryForeground.completedFrames,1);
  const step=f.scope.state.simStepCount;f.scope.render(1);await Promise.resolve();assert.equal(f.scope.state.simStepCount,step);
- await hold.draw();assert.equal(f.scope.state.simStepCount,step);hold.release();assert.equal(f.scope.selectiveHeadLiveCapturePaused,false);assert.ok(f.calls.includes('scheduled'));assert.ok(!f.calls.includes('removed'));
+ await hold.draw();assert.equal(f.scope.state.simStepCount,step);hold.release();assert.equal(f.scope.capturePaused,false);assert.ok(f.calls.includes('scheduled'));assert.ok(!f.calls.includes('removed'));
 });
 test('cancellation during foreground acquisition releases a live unpaused renderer',async()=>{
  const f=heldFixture(),finish=await f.queue(),abort=new AbortController();
  const capture=captureStill({async begin({signal}){const held=await f.scope.hold();try{signal.throwIfAborted();return {draw:held.draw,capture:()=>({dataUrl:'data:image/png;base64,AAAA',width:320,height:240}),release:held.release};}catch(error){held.release();throw error;}}});
  const pending=capture({width:320,height:240},{signal:abort.signal});abort.abort();finish();await assert.rejects(pending,error=>error.name==='AbortError');
- assert.equal(f.scope.state.active,true);assert.equal(f.scope.selectiveHeadLiveCapturePaused,false);assert.equal(f.scope.state.error,undefined);assert.ok(f.calls.includes('scheduled'));
+ assert.equal(f.scope.state.active,true);assert.equal(f.scope.capturePaused,false);assert.equal(f.scope.state.error,undefined);assert.ok(f.calls.includes('scheduled'));
 });
 
 function uiFixture(){
@@ -61,7 +61,7 @@ for(const outcome of ['success','failure','cancel'])test(`host-composed still ke
  if(outcome==='success')await result;else await assert.rejects(result,outcome==='cancel'?{name:'AbortError'}:/capture GPU failed/);
  assert.equal(requests.length,1);assert.equal(requests[0].includeRgba,false);
  assert.equal(f.scope.sceneTransportConsumer,consumer);assert.equal(f.scope.state.simStepCount,0);
- assert.equal(f.scope.controlsSnapshot,controls);assert.equal(f.scope.selectiveHeadLiveCapturePaused,false);assert.equal(f.scope.stillPresentationHeld,false);assert.equal(f.scope.state.active,true);
+ assert.equal(f.scope.controlsSnapshot,controls);assert.equal(f.scope.capturePaused,false);assert.equal(f.scope.stillPresentationHeld,false);assert.equal(f.scope.state.active,true);
 });
 
 // Execute the actual page output owner: it must request the composed frame

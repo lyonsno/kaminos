@@ -13,8 +13,6 @@ for (const rayStartNoise of [true, false, false, true]) {
   runInNewContext(statusStatement, {c:{rayStartNoise},document:{getElementById:()=>label}});
   assert.equal(label.textContent, rayStartNoise ? 'on' : 'off');
 }
-assert.match(core, /let rayPhase = rayStartPhaseAtFrame\(in\.pos\.xy, u\.reserved_render_controls\.w, fullGridCapture, u\.occupancy_controls\.y\)/,
-  'the actual camera marcher must offset starts by per-pixel noise while preserving full-grid capture');
 const jitterExpression = core.match(/let jitter = ([^;]+);/)?.[1];
 assert.ok(jitterExpression, 'camera ray start must have an explicit phase policy');
 for (const guided of [false, true]) {

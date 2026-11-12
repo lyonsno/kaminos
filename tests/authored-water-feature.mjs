@@ -30,3 +30,8 @@ console.log('Authored preview stays lazy; experiment and authored integration sh
  await current.dispose();assert.deepEqual(projections,[null],'Closing must publish absent water to controls');assert.equal(feature.host,null);assert.equal(destroyed,2);assert.equal(redraws,before+1,'Closing the current experiment must redraw its removed presentation');
  await current.dispose();assert.equal(redraws,before+1,'Repeated close remains inert');
 }
+{
+ const feature=createAuthoredWaterFeature({services:()=>({}),emitters:()=>[]});
+ await assert.rejects(feature.openExperiment({dt:1}),/Numerical water experiments are not mounted/);
+ assert.equal(feature.host,null);assert.equal(feature.setup,null);
+}

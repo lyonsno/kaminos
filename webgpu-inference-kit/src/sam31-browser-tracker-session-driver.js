@@ -80,12 +80,12 @@ export function createSam31BrowserTrackerPackageAuthority(packageRuntime) {
   };
 }
 
-async function sha256Bytes(values) {
+export async function sha256Bytes(values) {
   const digest = await crypto.subtle.digest('SHA-256', values.buffer.slice(values.byteOffset, values.byteOffset + values.byteLength));
   return `sha256:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')}`;
 }
 
-async function sha256Text(value) {
+export async function sha256Text(value) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
   return `sha256:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')}`;
 }
@@ -115,7 +115,7 @@ function finiteRatio(numerator, denominator) {
 function entryMap(entries) { return Object.fromEntries(entries.map(entry => [entry.role, entry])); }
 function scopedArtifactId(value, invocationTag) { return `${value}:${invocationTag}`; }
 
-async function loadDecoderWeights(manifest, loadFloat32) {
+export async function loadDecoderWeights(manifest, loadFloat32) {
   const weights = {};
   for (const entry of manifest.weights) {
     const key = entry.group === 'decoder' ? entry.localKey : `${entry.group}.${entry.localKey}`;
@@ -124,7 +124,7 @@ async function loadDecoderWeights(manifest, loadFloat32) {
   return weights;
 }
 
-async function loadInteractivePointerWeights(manifest, loadFloat32) {
+export async function loadInteractivePointerWeights(manifest, loadFloat32) {
   const weights = {};
   for (const entry of manifest.weights) {
     weights[`${entry.group}.${entry.localKey}`] = await loadFloat32(entry);
@@ -132,7 +132,7 @@ async function loadInteractivePointerWeights(manifest, loadFloat32) {
   return weights;
 }
 
-async function loadMemoryWeights(manifest, loadFloat32) {
+export async function loadMemoryWeights(manifest, loadFloat32) {
   const byRole = entryMap(manifest.weights);
   const weight = role => loadFloat32(byRole[role]);
   const conv = async (prefix, { stride = 1, padding = 0, activation = null, groups = 1 } = {}) => {
@@ -161,7 +161,7 @@ async function loadMemoryWeights(manifest, loadFloat32) {
   return result;
 }
 
-async function loadAttentionWeights(manifest, loadFloat32) {
+export async function loadAttentionWeights(manifest, loadFloat32) {
   const byRole = entryMap(manifest.attentionWeights);
   const weight = role => loadFloat32(byRole[role]);
   const projection = async (prefix, inChannels, outChannels) => ({ weight: await weight(`${prefix}-weight`), bias: await weight(`${prefix}-bias`), inChannels, outChannels });
@@ -211,15 +211,25 @@ export function deriveSam31BrowserTrackerExecutionContracts({
   });
 }
 
-async function decoderInvocation({ frame, inputs, expected, manifest, weights, weightsHash, adapter, device, adapterInfo, errors, commit, userAgent, invocationTag, residentTensorResolver }) {
+export async function hashSam31DecoderInputs(inputs) {
+  const hashes = [];
+  for (const name of ['imageEmbedding', 'imagePosition', 'highResolutionS0', 'highResolutionS1', 'extraPerObjectEmbedding']) {
+    const value = inputs[name];
+    hashes.push([name, value.byteLength, await sha256Bytes(value)]);
+  }
+  return sha256Text(JSON.stringify(hashes));
+}
+
+export async function decoderInvocation({ frame, inputs, expected, manifest, weights, weightsHash, adapter, device, adapterInfo, errors, commit, userAgent, invocationTag, residentTensorResolver, schedule }) {
   const scopedOutputId = value => scopedArtifactId(value, invocationTag);
   const route = createSam31MultiplexMaskDecoderPhaseProgramRouteDefinition({ model: { revision: manifest.reference.model.revision }, kernel: { profile: 'sam31-multiplex-mask-decoder-phase-program-v0', commit: commit } });
   const sourceHash = await sha256Bytes(inputs.imageEmbedding);
+  const inputsHash = await hashSam31DecoderInputs(inputs);
   const request = createRouteInvocationRequest(route, {
     requestId: scopedArtifactId(`sam31-two-frame-decoder-${frame}-${Date.now()}`, invocationTag),
     inputs: {
       'source-frame': { artifactId: `sam31-two-frame:${frame}`, sha256: sourceHash, shape: [1] },
-      'sam31-multiplex-decoder-tensors': { artifactId: `sam31-two-frame-decoder-tensors:${frame}`, sha256: sourceHash, shape: [5] },
+      'sam31-multiplex-decoder-tensors': { artifactId: `sam31-two-frame-decoder-tensors:${frame}`, sha256: inputsHash, shape: [5] },
       'sam31-multiplex-decoder-weights': { artifactId: 'sam31-multiplex-decoder-weights:official', sha256: weightsHash, mappedTensorCount: manifest.weights.length },
     },
     outputs: {
@@ -231,7 +241,7 @@ async function decoderInvocation({ frame, inputs, expected, manifest, weights, w
     },
   });
   const started = performance.now();
-  const result = await runSam31MultiplexMaskDecoderPhaseProgramRoute({ request, route, adapter, device, queue: device.queue, adapterName: adapterInfo.description || 'browser-webgpu-adapter', browser: userAgent, model: { revision: manifest.reference.model.revision, weightsHash }, kernel: route.kernel, tensors: { shape: manifest.shape, tensors: inputs, weights }, residentTensorResolver, includeReadback: true });
+  const result = await runSam31MultiplexMaskDecoderPhaseProgramRoute({ schedule, request, route, adapter, device, queue: device.queue, adapterName: adapterInfo.description || 'browser-webgpu-adapter', browser: userAgent, model: { revision: manifest.reference.model.revision, weightsHash }, kernel: route.kernel, tensors: { shape: manifest.shape, tensors: inputs, weights }, residentTensorResolver, includeReadback: true });
   const durationMs = performance.now() - started;
   const diagnostics = expected ? {
     selectedMasks: parityDiagnostics(result.debugReadback.selectedMasks, expected.selectedMasks),
@@ -243,7 +253,7 @@ async function decoderInvocation({ frame, inputs, expected, manifest, weights, w
   return { result, route, requestId: request.requestId, parity, diagnostics, maximum: parity ? Math.max(...Object.values(parity)) : null, durationMs };
 }
 
-async function maskConditioningInvocation({ inputs, expected, manifest, adapter, device, adapterInfo, errors, commit, userAgent, invocationTag }) {
+export async function maskConditioningInvocation({ inputs, expected, manifest, adapter, device, adapterInfo, errors, commit, userAgent, invocationTag, schedule }) {
   const scopedOutputId = value => scopedArtifactId(value, invocationTag);
   const route = createSam31MaskConditioningPhaseProgramRouteDefinition({ model: { revision: manifest.reference.model.revision }, kernel: { profile: 'sam31-mask-conditioning-phase-program-v0', commit: commit } });
   const sourceHash = await sha256Bytes(inputs.imageEmbedding);
@@ -260,7 +270,7 @@ async function maskConditioningInvocation({ inputs, expected, manifest, adapter,
     },
   });
   const started = performance.now();
-  const result = await runSam31MaskConditioningPhaseProgramRoute({
+  const result = await runSam31MaskConditioningPhaseProgramRoute({ schedule,
     request,
     route,
     adapter,
@@ -282,7 +292,7 @@ async function maskConditioningInvocation({ inputs, expected, manifest, adapter,
   return { result, route, requestId: request.requestId, parity, maximum: parity ? Math.max(...Object.values(parity)) : null, durationMs };
 }
 
-async function interactivePointerInvocation({ inputs, expected, manifest, weights, adapter, device, adapterInfo, errors, commit, userAgent, invocationTag, residentTensorResolver }) {
+export async function interactivePointerInvocation({ inputs, expected, manifest, weights, adapter, device, adapterInfo, errors, commit, userAgent, invocationTag, residentTensorResolver, schedule }) {
   const scopedOutputId = value => scopedArtifactId(value, invocationTag);
   const route = createSam31InteractivePointerPhaseProgramRouteDefinition({ model: { revision: manifest.reference.model.revision }, kernel: { profile: 'sam31-interactive-pointer-phase-program-v0', commit: commit } });
   const sourceHash = await sha256Bytes(inputs.imageEmbedding);
@@ -299,7 +309,7 @@ async function interactivePointerInvocation({ inputs, expected, manifest, weight
     outputs: { 'sam31-interactive-object-pointers': { artifactId: scopedOutputId('sam31-frame-0-interactive-object-pointers'), shape: [manifest.shape.batch, manifest.shape.channels] } },
   });
   const started = performance.now();
-  const result = await runSam31InteractivePointerPhaseProgramRoute({
+  const result = await runSam31InteractivePointerPhaseProgramRoute({ schedule,
     request, route, adapter, device, queue: device.queue,
     adapterName: adapterInfo.description || 'browser-webgpu-adapter', browser: userAgent,
     model: { revision: manifest.reference.model.revision, weightsHash }, kernel: route.kernel,

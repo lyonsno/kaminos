@@ -11,6 +11,7 @@ const observed=JSON.parse(readFileSync(new URL('./fixtures/fire-scene-816e82aa1.
 // claim that this generated preset is an observed operator preset artifact.
 function historicalPreset(){
  const settings=structuredClone(observed);
+ settings.domControls['volume-appearance-model'].value='shred-only';
  // This replay isolates DOM history; renderer defaults arrive through the
  // existing server/scene schema projection before public preset validation.
  settings.rendererControls=projectFireSettingsToSchema(observed,schema).rendererControls;

@@ -3,13 +3,13 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const start=source.includes('function sceneViewerPlaybackState(')?source.indexOf('function sceneViewerPlaybackState('):source.indexOf('function syncVolumeViewerPlay('),end=source.indexOf('function refreshVolumeReadout()',start);
+const start=source.includes('function sceneViewerPlaybackState(')?source.indexOf('function sceneViewerPlaybackState('):source.indexOf('function syncVolumeViewerPlay('),end=source.indexOf('function releaseReconstructionEvaluationCamera()',start);
 assert.ok(start>=0&&end>start);
 for(const fire of [true,false])for(const water of [true,false]) {
  const listeners={},pauseGlyph={style:{}},playGlyph={style:{}};
  const button={hidden:true,dataset:{},setAttribute(k,v){this[k]=v;},querySelector(k){return k==='.pause-glyph'?pauseGlyph:playGlyph;},addEventListener(k,fn){listeners[k]=fn;}};
  const freeze={value:'0',dispatchEvent(){}};
- const context={document:{getElementById:id=>id==='volume-viewer-play'?button:id==='volume-look-freeze'?freeze:id==='kaminos-volume-canvas'?{classList:{contains:()=>fire}}:null},
+ const context={authoredFireUnits:new Map(),document:{getElementById:id=>id==='volume-viewer-play'?button:id==='volume-look-freeze'?freeze:id==='kaminos-volume-canvas'?{classList:{contains:()=>fire}}:null},
   Event:class{},volumePrototype:{isActive:()=>fire,debugState:()=>({active:fire})},localLiquidHost:water?{}:null,localLiquidPaused:false,sceneViewerPaused:null,window:{}};
  context.window.kaminosPauseLocalLiquid=value=>{context.localLiquidPaused=value;};
  context.waterFeature={get host(){return context.localLiquidHost;},get paused(){return context.localLiquidPaused;}};

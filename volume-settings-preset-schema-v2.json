@@ -1,7 +1,20 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 174,
+  "controlCount": 165,
   "controls": [
+    {
+      "key": "volume-world-smoke-join",
+      "param": "volume_world_smoke_join",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "allowedValues": [
+        "prescribed-flow",
+        "projected-donor"
+      ],
+      "additiveDefault": "prescribed-flow",
+      "additiveLineage": "box-join",
+      "additiveSinceControlCount": 1
+    },
     {
       "key": "volume-fine-velocity",
       "param": "volume_fine_velocity",
@@ -292,14 +305,6 @@
       "tagName": "INPUT",
       "type": "checkbox",
       "additiveDefault": true
-    },
-    {
-      "key": "volume-fine-breakup-localization",
-      "param": "volume_fine_breakup_localization",
-      "tagName": "INPUT",
-      "type": "range",
-      "additiveDefault": 0,
-      "additiveSinceControlCount": 210
     },
     {
       "key": "volume-common-gas-transport",
@@ -788,20 +793,8 @@
       "type": "range"
     },
     {
-      "key": "volume-microdetail",
-      "param": "volume_microdetail",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
       "key": "volume-interface-shred",
       "param": "volume_interface_shred",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
-      "key": "volume-fire-licks",
-      "param": "volume_fire_licks",
       "tagName": "INPUT",
       "type": "range"
     },
@@ -814,12 +807,6 @@
     {
       "key": "volume-speed",
       "param": "volume_speed",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
-      "key": "volume-fire-scale",
-      "param": "volume_fire_scale",
       "tagName": "INPUT",
       "type": "range"
     },
@@ -866,13 +853,6 @@
       "type": "range"
     },
     {
-      "key": "volume-adaptive-rays",
-      "param": "volume_adaptive_rays",
-      "tagName": "INPUT",
-      "type": "range",
-      "additiveDefault": 0.65
-    },
-    {
       "key": "volume-occupancy-skip",
       "param": "volume_occupancy_skip",
       "tagName": "INPUT",
@@ -883,30 +863,6 @@
       "param": "volume_render_scale",
       "tagName": "INPUT",
       "type": "range"
-    },
-    {
-      "key": "volume-residual-mode",
-      "param": "volume_residual_mode",
-      "tagName": "SELECT",
-      "type": "select-one"
-    },
-    {
-      "key": "volume-residual-strength",
-      "param": "volume_residual_strength",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
-      "key": "volume-residual-feature-debug",
-      "param": "volume_residual_feature_debug",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
-      "key": "volume-residual-model-url",
-      "param": "volume_residual_model_url",
-      "tagName": "INPUT",
-      "type": "text"
     },
     {
       "key": "volume-resolution",
@@ -1005,9 +961,8 @@
       "param": "volume_reaction_law",
       "tagName": "SELECT",
       "type": "select-one",
-      "additiveDefault": "authored-tall-plume",
+      "additiveDefault": "reactant-v0",
       "allowedValues": [
-        "authored-tall-plume",
         "reactant-v0"
       ],
       "additiveSinceControlCount": 250
@@ -1057,10 +1012,8 @@
       "param": "volume_appearance_model",
       "tagName": "SELECT",
       "type": "select-one",
-      "additiveDefault": "authored",
+      "additiveDefault": "shred-only",
       "allowedValues": [
-        "authored",
-        "compact-3",
         "shred-only"
       ],
       "additiveSinceControlCount": 256
@@ -1097,15 +1050,6 @@
       "additiveDefault": 2,
       "additiveLineage": "reactant-soot-yield",
       "additiveSinceControlCount": 1
-    },
-    {
-      "key": "volume-swirl-jostle",
-      "param": "volume_swirl_jostle",
-      "tagName": "INPUT",
-      "type": "range",
-      "additiveDefault": 1,
-      "additiveSinceControlCount": 1,
-      "additiveLineage": "swirl-jostle"
     },
     {
       "key": "volume-adaptive-material",
@@ -2316,21 +2260,99 @@
       "param": "volume_force_fine_breakup",
       "tagName": "INPUT",
       "type": "checkbox"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-microdetail",
+      "param": "volume_microdetail",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-fire-licks",
+      "param": "volume_fire_licks",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-swirl-jostle",
+      "param": "volume_swirl_jostle",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-fine-breakup-localization",
+      "param": "volume_fine_breakup_localization",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-fire-scale",
+      "param": "volume_fire_scale",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-adaptive-rays",
+      "param": "volume_adaptive_rays",
+      "tagName": "INPUT",
+      "type": "range",
+      "axis": "domControls"
+    },
+    {
+      "key": "volume-residual-mode",
+      "param": "volume_residual_mode",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "axis": "domControls"
+    },
+    {
+      "key": "volume-residual-strength",
+      "param": "volume_residual_strength",
+      "tagName": "INPUT",
+      "type": "range",
+      "axis": "domControls"
+    },
+    {
+      "key": "volume-residual-feature-debug",
+      "param": "volume_residual_feature_debug",
+      "tagName": "INPUT",
+      "type": "range",
+      "axis": "domControls"
+    },
+    {
+      "key": "volume-residual-model-url",
+      "param": "volume_residual_model_url",
+      "tagName": "INPUT",
+      "type": "text",
+      "axis": "domControls"
     }
   ],
   "rendererControls": [
+    {
+      "key": "volume-occupancy-threshold",
+      "param": "volume_occupancy_threshold",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 0
+    },
     {
       "key": "volume-raymarch-mode",
       "param": "volume_raymarch_mode",
       "tagName": "SELECT",
       "type": "select-one",
       "allowedValues": [
-        "current",
         "numerical",
         "fixed",
         "budgeted",
         "joins",
-        "history"
+        "history",
+        "current",
+        "fixed-dense"
       ],
       "additiveDefault": "numerical"
     },
@@ -2340,6 +2362,20 @@
       "tagName": "INPUT",
       "type": "number",
       "additiveDefault": 0.001
+    },
+    {
+      "key": "volume-history-influence",
+      "param": "volume_history_influence",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 1
+    },
+    {
+      "key": "volume-history-window",
+      "param": "volume_history_window",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 1
     },
     {
       "key": "volume-ray-step-telemetry",
@@ -2479,6 +2515,80 @@
       "param": "volume_flow_kernel_coherence",
       "tagName": "INPUT",
       "type": "range",
+      "additiveDefault": 1
+    },
+    {
+      "key": "volume-integral-reconstruction",
+      "param": "volume_integral_reconstruction",
+      "tagName": "SELECT",
+      "additiveDefault": "off",
+      "type": "select-one",
+      "allowedValues": [
+        "off",
+        "spatial",
+        "temporal",
+        "combined"
+      ]
+    },
+    {
+      "key": "volume-reconstruction-spatial",
+      "param": "volume_reconstruction_spatial",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 0.6
+    },
+    {
+      "key": "volume-reconstruction-radius",
+      "param": "volume_reconstruction_radius",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 1
+    },
+    {
+      "key": "volume-reconstruction-window",
+      "param": "volume_reconstruction_window",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 8
+    },
+    {
+      "key": "volume-reconstruction-response",
+      "param": "volume_reconstruction_response",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 1
+    },
+    {
+      "key": "volume-reconstruction-edge",
+      "param": "volume_reconstruction_edge",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 2
+    },
+    {
+      "key": "volume-reconstruction-fresh",
+      "param": "volume_reconstruction_fresh",
+      "tagName": "INPUT",
+      "type": "checkbox",
+      "additiveDefault": true
+    },
+    {
+      "key": "volume-reconstruction-edges",
+      "param": "volume_reconstruction_edges",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "additiveDefault": "samples",
+      "allowedValues": [
+        "off",
+        "samples",
+        "image"
+      ]
+    },
+    {
+      "key": "volume-reconstruction-image-edge",
+      "param": "volume_reconstruction_image_edge",
+      "tagName": "INPUT",
+      "type": "number",
       "additiveDefault": 1
     }
   ],

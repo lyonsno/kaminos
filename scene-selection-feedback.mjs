@@ -1,5 +1,6 @@
 import * as THREE from './lib/three.webgpu.js';
 import {pass,vec2,vec4,mix,textureSize,screenUV,uniform} from './lib/three.tsl.js';
+import {isSurfaceSplatResolve} from './surface-splat-support.mjs';
 import {presentedSurface} from './scene-presented-surface.mjs';
 
 // This mask owns no authored geometry/materials. It never enters lighting,
@@ -25,6 +26,7 @@ export function createSelectionFeedback(camera) {
 // and LODs are settled for the camera first, so the outline matches the level the render is about to draw.
 function createSelectionMaskProxies(maskScene,{selected,active,pairs=[],camera=null}){
   let roots=[];
+  const splatProxy=source=>{for(let p=source;p;p=p.parent)if(p.isSurfaceSplatObject)return !isSurfaceSplatResolve(source);return false;};
   const shown=(source,root)=>{for(let o=source;o;o=o.parent){if(!o.visible)return false;if(o===root)return true;}return true;};
   function update(entries,activeIds){
     const next=entries.map(entry=>entry.object),activeSet=new Set(activeIds);
@@ -32,7 +34,7 @@ function createSelectionMaskProxies(maskScene,{selected,active,pairs=[],camera=n
     for(const entry of entries)entry.object.traverse(source=>{
       const presentation=presentedSurface(source);
       if(presentation)meshes.push({source:presentation.mesh,owner:source,id:entry.id,root:entry.object,presentation});
-      else if(source.isMesh&&!source.isSkinnedMesh&&!source.geometry?.indirect&&!source.material?.positionNode&&!source.userData.kaminosEditorHelper&&!source.userData.kaminosEditorOnly)meshes.push({source,id:entry.id,root:entry.object});
+      else if(!isSurfaceSplatResolve(source)&&(splatProxy(source)||[].concat(source.material??[]).some(m=>m.visible!==false))&&source.isMesh&&!source.isSkinnedMesh&&!source.geometry?.indirect&&!source.material?.positionNode&&!source.userData.kaminosEditorHelper&&!source.userData.kaminosEditorOnly)meshes.push({source,id:entry.id,root:entry.object});
     });
     if(next.length!==roots.length||next.some((object,i)=>object!==roots[i])||meshes.length!==pairs.length||meshes.some((mesh,i)=>mesh.source!==pairs[i].source||mesh.id!==pairs[i].id)){
       for(const pair of pairs)for(const material of pair.owned??[])material.dispose();
@@ -40,7 +42,7 @@ function createSelectionMaskProxies(maskScene,{selected,active,pairs=[],camera=n
       for(const {source,owner,id,root,presentation} of meshes){
         const proxy=source.isInstancedMesh?new THREE.InstancedMesh(source.geometry,selected,source.count):new THREE.Mesh(source.geometry,selected);
         const owned=[];
-        const materialFor=base=>{const make=material=>{const mask=base.clone();for(const key of ['positionNode','maskNode','opacityNode','alphaTest','side'])mask[key]=material[key];owned.push(mask);return mask;};return Array.isArray(source.material)?source.material.map(make):make(source.material);};
+        const materialFor=base=>{const make=material=>{const mask=base.clone();for(const key of ['vertexNode','positionNode','maskNode','depthNode','opacityNode','alphaTest','side'])mask[key]=material[key];owned.push(mask);return mask;};return Array.isArray(source.material)?source.material.map(make):make(source.material);};
         const masks=presentation?{selected:materialFor(selected),active:materialFor(active)}:{selected,active};
         proxy.matrixAutoUpdate=false;proxy.frustumCulled=source.frustumCulled;maskScene.add(proxy);pairs.push({source,owner,proxy,id,root,masks,owned});
       }

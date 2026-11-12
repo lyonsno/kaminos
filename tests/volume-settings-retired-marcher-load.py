@@ -23,26 +23,35 @@ with tempfile.TemporaryDirectory() as tmp:
     result = serve.read_volume_settings_preset(store, observed["presetId"])
     assert result["presetId"] == observed["presetId"]
     assert path.read_bytes() == before, "loading must preserve the content-addressed artifact"
-    assert result["schemaProjection"]["defaultsApplied"] == ["volume-adaptive-rays"]
+    assert "volume-adaptive-rays" not in result["schemaProjection"]["defaultsApplied"]
+    assert result["preset"]["domControls"]["volume-world-smoke-join"]["value"] == "prescribed-flow"
     preset = result["preset"]
-    assert preset["domControls"]["volume-adaptive-rays"]["value"] == 0.65
+    assert "volume-adaptive-rays" not in preset["domControls"]
     for key, descriptor in observed["preset"]["domControls"].items():
-        assert preset["domControls"][key] == descriptor, key
+        if any(entry["key"] == key for entry in serve._load_volume_settings_preset_schema()["retiredControls"]):
+            assert key not in preset["domControls"]
+        elif key == "volume-appearance-model":
+            assert preset["domControls"][key]["value"] == "shred-only"
+        else:
+            assert preset["domControls"][key] == descriptor, key
     assert preset["rendererControls"]["volume-raymarch-mode"]["value"] == "history"
     assert preset["domControls"]["volume-steps"]["value"] == 4
     assert preset["domControls"]["volume-adaptive-budget"]["value"] == 20
     assert preset["domControls"]["volume-render-scale"]["value"] == 0.73678515625
     route = parse_qs(urlparse(preset["route"]).query, keep_blank_values=True)
     assert route["volume_raymarch_mode"] == ["history"]
-    assert route["volume_adaptive_rays"] == ["0.65"]
+    assert "volume_adaptive_rays" not in route
     # A basin that did author this control must keep its exact tuning.
     authored = copy.deepcopy(preset)
-    authored["domControls"]["volume-adaptive-rays"]["value"] = 0.27
+    retired = next(c for c in serve._load_volume_settings_preset_schema()["retiredControls"] if c["key"] == "volume-adaptive-rays")
+    authored["domControls"]["volume-adaptive-rays"] = {"id": retired["key"], "param": retired["param"], "tagName": retired["tagName"], "type": retired["type"], "value": 0.27}
+    authored["controlCount"] = len(authored["domControls"])
     from urllib.parse import urlencode
     route["volume_adaptive_rays"] = ["0.27"]
     parsed = urlparse(authored["route"])
     authored["route"] = parsed._replace(query=urlencode(route,doseq=True)).geturl()
     normalized, projection = serve.normalize_volume_settings_preset_payload(authored, tolerate_foreign_controls=True)
-    assert normalized["domControls"]["volume-adaptive-rays"]["value"] == 0.27
+    assert "volume-adaptive-rays" not in normalized["domControls"]
+    assert any(c["id"] == "volume-adaptive-rays" and c["value"] == 0.27 for c in projection["retiredControlsStripped"])
     assert "volume-adaptive-rays" not in projection["defaultsApplied"]
 print("retired marcher basin loads without changing authored settings")

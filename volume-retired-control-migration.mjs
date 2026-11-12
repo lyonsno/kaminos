@@ -198,6 +198,13 @@ export function migrateRetiredVolumeSettingsPresetDocument(documentValue, schema
     preset.controlCount = Object.keys(preset.domControls).length;
     if (migrated.controlCount !== undefined) migrated.controlCount = preset.controlCount;
   }
+  const retiredModeChanges=[];
+  const mode=preset.rendererControls?.['volume-raymarch-mode'];
+  if(mode&&['current','fixed-dense'].includes(mode.value)){
+    const before=mode.value;mode.value=before==='current'?'numerical':'fixed';
+    if(Object.hasOwn(mode,'rawValue'))mode.rawValue=mode.value;
+    route.searchParams.set('volume_raymarch_mode',mode.value);retiredModeChanges.push({before,after:mode.value});
+  }
   preset.route = route.href;
   return {
     document: migrated,
@@ -206,7 +213,8 @@ export function migrateRetiredVolumeSettingsPresetDocument(documentValue, schema
     addedControlIds,
     addedRouteParams,
     zeroedByRetiredSwitches,
-    applied: removedControlIds.length > 0 || addedControlIds.length > 0,
+    retiredModeChanges,
+    applied: removedControlIds.length > 0 || addedControlIds.length > 0 || retiredModeChanges.length>0,
   };
 }
 

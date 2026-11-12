@@ -10,11 +10,11 @@ import { requestKaminosSharedWebGpuDevice } from '../volume-core.js';
 const TALL_FLUID_BYTES_AT_160 = 160 * 320 * 160 * 16 * 4; // 524,288,000
 const CUBIC_FLUID_BYTES_AT_160 = 160 * 160 * 160 * 16 * 4; // 262,144,000
 assert.equal(TALL_FLUID_BYTES_AT_160, 524288000);
-// Largest per-cell buffer the prototype sizes for itself: flow-kernel
-// descriptors at 100 floats per cell over the tallest supported domain. Since
+// Largest per-cell buffer the prototype sizes for itself: fluid
+// state at 16 floats per cell over the tallest supported domain. Since
 // the grid height control (report §34) the tallest domain is 4 x the widest
 // width, so the request is clamped by the adapter.
-const PROTOTYPE_REQUESTED_BYTES = 160 * 640 * 160 * 100 * 4;
+const PROTOTYPE_REQUESTED_BYTES = 160 * 640 * 160 * 16 * 4;
 
 let requests = [];
 let destroys = 0;
@@ -73,7 +73,7 @@ installGpu(fakeAdapter(smallCaps));
 requests = [];
 await requestKaminosSharedWebGpuDevice({ bufferRequirements: { maxBufferSize: sf3dBytes, maxStorageBufferBindingSize: sf3dBytes } });
 granted = requests[0].requiredLimits;
-assert.equal(granted.maxStorageBufferBindingSize, 1073741824, 'clamped volume request on a 1 GiB adapter');
+assert.equal(granted.maxStorageBufferBindingSize, 1048576000, 'retained fluid request fits a 1 GiB adapter');
 assert.ok(granted.maxBufferSize >= sf3dBytes && granted.maxStorageBufferBindingSize >= sf3dBytes, 'SF3D requirement admitted');
 
 // A small adapter is clamped exactly as the prototype clamps its own device.

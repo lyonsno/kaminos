@@ -16,7 +16,7 @@ const writes=core.match(/uniforms\[41\][\s\S]*?uniforms\[43\][^;]*;/)?.[0];
 assert.ok(writes,'interior jitter needs its own GPU flag, not the animation phase');
 for(const rayNoiseAnimated of [false,true])for(const quadratureJitter of [false,true]){
   const uniforms=[];
-  vm.runInNewContext(writes,{uniforms,state:{frameCount:7},controlsSnapshot:{rayStartNoise:true,rayNoiseAnimated,quadratureJitter},clampFinite:()=>0});
+  vm.runInNewContext(writes,{reconstructionSample:false,reconstructionSampleFrame:0,uniforms,state:{frameCount:7},controlsSnapshot:{integralReconstruction:'off',rayStartNoise:true,rayNoiseAnimated,quadratureJitter},clampFinite:()=>0});
   assert.equal(uniforms[41],rayNoiseAnimated?7:0);
   assert.equal(uniforms[43],quadratureJitter?1:0);
 }

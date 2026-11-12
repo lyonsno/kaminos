@@ -13,7 +13,12 @@ import {FLAME_EMITTER_SOURCE} from '../scene-flame-emitter.mjs';
 const path=new URL('../scene-worker-fire-resources.mjs',import.meta.url);
 const api=await import(path).catch(error=>{if(error.code==='ERR_MODULE_NOT_FOUND'&&error.url===path.href)return {};throw error;});
 const schema=JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json',import.meta.url)));
-const basin=JSON.parse(readFileSync(new URL('./fixtures/worker-fire-basin-1685273e.json',import.meta.url)));
+const historicalBasin=JSON.parse(readFileSync(new URL('./fixtures/worker-fire-basin-1685273e.json',import.meta.url)));
+const basin=JSON.parse(execFileSync('python3',['-c',`import json,sys,serve
+artifact=json.load(sys.stdin)
+payload,projection=serve.normalize_volume_settings_preset_payload(artifact['preset'],tolerate_foreign_controls=True)
+artifact['preset']=payload;artifact['schemaProjection']=projection;artifact['controlCount']=payload['controlCount']
+print(json.dumps(artifact))`],{cwd:new URL('..',import.meta.url),input:JSON.stringify(historicalBasin),encoding:'utf8'}));
 const observed=JSON.parse(readFileSync(new URL('./fixtures/fire-scene-816e82aa1.json',import.meta.url))).settings;
 const values=JSON.parse(readFileSync(new URL('./fixtures/volume-runtime-controls/page-b99.json',import.meta.url)))[0].expected;
 const pose={position:[.2,.3,.4],rotation:[0,0,0],scale:[.5,.5,.5]};

@@ -26,52 +26,6 @@
     "tests/authoring-workspace-slots.mjs": {
       "kind": "node"
     },
-    "tests/boundary-splat-attribute-compiler-cli-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/boundary-splat-attribute-model-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/boundary-splat-attribute-training-contracts.mjs": {
-      "kind": "manual",
-      "reason": "requires the private MLX venv at /private/tmp/kaminos-mlx-residual-venv"
-    },
-    "tests/boundary-splat-benchmark-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/boundary-splat-feature-capture-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/boundary-splat-full-support-instance-consumer-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/boundary-splat-kernel-moment-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/boundary-splat-learned-attribute-live-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/boundary-splat-live-nonridge-union-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/boundary-splat-live-union-direct-route-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/boundary-splat-motion-witness-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/boundary-splat-renderer-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/boundary-splat-supervision-corpus-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/boundary-splat-support-covariance-composition-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/boundary-splat-world-covariance-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/burner-assembly.mjs": {
       "kind": "node"
     },
@@ -179,9 +133,6 @@
       "kind": "node"
     },
     "tests/finger-juice-host-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/fire-actor-live-parity-contracts.mjs": {
       "kind": "node"
     },
     "tests/fire-light-field-depth-mask-contracts.mjs": {
@@ -354,9 +305,6 @@
     "tests/musculature-source-m0-contracts.mjs": {
       "kind": "node"
     },
-    "tests/neural-renderer-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/pages-site-contracts.mjs": {
       "kind": "node"
     },
@@ -371,30 +319,6 @@
       "kind": "node"
     },
     "tests/rendering-channel-controls.mjs": {
-      "kind": "node"
-    },
-    "tests/residual-boundary-sidecar-aux-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/residual-browser-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/residual-coordinate-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/residual-material-split-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/residual-playback-witness-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/residual-preview-scope-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/residual-unet-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/residual-upscale-contracts.mjs": {
       "kind": "node"
     },
     "tests/sam-image-http-contracts.py": {
@@ -526,9 +450,6 @@
       "kind": "node"
     },
     "tests/scene-light-route-consumer-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/scene-lod-budget.mjs": {
       "kind": "node"
     },
     "tests/scene-light-timing-contracts.mjs": {
@@ -759,9 +680,6 @@
     "tests/visual-work.mjs": {
       "kind": "node"
     },
-    "tests/volume-appearance-decomposition-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-arm-capture-checks-contracts.mjs": {
       "kind": "browser",
       "reason": "connects to a browser debugging socket"
@@ -793,15 +711,6 @@
     "tests/volume-beauty-control-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-bonfire-macro-force-periodicity-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-bonfire-source-periodicity-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-boundary-raster-transition-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-bounded-emitter-injection-contracts.mjs": {
       "kind": "node"
     },
@@ -809,12 +718,6 @@
       "kind": "node"
     },
     "tests/volume-coarse-closure-oracle-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-coarse-closure-receiver-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-cockpit-authority-toggle-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-cockpit-layout-contracts.mjs": {
@@ -853,9 +756,6 @@
     "tests/volume-cockpit-retired-controls-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-common-gas-transport.mjs": {
-      "kind": "node"
-    },
     "tests/volume-confinement-mode-contracts.mjs": {
       "kind": "node"
     },
@@ -868,22 +768,10 @@
     "tests/volume-dead-render-clock-retirement-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-dense-cue-splat-bridge-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-detail-force-isolation.mjs": {
       "kind": "node"
     },
     "tests/volume-device-layout-capacity.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-diagnostic-periodicity-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-disabled-splat-diagnostic-consumer-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-disabled-splat-inert-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-dynamic-texture-proof-retirement-contracts.mjs": {
@@ -907,53 +795,19 @@
     "tests/volume-emitter-runtime.mjs": {
       "kind": "node"
     },
-    "tests/volume-entrainment-sway-periodicity-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-exact-basin-full-grid-export-contracts.mjs": {
-      "kind": "browser",
-      "reason": "spawns an exporter that can launch Chrome"
-    },
-    "tests/volume-exact-basin-support-probe-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-exact-load-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-external-emitter-flicker-periodicity-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-fire-actor-control-rebake-adapter-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-fire-actor-mount-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-fire-lick-periodicity-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-flame-settings-problems-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-flow-kernel-descriptor-socket-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-flow-reconstruction-kernel-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-four-arm-held-state-runtime-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-frame-only-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-frozen-composition-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-full-support-authored-fork-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-full-support-cockpit-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-grid-height-contracts.mjs": {
@@ -989,52 +843,16 @@
     "tests/volume-intrinsic-presentation-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-intrinsic-presentation-witness-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-kiln-composition-bridge.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-layer-coefficient-live-union-overlay-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-layer-coefficient-live-union-remap-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-layer-coefficient-live-union-runtime-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-layer-coefficient-live-union-witness-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-live-field-viewer-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-live-full-support-optics-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-main-integration-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-microdetail-transport-slip-retirement-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-nonridge-randomized-capture-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-nonridge-source-basis-capture-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-nonridge-source-basis-corpus-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-occupancy-ridge-preservation-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-operator-drive-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-optical-depth-order-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-ordinary-scene-depth-contracts.mjs": {
@@ -1044,18 +862,6 @@
       "kind": "node"
     },
     "tests/volume-periodic-authorship-inventory-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-periodic-excitation-controls-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-persistent-sparse-cohort-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-persistent-sparse-cohort-gpu-consumer-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-phase-aligned-field-pair-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-physical-color-contracts.mjs": {
@@ -1074,16 +880,10 @@
     "tests/volume-physical-highlight-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-positive-flame-partition-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-pressure-solver-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-pressure-tier-witness-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-product-fire-adapter-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-production-raymarch-retirement-contracts.mjs": {
@@ -1092,37 +892,16 @@
     "tests/volume-raymarch-periodicity-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-raymarch-specialization-negative-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-raymarch-specialization-witness-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-raymarch-trilinear-baseline-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-render-pair-cli-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-residual-lean-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-retired-control-migration-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-scalar-advection-periodicity-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-scene-solid-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-selective-head-live-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-selective-head-motion-producer-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-selective-head-motion-witness-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-settings-index-ui-contracts.mjs": {
@@ -1161,28 +940,7 @@
     "tests/volume-shallow-emitter-flux-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-shared-transmittance-optical-layer-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-shared-transmittance-witness-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/volume-slab-inlet-dynamics-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-source-birth-periodicity-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-splat-optical-recurrence-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-splat-radiance-parity-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-stage-b-cockpit-consumer-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-stage-b-optical-adjudication-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-tall-domain-pipeline-constants-contracts.mjs": {
@@ -1196,9 +954,6 @@
       "reason": "launches a browser with a remote debugging port"
     },
     "tests/volume-transport-scheme-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/volume-transported-detail-force-periodicity-contracts.mjs": {
       "kind": "node"
     },
     "tests/volume-velocity-staggering-contracts.mjs": {
@@ -1229,6 +984,9 @@
       "kind": "node"
     },
     "tests/world-chambers-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-lod-budget.mjs": {
       "kind": "node"
     }
   },

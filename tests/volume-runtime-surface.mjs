@@ -64,10 +64,10 @@ test('injected scheduler preserves its owning context and cancellation handle',(
  const start=source.indexOf('export function createKaminosVolumePrototype('),end=source.indexOf('  const productTransform =',start);
  const body=source.slice(start,end).replace('export function','function')+'return {requestAnimationFrame,cancelAnimationFrame};\n}';
  const calls=[],scheduler={requestAnimationFrame(callback){assert.equal(this,scheduler);calls.push(callback);return 73;},cancelAnimationFrame(handle){assert.equal(this,scheduler);calls.push(handle);}};
- const c={PROTOTYPE_IDENTITY:'v',ROUTE_IDENTITY:'r'};vm.createContext(c);vm.runInContext(body,c);
- const runtime=c.createKaminosVolumePrototype({presentationSurface:{canvas:{},setTransparent(){}},frameScheduler:scheduler});
+ const c={PROTOTYPE_IDENTITY:'v',ROUTE_IDENTITY:'r',getControls:()=>({}),stripRetiredRaymarchControls:controls=>({controls}),integralReconstructionSettings:()=>({}),rayHistorySettings:()=>({})};vm.createContext(c);vm.runInContext(body,c);
+ const runtime=c.createKaminosVolumePrototype({getControls:()=>({}),presentationSurface:{canvas:{},setTransparent(){}},frameScheduler:scheduler});
  const callback=()=>{};assert.equal(runtime.requestAnimationFrame(callback),73);runtime.cancelAnimationFrame(73);assert.deepEqual(calls,[callback,73]);
- const host=c.createKaminosVolumePrototype({presentationSurface:{canvas:{},setTransparent(){}},frameScheduler:scheduler,frameScheduleOwner:'host'});
+ const host=c.createKaminosVolumePrototype({getControls:()=>({}),presentationSurface:{canvas:{},setTransparent(){}},frameScheduler:scheduler,frameScheduleOwner:'host'});
  assert.equal(host.requestAnimationFrame(callback),0,'the scene host owns frame cadence');assert.deepEqual(calls,[callback,73]);
 });
 
@@ -78,7 +78,7 @@ test('production resize uses host viewport and capture extent without page globa
  vm.createContext(c);
  const start=source.indexOf('  function resize() {'),end=source.indexOf('\n  function ensureFrameTexture()',start);
  assert.ok(start>0&&end>start);vm.runInContext(source.slice(start,end),c);c.resize();
- assert.deepEqual([canvas.width,canvas.height],[120,60]);assert.equal(state.displayWidth,240);assert.equal(state.renderScale,.5);
+ assert.deepEqual([canvas.width,canvas.height],[60,30]);assert.equal(state.displayWidth,120);assert.equal(state.renderScale,.5);
  c.getPresentationSize=()=>({width:40,height:20});c.resize();assert.deepEqual([canvas.width,canvas.height],[20,10]);assert.equal(state.canvasDevicePixelRatio,1,'explicit capture extent is backing pixels');
  c.getPresentationSize=()=>null;viewport={width:0,height:0,fallbackWidth:80,fallbackHeight:50,pixelRatio:1};c.resize();assert.deepEqual([canvas.width,canvas.height],[40,25]);assert.equal(state.viewportSizeFallback,true);
 });

@@ -136,7 +136,7 @@ export function createSceneWorkerFireResources(input,{definitions,fetch:request=
   readDrawSettings(){return {waterVisible:ordinary.visible('water-field'),flameHDRActive:transport,customToneMapping:readFlameControls().toneMapping==='custom',matchFlameCamera:present()&&rendering['rendering-match-flame-camera']};},
   readRouteParams:route,
   readDrawResources:()=>({waterFeature}),
-  readUi:()=>({water:readWater(),fireLighting:structuredClone(lightingStatus),surfaces:{volume:{visible:!transport}}}),
+  readUi:()=>({fireSettingsWarning:prepared?.warning??null,water:readWater(),fireLighting:structuredClone(lightingStatus),surfaces:{volume:{visible:!transport}}}),
   createFireLightReceiver:(base,depth,normal)=>createSceneFireLightReceiver({THREE,sharedGpu:readGpu(),renderer:renderResources.renderer,scene,camera,sceneGiProxies:ordinary.giProxies,routeParams:route(),
    readLightField:()=>volume?.fireIrradianceLightField()??null,createFireLightFieldShadow,createFireShadowCasters,renderFireShadowBatch,retain:owner=>receiverOwners.add(owner)},base,depth,normal),
   drawOperations:{beforeDraw(){},syncProxies(){},readPhysicalCamera:()=>volume?.emissiveCameraState(),renderFlameHDR(frame){

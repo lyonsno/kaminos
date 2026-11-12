@@ -2,13 +2,12 @@
 // carrying fire intent (a saved flame recipe, a volume route or volume parameters) gets
 // it, and so does a saved-scene address (#scene=), since the scene may hold fire and its
 // restore waits for the volume route. fire=off and fire=on override.
-// The basin semantic flame uses when no recipe is named: Noah's smokeyfuckinkilndemo-basin
-// (64x128x64, 28 ray steps, 30% render scale), his cheapest recent preview, chosen
-// 2026-10-13. Committed byte-identical so a fresh checkout has it.
+// The current model's inexpensive built-in preview, derived from the committed
+// Reactant source recipe. Historical defaults remain in Git, not in live boot.
 export const SEMANTIC_FLAME_BASIN=Object.freeze({
-  url:'./artifacts/default-basin/semantic-flame.json',
-  presetId:'vsp-73c7fa64b2498e1dc5a24f1feefe79a6c1ce1c1effeb2c90ae318c56b0c75350',
-  label:'smokeyfuckinkilndemo-basin',
+  url:'/api/volume-settings-preset?runtime=1&id=%40reactant-preview',
+  sourcePresetId:'vsp-603cb6e842f15e56fcbac4f9c2eb0a53ea6cbf9748a45c09337d766b7d901eee',
+  label:'Reactant preview',
 });
 
 export function fireAtBoot(params,hash=new URLSearchParams()){

@@ -346,11 +346,7 @@ export function readVolumeRuntimeControlValues({readControl,quality='full',param
   const reactionLiveView = normalizeReactionFrontLiveView(readControl('volume-reaction-live-view')?.value);
   const boundarySidecarSource = normalizeBoundarySidecarSource(readControl('volume-boundary-sidecar-source')?.value);
   const boundarySidecarView = normalizeBoundarySidecarView(readControl('volume-boundary-sidecar-view')?.value);
-  const boundarySplatMode = normalizeBoundarySplatMode('off');
-  const boundarySplatFeatureCapture = ['1', 'true', 'on'].includes(String(params.get('volume_boundary_splat_feature_capture') || '').toLowerCase());
-  const flowKernelDescriptorCapture = ['1', 'true', 'on'].includes(String(params.get('volume_flow_kernel_descriptor_capture') || '').toLowerCase());
-  const boundarySplatInstanceConsumer = ['1', 'true', 'on'].includes(String(params.get('volume_boundary_splat_instance_consumer') || '').toLowerCase());
-  const boundarySplatInstances = Math.max(1, Math.min(128, Math.round(Number(params.get('volume_boundary_splat_instances') || 1))));
+
   const reactionBoundaryControls = {
     identity: 'reaction-boundary-live-controls-v0',
     gradientGain: 2.6,
@@ -391,8 +387,8 @@ export function readVolumeRuntimeControlValues({readControl,quality='full',param
     // The procedural-force switches were retired 2026-10-22: Microdetail and
     // Shred are their own switches; Swirl jostle sets the fine force's strength.
     proceduralDetailForces: true,
-    swirlJostle: parseFloat(readControl('volume-swirl-jostle').value),
-    fineBreakupLocalization: parseFloat(readControl('volume-fine-breakup-localization').value),
+    swirlJostle: 0,
+    fineBreakupLocalization: 0,
     commonGasTransport: readControl('volume-common-gas-transport').checked,
     volumeExposure: 1,
     density: parseFloat(readControl('volume-density').value),
@@ -402,15 +398,16 @@ export function readVolumeRuntimeControlValues({readControl,quality='full',param
     glow: 1.15,
     smoke: 2.8, // retired 2026-10-21: no effect under the Physics law
     curl: parseFloat(readControl('volume-curl').value),
-    microdetail: parseFloat(readControl('volume-microdetail').value),
+    microdetail: 0,
     interfaceShred: parseFloat(readControl('volume-interface-shred').value),
-    fireLicks: parseFloat(readControl('volume-fire-licks').value),
+    fireLicks: 0,
     projection: parseFloat(readControl('volume-projection').value),
     speed: parseFloat(readControl('volume-speed').value),
     raySteps: parseFloat(readControl('volume-steps').value),
-    adaptiveRays: parseFloat(readControl('volume-adaptive-rays').value),
+    adaptiveRays: 0,
     occupancySkip: parseFloat(readControl('volume-occupancy-skip').value),
-    fireScale: parseFloat(readControl('volume-fire-scale').value),
+    occupancyThreshold: Number(readControl('volume-occupancy-threshold').value),
+    fireScale: 1,
     detailScale: 1.75, // retired 2026-10-21: the single Flame simulator fixes the detail frequency
     plumeHeight: parseFloat(readControl('volume-plume-height').value),
     windStrength: parseFloat(readControl('volume-wind-strength').value),
@@ -448,19 +445,24 @@ export function readVolumeRuntimeControlValues({readControl,quality='full',param
     reactionLiveViewIdentity: 'reaction-live-view-shader-inspect-v0',
     boundarySidecarSource,
     boundarySidecarView,
-    boundarySplatMode,
-    boundarySplatFeatureCapture,
-    flowKernelDescriptorCapture,
-    boundarySplatInstanceConsumer,
-    boundarySplatInstances,
-    boundarySplatRadius: 1,
-    boundarySplatSharpness: 3.4,
     flowKernelStrength: parseFloat(readControl('volume-flow-kernel-strength').value),
     flowKernelRadius: parseFloat(readControl('volume-flow-kernel-radius').value),
     flowKernelCoherence: parseFloat(readControl('volume-flow-kernel-coherence').value),
     toneMapping: readControl('volume-tone-mapping').value,
     raymarchMode: readControl('volume-raymarch-mode').value,
     opticalTolerance: Number(readControl('volume-optical-tolerance').value),
+    historyInfluence: Number(readControl('volume-history-influence').value),
+    historyWindow: Number(readControl('volume-history-window').value),
+    reconstructionFresh: readControl('volume-reconstruction-fresh').checked,
+    integralReconstruction: readControl('volume-integral-reconstruction').value,
+    reconstructionSpatial: Number(readControl('volume-reconstruction-spatial').value),
+    reconstructionRadius: Number(readControl('volume-reconstruction-radius').value),
+    reconstructionWindow: Number(readControl('volume-reconstruction-window').value),
+    reconstructionResponse: Number(readControl('volume-reconstruction-response').value),
+    reconstructionImageEdge: Number(readControl('volume-reconstruction-image-edge').value),
+    reconstructionEdges: readControl('volume-reconstruction-edges').value,
+    reconstructionEdge: Number(readControl('volume-reconstruction-edge').value),
+
     rayStepTelemetry: readControl('volume-ray-step-telemetry').checked,
     rayStartNoise: readControl('volume-ray-start-noise').checked,
     rayNoiseAnimated: readControl('volume-ray-noise-animated').checked,
@@ -560,10 +562,6 @@ export function readVolumeRuntimeControlValues({readControl,quality='full',param
     shellSmoke: 0.25,
     resolution: parseInt(readControl('volume-resolution').value, 10),
     gridHeightRatio: parseFloat(readControl('volume-grid-height-ratio').value) || 2,
-    volumeResidualMode: readControl('volume-residual-mode').value || 'off',
-    volumeResidualModelUrl: readControl('volume-residual-model-url').value || '',
-    volumeResidualStrength: parseFloat(readControl('volume-residual-strength').value),
-    volumeResidualFeatureDebug: parseFloat(readControl('volume-residual-feature-debug').value),
     gridOverlay: parseFloat(readControl('volume-grid-overlay').value),
     flowDebug: parseFloat(readControl('volume-flow-debug').value),
     oracleActivityCue: parseFloat(readControl('volume-oracle-activity-cue').value),
@@ -668,16 +666,17 @@ export function readVolumeRuntimeControlValues({readControl,quality='full',param
     worldSmokeMaterial: Number(readControl('volume-world-smoke-material').value),
     worldSmokeExtent: Number(readControl('volume-world-smoke-extent').value),
     worldSmokeTransition: Number(readControl('volume-world-smoke-transition').value),
+    worldSmokeJoin: readControl('volume-world-smoke-join').value,
     worldSmokeIntermediate: readControl('volume-world-smoke-intermediate').value,
     ...Object.fromEntries(REGION_CONTROL_FIELDS.map(field=>[field.key,Number(readControl(field.id).value)])),
     adaptiveMaterial: adaptiveMaterial,
     ...Object.fromEntries([...WORLD_CALIBRATION_FIELDS,...SIMULATION_LEVER_FIELDS].map(f=>[f.key,f.type==='select-one'?readControl(f.id).value:Number(readControl(f.id).value)])),
     heatReleaseExpansion: parseFloat(readControl('volume-heat-release-expansion').value),
-    reactionLaw: readControl('volume-reaction-law').value || 'authored-tall-plume',
+    reactionLaw: 'reactant-v0',
     reactantMixingTime: parseFloat(readControl('volume-reactant-mixing-time').value),
     reactantCoolingTime: parseFloat(readControl('volume-reactant-cooling-time').value),
     reactantSootYield: parseFloat(readControl('volume-reactant-soot-yield').value),
-    appearanceModel: readControl('volume-appearance-model').value || 'authored',
+    appearanceModel: 'shred-only',
     velocityStaggering: readControl('volume-velocity-staggering').value || 'collocated',
     immersedCentreX: parseFloat(readControl('volume-immersed-centre-x').value),
     immersedCentreY: parseFloat(readControl('volume-immersed-centre-y').value),
@@ -731,8 +730,6 @@ export function readVolumeRuntimeControlValues({readControl,quality='full',param
   }));
 }
 
-// Values already admitted/projected by the canonical saved-settings contract.
-// This adapter maps coefficients; it does not claim GPU application or restore.
 export function readAuthoredVolumeRuntimeControls(settings,{nonPersistentControls={},...options}={}){
  const controls={...nonPersistentControls,...settings.domControls,...settings.rendererControls};
  controls['volume-scene']??={value:settings.volumeSceneRequested??DEFAULT_VOLUME_SCENE};

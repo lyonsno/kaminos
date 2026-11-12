@@ -3,15 +3,29 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Group, Mesh, BoxGeometry, MeshStandardMaterial, Texture} from '../lib/three.core.js';
 import {createGeneratedGlass} from '../generated-glass.mjs';
+import {MeshStandardNodeMaterial,TSL} from '../lib/three.webgpu.js';
+
+test('glass modes preserve spatial PBR nodes installed by the raw-field loader',()=>{
+ const root=new Group(),source=new MeshStandardNodeMaterial({map:new Texture()});
+ source.metalnessNode=TSL.float(.7);source.roughnessNode=TSL.float(.2);
+ const mesh=new Mesh(new BoxGeometry(),source);root.add(mesh);
+ const controller=createGeneratedGlass(root);
+ for(const mode of ['glass','opacity']){
+  controller.set({mode});assert.equal(mesh.material.metalnessNode,source.metalnessNode);assert.equal(mesh.material.roughnessNode,source.roughnessNode);
+ }
+ assert.equal(mesh.children[0].material.metalnessNode,source.metalnessNode);
+ controller.dispose();assert.equal(mesh.material,source);
+});
 
 test('glass study preserves source and restores exact materials without disposing shared maps', () => {
-  const root=new Group(), map=new Texture(), source=new MeshStandardMaterial({map,roughness:.6});
+  const root=new Group(), map=new Texture(), source=new MeshStandardMaterial({map,roughness:.6,vertexColors:true});
   const mesh=new Mesh(new BoxGeometry(),source);root.add(mesh);
   let textureDisposals=0;map.addEventListener('dispose',()=>textureDisposals++);
   const controller=createGeneratedGlass(root);
   assert.equal(source.transparent,false);
   assert.equal(source.roughness,.6);
   assert.notEqual(mesh.material,source);
+  assert.equal(mesh.material.vertexColors,true,'solid material in glass mode must preserve source vertexColors');
   assert.equal(mesh.children.length,1);
   assert.ok(mesh.children[0].material.transmissionNode);
   assert.ok(mesh.material.maskNode);
@@ -20,6 +34,7 @@ test('glass study preserves source and restores exact materials without disposin
   assert.equal(mesh.children[0].visible,false);
   controller.set({mode:'opacity'});
   assert.equal(mesh.material.alphaHash,true);
+  assert.equal(mesh.material.vertexColors,true,'hashed material in opacity mode must preserve source vertexColors');
   assert.equal(mesh.material.transparent,false);
   controller.set({mode:'glass',ior:1.5,thickness:.08});
   assert.equal(mesh.children[0].visible,true);

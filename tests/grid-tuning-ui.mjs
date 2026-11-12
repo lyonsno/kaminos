@@ -67,3 +67,49 @@ event(width,'change');assert.equal(edits.state().undoCount,before+1);edits.undo(
 event(width,'focusin');width.value='3';event(width,'input');width.listeners.keydown({currentTarget:width,key:'Escape',preventDefault(){}});assert.equal(current.simulationWorldScale,2.8,'Escape restores the pre-gesture reference');
 event(width,'focusin');width.value='3.2';event(width,'input');calibrated.close();assert.equal(edits.state().active,null,'closing releases the calibration gesture');assert.equal(current.simulationWorldScale,3.2);edits.undo();assert.equal(current.simulationWorldScale,2.8);
 console.log('PASS world-scale preview, single undo entry, Escape cancellation and close commit');
+
+// The periodic flame readout also syncs this editor while its dialog is closed.
+// Defer its reads/planning until open, then reconcile against the applied state.
+document.body=new Element('body');document.activeElement=null;
+let hiddenCurrent={...current},reads=0,plans=0,hiddenApplications=0;
+const deferred=createGridTuningInspector({document,host:new Element('div'),
+ read:()=>{reads++;return hiddenCurrent;},
+ validate:c=>{plans++;return gridTuningPlan(c);},
+ apply:patch=>{hiddenCurrent={...hiddenCurrent,...patch};hiddenApplications++;},
+ installNumberDrag:()=>({dispose(){}}),
+});
+const hiddenField=key=>find('grid-draft-'+key,document.body);
+const hiddenEdit=(key,value)=>{const input=hiddenField(key);input.focus();input.value=String(value);event(input,'input');};
+const counts=()=>[reads,plans];
+let idleCounts=counts();deferred.sync();deferred.sync();
+assert.deepEqual(counts(),idleCounts,'closed editor sync must not read or validate simulation settings');
+hiddenCurrent={...hiddenCurrent,fineVelocity:26};deferred.open();
+assert.equal(hiddenField('fineVelocity').value,'26','first open reads the latest applied state');
+assert.ok(reads>idleCounts[0]&&plans>idleCounts[1],'opening performs the deferred read and validation');
+deferred.close();idleCounts=counts();hiddenCurrent={...hiddenCurrent,fineVelocity:27};deferred.sync();
+assert.deepEqual(counts(),idleCounts,'external changes do not wake the closed editor');
+deferred.open();assert.equal(hiddenField('fineVelocity').value,'27','clean reopen refreshes external changes');
+hiddenEdit('fineVelocity',29);deferred.close();idleCounts=counts();
+hiddenCurrent={...hiddenCurrent,pressureSolverIterations:16};deferred.sync();
+assert.deepEqual(counts(),idleCounts,'pending drafts do not require hidden planning');
+deferred.open();
+assert.equal(hiddenField('fineVelocity').value,'29','reopen retains pending dimensions');
+assert.equal(hiddenField('pressureSolverIterations').value,'16','reopen merges external live iterations');
+assert.equal(find('grid-tuning-apply',document.body).disabled,false,'iteration change keeps the dimension draft applicable');
+find('grid-tuning-apply',document.body).onclick();
+assert.equal(hiddenApplications,1);assert.equal(hiddenCurrent.fineVelocity,29);assert.equal(hiddenCurrent.pressureSolverIterations,16);
+hiddenEdit('fineVelocity',30);deferred.close();hiddenCurrent={...hiddenCurrent,fineVelocity:25};deferred.sync();deferred.open();
+assert.equal(hiddenField('fineVelocity').value,'30','stale draft survives closing');
+assert.equal(find('grid-tuning-apply',document.body).disabled,true,'reopen refuses a draft conflicting with external dimensions');
+find('grid-tuning-apply',document.body).onclick();assert.equal(hiddenApplications,1,'stale draft cannot overwrite applied dimensions');
+find('grid-tuning-reset',document.body).onclick();assert.equal(hiddenField('fineVelocity').value,'25','discard loads current applied dimensions');
+console.log('PASS closed-editor idle work, fresh reopen, retained draft and external iteration/dimension reconciliation');
+
+// The box join uses the same per-unit grid settings path as dimensions. Its
+// string value must survive the editor rather than being coerced to NaN.
+const join=hiddenField('worldSmokeJoin');
+assert.ok(join,'World exposes a box-join comparison control');
+join.value='projected-donor';event(join,'change');
+find('grid-tuning-apply',document.body).onclick();
+assert.equal(hiddenCurrent.worldSmokeJoin,'projected-donor');
+assert.throws(()=>gridTuningPlan({...hiddenCurrent,worldSmokeJoin:'unknown'}),/box join/i);

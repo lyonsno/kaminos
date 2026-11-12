@@ -6,10 +6,7 @@ import {resolveAuthoredWaterSampling} from './authored-water-drop.mjs';
 export function createAuthoredWaterFeature({services,emitters,enabledEmitters=emitters,recoveryEmitters=enabledEmitters,runtimeEmitters=emitters,
   visible=()=>true,viewerPaused=()=>null,preview=()=>{},refresh=()=>{},report=()=>{},
   loadHost=()=>import('./authored-water-host.mjs'),
-  loadExperiment=async options=>{
-   const [{createFiniteFluidHost},{createFluidViewportHost},{createWebGPUFingerFluidSolver}]=await Promise.all([import('./finite-fluid-host.mjs'),import('./fluid-viewport-host.mjs'),import('./finger-fluid-webgpu-core.js')]);
-   return createFiniteFluidHost({...options,createSolver:createWebGPUFingerFluidSolver,createPresentation:solver=>createFluidViewportHost({...options,solver})});
-  }}) {
+  loadExperiment=null}) {
  let setup=null,host=null,failure=null,paused=false,generation=0,request=0,admitted=null,pending=null,recoveryRequested=false;
  const superseded=()=>Error('Water release superseded or scene changed');
  function retire(){
@@ -17,6 +14,7 @@ export function createAuthoredWaterFeature({services,emitters,enabledEmitters=em
   const previous=host;host=null;previous?.dispose();
  }
  async function acquire({replace=false,experiment=null,recovery=false}={}){
+  if(experiment&&typeof loadExperiment!=='function')throw Error('Numerical water experiments are not mounted in this host');
   if(!setup&&!experiment)return false;
   if(!replace&&host)return true;
   if(!replace&&pending)return pending.promise;

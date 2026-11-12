@@ -1,4 +1,7 @@
 // kaminos-test: node
+import {integralReconstructionSettings} from '../volume-integral-reconstruction.mjs';
+import {reconstructionSourceChanges} from '../volume-reconstruction-pause.mjs';
+import {rayHistorySettings} from '../volume-history-allocation.mjs';
 import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import vm from 'node:vm';import{readFileSync}from'node:fs';
 import{flamePoseInDomain,flamePoseToDomain,normalizeFlameEmitterPose,immersedControlsForFlamePose,flameDomainTranslationForAcceptedPose,effectiveFlameDomainControls}from'../scene-flame-emitter.mjs';
@@ -49,7 +52,7 @@ test('the actual cockpit and core admission prefix keep a source suspended after
  backend.resolveDisplayReconstruction=resolveDisplayReconstruction;
  Object.assign(backend,{gridTuningPlan,resolvePressureSolverConfig,resolveVelocityStaggeringConfig,resolveWorldCalibration,productTransform:{scale:1}});
  const validator=core.match(/    validateGridControls\(next\) \{[\s\S]*?\n    \},/)[0].trim().replace(/^validateGridControls/, 'function validateGridControls').replace(/,$/,'');
- sceneContext(backend);vm.runInContext(validator+'\nfunction setControls(next){'+prefix+'}',backend);
+ Object.assign(backend,{integralReconstructionSettings,rayHistorySettings,reconstructionSourceChanges,rayStepTelemetry:null,assertIntegralSourceEditable(){}});sceneContext(backend);vm.runInContext(validator+'\nfunction setControls(next){'+prefix+'}',backend);
  const fields=new Map(),prototype={previewGridShape:c=>{const shape=resolveGridHeight(c,c.resolution);return{...gridShapeAdmission(shape,limits),dimensions:[shape.widthCells,shape.heightCells,shape.widthCells]};},debugState:()=>({active:true,frameCount:1,simGridDimensions:[backend.gridSize,backend.gridHeight,backend.gridSize],gridHeight:backend.state.gridHeight}),setControls:c=>backend.setControls(c),setAnalyticEmitterDescriptor:()=>({mode:'off',count:0}),setCoreEmitterSourceMode:()=>({effectiveMode:'analytic-only',effectiveFlowRate:0})};
  const page={isSceneItemVisible:()=>true,performance,structuredClone,flamePoseInDomain,flamePoseToDomain,effectiveFlameDomainControls,flameEmitterPose:pose(4),flameDomainTranslation:[0,0,0],flameDomainScale:1,flameEmitterInjectionSuspended:true,authoredFlamePresent:true,routeExternalEmitters:null,volumeEmitterRuntimeFrame:0,volumePrototype:prototype,document:{getElementById:id=>{if(id==='emitter-assay-family')return{value:'ring'};if(!fields.has(id))fields.set(id,{id,value:'0',textContent:''});return fields.get(id);}},emitterCompilerControls:x=>x,applyVolumeEmitterFamilyRuntime,window:{},setVolumeControlValue(id,v){fields.get(id).value=String(v);},renderVolumeEmitterReceipt(){},syncAuthoredFlameSources(){},ensureAuthoredFlameEmitter(){}};
  page.sceneObjects=[];page.FLAME_EMITTER_TYPE='flame-emitter';page.FLAME_EMITTER_ID='flame-emitter';const start=html.indexOf('  function applyVolumeEmitterFamilyRuntimeToCockpit('),stop=html.indexOf('  applyFlameEmitterPose =',start);sceneContext(page);vm.runInContext(primary+'\n'+html.slice(start,stop),page);assert.throws(()=>page.applyVolumeEmitterFamilyRuntimeToCockpit(requested),/Fine material buffer exceeds/);

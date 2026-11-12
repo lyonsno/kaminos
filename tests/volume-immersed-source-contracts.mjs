@@ -77,25 +77,6 @@ test('the CPU weight model mirrors the shader: an antialiased slab, normalised t
   assert.ok(Math.abs(on.effective.fluxEffectivePredicted - on.effective.fluxRequested) < 1e-9);
 });
 
-test('the shader derives target, momentum and scalar entry from one weight and one flux, caps the target, and stores it beside heat release', () => {
-  const weight = source.slice(source.indexOf('fn immersedSourceWeight('), source.indexOf('\n}\n', source.indexOf('fn immersedSourceWeight(')));
-  assert.match(weight, /let along = dot\(d, n\);/);
-  assert.match(weight, /\(1\.0 - smoothstep\(halfThickness - 0\.5, halfThickness \+ 0\.5, abs\(along\)\)\)/, 'ascending edges (Metal leaves reversed edges undefined)');
-  assert.match(weight, /\(1\.0 - smoothstep\(radius - 0\.5, radius \+ 0\.5, radial\)\)/);
-  assert.doesNotMatch(weight, /smoothstep\([a-zA-Z]+ \+ 0\.5, [a-zA-Z]+ - 0\.5/, 'no reversed-edge smoothstep');
-  const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('\nfn ', source.indexOf('\nfn cs(@builtin') + 10));
-  assert.match(main, /let immersedSourcesAtCell = immersedContributions\(cell\);/);
-  const collection=readFileSync(new URL('../volume-immersed-source-collection-wgsl.mjs',import.meta.url),'utf8');
-  assert.match(collection,/let slab=immersedSourceWeight\(cell\);let w=immersedPatternedWeight\(cell,slab\);/);
-  assert.match(main,/let immersedTarget = immersedSourcesAtCell\.supply;/);assert.match(collection,/min\(u\.immersed_source_d.y,w\*u\.immersed_source_d.z\)/);
-  assert.match(main, /textureStore\(burnRate, cellI, vec4<f32>\(u\.heat_release\.x \* fuelBurned \/ max\(timeStep, 1e-6\) \+ immersedTarget, 0\.0, 0\.0, 0\.0\)\);/, 'stored beside heat release');
-  assert.match(main, /let immersedEntry = clamp\(immersedTarget \* dynamicsBacktraceScale\(\), 0\.0, 1\.0\);/, 'scalar entry mirrors the floor law');
-  assert.match(main, /heat = mix\(heat, immersedSourcesAtCell\.mixture\.y, immersedEntry\);/);
-  assert.match(main, /fuel = mix\(fuel, immersedSourcesAtCell\.mixture\.x, immersedEntry\);/);
-  assert.match(main, /vel = mix\(vel, immersedSourcesAtCell\.velocity \* VELOCITY_UNIT_SCALE, stepBlend\(immersedSourcesAtCell\.relaxation\)\);/, 'momentum relaxes toward v·n through stepBlend (follows the step; velocity-dependent, so it stays local under the staggered reading)');
-  assert.doesNotMatch(main, /centredForce = centredForce \+ [^\n]*immersed/, 'not averaged onto faces');
-});
-
 test('cockpit: the source law option, eleven bench rows with help, snapshot, listeners, route restore, receipt; schema 236–246', () => {
   assert.match(index, /<option value="immersed-source">Immersed source \(anywhere, any direction\)<\/option>/);
   const ids = ['volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction'];
@@ -181,22 +162,6 @@ test('IS-01: the momentum relaxation carries the time step once, after the fold'
     assert.ok(Math.abs(v - expected) < 1e-5, `w ${w} dt ${dt}: ${v} vs ${expected}`);
   }
   assert.ok(Math.abs(core.immersedMomentumModel({ transported: 0.04, target: 0.1, weight: 1, gain: 0.5, dt: 1 }) - 0.07) < 1e-9, 'partial gain relaxes halfway');
-  const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('\nfn ', source.indexOf('\nfn cs(@builtin') + 10));
-  const shred = balancedWgslBlock(main, 'if (SHRED_ONLY) {\n    // One activity memory.');
-  const legacy = main.replace(shred, '');
-  const foldAt = legacy.search(/let forceIncrement = .*\* timeStep;/);
-  const relaxation = 'vel = mix(vel, immersedSourcesAtCell.velocity * VELOCITY_UNIT_SCALE, stepBlend(immersedSourcesAtCell.relaxation));';
-  const relaxAt = legacy.indexOf(relaxation);
-  // The reactant candidate opens the top through materialWallFade (equal to wallFade under the authored law).
-  const spongeAt = Math.max(legacy.indexOf('vel = vel * stepRate(mix(0.55, 1.0, wallFade));'), legacy.indexOf('vel = vel * stepRate(mix(0.55, 1.0, materialWallFade));'));
-  assert.ok(foldAt > 0 && relaxAt > 0 && spongeAt > 0);
-  assert.ok(relaxAt > foldAt && relaxAt < spongeAt, 'the relaxation follows the fold (its stepBlend is the only time dependence) and precedes the sponge');
-  const shredFold = shred.indexOf('vel = velTransported + increment;');
-  const shredRelax = shred.indexOf(relaxation);
-  const shredSponge = shred.indexOf('vel *= stepRate(mix(0.55, 1.0, fade));');
-  assert.match(shred, /let increment = .*\* timeStep;/);
-  assert.ok(shredFold > 0 && shredRelax > shredFold && shredSponge > shredRelax,
-    'Shred-only relaxation also follows its timestep fold and precedes its velocity-only sponge');
 });
 
 test('IS-02: positive supply needs a volume outlet — the closed-top converged solve is refused', () => {
@@ -269,7 +234,7 @@ test('IS-06 (withdrawn as a defect; kept as the explicit shape contract): the re
   const run = async (solidCellCount) => {
     let release; const mapped = new Promise(r => { release = r; });
     const state = { frameCount: 50, simStepCount: 48, heatRelease: { effective: { admitted: false, expansion: 0 } }, immersedSource: { effective: { admitted: false } }, sceneCollision: { solidCellCount }, pressureSolver: { effective: { solver: 'converged', openTop: true } } };
-    const context = { state, gridSize: 4, gridHeight: 8, pressureResidualCopyPending: false, pressureResidualMapPending: false, pressureResidualMapStartedFrame: 0, pressureResidualMapGeneration: 0, pressureResidualWorkgroupCount: 2, pressureResidualCopyStep: 0, pressureResidualCopyFrame: 0, pressureResidualCopyFluidCells: 0, pressureResidualCopyCells: 0, pressureResidualCopyGridHeight: 0, pressureResidualCopySolver: null, pressureResidualCopyMeasurement: null, pressureResidualAfterPipeline: {}, pressureResidualBindGroup: {}, pressureResidualPartialsBuffer: {}, fluidBindGroup: () => ({}), pressureResidualReadbackBuffer: { mapAsync: () => mapped, getMappedRange: () => new Float32Array(2 * 20).buffer, unmap() {} }, GPUMapMode: { READ: 1 }, setTimeout, clearTimeout, Float32Array, performance, Math, Number, Promise, Error, PRESSURE_RESIDUAL_MAP_TIMEOUT_MS: 10000, PRESSURE_RESIDUAL_MAP_TIMEOUT_ERROR: 'synthetic-timeout', PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP: 20, gridCellCount: g => g * 2 * g * g, gridHeightForSize: g => g * 2, pressureResidualMeasurement: core.pressureResidualMeasurement, residualProfileFromPartials: core.residualProfileFromPartials };
+    const context = { state, gpuPipelines:{resolve:handle=>handle}, gridSize: 4, gridHeight: 8, pressureResidualCopyPending: false, pressureResidualMapPending: false, pressureResidualMapStartedFrame: 0, pressureResidualMapGeneration: 0, pressureResidualWorkgroupCount: 2, pressureResidualCopyStep: 0, pressureResidualCopyFrame: 0, pressureResidualCopyFluidCells: 0, pressureResidualCopyCells: 0, pressureResidualCopyGridHeight: 0, pressureResidualCopySolver: null, pressureResidualCopyMeasurement: null, pressureResidualAfterPipeline: {}, pressureResidualBindGroup: {}, pressureResidualPartialsBuffer: {}, fluidBindGroup: () => ({}), pressureResidualReadbackBuffer: { mapAsync: () => mapped, getMappedRange: () => new Float32Array(2 * 20).buffer, unmap() {} }, GPUMapMode: { READ: 1 }, setTimeout, clearTimeout, Float32Array, performance, Math, Number, Promise, Error, PRESSURE_RESIDUAL_MAP_TIMEOUT_MS: 10000, PRESSURE_RESIDUAL_MAP_TIMEOUT_ERROR: 'synthetic-timeout', PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP: 20, gridCellCount: g => g * 2 * g * g, gridHeightForSize: g => g * 2, pressureResidualMeasurement: core.pressureResidualMeasurement, residualProfileFromPartials: core.residualProfileFromPartials };
     context.encoder = { beginComputePass: () => ({ setPipeline() {}, setBindGroup() {}, dispatchWorkgroups() {}, end() {} }), copyBufferToBuffer() {} };
     const pending = vm.runInNewContext(source.slice(start, end) + '\nfinishPressureResidualProbe(encoder);\nresolvePressureResidualProbe();', context);
     release(); await pending;

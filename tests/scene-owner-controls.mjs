@@ -21,3 +21,6 @@ const propertiesHandle=registry.mount({asset:{id:'animal',root},properties:prope
 assert.equal(propertiesOnly.hidden,false);assert.equal(viewport.children.length,0,'Properties-only behavior created a global-looking transport');
 propertiesHandle.dispose();
 console.log('Owner properties/transport follow actual selected roots and descendants and release independently');
+let deselected=0;const propertyAgain=new Element();
+const scoped=registry.mount({asset:{id:'animal',root},properties:propertyAgain,onDeselected:()=>deselected++});
+selected={id:'other',object:other};registry.update();assert.equal(deselected,1,'a unit can close its detached grid dialog on deselection');registry.update();assert.equal(deselected,1,'unchanged idle selection does no repeated cleanup');scoped.dispose();

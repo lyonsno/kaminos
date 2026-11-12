@@ -55,7 +55,7 @@ export function assertMaterialBurningSupport(library,objectId,definitions=materi
 export function materialSlots(root) {
  const result=[];
  function visit(object,path){
-  if(object.userData?.kaminosEditorOnly||object.userData?.kaminosEditorHelper||object.userData?.kaminosBeautyLodProxy||object.userData?.kaminosRepetitionCopy)return;
+  if(object.isSurfaceSplatObject||object.userData?.kaminosEditorOnly||object.userData?.kaminosEditorHelper||object.userData?.kaminosBeautyLodProxy||object.userData?.kaminosRepetitionCopy)return;
   if(object.isMesh&&object.material){const source=object.userData?.kaminosOriginalMaterial??object.material,array=Array.isArray(source);[].concat(source).forEach((material,index)=>{
    if(material)result.push({key:`${path||'.'}:${index}`,label:`${object.name||'Surface'}${material.name?' · '+material.name:array?` · slot ${index+1}`:''}`,mesh:object,index,material,
     set:value=>{if(array)object.material[index]=value;else object.material=value;if(object.userData?.kaminosOriginalMaterial){if(array)object.userData.kaminosOriginalMaterial[index]=value;else object.userData.kaminosOriginalMaterial=value;}}});

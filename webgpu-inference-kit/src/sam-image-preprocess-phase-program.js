@@ -294,5 +294,5 @@ export async function runSam3ImagePreprocessPhaseProgramRoute(input = {}) {
       };
     }
     return authoritative;
-  });
+  }, input.schedule);
 }

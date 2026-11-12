@@ -7,7 +7,7 @@ import { compileVolumeEmitterFamily } from '../volume-emitter-basis.mjs';
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 const mainShader = core.slice(
   core.indexOf('const WGSL ='),
-  core.indexOf('const BROWSER_RESIDUAL_WGSL'),
+  core.indexOf('const ANALYTIC_EMITTER_INJECTION_WGSL'),
 );
 const injectionShader = core.match(
   /const ANALYTIC_EMITTER_INJECTION_WGSL = \/\* wgsl \*\/[\s\S]*?\n`;/,

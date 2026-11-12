@@ -33,7 +33,7 @@ function mount({fire=true,existing=false,refused=true}={}) {
  vm.runInContext(section('async function collectSceneComposition()','async function withAuthoringAction('),c);
  vm.runInContext(section('async function withAuthoringAction(','async function changeCompositionBasin('),c);
  vm.runInContext(section('async function saveToServer(','function sceneIsEmpty()'),c);
- vm.runInContext(section('// Save: overwrite current scene file','function getMaterialState()'),c);
+ vm.runInContext(section('// Save: overwrite current scene file','function applyMaterialStateToObject('),c);
  vm.runInContext(section('window.captureComposition =',"document.getElementById('composition-capture').onclick"),c);
  return{c,writes,messages,runtime,preset};
 }

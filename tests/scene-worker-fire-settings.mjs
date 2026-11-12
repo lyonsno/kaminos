@@ -1,9 +1,10 @@
 // kaminos-test: node
 import test from 'node:test';import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';import {execFileSync} from 'node:child_process';
-import {projectFireSettingsToSchema} from '../scene-fire-domain.mjs';
+import {projectFireSettingsToSchema,runtimeFireSettings} from '../scene-fire-domain.mjs';
 const schema=JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json',import.meta.url)));
-const observed=JSON.parse(readFileSync(new URL('./fixtures/fire-scene-816e82aa1.json',import.meta.url)));
+const historicalObserved=JSON.parse(readFileSync(new URL('./fixtures/fire-scene-816e82aa1.json',import.meta.url)));
+const observed={...historicalObserved,settings:runtimeFireSettings(historicalObserved.settings,schema).settings};
 const before=JSON.parse(readFileSync(new URL('./fixtures/volume-runtime-controls/page-b99.json',import.meta.url)))[0];
 const definitions=JSON.parse(execFileSync('python3',[new URL('../tools/scene-worker-control-definitions.py',import.meta.url).pathname,'--page',new URL('../index.html',import.meta.url).pathname],{encoding:'utf8'})).controls;
 const path=new URL('../scene-worker-fire-settings.mjs',import.meta.url);
@@ -72,4 +73,16 @@ test('late saved settings cannot publish after replacement and failed schema acq
  await assert.rejects(retry.prepare({fireSettings:observed.settings},context()),/offline/);
  assert.ok((await retry.prepare({fireSettings:observed.settings},context())).controls);
  assert.equal(await retry.prepare({composition:null,fireSettings:null},context()),null);
+});
+
+test('runtime admission converts retired appearance and explicitly reports unsupported saved fire fallback',async()=>{
+ const source=artifact(),ctx=context(),calls=[];
+ const loader=api.createSceneWorkerFireSettingsLoader({...options,fetch:async url=>{calls.push(url);return {ok:true,json:async()=>url.includes('schema')?schema:{...source,requestedPresetRef:'@reactant-preview'}};}});
+ const retired=structuredClone(observed.settings);retired.domControls['volume-appearance-model'].value='authored';
+ const current=await loader.prepare({fireSettings:retired},ctx);assert.equal(current.controls.appearanceModel,'shred-only');
+ const unsupported=structuredClone(retired);unsupported.domControls['volume-reaction-law'].value='legacy';
+ const fallback=await loader.prepare({fireSettings:unsupported},ctx);
+ assert.match(fallback.warning,/SAVED FIRE REPLACED/);assert.match(fallback.warning,/pre-Reactant/);
+ assert.equal(fallback.controls.reactionLaw,'reactant-v0');assert(calls.some(url=>url.includes('runtime=1')));
+ assert.equal(unsupported.domControls['volume-reaction-law'].value,'legacy');
 });

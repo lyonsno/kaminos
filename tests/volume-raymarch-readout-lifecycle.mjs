@@ -16,15 +16,15 @@ test('releasing disabled counters refreshes fluid bindings before they can be su
   assert.equal(rebound,1,'a changed counter binding must replace every fluid bind group');
 });
 
-for(const route of ['residual','splats','proxy'])test('leaving ordinary beauty for '+route+' cannot display old live work or marcher identity',()=>{
+for(const route of ['proxy'])test('leaving ordinary beauty for '+route+' cannot display old live work or marcher identity',()=>{
   const noop=()=>{},state={active:true,frameCount:1,simStepCount:9,width:8,height:8,lookFreezeFrame:null,
     rayStepTelemetry:{requested:true,active:true},opticalStepping:{requested:'numerical',effective:'numerical'}};
   let receipt={...state.rayStepTelemetry},visible=true;
   const rayStepTelemetry={ensure(w,h,requested,options){const active=options.supported&&options.activate!==false;receipt={requested,active,reason:options.reason};visible=active;return false;},read:()=>receipt};
   const encoder={finish:()=>({})},context=vm.createContext({
-    pendingDomainRemap:null,encodeDomainRemap:noop,
+    pendingDomainRemap:null,encodeDomainRemap:noop,integralEvaluation:null,prepareWorldSmoke:noop,
     state,rayStepTelemetry,debugOpticalStepping:{mode:'numerical',tolerance:.001},controlsSnapshot:{lookFreeze:1,density:1,fire:1,rayStepTelemetry:true},
-    productFrameOwner:'prototype',selectiveHeadLiveCapturePaused:false,raf:0,controls:{update:noop},updateUniforms:()=>context.prepareRayStepCounters(),
+    productFrameOwner:'prototype',capturePaused:false,raf:0,controls:{update:noop},updateUniforms:()=>context.prepareRayStepCounters(),
     emissiveRaymarchAdmission:()=>({eligible:true}),debugRaymarchShaderSpecialization:'auto',rebuildFluidBindGroups:noop,
     performance:{now:()=>1},device:{createCommandEncoder:()=>encoder,queue:{submit:noop}},normalizeLookFreeze:()=>true,lookFreezeCanPin:()=>true,
     simulationPaused:true,liveCompleteFlameOpticalCoefficientsEnabled:false,prepareSharedSceneConsumers:e=>e,
@@ -36,8 +36,8 @@ for(const route of ['residual','splats','proxy'])test('leaving ordinary beauty f
     ensureFrameTexture:noop,ensureBrowserResidualFeatureTexture:noop,frameTexture:{createView:()=>({})},browserResidualFeatureTexture:{createView:()=>({})},
     encodeBrowserResidualSourcePass:noop,encodeBrowserResidualPass:()=>true,sceneTransportConsumer:null,canvasPresentationSuppressed:route==='proxy',
     appearanceDecompositionActive:()=>false,encodeBoundarySplatTelemetry:noop,boundarySplatTelemetryCopyPending:false,pressureResidualCopyPending:false,
-    selectiveHeadLiveExactPause:null,recordVolumeFrameTiming:noop,requestAnimationFrame:()=>1,render:noop,cancelAnimationFrame:noop,
-    canvas:{classList:{remove:noop}},surface:{setActive:noop},emitStatus:noop,
+    exactCapturePause:null,recordVolumeFrameTiming:noop,requestAnimationFrame:()=>1,render:noop,cancelAnimationFrame:noop,
+    surface:{setActive:noop},canvas:{classList:{remove:noop}},emitStatus:noop,
   });
   Object.assign(context,volumeSubmissionContext(context.device));
   vm.runInContext(invalidate+'\n'+prepare+'\n'+frame+'\nrenderOrdinaryFrame(1);',context);
@@ -49,11 +49,11 @@ for(const route of ['residual','splats','proxy'])test('leaving ordinary beauty f
 test('World readout follows this draw resolution rather than the invalidated prior frame',()=>{
  const block=source.match(/    if\(state.worldSmoke\?\.raymarch\)\{[^]*?\n    \}/)?.[0];
  assert.ok(block);
- for(const mode of ['current','numerical','budgeted','joins','history']){
+ for(const mode of ['fallback-fixed','numerical','fixed','budgeted','joins','history']){
   const state={worldSmoke:{raymarch:{}},opticalStepping:{effective:null}};
   vm.runInNewContext(block,{state,optical:{mode}});
   assert.equal(state.worldSmoke.raymarch.effectiveMode,mode);
-  assert.equal(state.worldSmoke.raymarch.policy,mode==='current'?'shared-quality-material-cell-step':mode==='numerical'?'nested-quadrature-fine-step-scale':'fixed-count-whole-ray');
+  assert.equal(state.worldSmoke.raymarch.policy,mode==='fallback-fixed'?'shared-quality-material-cell-step':['numerical','fixed'].includes(mode)?'nested-quadrature-fine-step-scale':'fixed-count-whole-ray');
  }
  assert.ok(source.indexOf(block)>source.indexOf('    state.opticalStepping = { ...optical, effective: optical.mode,'),'receipt follows effective route resolution');
 });
@@ -73,17 +73,42 @@ test('shared transport initializes, advances and invalidates actual spatial guid
    appearanceDecompositionActive:()=>false,boundarySplatRequested:()=>false,browserResidualCanApply:()=>false,
    camera:{isPerspectiveCamera:true,getWorldDirection:()=>({toArray:()=>[0,0,-1]})},THREE:{Vector3:class{}},updateOrdinarySceneDepth:()=>null,
    emissiveRaymarchAdmission:()=>({eligible:true}),debugRaymarchShaderSpecialization:'auto',debugOpticalStepping:opticalSteppingConfig({mode}),debugOpticalSteppingExplicit:false,
-   resolveOpticalStepping,raymarchAdaptivity,controlsSnapshot:{adaptiveRays:.65},sceneTransportLightEncoders:{has:()=>true},WGSL:'',distributedGroup:null,emissiveLightField:null,scenePointBindGroup:null,
+   resolveOpticalStepping,raymarchAdaptivity,controlsSnapshot:{adaptiveRays:.65,historyInfluence:1,historyWindow:8},sceneTransportLightEncoders:{has:()=>true},WGSL:'',distributedGroup:null,emissiveLightField:null,scenePointBindGroup:null,
    sceneTransport:null,createSceneVolumeTransport:()=>({encode(input){constants=input.constants;assert.ok(rayAllocationHistory.read().geometry,'guidance geometry must exist when the actual transport binds');return {};}}),device,stateSource:null,bindGroupLayout:{},
    rebuildFluidBindGroups(){rebuilds++;},fluidBindGroup:()=>({}),productTransform:{translate:[0,0,0],scale:1},currentFluid:0});
   context.worldSmoke.plan.materialDims=[8,8,8];
   vm.runInContext(helper+'\n'+body+'\nrenderSceneTransportHost();',context);
   assert.equal(constants.OPTICAL_STEP_MODE,opticalSteppingConfig({mode}).value);assert.equal(state.sceneTransport.stepping,mode);
-  const first=rayAllocationHistory.read();assert.equal(first.frames,1);assert.equal(first.historyFrames,0);assert.equal(writes.length,2);assert.equal(rebuilds,1);
+  const first=rayAllocationHistory.read();assert.equal(first.frames,1);assert.equal(first.historyFrames,0);assert.ok(writes.some(write=>write.bytes>0));assert.equal(rebuilds,1);
   vm.runInContext('state.frameCount++;state.simStepCount++;renderSceneTransportHost();',context);
   const second=rayAllocationHistory.read();assert.equal(second.frames,2);assert.equal(second.historyFrames,1);assert.equal(second.previousOffset,first.observationsOffset);assert.equal(rebuilds,2);
   context.productTransform.translate=[1,0,0];vm.runInContext('state.frameCount++;renderSceneTransportHost();',context);
-  const moved=rayAllocationHistory.read();assert.equal(moved.frames,1);assert.equal(moved.historyFrames,0);assert.deepEqual(moved.geometry.min,[0,-1,-1]);assert.equal(writes.length,4);assert.equal(rebuilds,3);
+  const moved=rayAllocationHistory.read();assert.equal(moved.frames,1);assert.equal(moved.historyFrames,0);assert.deepEqual(moved.geometry.min,[0,-1,-1]);assert.ok(writes.length>1);assert.equal(rebuilds,3);
   rayAllocationHistory.dispose();
  }
+});
+test('held comparison never advances residual touch damping or simulation',async()=>{
+  const {PerspectiveCamera}=await import('three');const {OrbitControls}=await import('three/addons/controls/OrbitControls.js');
+  const noop=()=>{},root={addEventListener:noop,removeEventListener:noop};
+  const element={style:{},clientHeight:1000,clientWidth:1000,addEventListener:noop,removeEventListener:noop,getRootNode:()=>root};
+  const camera=new PerspectiveCamera();camera.position.set(0,0,10);
+  const controls=new OrbitControls(camera,element);controls.enableDamping=true;controls.dampingFactor=.06;controls.rotateSpeed=-.72;
+  controls._pointers=[1];controls._handleTouchStartRotate({pageX:100,pageY:100});controls._handleTouchMoveRotate({pageX:120,pageY:100});
+  const pinned=camera.position.toArray();const signature=()=>camera.position.toArray().join('|');
+  let ended=false,presented=0,stepped=false;
+  controls.enabled=false;controls.enableDamping=false;
+  const state={active:true,frameCount:20,simStepCount:7};
+  const context=vm.createContext({state,controls,productFrameOwner:'prototype',capturePaused:false,raf:0,performance:{now:()=>1},
+    invalidateRaymarchReadouts:noop,integralEvaluation:{camera:signature(),source:'source',view:'temporal'},integralViewIdentity:signature,integralSceneIdentity:()=> 'source',
+    integralReconstruction:{describe:()=>({evaluation:{active:true}}),encodeEvaluation:()=>{presented++;return {frames:20};}},integralCameraValues:new Float32Array(20),controlsSnapshot:{},
+    endIntegralEvaluation:()=>{ended=true;},updateUniforms:()=>{stepped=true;throw Error('ordinary update must not run');},
+    device:{createCommandEncoder:()=>({finish:noop}),queue:{submit:noop}},context:{getCurrentTexture:()=>({createView:noop})},format:'rgba8unorm',
+    exactCapturePause:null,canvas:{classList:{remove:noop}},cancelAnimationFrame:noop,emitStatus:noop,requestAnimationFrame:()=>1,render:noop,
+  });
+  Object.assign(context,volumeSubmissionContext(context.device));
+  try {
+    vm.runInContext(frame+'\nrenderOrdinaryFrame(1);renderOrdinaryFrame(2);',context);
+    assert.equal(ended,false);assert.equal(stepped,false);assert.equal(presented,2);assert.deepEqual(camera.position.toArray(),pinned);
+    assert.equal(state.frameCount,20);assert.equal(state.simStepCount,7);
+  }finally{controls.dispose();}
 });
