@@ -35,6 +35,7 @@
     ".": "./src/index.js",
     "./core": "./src/core.js",
     "./sam": "./src/sam.js",
+    "./parallax-matrix": "./src/parallax-matrix.js",
     "./examples/minimal-model-port": "./examples/minimal-model-port.mjs",
     "./examples/render-plus-inference": "./examples/render-plus-inference.mjs",
     "./examples/sam-image": "./examples/sam-image.mjs"
@@ -45,6 +46,7 @@
   "scripts": {
     "pretest": "npm run test:sam31-per-frame",
     "test:sam31-per-frame": "node tests/sam31-browser-tracker-perframe-contracts.mjs && node tests/sam31-tracker-memory-benchmark-contracts.mjs && node tests/sam31-tracker-memory-benchmark-source-contracts.mjs && node tests/sam31-tracker-memory-benchmark-runner-contracts.mjs",
+    "test:parallax-matrix": "node tests/parallax-matrix-contracts.mjs",
     "test:entrypoints": "node --experimental-vm-modules tests/package-entrypoints-contracts.mjs && node tests/weight-representation-contracts.mjs",
     "test:parity-browser": "node tests/parity-primitives-browser-smoke.mjs",
     "test:render-browser": "node tests/render-plus-inference-browser.mjs",

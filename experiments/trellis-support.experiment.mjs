@@ -158,6 +158,7 @@ export default {
         setThreshold(value){if(!Number.isFinite(value)||value<=0)throw Error('positive LOD threshold required');threshold=value;measure();applyVisibility();publish();return read();},
         frame(){const box=new Box3().setFromObject(asset.root),target=box.getCenter(new Vector3()),size=box.getSize(new Vector3()).length();return session.setView({position:target.clone().add(new Vector3(size*1.1,size*.8,size*1.25)).toArray(),target:target.toArray(),near:Math.max(size/10000,.0001)});},
         frameRegion,
+        setView(value){session.setView(value);measure();applyVisibility();record({kind:"trellis-support.view",phase:"applied",effective:session.readView()});return read();},
         probeLighting,
         inspectCandidate(){sourceMesh.updateWorldMatrix(true,false);group.updateWorldMatrix(true,false);return {state:read(),patch:candidate.patch,retained:candidate.retained,boundarySegments:candidate.boundarySegments,untouched:Array.from(candidate.untouched),frame:candidate.frame,lo:candidate.lo,hi:candidate.hi,transforms:{sourceWorld:sourceMesh.matrixWorld.elements,partitionWorld:group.matrixWorld.elements,sourceParentVisible:sourceMesh.parent.visible,sourceVisible:sourceMesh.visible,partitionVisible:group.visible,patchVisible:patchMesh.visible,wireVisible:wire.visible,partitionParent:group.parent.name,sourceParent:sourceMesh.parent.name}};},
       },

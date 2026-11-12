@@ -281,3 +281,9 @@ Each physical timestamp pair is used once per query set. Exhausted sets retire a
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Inspect Directional Materials
+
+The [parallax matrix helper](./docs/parallax-matrix.md) pairs source and learned
+material captures across a caller-defined camera hemisphere and magnification
+batch, preserving fixed-light and effective-route evidence in the host renderer.
