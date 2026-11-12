@@ -3,7 +3,7 @@ import {installSceneControlHistory,installRelativeNumberDrag} from './scene-cont
 export function installMaterialInspector({document,root,materials,definitions,edits,selected,selection=()=>({ids:[],memberIds:[]}),isEditable=()=>true,assertAvailable,changed,error}){
  const target='@scene-materials',registry=new Map(definitions.map(d=>[d.id,d]));
  edits.register(target,{read:materials.read,write:materials.write,check:materials.check});
- let slotKey=null,renderKey=null,sessions=[];const draftIds=new Map();const pendingSources=new Map();
+ let slotKey=null,renderKey=null,sessions=[],bulkGesture=false;const draftIds=new Map();const pendingSources=new Map();
  const id=()=>globalThis.crypto.randomUUID();
  const apply=(value,label)=>{assertAvailable();try{return edits.apply(target,value,label);}catch(e){if(edits.state().active?.id===target)edits.cancel();throw e;}};
  const bulkTargets=(ids=selection().memberIds)=>{
@@ -135,23 +135,27 @@ export function installMaterialInspector({document,root,materials,definitions,ed
    input.setAttribute('aria-label',field.label);input.value=field.mixed?'':field.value;
    if(field.mixed)input.placeholder=field.type==='color'?'Mixed · #RRGGBB':'Mixed';
    for(const key of ['min','max','step'])if(field[key]!==undefined)input[key]=field[key];
+   row.append(input);root.append(row);
    const read=()=>field.type==='number'?input.valueAsNumber:input.value;
    if(input.type==='text'){
     input.onchange=()=>run(()=>input.value?api.editSelection({[field.key]:read()}):sync(true));
    }else{
     input.addEventListener('input',()=>run(()=>{
      const active=edits.state().active;
-     if(active?.id!==target||input.value==='')return;
-     const next=editSelectionDocument(active.before,{[field.key]:read()},undefined,recipeId=>{
-      if(!draftIds.has(recipeId))draftIds.set(recipeId,id());
-      return draftIds.get(recipeId);
-     });
-     edits.preview(next??active.before);
+     if(active?.id!==target)return;
+     bulkGesture=true;
+     if(input.value===''){edits.preview(active.before);return;}
+     try{
+      const next=editSelectionDocument(active.before,{[field.key]:read()},undefined,recipeId=>{
+       if(!draftIds.has(recipeId))draftIds.set(recipeId,id());
+       return draftIds.get(recipeId);
+      });
+      edits.preview(next??active.before);
+     }catch(e){edits.preview(active.before);throw e;}
     }));
     sessions.push(installSceneControlHistory({controls:[input],edits,id:target,label:'Edit selected '+field.label,onError:e=>error(e.message)}));
     if(field.type==='number'&&!field.mixed)sessions.push(installRelativeNumberDrag({input,grip,step:field.step}));
    }
-   row.append(input);root.append(row);
   }
  }
  function sync(force=false){
@@ -197,5 +201,10 @@ export function installMaterialInspector({document,root,materials,definitions,ed
    row.append(grip,input);root.append(row);if(field.type==='number')sessions.push(installRelativeNumberDrag({input,grip,step:field.step}));
   }
  }
- edits.subscribe(state=>{if(state.active?.id!==target)draftIds.clear();sync();changed();});sync();return {...api,sync};
+ edits.subscribe(state=>{
+  const finished=state.active?.id!==target;
+  const refresh=finished&&bulkGesture;
+  if(finished){draftIds.clear();bulkGesture=false;}
+  sync(refresh);changed();
+ });sync();return {...api,sync};
 }

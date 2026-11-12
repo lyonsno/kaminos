@@ -22,9 +22,9 @@ function fixture(){
  const element=tag=>Object.assign(new EventTarget(),{ownerDocument:document,tag,style:{},children:[],dataset:{},append(...args){this.children.push(...args);},replaceChildren(){this.children=[];},querySelectorAll(){return [];},setAttribute(){},add(){},classList:{add(){}}});
  const document={createElement:element,addEventListener(){},removeEventListener(){},defaultView:{addEventListener(){},removeEventListener(){},Option:class{}}};
  const selection=['a','b','light','locked','a'];
- const root=element('root');
- const inspector=installMaterialInspector({document,root,materials,definitions,edits,selected:id=>entries[id??'a'],selection:()=>({ids:selection,memberIds:selection}),assertAvailable(){},changed(){},error:assert.fail});
- return {inspector,edits,entries,original,materials,root};
+ const root=element('root'),errors=[];
+ const inspector=installMaterialInspector({document,root,materials,definitions,edits,selected:id=>entries[id??'a'],selection:()=>({ids:selection,memberIds:selection}),assertAvailable(){},changed(){},error:message=>errors.push(message)});
+ return {inspector,edits,entries,original,materials,root,errors};
 }
 
 test('selection edits common fields once, splitting recipes only when unselected slots share them',()=>{
@@ -73,7 +73,23 @@ test('bulk numeric preview reuses a single private copy, then cancels or commits
  assert.equal(edits.state().undoCount,0);
  input.dispatchEvent(new Event('pointercancel'));
  assert.deepEqual(materials.read(),original);
+ assert.equal(field().value,'','cancel restores mixed input display');
  input=field();input.dispatchEvent(new Event('focusin'));change(input,.65);
  input.dispatchEvent(new Event('change'));assert.equal(edits.state().undoCount,1);
  edits.undo();assert.deepEqual(materials.read(),original);
+});
+
+test('blank or invalid text after a valid numeric preview cannot commit the earlier value',()=>{
+ for(const invalid of ['', '12']){
+  const {edits,original,materials,root,errors}=fixture();
+  const field=()=>root.children.flatMap(x=>x.children).find(x=>x.dataset.selectionMaterialParam==='roughness');
+  const input=field();
+  const change=value=>{input.value=value;input.valueAsNumber=value?Number(value):NaN;input.dispatchEvent(new Event('input'));};
+  input.dispatchEvent(new Event('focusin'));change('0.7');change(invalid);
+  input.dispatchEvent(new Event('change'));
+  assert.deepEqual(materials.read(),original);
+  assert.equal(edits.state().undoCount,0);
+  assert.equal(field().value,'');
+  assert.equal(errors.length,invalid?1:0);
+ }
 });
