@@ -3,8 +3,20 @@ import {buildTriangleVisibility} from './scene-light-visibility.mjs';
 import {SURFACE_TEACHER_IMAGE_WGSL,SURFACE_TEACHER_QUERY_WGSL,SURFACE_TEACHER_HISTORY_WGSL,SURFACE_TEACHER_FILTER_WGSL} from './surface-teacher-wgsl.mjs';
 
 const finite3=v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite);
+// Reuse the existing BVH builder for bounds/order only. Sphere records are
+// tagged analytical primitives, never triangles used for intersection.
+export function packSurfacePrimitives(triangles=[],spheres=[]){
+ if(!Array.isArray(triangles)||!Array.isArray(spheres))throw Error('Primitive arrays required');
+ for(const s of spheres)if(!finite3(s.center)||!(s.radius>0&&Number.isFinite(s.radius))||!Number.isSafeInteger(s.materialIndex)||s.materialIndex<0)throw Error('Invalid analytical sphere');
+ const bounds=spheres.map(s=>({a:s.center.map(v=>v-s.radius),b:s.center.map(v=>v+s.radius),c:s.center.map((v,k)=>v+(k===1?-s.radius:s.radius)),materialIndex:s.materialIndex})),all=[...triangles,...bounds],packed=buildTriangleVisibility(all).packGpu();
+ for(let i=0;i<packed.triangleCount;i++){
+  const id=packed.triangleIndices[i],o=i*12;packed.triangles[o+3]=all[id].materialIndex;
+  if(id>=triangles.length){const s=spheres[id-triangles.length];packed.triangles.set([...s.center,s.materialIndex,s.radius,0,0,1,0,0,0,0],o);}
+ }
+ return {...packed,primitiveCount:all.length,triangleCount:triangles.length,sphereCount:spheres.length};
+}
 export class SurfaceTeacher {
- constructor(device,{triangles,materials,lights=[],environment=.15,bounces=3}) {
+ constructor(device,{triangles=[],spheres=[],materials,lights=[],environment=.15,bounces=3}) {
   this.device=device;this.resources=[];this.targets=[];this.pipelines={};this.disposed=false;this.serial=0;this.samples=0;this.valid=false;
   this.setTransport({environment,bounces});
   try{
@@ -14,23 +26,23 @@ export class SurfaceTeacher {
   for(const [name,code]of Object.entries({image:SURFACE_TEACHER_IMAGE_WGSL,query:SURFACE_TEACHER_QUERY_WGSL,history:SURFACE_TEACHER_HISTORY_WGSL,filter:SURFACE_TEACHER_FILTER_WGSL})){
    this.pipelines[name]=device.createComputePipeline({label:`surface teacher ${name}`,layout:'auto',compute:{module:device.createShaderModule({label:`surface teacher ${name}`,code}),entryPoint:'main'}});
   }
-   this.setScene({triangles,materials,lights});
+   this.setScene({triangles,spheres,materials,lights});
   }catch(error){this.dispose();throw error;}
  }
  buffer(label,data,usage=GPUBufferUsage.STORAGE){
   if(data.byteLength>this.device.limits.maxBufferSize||(usage&GPUBufferUsage.STORAGE)&&data.byteLength>this.device.limits.maxStorageBufferBindingSize)throw Error(`${label} exceeds the active device's buffer capacity`);
   const buffer=this.device.createBuffer({label,size:Math.max(16,data.byteLength),usage:usage|GPUBufferUsage.COPY_DST});this.device.queue.writeBuffer(buffer,0,data);this.resources.push(buffer);return buffer;
  }
- setScene({triangles,materials,lights=[]}){
+ setScene({triangles=[],spheres=[],materials,lights=[]}){
   if(!Array.isArray(materials)||!materials.length||materials.some(m=>!finite3(m.color)||m.color.some(v=>v<0||v>1)||!Number.isFinite(m.roughness)||m.roughness<0||m.roughness>1||!Number.isFinite(m.metalness)||m.metalness<0||m.metalness>1))throw Error('physical material colors, roughness and metalness required');
   if(lights.some(l=>!finite3(l.position)||!finite3(l.color)||l.color.some(v=>v<0)||!['directional','point','spot'].includes(l.type)||l.type==='directional'&&Math.hypot(...l.position)===0||l.type==='spot'&&(!finite3(l.direction)||Math.hypot(...l.direction)===0||!Number.isFinite(l.angle)||l.angle<=0||l.angle>=Math.PI/2||!Number.isFinite(l.penumbra)||l.penumbra<0||l.penumbra>1)))throw Error('finite directional, inverse-square point or nonzero spot direction required');
   if(triangles.some(t=>!Number.isSafeInteger(t.materialIndex)||t.materialIndex<0||t.materialIndex>=materials.length))throw Error('each triangle must address an existing material');
-  const packed=buildTriangleVisibility(triangles).packGpu();
-  for(let i=0;i<packed.triangleCount;i++)packed.triangles[i*12+3]=triangles[packed.triangleIndices[i]].materialIndex;
+  const packed=packSurfacePrimitives(triangles,spheres);
+  for(const s of spheres)if(s.materialIndex>=materials.length)throw Error('sphere material index is out of range');
   const materialData=new Float32Array(materials.length*8);materials.forEach((m,i)=>materialData.set([...m.color,1,m.roughness,m.metalness,0,0],i*8));
   const lightData=new Float32Array(Math.max(1,lights.length)*16);lights.forEach((l,i)=>{const direction=l.type==='spot'?l.direction.map(v=>v/Math.hypot(...l.direction)):[0,0,-1];lightData.set([...l.position,l.type==='spot'?2:l.type==='point'?1:0,...l.color,0,...direction,Math.cos(l.angle??0),Math.cos((l.angle??0)*(1-(l.penumbra??0))),0,0,0],i*16);});
   const next=[this.buffer('surface teacher BVH nodes',packed.nodes),this.buffer('surface teacher triangles',packed.triangles),this.buffer('surface teacher materials',materialData),this.buffer('surface teacher lights',lightData)];
-  for(const buffer of this.sceneBuffers||[]){buffer.destroy();this.resources.splice(this.resources.indexOf(buffer),1);}this.sceneBuffers=next;this.lightCount=lights.length;this.triangleCount=packed.triangleCount;this.reset('source or lighting changed');
+  for(const buffer of this.sceneBuffers||[]){buffer.destroy();this.resources.splice(this.resources.indexOf(buffer),1);}this.sceneBuffers=next;this.lightCount=lights.length;this.triangleCount=packed.triangleCount;this.sphereCount=packed.sphereCount;this.reset('source or lighting changed');
  }
  setTransport({environment=this.environment,bounces=this.bounces}){
   if(!Number.isFinite(environment)||environment<0||!Number.isSafeInteger(bounces)||bounces<1)throw Error('nonnegative environment and positive integer path depth required');
@@ -94,6 +106,6 @@ export class SurfaceTeacher {
   if(destination.width!==this.width||destination.height!==this.height||destination.format!=='rgba32float')throw Error('Surface teacher presentation texture extent or format mismatch');
   const encoder=this.device.createCommandEncoder();encoder.copyTextureToTexture({texture:this.output},{texture:destination},[this.width,this.height]);this.device.queue.submit([encoder.finish()]);
  }
- state(){return {route:'explicit-surface-webgpu-path-teacher-v1',triangles:this.triangleCount,width:this.width??0,height:this.height??0,samples:this.samples,frame:this.serial,bounces:this.bounces,environment:this.environment,resetReason:this.resetReason,accumulationMode:this.wasMoving?'responsive-history':'stationary-mean',reconstruction:'geometry-validated temporal accumulation and variance-guided atrous',rawOutput:'linear RGB; stationary alpha stores sample count, responsive alpha stores effective history weight',disposed:this.disposed};}
+ state(){return {route:'explicit-surface-webgpu-path-teacher-v1',triangles:this.triangleCount,spheres:this.sphereCount,width:this.width??0,height:this.height??0,samples:this.samples,frame:this.serial,bounces:this.bounces,environment:this.environment,resetReason:this.resetReason,accumulationMode:this.wasMoving?'responsive-history':'stationary-mean',reconstruction:'geometry-validated temporal accumulation and variance-guided atrous',rawOutput:'linear RGB; stationary alpha stores sample count, responsive alpha stores effective history weight',disposed:this.disposed};}
  dispose(){if(this.disposed)return;this.disposed=true;for(const value of [...this.resources,...this.targets])value.destroy();}
 }

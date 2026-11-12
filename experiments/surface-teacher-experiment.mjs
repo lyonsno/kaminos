@@ -57,7 +57,9 @@ export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,
     const v=p=>new THREE.Vector3(...p).applyMatrix4(poseRoot.matrixWorld).toArray();
     const triangles=source.triangles.map(t=>({...t,a:v(t.a),b:v(t.b),c:v(t.c)}));
     if(!poseRoot.visible||!host.scene.isVisible(asset.id))throw Error('Teacher source is hidden; restore its visibility to capture');
-    if(engine)engine.setScene({triangles,materials,lights});else engine=new SurfaceTeacher(renderer.backend.device,{triangles,materials,lights,...configuration});sceneKey=next;
+    const scale=poseRoot.getWorldScale(new THREE.Vector3());if(source.spheres?.length&&(Math.abs(scale.x-scale.y)>1e-6||Math.abs(scale.x-scale.z)>1e-6))throw Error('Analytical sphere source requires uniform scale');
+    const spheres=(source.spheres??[]).map(s=>({...s,center:v(s.center),radius:s.radius*scale.x}));
+    if(engine)engine.setScene({triangles,spheres,materials,lights});else engine=new SurfaceTeacher(renderer.backend.device,{triangles,spheres,materials,lights,...configuration});sceneKey=next;
    }
    engine.setTransport(configuration);
   };

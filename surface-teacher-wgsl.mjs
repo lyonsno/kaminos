@@ -29,12 +29,18 @@ fn rayTriangle(origin:vec3<f32>,direction:vec3<f32>,a:vec3<f32>,e1:vec3<f32>,e2:
  if(u<0.0||v<0.0||u+v>1.0||t<=0.00001){return vec3<f32>(-1.0);}
  return vec3<f32>(t,u,v);
 }
+fn raySphere(origin:vec3<f32>,direction:vec3<f32>,centre:vec3<f32>,radius:f32)->f32{
+ let o=origin-centre;let a=dot(direction,direction);let b=dot(o,direction);let c=dot(o,o)-radius*radius;let discriminant=b*b-a*c;
+ if(discriminant<0.0){return -1.0;}let root=sqrt(discriminant);let near=(-b-root)/a;if(near>0.00001){return near;}let far=(-b+root)/a;return select(-1.0,far,far>0.00001);
+}
 fn trace(origin:vec3<f32>,direction:vec3<f32>,limit:f32)->Hit{
  var hit=Hit(limit,0xffffffffu,vec3<f32>(0.0),vec2<f32>(0.0));var node=0u;
  loop{if(node>=arrayLength(&nodes)){break;}let item=nodes[node];
   if(!rayBox(origin,direction,item.lo.xyz,item.hi.xyz,hit.t)){node=item.range.x;continue;}
   for(var i=0u;i<item.range.z;i++){
-   let id=item.range.y+i;let tri=triangles[id];let sample=rayTriangle(origin,direction,tri.a.xyz,tri.e1.xyz,tri.e2.xyz);
+   let id=item.range.y+i;let tri=triangles[id];
+   if(tri.e1.w==1.0){let t=raySphere(origin,direction,tri.a.xyz,tri.e1.x);if(t>0.0&&t<hit.t){var normal=normalize(origin+direction*t-tri.a.xyz);if(dot(normal,direction)>0.0){normal=-normal;}hit=Hit(t,id,normal,vec2<f32>(0.0));}continue;}
+   let sample=rayTriangle(origin,direction,tri.a.xyz,tri.e1.xyz,tri.e2.xyz);
    if(sample.x>0.0&&sample.x<hit.t){var normal=normalize(cross(tri.e1.xyz,tri.e2.xyz));if(dot(normal,direction)>0.0){normal=-normal;}hit=Hit(sample.x,id,normal,sample.yz);}
   }
   node++;
