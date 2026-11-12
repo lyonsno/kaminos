@@ -22,15 +22,18 @@ def smelu(x):
 
 
 class Appearance(nn.Module):
-    def __init__(self, resolution=64, width=16, seed=41, *, recipe="legacy"):
+    def __init__(self, resolution=64, width=16, seed=41, *, recipe="legacy", hidden_layers=None):
         if recipe not in ["legacy", "published-direct"]:raise ValueError("Known initialization recipe required")
+        hidden_layers=[width,width] if hidden_layers is None else hidden_layers
+        if not isinstance(hidden_layers,(list,tuple)) or not hidden_layers or any(type(w) is not int or w<1 for w in hidden_layers):raise ValueError('Positive integer decoder hidden layers required')
         super().__init__()
         mx.random.seed(seed)
         self.resolution=resolution
         self.normalized_latents=recipe=="legacy"
         self.latents=mx.random.normal((resolution*resolution,8))*.1 if self.normalized_latents else mx.zeros((resolution*resolution,8))
         self.rotation=nn.Linear(8,12,bias=False)
-        self.layers=[nn.Linear(24,width),nn.Linear(width,width),nn.Linear(width,3)]
+        sizes=[24,*hidden_layers,3]
+        self.layers=[nn.Linear(inputs,outputs) for inputs,outputs in zip(sizes,sizes[1:])]
         # Start near a plausible reflectance; the official output mapping has
         # exp-like slope in this range, with a high finite asymptote.
         if recipe=="legacy":self.layers[-1].bias=mx.full((3,),-2.)
@@ -69,7 +72,7 @@ class Appearance(nn.Module):
             w=np.asarray(l.weight);b=np.asarray(l.bias) if 'bias' in l else np.zeros(w.shape[0])
             return {'num_inputs':w.shape[1],'num_outputs':w.shape[0],'weights':w.flatten().tolist(),'biases':b.tolist()}
         return {'latents':{'num_channels':8,'num_mip_levels':1,'normalize':self.normalized_latents},'decoder':{
-            'hidden_layers':[self.layers[0].weight.shape[0]]*2,'hidden_activations':'SmeLU',
+            'hidden_layers':[layer.weight.shape[0] for layer in self.layers[:-1]],'hidden_activations':'SmeLU',
             'output_activation':{'type':'ScaledSigmoid','scale':1e5},'half_diff_parameterization':'StableRusinkiewicz',
             'num_shading_frames':2,'direction_inputs':'WhWdZiZo',
             '_params':{'rotation':{'rotation_decoder':{'mlp_layers':[layer(self.rotation)]}},'network':{'mlp_layers':[layer(l) for l in self.layers]}}}}

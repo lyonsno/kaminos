@@ -32,9 +32,9 @@ class SourceAdam(optim.Adam):
 
 
 class CandidatePool:
- def __init__(self,resolution,width,seeds,*,epsilon=1e-7,loss_kind='L1WithPowerLog',loss_power=3,recipe='legacy'):
+ def __init__(self,resolution,width,seeds,*,epsilon=1e-7,loss_kind='L1WithPowerLog',loss_power=3,recipe='legacy',hidden_layers=None):
   if not seeds or len(set(seeds))!=len(seeds) or any(not isinstance(x,int) or x<0 for x in seeds):raise ValueError('Distinct nonnegative candidate seeds required')
-  models=[Appearance(resolution,width,seed,recipe=recipe) for seed in seeds];self.model=models[0];self.seeds=list(seeds)
+  models=[Appearance(resolution,width,seed,recipe=recipe,hidden_layers=hidden_layers) for seed in seeds];self.model=models[0];self.seeds=list(seeds)
   self.parameters=tree_map(lambda *xs:mx.stack(xs),*[m.parameters() for m in models]);self.optimizer=SourceAdam(epsilon=epsilon)
   def forward(parameters,queries):self.model.update(parameters);return self.model(queries)
   def objective(parameters,queries,labels):return appearance_response_loss(forward(parameters,queries),labels,loss_kind,loss_power)
@@ -63,7 +63,10 @@ class CandidatePool:
   mx.savez(path,**arrays)
  def load_state(self,path):
   arrays=mx.load(path)
-  self.parameters=tree_unflatten([(k.removeprefix('parameters:'),v) for k,v in arrays.items() if k.startswith('parameters:')])
+  parameters=[(k.removeprefix('parameters:'),v) for k,v in arrays.items() if k.startswith('parameters:')]
+  expected={k:tuple(v.shape) for k,v in tree_flatten(self.parameters)}
+  if {k:tuple(v.shape) for k,v in parameters}!=expected:raise ValueError('Resume parameter architecture changed')
+  self.parameters=tree_unflatten(parameters)
   self.optimizer.state=tree_unflatten([(k.removeprefix('optimizer:'),v) for k,v in arrays.items() if k.startswith('optimizer:')])
   if any(x.shape[0]!=len(self.seeds) for _,x in tree_flatten(self.parameters)):raise ValueError('Resume candidate count changed')
   mx.eval(self.parameters,self.optimizer.state)

@@ -47,7 +47,7 @@ def run(args):
   from neural_appearance_mlx import appearance_response_loss,appearance_learning_rate
   if not mx.metal.is_available():raise RuntimeError('Metal MLX required; no CPU training fallback')
   mx.set_default_device(mx.gpu);report['backend']={'library':'mlx','device':str(mx.default_device()),'metalAvailable':True}
-  pool=CandidatePool(plan['resolution'],16,[plan['seed']],epsilon=plan['adamEpsilon'],loss_kind=plan['lossKind'],loss_power=plan['lossPower'],recipe='published-direct')
+  pool=CandidatePool(plan['resolution'],16,[plan['seed']],epsilon=plan['adamEpsilon'],loss_kind=plan['lossKind'],loss_power=plan['lossPower'],recipe='published-direct',hidden_layers=plan['hiddenLayers'])
   if resume:pool.load_state(resume['state']['path'])
   if previous is not None:
    prior=json.loads(previous)

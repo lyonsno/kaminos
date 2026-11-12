@@ -6,7 +6,8 @@ requires one instance and unnormalized latents. Multi-instance encoding is separ
 import math
 
 def validate_plan(options,until):
- p={'steps':100000,'batch':65536,'batchesPerBlock':64,'checkpointPeriod':128,'resolution':256,'seed':41,'candidates':1,'latentNormalization':False,'learningRate':.001,'cosineEndScale':.01,'adamEpsilon':1e-7,'lossKind':'L1WithPowerLog','lossPower':3.,**options}
+ p={'steps':100000,'batch':65536,'batchesPerBlock':64,'checkpointPeriod':128,'resolution':256,'seed':41,'candidates':1,'latentNormalization':False,'learningRate':.001,'cosineEndScale':.01,'adamEpsilon':1e-7,'lossKind':'L1WithPowerLog','lossPower':3.,'hiddenLayers':[16,16],**options}
+ if not isinstance(p['hiddenLayers'],list) or not p['hiddenLayers'] or any(type(w) is not int or w<1 for w in p['hiddenLayers']):raise ValueError('Positive integer decoder hidden layers required')
  for k in ['steps','batch','batchesPerBlock','checkpointPeriod','resolution','seed']:
   if type(p[k]) is not int or p[k]<(0 if k=='seed' else 1):raise ValueError('Valid direct optimization '+k+' required')
  if p['candidates']!=1 or p['latentNormalization'] is not False:raise ValueError('Published direct optimization requires one instance and unnormalized latents')
@@ -28,7 +29,8 @@ def storage_bytes(plan,start,until,heldout):
  # raw predictions and complete parameters/Adam state. JSON/ZIP allowances are
  # estimates, explicitly surfaced; they never cap stored results.
  raw=((until-start)*plan['batch']+(heldout if start==0 else 0))*11*4
- parameters=plan['resolution']**2*8*4+(12*8+24*16+16+16*16+16+16*3+3)*4
+ sizes=[24,*plan['hiddenLayers'],3]
+ parameters=(plan['resolution']**2*8+12*8+sum(i*o+o for i,o in zip(sizes,sizes[1:])))*4
  checkpoints=sum(1 for step,number,_ in blocks(plan,start,until) if (step+number)%plan['checkpointPeriod']==0 or step+number==until)+(1 if start==0 else 0)
  archive=checkpoints*(parameters*4+heldout*3*4+65536)
- return {'rawResponseBytes':raw,'checkpointEstimateBytes':archive,'requiredBytes':raw+archive,'estimate':'All rows retained; parameter/optimizer ZIP and decoder JSON overhead estimated'}
+ return {'rawResponseBytes':raw,'parameterBytes':parameters,'checkpointEstimateBytes':archive,'requiredBytes':raw+archive,'estimate':'All rows retained; parameter/optimizer ZIP and decoder JSON overhead estimated'}

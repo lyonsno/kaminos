@@ -14,4 +14,12 @@ class FreshPlan(unittest.TestCase):
   from neural_appearance_fresh_plan import validate_plan,storage_bytes
   p=validate_plan({'steps':4,'batch':4,'batchesPerBlock':2,'checkpointPeriod':2,'resolution':2,'seed':41,'candidates':1,'latentNormalization':False},4)
   size=storage_bytes(p,0,4,4);self.assertEqual(size['rawResponseBytes'],(4*4+4)*11*4);self.assertGreater(size['requiredBytes'],size['rawResponseBytes'])
+ def test_large_published_decoder_is_explicit_and_storage_counts_it(self):
+  from neural_appearance_fresh_plan import validate_plan,storage_bytes
+  small=validate_plan({'resolution':2},128);large=validate_plan({'resolution':2,'hiddenLayers':[128,128,128,128]},128)
+  self.assertEqual(small['hiddenLayers'],[16,16]);self.assertEqual(large['hiddenLayers'],[128]*4)
+  self.assertEqual(storage_bytes(large,0,128,4)['parameterBytes'],(2*2*8+53219)*4)
+  self.assertGreater(storage_bytes(large,0,128,4)['checkpointEstimateBytes'],storage_bytes(small,0,128,4)['checkpointEstimateBytes'])
+  for value in [[],[0],[True],[-1],[16.5],'128,128']:
+   with self.subTest(value=value),self.assertRaises(ValueError):validate_plan({'hiddenLayers':value},128)
 if __name__=='__main__':unittest.main()
