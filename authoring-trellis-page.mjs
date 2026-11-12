@@ -40,7 +40,8 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
   let run,generation,asset,released=false,result,timing=null,primaryError;
   // Per phase: wall time, and GPU time from the kit's timestamp-query timer (the change in
   // its running total; timings resolve lazily, so the totals are settled before release).
-  const phases=[],clock=()=>globalThis.performance.now();
+  const phases=[],clock=()=>globalThis.performance.now();let checkpointSequence=0,checkpointListenerErrors=0;
+  const observeCheckpoint=event=>{try{onTelemetry?.(event);}catch{checkpointListenerErrors++;}};
   const gpuTotal=()=>run?.route?.runtime?.profile?.gpuTiming?.totalGpuMs??null;
   const closePhase=()=>{const last=phases.at(-1);if(!last||last.endMs!==undefined)return;last.endMs=clock();last.gpuEnd=gpuTotal();};
   const timed=async event=>{
@@ -53,7 +54,16 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
     await timed({phase:'checkpoint-loading'});
     // CPU/network spans open a foreground window so scene frames run while they wait;
     // GPU work and readbacks keep the run's boundary admission.
-    const inputs=await run.withForeground('trellis-checkpoint-loading',()=>d.loadGenerationInputs(manifest,fetchTensor,{pixelValues,highResolutionPixelValues}));
+    // The model retains this callback for lazy DINO/flow/decoder weights. Each
+    // CPU/network read needs its own foreground window after initial loading too.
+    let initialLoading=true;
+    const loadCheckpoint=async name=>{
+      const sequence=++checkpointSequence,start=clock();observeCheckpoint({kind:'checkpoint',status:'started',name,sequence});
+      try{const value=await(initialLoading?fetchTensor(name):run.withForeground('trellis-checkpoint:'+name,()=>fetchTensor(name)));
+        observeCheckpoint({kind:'checkpoint',status:'completed',name,sequence,durationMs:clock()-start,authority:'host-operation-wall-time-not-gpu-completion'});return value;}
+      catch(error){observeCheckpoint({kind:'checkpoint',status:'failed',name,sequence,durationMs:clock()-start,error:{name:error.name,message:error.message}});throw error;}
+    };
+    let inputs;try{inputs=await run.withForeground('trellis-checkpoint-loading',()=>d.loadGenerationInputs(manifest,loadCheckpoint,{pixelValues,highResolutionPixelValues}));}finally{initialLoading=false;}
     generation=d.createTrellisImageGenerationAdapter({...inputs,route:run.route,onPhase:timed,
       ...(onPreview?{runId:run.runId,onPreview}:{})});
     const job=run.route.enqueue({jobId:run.runId+':image-to-fields',execute:invocation=>generation.run(invocation)});
@@ -105,7 +115,7 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
     if(run){
       const gpu=await run.route?.runtime?.settleGpuTiming?.().catch(()=>null);
       closePhase();
-      timing={telemetry:run.telemetry?.()??null,scheduling:run.scheduling?.()??{kind:'current-timer-zero-delay'},gpu:gpu?{...gpu}:run.route?.runtime?.profile?.gpuTiming??null,stages:stageSummary(run.route?.runtime?.profile),phases:phases.map(p=>({phase:p.phase,modelRole:p.modelRole,
+      timing={telemetry:{...run.telemetry?.(),checkpointListenerErrors},scheduling:run.scheduling?.()??{kind:'current-timer-zero-delay'},gpu:gpu?{...gpu}:run.route?.runtime?.profile?.gpuTiming??null,stages:stageSummary(run.route?.runtime?.profile),phases:phases.map(p=>({phase:p.phase,modelRole:p.modelRole,
         wallMs:Math.round(p.endMs-p.startMs),gpuMs:p.gpuStart==null?null:Math.round(((p===phases.at(-1)?gpu?.totalGpuMs??p.gpuEnd:p.gpuEnd)-p.gpuStart)*10)/10}))};
       const report=await run.finish().catch(error=>({status:'held',error}));
       released=report?.status==='released';

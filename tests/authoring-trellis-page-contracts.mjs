@@ -27,6 +27,22 @@ function fixture({jobStatus='succeeded',release='released'}={}){
 const call=(f,extra={})=>runTrellisInPage({appGpu:f.appGpu,manifest:{id:'pack'},fetchTensor:async()=>new ArrayBuffer(4),
   pixelValues:new Float32Array(512*512*3),finishing:{postprocessMesh:async m=>m,unwrapMesh:async m=>m},deps:f.deps,...extra});
 
+test('lazy checkpoint reads retain a foreground window and report their actual operation',async()=>{
+ const f=fixture(),original=f.deps.createTrellisSharedHost;let inside=false;const telemetry=[],reads=[];
+ f.deps.createTrellisSharedHost=async options=>{const host=await original(options),begin=host.beginRun;return {...host,async beginRun(options){return {...await begin(options),async withForeground(phase,work){assert.equal(inside,false,'Kit foreground windows cannot nest');inside=true;try{return await work();}finally{inside=false;}}};}};};
+ f.deps.loadGenerationInputs=async(manifest,fetchTensor)=>{await fetchTensor('dino-prefix');return{lazy:()=>fetchTensor('flow-block-weight')};};
+ f.deps.createTrellisImageGenerationAdapter=options=>({async run(){await options.lazy();return{geometry:{},material:{}};},dispose(){}});
+ await call(f,{fetchTensor:async name=>{reads.push({name,inside});return new ArrayBuffer(4);},onTelemetry:event=>telemetry.push(event)});
+ assert.deepEqual(reads,[{name:'dino-prefix',inside:true},{name:'flow-block-weight',inside:true}]);
+ assert.deepEqual(telemetry.filter(x=>x.kind==='checkpoint').map(x=>[x.name,x.status]),[['dino-prefix','started'],['dino-prefix','completed'],['flow-block-weight','started'],['flow-block-weight','completed']]);
+});
+
+test('failed checkpoint loading keeps its cause and emits failed operation before settlement',async()=>{
+ const f=fixture(),telemetry=[];f.deps.loadGenerationInputs=async(manifest,fetchTensor)=>fetchTensor('bad-weight');
+ await assert.rejects(call(f,{fetchTensor:async()=>{throw Error('observed shard unavailable');},onTelemetry:e=>telemetry.push(e)}),/observed shard unavailable/);
+ assert.equal(telemetry.at(-1)?.kind,'checkpoint');assert.equal(telemetry.at(-1)?.status,'failed');assert.match(telemetry.at(-1).error.message,/shard unavailable/);assert.ok(f.events.includes('finish'));
+});
+
 test('preview and final page result use one caller run identity without an observer settlement join',async()=>{
  const f=fixture(),createHost=f.deps.createTrellisSharedHost,createGeneration=f.deps.createTrellisImageGenerationAdapter;
  const pendingWindows=new Set();let received,actualRunId,completed=false;
@@ -185,7 +201,7 @@ test('a failed decode is captured before the route is released: tensor bytes, bo
   assert.ok(order.indexOf('finish')>order.lastIndexOf('read:logits'),'tensors are read before the route releases them');
 });
 
-test('scene frames are served while checkpoints load and while the mesh is cleaned and unwrapped',async()=>{
+test('scene frames are served during initial and lazy checkpoint reads, cleaning and unwrapping',async()=>{
   const {createAppGpuHost}=await import('../app-gpu-host.mjs');
   const kit=await import('../webgpu-inference-kit/src/core.js');
   const {createTrellisSharedHost}=await import('../models/trellis2/shared-host.js');
@@ -196,20 +212,21 @@ test('scene frames are served while checkpoints load and while the mesh is clean
     host:{device,setForegroundServiceActive(){},runForegroundFrame:run=>run()}});
   let frames=0,seq=0;const frame=()=>installs[0]({requestId:'frame-'+(++seq),run:()=>{frames++;}}).completion;
   const gate=()=>{let open;const p=new Promise(r=>open=r);return {p,open};};
-  const loading=gate(),cleaning=gate(),unwrapping=gate();const seen={};
+  const loading=gate(),lazyLoading=gate(),cleaning=gate(),unwrapping=gate();const seen={};
   const f=fixture();
   const deps={...f.deps,createTrellisSharedHost,
-    loadGenerationInputs:async()=>{await loading.p;return {};},
-    createTrellisImageGenerationAdapter:()=>({async run(){return {geometry:{},material:{}};},dispose(){}}),
+    loadGenerationInputs:async(manifest,fetchTensor)=>{await loading.p;return {loadLazy:()=>fetchTensor('later-stage-weight')};},
+    createTrellisImageGenerationAdapter:options=>({async run(){await options.loadLazy();return {geometry:{},material:{}};},dispose(){}}),
     createTrellisAssetAdapter:options=>({async run(){await options.postprocessMesh({});await options.unwrapMesh({});return {glb};},dispose(){}})};
-  const running=runTrellisInPage({appGpu:app,manifest:{id:'pack'},fetchTensor:async()=>new ArrayBuffer(4),pixelValues:new Float32Array(512*512*3),deps,
+  const running=runTrellisInPage({appGpu:app,manifest:{id:'pack'},fetchTensor:async()=>{await lazyLoading.p;return new ArrayBuffer(4);},pixelValues:new Float32Array(512*512*3),deps,
     finishing:{postprocessMesh:async m=>{await cleaning.p;return m;},unwrapMesh:async m=>{await unwrapping.p;return m;}}});
   const settle=()=>new Promise(r=>setTimeout(r,20));
   await settle();await Promise.race([frame(),settle()]);seen.loading=frames;loading.open();
+  await settle();await Promise.race([frame(),settle()]);seen.lazyLoading=frames;lazyLoading.open();
   await settle();await Promise.race([frame(),settle()]);seen.cleaning=frames;cleaning.open();
   await settle();await Promise.race([frame(),settle()]);seen.unwrapping=frames;unwrapping.open();
   await running;
-  assert.deepEqual(seen,{loading:1,cleaning:2,unwrapping:3},'a frame is served inside each CPU span, not only at route finish');
+  assert.deepEqual(seen,{loading:1,lazyLoading:2,cleaning:3,unwrapping:4},'a frame is served inside each CPU span, not only at route finish');
 });
 
 // A run whose asset consumer cleans a real (tiny) raw dual-grid mesh, with readable geometry and material tensors.

@@ -151,3 +151,13 @@ test('a failed live telemetry listener cannot fail model execution or settlement
  await run.finish();await bridge.dispose();await f.close();
  assert.equal(terminal.status,'succeeded');assert.ok(diagnostic?.listenerErrors>=2,'observer errors stay visible as diagnostic failures');
 });
+
+test('actual Kit tensor uploads expose timing and identity without capturing weight data',async()=>{
+ const f=await fixture(),observed=[];f.device.queue.writeBuffer=()=>{};
+ const bridge=await createTrellisSharedHost({appGpu:f.appGpu}),run=await bridge.beginRun({runId:'upload-observation',onTelemetry:e=>observed.push(e)});
+ const runtime=run.route.runtime,tensor=runtime.createTensor({name:'tiny-weight',shape:[1],dtype:'f32',buffer:{size:4}}),data=new Float32Array([3]);
+ assert.equal(runtime.uploadTensor(tensor,data),tensor);
+ await run.finish();await bridge.dispose();await f.close();
+ assert.deepEqual(observed.filter(e=>e.kind==='upload').map(e=>[e.name,e.status]),[['tiny-weight','started'],['tiny-weight','completed']]);
+ assert.ok(observed.every(e=>!Object.hasOwn(e,'data')&&!Object.hasOwn(e,'values')));
+});

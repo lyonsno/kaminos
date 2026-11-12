@@ -134,6 +134,12 @@ export async function createTrellisSharedHost({appGpu,sharedGpu,host,prototype,s
         }});
       };
       const runtime=Object.freeze({...route.runtime,
+        uploadTensor(tensor,data,offset){
+          const sequence=++operationSequence,start=clock(),name=tensor?.name??'tensor-upload';
+          emit({kind:'upload',status:'started',name,sequence,shape:tensor?.shape,dtype:tensor?.dtype,byteLength:data?.byteLength??null});
+          try{const result=route.runtime.uploadTensor(tensor,data,offset);emit({kind:'upload',status:'completed',name,sequence,durationMs:clock()-start,authority:'host-operation-wall-time-not-gpu-completion'});return result;}
+          catch(error){emit({kind:'upload',status:'failed',name,sequence,durationMs:clock()-start,error:{name:error.name,message:error.message}});throw error;}
+        },
         defineComputeKernel(input){
           const sequence=++operationSequence,start=clock(),name=input.name??input.label??'compute-kernel';
           emit({kind:'kernel-prepare',status:'started',name,sequence});

@@ -23,3 +23,9 @@ test('a frame-reader failure is exposed without losing the operation trace',()=>
  t.record({kind:'kernel',status:'completed',name:'actual-op',durationMs:1});t.heartbeat();
  assert.match(formatTrellisLiveTelemetry(t.summary()),/frame owner lost/);assert.equal(t.export().events.length,1);t.finish('failed');
 });
+
+test('weight reads and uploads become the current visible operation',()=>{
+ let now=0;const t=createTrellisLiveTelemetry({now:()=>now,requestFrame:null});
+ for(const kind of ['checkpoint','upload']){t.record({kind,status:'started',name:kind+'-weight'});now+=1000;assert.equal(t.summary().latestOperation.name,kind+'-weight');assert.match(formatTrellisLiveTelemetry(t.summary()),new RegExp(kind+'-weight'));}
+ t.finish('completed');
+});

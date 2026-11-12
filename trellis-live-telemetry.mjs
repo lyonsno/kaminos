@@ -11,7 +11,7 @@ export function createTrellisLiveTelemetry({input,now=()=>Date.now(),requestFram
     if(terminal)return;
     const row={...structuredClone(event),observedAtMs:now()};events.push(row);
     if(row.kind==='phase')phase=row;
-    if(['kernel','kernel-prepare','gpu-duty'].includes(row.kind)){
+    if(['kernel','kernel-prepare','gpu-duty','checkpoint','upload'].includes(row.kind)){
       latestOperation=row;if(row.kind==='kernel'&&row.status==='completed')completedOperations++;
       if(row.status==='failed')failedOperations++;
     }
