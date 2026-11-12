@@ -19,6 +19,7 @@ export class PairGrid extends C.Broadphase{
 export function makePairBed({count=4096,seed=41,width,dt=1/120,friction=.6,separation=.65}={}){
  if(!Number.isSafeInteger(count)||count<1||!Number.isSafeInteger(seed)||!(dt>0&&Number.isFinite(dt))||!(separation>0&&separation<1.5)||!(friction>=0&&Number.isFinite(friction)))throw Error('Invalid pair bed configuration');
  const rng=random(seed),world=new C.World({gravity:new C.Vec3(0,-50,0)}),bodies=[],ingredients=[],planes=[];let solidVolume=0;
+ world.collisionMatrix=new C.ObjectCollisionMatrix();world.collisionMatrixPrevious=new C.ObjectCollisionMatrix();
  world.solver.iterations=10;world.defaultContactMaterial.friction=friction;world.defaultContactMaterial.restitution=.01;world.defaultContactMaterial.contactEquationStiffness=1e4;world.defaultContactMaterial.contactEquationRelaxation=4;
  for(let i=0;i<count;i++){
   const r=.38*(.8+.4*rng()),s=r*(.85+.15*rng()),distance=r*separation,overlap=r+s-distance;

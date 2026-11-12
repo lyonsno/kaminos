@@ -87,7 +87,7 @@ export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,
    stop=session.onFrame(()=>{
     if(!poseRoot.parent||!poseRoot.visible||!host.scene.isVisible(asset.id)||!camera.isPerspectiveCamera){screen.visible=false;return;}screen.visible=true;
     if(configuration.paused||capturing||failure||document.hidden||pending)return;
-    try{render();pending=engine.device.queue.onSubmittedWorkDone().catch(error=>{failure=error.message;showStatus();}).finally(()=>{pending=null;});}catch(error){failure=error.message;showStatus();}
+    try{render();pending=engine.device.queue.onSubmittedWorkDone().catch(error=>{failure=error.message;showStatus();}).finally(()=>{pending=null;if(!disposed&&!configuration.paused&&!failure)session.redraw();});}catch(error){failure=error.message;showStatus();}
    });
    const operations={
     frame(){return session.setView(initialView);},
