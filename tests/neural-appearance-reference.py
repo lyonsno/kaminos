@@ -34,6 +34,29 @@ class PatternedReference(unittest.TestCase):
   color=mx.full((3,3),.3);rough=mx.full((3,),.25);metal=mx.ones((3,));n=mx.array([[0.,0.,1.]]*3)
   wi=mx.array([[0.,0.,1.],[.6,0.,.8],[0.,0.,-1.]]);wo=mx.array([[0.,0.,1.],[-.6,0.,.8],[0.,0.,1.]])
   actual=np.asarray(material_response(color,rough,metal,n,wi,wo));self.assertTrue(np.isfinite(actual).all());np.testing.assert_array_equal(actual[2],0);self.assertGreater(float(actual[1].mean()),float(actual[0].mean()))
+ def test_reference_reuses_the_response_of_identical_coarse_queries(self):
+  import mlx.core as mx
+  import numpy as np
+  from neural_appearance_patterned_metal import filtered_response,reference_footprint
+  q=np.tile(np.array([[.25,.25,0,0,1,0,0,1]],np.float32),(8,1))
+  evaluate=lambda x:mx.broadcast_to(x[:,:1]**2,(len(x),3))
+  result=np.asarray(filtered_response(evaluate,q,np.random.Generator(np.random.PCG64(41)),reference_footprint(512),reference=True))
+  np.testing.assert_array_equal(result,np.broadcast_to(result[0],result.shape),err_msg='A shared nearest-texel query must not acquire eight independent MonteCarlo colors')
+ def test_filter_submits_one_batch_without_reducing_the_sample_count(self):
+  import mlx.core as mx
+  import numpy as np
+  from neural_appearance_patterned_metal import filtered_response,reference_footprint
+  calls=[]
+  def evaluate(q):
+   calls.append(np.asarray(q));return mx.broadcast_to(q[:,:1]**2,(len(q),3))
+  q=np.array([[.25,.25,0,0,1,0,0,1],[.75,.75,0,0,1,0,0,1]],np.float32)
+  rng=np.random.Generator(np.random.PCG64(41));state=rng.bit_generator.state
+  result=np.asarray(filtered_response(evaluate,q,rng,reference_footprint(512)))
+  self.assertEqual(len(calls),1,'64 samples must be submitted together, rather than64 host/device evaluations')
+  self.assertEqual(len(calls[0]),64*len(q));samples=calls[0].reshape(64,len(q),8)
+  np.testing.assert_allclose(result[:,0],np.mean(samples[:,:,0]**2,axis=0),rtol=2e-6)
+  other=np.random.Generator(np.random.PCG64());other.bit_generator.state=state
+  np.testing.assert_array_equal(result,np.asarray(filtered_response(evaluate,q,other,reference_footprint(512))))
  def test_native_and_coarse_footprints_match_published_sigma(self):
   from neural_appearance_patterned_metal import reference_footprint
   point=reference_footprint(4096);coarse=reference_footprint(512)

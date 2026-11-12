@@ -89,23 +89,25 @@ def reference_footprint(resolution):
  """Published filter_sigma(mip_level, native_resolution), one selected mip."""
  if type(resolution) is not int or resolution<1 or resolution>4096 or resolution&(resolution-1):raise ValueError('Power-of-two latent resolution in1..4096 required')
  mip=12-int(math.log2(resolution));sigma=0. if mip==0 else .65*.5*(1<<mip)/4096
- return {'mode':'point' if mip==0 else 'gaussian-response','nativeMapSampling':'bilinear-repeat','nativeResolution':4096,'latentResolution':resolution,'mipLevel':mip,'sigmaUV':sigma,'uvSnap':'latent-texel-center','filteredUvSnap':'native-texel-center','trainingSamples':1 if mip==0 else 64,'referenceSamples':1 if mip==0 else 256}
+ return {'mode':'point' if mip==0 else 'gaussian-response','nativeMapSampling':'bilinear-repeat','nativeResolution':4096,'latentResolution':resolution,'mipLevel':mip,'sigmaUV':sigma,'uvSnap':'latent-texel-center','filteredUvSnap':'native-texel-center','trainingSamples':1 if mip==0 else 64,'referenceSamples':1 if mip==0 else 256,'filterRng':'MLX-uniform-BoxMuller-keyed-from-PCG64-v1','referenceDuplicates':'shared-query-estimate'}
 
 def filtered_response(evaluate,queries,rng,footprint,reference=False):
- """Port of eval_target_bsdf_lod + sample_2d_gaussian, not parameter filtering.
+ """Published Gaussian response integral, batched on the effective MLX device.
 
- Sequential accumulation retains the published sample count without building
- all64/256 samples' BSDF intermediates at once. RNG state remains replayable.
+ A PCG64-derived key makes the MLX uniform/Box-Muller samples replayable.
+ All64/256 samples are retained in one source evaluation; no host trig or
+ per-sample device barrier. Diagnostic duplicate queries share one estimate.
  """
- q=np.asarray(queries,dtype=np.float32)
- if footprint['mipLevel']==0:return evaluate(mx.array(q))
- samples=footprint['referenceSamples' if reference else 'trainingSamples'];total=mx.zeros((len(q),3))
- for _ in range(samples):
-  u=rng.random((len(q),2));radius=np.sqrt(-2*np.log(np.maximum(u[:,0],np.finfo(float).tiny)));phi=2*math.pi*u[:,1]
-  uv=q[:,:2]+footprint['sigmaUV']*radius[:,None]*np.stack([np.cos(phi),np.sin(phi)],axis=-1)
-  sample=q.copy();sample[:,:2]=(np.floor(uv*4096)+.5)/4096
-  total=total+evaluate(mx.array(sample));mx.eval(total)
- return total/samples
+ q=np.asarray(queries,dtype=np.float32);inverse=None
+ if reference:q,inverse=np.unique(q,axis=0,return_inverse=True)
+ if footprint['mipLevel']==0:result=evaluate(mx.array(q))
+ else:
+  samples=footprint['referenceSamples' if reference else 'trainingSamples'];key=mx.random.key(int(rng.integers(0,1<<32,dtype=np.uint32)))
+  u=mx.random.uniform(shape=(samples,len(q),2),key=key);radius=mx.sqrt(-2*mx.log(mx.maximum(u[:,:,0],1e-30)));phi=2*math.pi*u[:,:,1]
+  base=mx.array(q);uv=base[None,:,:2]+footprint['sigmaUV']*radius[:,:,None]*mx.stack([mx.cos(phi),mx.sin(phi)],axis=-1)
+  uv=(mx.floor(uv*4096)+.5)/4096;directions=mx.broadcast_to(base[None,:,2:],(samples,len(q),6));points=mx.concatenate([uv,directions],axis=-1).reshape(samples*len(q),8)
+  result=mx.mean(evaluate(points).reshape(samples,len(q),3),axis=0)
+ return result if inverse is None else result[mx.array(inverse,dtype=mx.int32)]
 
 class PatternedMetal:
  def __init__(self,manifest):

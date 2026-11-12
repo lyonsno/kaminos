@@ -17,7 +17,7 @@ def run(args):
   if not mx.metal.is_available():raise RuntimeError('Metal reference required; no CPU fallback')
   mx.set_default_device(mx.gpu);report['backend']={'library':'mlx','version':mx.__version__,'device':str(mx.default_device()),'metal':True};report['phase']='load-source';save();teacher=PatternedMetal(args.source);report['sourceManifest']=teacher.manifest
   report['phase']='source-response';save();size=128;v,u=np.mgrid[0:size,0:size];uv=np.stack([(u.flatten()+.5)/size,(v.flatten()+.5)/size],axis=-1).astype(np.float32)
-  light=np.array([.4,.15,.9041570660],np.float32);light/=np.linalg.norm(light);footprint=reference_footprint(512);report['footprint']=footprint;filter_rng=np.random.Generator(np.random.PCG64(940))
+  light=np.array([.4,.15,.9041570660],np.float32);light/=np.linalg.norm(light);selected_resolution=args.latent_resolution;footprint=reference_footprint(selected_resolution);report['footprint']=footprint;filter_rng=np.random.Generator(np.random.PCG64(940))
   def encode(name,rgb,width,height):
    rgb=np.asarray(rgb,np.float32);assert np.isfinite(rgb).all() and (rgb>=0).all();raw=rgb.astype('<f4').tobytes();file=out/(name+'.f32');file.write_bytes(raw);display=np.clip(rgb*2,0,1);display=np.where(display<=.0031308,display*12.92,1.055*display**(1/2.4)-.055);png=out/(name+'.png');Image.fromarray(np.round(display*255).astype(np.uint8).reshape(height,width,3)).save(png)
    return {'path':str(file),'sha256':hashlib.sha256(raw).hexdigest(),'image':str(png),'width':width,'height':height,'mean':float(rgb.mean()),'std':float(rgb.std()),'maximum':float(rgb.max()),'displayExposure':2}
@@ -26,7 +26,7 @@ def run(args):
    q=np.concatenate([uv,np.tile(view,(len(uv),1)),np.tile(light,(len(uv),1))],axis=-1).astype(np.float32);answer=np.asarray(filtered_response(teacher.evaluate,q,filter_rng,footprint,reference=True));assert np.isfinite(answer).all() and (answer>=0).all();fields[name]=encode('field-'+name,answer,size,size)
   report['fields']=fields
   # A replayable independent query batch proves source regeneration on this route.
-  rng=np.random.Generator(np.random.PCG64(41));state=rng.bit_generator.state;q=reference_queries(rng,65536,512);a=np.asarray(filtered_response(teacher.evaluate,q,rng,footprint));other=np.random.Generator(np.random.PCG64());other.bit_generator.state=state;q2=reference_queries(other,65536,512);b=np.asarray(filtered_response(teacher.evaluate,q2,other,footprint));assert np.array_equal(q,q2) and np.array_equal(a,b)
+  rng=np.random.Generator(np.random.PCG64(41));state=rng.bit_generator.state;q=reference_queries(rng,65536,selected_resolution);a=np.asarray(filtered_response(teacher.evaluate,q,rng,footprint));other=np.random.Generator(np.random.PCG64());other.bit_generator.state=state;q2=reference_queries(other,65536,selected_resolution);b=np.asarray(filtered_response(teacher.evaluate,q2,other,footprint));assert np.array_equal(q,q2) and np.array_equal(a,b)
   for name,array in [('replay-queries',q),('replay-labels',a)]:array.astype('<f4').tofile(out/(name+'.f32'))
   report['replay']={'rng':'numpy.PCG64','numpyVersion':np.__version__,'stateBefore':state,'queriesSha256':hashlib.sha256(q.tobytes()).hexdigest(),'labelsSha256':hashlib.sha256(a.tobytes()).hexdigest(),'bitEqual':True,'rawRetained':True,'footprint':footprint,'stateAfter':rng.bit_generator.state}
   # Camera rays against a real plane and sphere, then source evaluation in each
@@ -42,7 +42,7 @@ def run(args):
    tangent=np.tile([1.,0.,0.],(len(p),1));tangent[sphere]=unit(np.stack([normal[sphere,2],np.zeros(sphere.sum()),-normal[sphere,0]],axis=-1));bitangent=np.cross(normal,tangent)
    coords=np.stack([(point[:,0]+2.8)/2.6,(point[:,1]+1.3)/2.6],axis=-1);coords[sphere,0]=np.arctan2(normal[sphere,0],normal[sphere,2])/(2*np.pi)+.5;coords[sphere,1]=np.arccos(np.clip(normal[sphere,1],-1,1))/np.pi
    view=unit(camera-point);project=lambda w:np.stack([np.sum(w*tangent,axis=-1),np.sum(w*bitangent,axis=-1),np.sum(w*normal,axis=-1)],axis=-1)
-   for resolution in [None,512]:
+   for resolution in [None,selected_resolution]:
     source_uv=coords if resolution is None else (np.floor(coords*resolution)+.5)/resolution;color=np.zeros((len(p),3),np.float32)
     for direction,intensity in lights:
      q=np.concatenate([source_uv,project(view),project(np.broadcast_to(direction,view.shape))],axis=-1).astype(np.float32);q=q[valid];rgb=np.asarray(teacher.evaluate(mx.array(q)) if resolution is None else filtered_response(teacher.evaluate,q,filter_rng,footprint));assert np.isfinite(rgb).all() and (rgb>=0).all();color[valid]+=rgb*np.array(intensity,np.float32)
@@ -51,11 +51,11 @@ def run(args):
   # a whole-material camera image can undersample. Each patch spans256 source
   # texels at256 output pixels. Retain all raw radiance, without display blur.
   report['phase']='magnified-source-detail';save();size=256;v,u=np.mgrid[:size,:size];patch_uv=np.stack([.30+(u.flatten()+.5)/4096,.30+(v.flatten()+.5)/4096],axis=-1)
-  for mode in ['source4k','point512','filtered512']:
-   uv=patch_uv if mode=='source4k' else (np.floor(patch_uv*512)+.5)/512
+  for mode in ['source4k','point'+str(selected_resolution),'filtered'+str(selected_resolution)]:
+   uv=patch_uv if mode=='source4k' else (np.floor(patch_uv*selected_resolution)+.5)/selected_resolution
    q=np.concatenate([uv,np.tile([-light[0],-light[1],light[2]],(len(uv),1)),np.tile(light,(len(uv),1))],axis=-1).astype(np.float32)
-   rgb=teacher.evaluate(mx.array(q)) if mode!='filtered512' else filtered_response(teacher.evaluate,q,filter_rng,footprint,reference=True)
-   item=encode('detail-'+mode,rgb,size,size);item.update(meaning='Untrained source near-reflection;256-native-texel patch at1:1;point512 is a rejected aliasing control',mode=mode,uvMin=[.30,.30],uvExtent=[256/4096]*2,filterSamples=256 if mode=='filtered512' else 1);report['captures'].append(item);save()
+   rgb=teacher.evaluate(mx.array(q)) if not mode.startswith('filtered') else filtered_response(teacher.evaluate,q,filter_rng,footprint,reference=True)
+   item=encode('detail-'+mode,rgb,size,size);item.update(meaning='Untrained source near-reflection;256-native-texel patch at1:1;point-coarse is a rejected aliasing control',mode=mode,uvMin=[.30,.30],uvExtent=[256/4096]*2,filterSamples=256 if mode.startswith('filtered') else 1);report['captures'].append(item);save()
   report['status']='passed';report['phase']='complete';report['claim']='Pinned MaterialX graph port produces finite angular response at the recorded native/coarse footprints and deterministic source replay; source visual quality still requires retained-image inspection. No NVIDIA-backend parity or learned appearance claim.'
  except BaseException:
   report['status']='failed';report['error']=traceback.format_exc();raise
@@ -63,4 +63,4 @@ def run(args):
  return report
 
 if __name__=='__main__':
- p=argparse.ArgumentParser();p.add_argument('source');p.add_argument('output');a=p.parse_args();run(a)
+ p=argparse.ArgumentParser();p.add_argument('source');p.add_argument('output');p.add_argument('--latent-resolution',type=int,default=512);a=p.parse_args();run(a)

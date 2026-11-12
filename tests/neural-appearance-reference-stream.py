@@ -22,10 +22,10 @@ class ProceduralFailure(unittest.TestCase):
    def evaluate(self,q):
     self.calls.append(np.asarray(q));return mx.broadcast_to(q[:,:1]**2,(len(q),3))
   with tempfile.TemporaryDirectory() as out:
-   stream=ReferenceStream('.',pathlib.Path(out)/'config.json',out,'a','b');stream.report={'status':'running','requests':[]};stream.rng={'training':np.random.Generator(np.random.PCG64(41))};stream.states={};stream.resolution=512;stream.teacher=Surface();stream.mip_level=3;stream.source_resolution=4096;stream.prefilter_samples={'training':64,'heldout':256};stream.ready={'route':'mlx-metal-ported-reference','runtime':{},'footprint':{}}
+   stream=ReferenceStream('.',pathlib.Path(out)/'config.json',out,'a','b');stream.report={'status':'running','requests':[]};stream.rng={'training':np.random.Generator(np.random.PCG64(41))};stream.states={};stream.resolution=512;stream.teacher=Surface();stream.ready={'route':'mlx-metal-ported-reference','runtime':{},'footprint':{}}
    (queries,labels),receipt=stream.batch('training',4,1)
-   self.assertEqual(len(stream.teacher.calls),64,'mip3 labels must integrate64 authored responses, rather than one stride-eight point lookup')
-   samples=np.stack(stream.teacher.calls)
+   self.assertEqual(sum(len(x) for x in stream.teacher.calls),64*len(queries),'mip3 labels must integrate64 authored responses per query')
+   samples=np.concatenate(stream.teacher.calls).reshape(64,len(queries),8)
    self.assertTrue(np.all((samples[:,:,:2]*4096)%1==.5));self.assertGreater(np.unique(samples[:,:,:2].reshape(-1,2),axis=0).shape[0],4)
    np.testing.assert_array_equal(samples[:,:,2:],np.broadcast_to(np.asarray(queries)[None,:,2:],samples[:,:,2:].shape))
    np.testing.assert_allclose(np.asarray(labels)[:,0],np.mean(samples[:,:,0]**2,axis=0),rtol=2e-6)
