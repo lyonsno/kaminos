@@ -1,0 +1,61 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import * as flow from '../stockroom-fold-flow-state.mjs';
+
+assert.equal(flow.initialFoldFlow().receiverExtent, 1.7,
+  'the receiving interpretation retains the participating span before tuning');
+const a = flow.createFoldAuthoring();
+assert.equal(a.read().stage, 'idle');
+a.begin('leaf');
+assert.equal(a.read().stage, 'bending');
+a.bend(2.5);
+a.hold();
+const held = a.read();
+assert.equal(held.stage, 'choosing');
+assert.equal(held.model.angle, 2.5);
+assert.ok(held.encounter.point.every(Number.isFinite));
+assert.throws(() => a.choose(), /highlight/i, 'nothing silently selects a default');
+a.highlight('side');
+assert.equal(a.display().receiver, true, 'hover previews the actual consequence');
+assert.equal(a.read().model.receiver, false, 'preview does not accept the consequence');
+a.choose();
+assert.equal(a.read().stage, 'tuning');
+a.tune({extent: 1.35, angle: .92});
+assert.equal(a.display().receiverExtent, 1.35);
+assert.equal(a.display().receiverAngle, .92);
+const beforeBad = a.read();
+assert.throws(() => a.tune({extent: NaN, angle: 0}), /finite/i);
+assert.deepEqual(a.read(), beforeBad);
+a.enter();
+assert.equal(a.read().stage, 'idle', 'enter does not attach a new moving part to the pointer');
+assert.equal(a.read().model.receiver, true);
+assert.equal(a.read().model.receiverExtent, 1.35);
+assert.equal(a.read().model.receiverAngle, .92);
+a.back();
+assert.equal(a.read().stage, 'tuning');
+assert.equal(a.display().receiverExtent, 1.35);
+a.back();
+assert.equal(a.read().stage, 'choosing');
+assert.equal(a.read().model.angle, 2.5);
+a.back();
+assert.equal(a.read().stage, 'bending');
+assert.equal(a.read().model.angle, 2.5, 'back preserves the pose that exposed the question');
+a.back();
+assert.equal(a.read().stage, 'idle');
+assert.equal(a.read().model.creased, false);
+assert.equal(a.read().model.angle, 0);
+
+a.begin('leaf');a.bend(2.5);a.hold();a.highlight('drop');a.choose();
+const drop = flow.receiverFlowPose(a.display()).elements;
+a.back();a.highlight('side');a.choose();
+assert.notDeepEqual(flow.receiverFlowPose(a.display()).elements, drop,
+  'the alternatives have different hinge geometry, not different names for one action');
+a.enter();
+a.begin('tip');a.bend(.4);a.hold();
+assert.equal(a.read().stage, 'idle');
+assert.equal(a.read().model.secondCrease, true);
+assert.equal(a.read().model.secondAngle, .4);
+a.reset();
+assert.equal(a.read().depth, 0);
+assert.deepEqual(a.read().model, flow.initialFoldFlow());
+console.log('fold authoring: hold, preview, paired tuning, enter and contextual back');

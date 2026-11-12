@@ -7107,7 +7107,7 @@ function pickVisibleFlameFromViewportPointer(hits) {
 }
 
 function viewportEventHitsInteractiveOverlay(event) {
-  return !!event.target.closest?.('#authoring-viewport-tools, #experiment-toolbar, #transform-bar, #greenroom-preview-controls, #info-bar, #hybrid-splat-viewport-controls, #scene-add-menu, #view-navigation-pie, #volume-viewer-play, .playback-controls, .scene-owner-playback, .living-scene-run');
+  return !!event.target.closest?.('#authoring-viewport-tools, #experiment-toolbar, #transform-bar, #greenroom-preview-controls, #info-bar, #hybrid-splat-viewport-controls, #scene-add-menu, #view-navigation-pie, #volume-viewer-play, .playback-controls, .scene-owner-playback, [data-scene-owner-overlay], .living-scene-run');
 }
 
 function viewportEventIsInsideCanvas(event) {
@@ -14070,7 +14070,7 @@ async function installOwnerWorkbenchEntry() {
   },scene:{
     async open(){await workbenchViewerReady;if(!workbenchSceneHost)throw Error('Shared scene host unavailable');setActiveTab('assets');return workbenchSceneHost.open();},
     refreshPresentation:refreshWorkbenchAssetPresentation,
-    renderer:()=>renderer,camera:()=>camera,objects:()=>workingScene.objects,select:id=>window.selectSceneObject(id),
+    renderer:()=>renderer,camera:()=>camera,navigation:()=>sceneNavigation,objects:()=>workingScene.objects,select:id=>window.selectSceneObject(id),
     materials:{create:options=>materialInspector.create(options),edit:(id,patch)=>materialInspector.edit(id,patch),read:()=>sceneMaterials.read(),subscribe:fn=>scenePlacementTools.edits.subscribe(fn)},
     ground:()=>({center:[groundPlane.position.x,groundPlane.position.y,groundPlane.position.z],height:groundPlane.position.y,radius:5,visible:groundPlane.visible}),
     frame:objects=>{frameObjects(objects,camera,controls);window._kaminosDirty?.();},
