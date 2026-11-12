@@ -24,3 +24,6 @@ console.log('Owner properties/transport follow actual selected roots and descend
 let deselected=0;const propertyAgain=new Element();
 const scoped=registry.mount({asset:{id:'animal',root},properties:propertyAgain,onDeselected:()=>deselected++});
 selected={id:'other',object:other};registry.update();assert.equal(deselected,1,'a unit can close its detached grid dialog on deselection');registry.update();assert.equal(deselected,1,'unchanged idle selection does no repeated cleanup');scoped.dispose();
+const overlay=new Element(),overlayProperties=new Element();selected={id:'animal',object:root};
+const withOverlay=registry.mount({asset:{id:'animal',root},properties:overlayProperties,overlay});
+assert.equal(overlay.parent,viewport,'Contextual construction actions belong in the shared viewport');assert.equal(overlay.hidden,false);selected={id:'other',object:other};registry.update();assert.equal(overlay.hidden,true);withOverlay.dispose();assert.equal(viewport.children.length,0,'Closing an owner removes its action overlay');
