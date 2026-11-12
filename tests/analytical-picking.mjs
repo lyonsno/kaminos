@@ -1,0 +1,4 @@
+// kaminos-test: node
+import test from 'node:test';import assert from 'node:assert/strict';import * as THREE from '../lib/three.webgpu.js';
+const api=await import('../surface-analytical-picking.mjs').catch(()=>({}));
+test('native picking intersects the analytical sphere above a parallel tray and expands bounds',()=>{assert.equal(typeof api.installAnalyticalPicking,'function');const root=new THREE.Mesh(new THREE.BufferGeometry(),new THREE.MeshBasicMaterial());root.geometry.setAttribute('position',new THREE.Float32BufferAttribute([-3,0,-3,3,0,-3,3,0,3],3));root.updateMatrixWorld(true);api.installAnalyticalPicking(root,[{center:[0,2,0],radius:1}]);const ray=new THREE.Raycaster(new THREE.Vector3(0,2,4),new THREE.Vector3(0,0,-1)),hits=[];root.raycast(ray,hits);assert.ok(hits.some(h=>Math.abs(h.distance-3)<1e-8));assert.ok(root.geometry.boundingBox.max.y>=3);root.geometry.dispose();root.material.dispose();});

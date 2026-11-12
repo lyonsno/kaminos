@@ -1,5 +1,6 @@
 import * as THREE from '../lib/three.webgpu.js';
 import {SurfaceTeacher} from '../surface-teacher.mjs';
+import {installAnalyticalPicking} from '../surface-analytical-picking.mjs';
 import {prepareNavigationGeometry} from '../scene-navigation.mjs';
 
 function checkedConfiguration(value){
@@ -35,7 +36,7 @@ export function surfaceTeacherExperiment({id,title,createSource,label,sourceURL,
   const gpuFailure=event=>{failure=event.error?.message??String(event.error);showStatus();};
   const replaceGeometry=()=>{
    const positions=new Float32Array(source.triangles.flatMap(t=>[...t.a,...t.b,...t.c]));
-   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));let start=0;for(let i=1;i<=source.triangles.length;i++){if(i===source.triangles.length||source.triangles[i].materialIndex!==source.triangles[start].materialIndex){geometry.addGroup(start*3,(i-start)*3,source.triangles[start].materialIndex);start=i;}}geometry.computeVertexNormals();geometry.computeBoundingSphere();const old=root.geometry;root.geometry=geometry;old.dispose();sceneKey='';if(asset&&!sourceObject){host.scene.refreshPresentation(asset);void prepareNavigationGeometry(root);}
+   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));let start=0;for(let i=1;i<=source.triangles.length;i++){if(i===source.triangles.length||source.triangles[i].materialIndex!==source.triangles[start].materialIndex){geometry.addGroup(start*3,(i-start)*3,source.triangles[start].materialIndex);start=i;}}geometry.computeVertexNormals();geometry.computeBoundingSphere();const old=root.geometry;root.geometry=geometry;old.dispose();if(source.spheres?.length)installAnalyticalPicking(root,source.spheres);else root.raycast=THREE.Mesh.prototype.raycast;sceneKey='';if(asset&&!sourceObject){host.scene.refreshPresentation(asset);void prepareNavigationGeometry(root);}
   };
   const nativeLights=()=>{
    const lights=[];scene.updateMatrixWorld(true);
