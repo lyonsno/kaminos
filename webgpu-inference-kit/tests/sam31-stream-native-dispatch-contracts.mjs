@@ -28,9 +28,4 @@ for (let frameIndex = 1; frameIndex <= 16; frameIndex++) {
   assert.equal(attention.memory.logicalInvocations, plan.memoryTokenCount * 256);
   if (frameIndex >= 4) { assert.ok(bank.spatial.dispatch.length > 1); assert.ok(attention.memory.dispatch.length > 1); }
 }
-for (const code of [temporal.TEMPORAL_SPATIAL_ASSEMBLY_WGSL, temporal.TEMPORAL_POINTER_POSITION_WGSL]) {
-  assert.match(code, /@builtin\(num_workgroups\)/);
-  assert.match(code, /gid\.y \* dispatch_grid\.x \* 64u/);
-  assert.match(code, /gid\.z \* dispatch_grid\.x \* dispatch_grid\.y \* 64u/);
-}
-console.log('Native SAM memory dispatch covers the full spatial/pointer window within device dimensions');
+console.log('SAM memory dispatch plans cover the full spatial/pointer window within device dimensions; shader execution is checked by sam31-temporal-dispatch-native.mjs');
