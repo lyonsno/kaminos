@@ -1,15 +1,15 @@
 import {checkMaterialParameters} from './scene-material-recipes.mjs';
 import {installSceneControlHistory,installRelativeNumberDrag} from './scene-control-history.mjs';
-export function installMaterialInspector({document,root,materials,definitions,edits,selected,selection=()=>({ids:[],memberIds:[]}),assertAvailable,changed,error}){
+export function installMaterialInspector({document,root,materials,definitions,edits,selected,selection=()=>({ids:[],memberIds:[]}),isEditable=()=>true,assertAvailable,changed,error}){
  const target='@scene-materials',registry=new Map(definitions.map(d=>[d.id,d]));
  edits.register(target,{read:materials.read,write:materials.write,check:materials.check});
- let slotKey=null,renderKey=null,sessions=[];const pendingSources=new Map();
+ let slotKey=null,renderKey=null,sessions=[];const draftIds=new Map();const pendingSources=new Map();
  const id=()=>globalThis.crypto.randomUUID();
  const apply=(value,label)=>{assertAvailable();try{return edits.apply(target,value,label);}catch(e){if(edits.state().active?.id===target)edits.cancel();throw e;}};
  const bulkTargets=(ids=selection().memberIds)=>{
   const targets=[];let skipped=0;
   for(const objectId of new Set(ids)){
-   const entry=selected(objectId),slots=entry&&!entry.burnable?.enabled?materials.slots(entry):[];
+   const entry=selected(objectId),slots=entry&&isEditable(objectId)&&!entry.burnable?.enabled?materials.slots(entry):[];
    if(!slots.length){skipped++;continue;}
    for(const slot of slots)targets.push({objectId,slot:slot.key,recipeId:slot.recipeId});
   }
@@ -17,7 +17,9 @@ export function installMaterialInspector({document,root,materials,definitions,ed
  };
  const bindingKey=b=>JSON.stringify([b.objectId,b.slot]);
  function bulkView(state,ids){
-  const {targets,skipped}=bulkTargets(ids),recipesById=new Map(state.recipes.map(r=>[r.id,r]));
+  const {targets:live,skipped}=bulkTargets(ids),bindings=new Map(state.bindings.map(b=>[bindingKey(b),b.recipeId]));
+  const targets=live.map(t=>({...t,recipeId:bindings.get(bindingKey(t))??null}));
+  const recipesById=new Map(state.recipes.map(r=>[r.id,r]));
   const bound=targets.map(t=>recipesById.get(t.recipeId));
   const fields=bound.length&&bound.every(Boolean)?registry.get(bound[0].implementation).fields.filter(field=>
    bound.every(r=>registry.get(r.implementation).fields.includes(field))
@@ -28,6 +30,27 @@ export function installMaterialInspector({document,root,materials,definitions,ed
   const recipeId=targets[0]?.recipeId??null,mixed=targets.some(t=>t.recipeId!==recipeId);
   return {targets,skipped,fields,recipeId:mixed?null:recipeId,mixed};
  }
+ function editSelectionDocument(state,patch,ids,makeCopyId=id){
+   if(!patch||typeof patch!=='object'||Array.isArray(patch)||!Object.keys(patch).length)throw Error('Material selection edit requires a parameter patch');
+   const next=structuredClone(state),{targets,fields}=bulkView(next,ids);
+   if(Object.keys(patch).some(key=>!fields.some(f=>f.key===key)))throw Error('These material parameters are not shared by the selection');
+   const selectedKeys=new Set(targets.map(bindingKey));
+   let changedAny=false;
+   for(const recipe of next.recipes.slice()){
+    const bindings=next.bindings.filter(b=>b.recipeId===recipe.id);
+    const chosen=bindings.filter(b=>selectedKeys.has(bindingKey(b)));
+    if(!chosen.length)continue;
+    const parameters=checkMaterialParameters(registry.get(recipe.implementation),{...recipe.parameters,...patch});
+    if(Object.keys(patch).every(key=>recipe.parameters[key]===parameters[key]))continue;
+    changedAny=true;
+    if(chosen.length===bindings.length){recipe.parameters=parameters;continue;}
+    const copy={...recipe,id:makeCopyId(recipe.id),name:recipe.name+' · selection',parameters};
+    next.recipes.push(copy);
+    for(const binding of chosen)binding.recipeId=copy.id;
+   }
+   return changedAny?next:null;
+ }
+
  const api={
   read:()=>materials.document(),
   slots:objectId=>materials.slots(selectedById(objectId)).map(({key,label,recipeId})=>({key,label,recipeId})),
@@ -47,24 +70,8 @@ export function installMaterialInspector({document,root,materials,definitions,ed
    return apply(next,recipeId?'Assign material to selection':'Restore source materials on selection');
   },
   editSelection(patch,ids){
-   if(!patch||typeof patch!=='object'||Array.isArray(patch)||!Object.keys(patch).length)throw Error('Material selection edit requires a parameter patch');
-   const next=materials.read(),{targets,fields}=bulkView(next,ids);
-   if(Object.keys(patch).some(key=>!fields.some(f=>f.key===key)))throw Error('These material parameters are not shared by the selection');
-   const selectedKeys=new Set(targets.map(bindingKey));
-   let changedAny=false;
-   for(const recipe of next.recipes.slice()){
-    const bindings=next.bindings.filter(b=>b.recipeId===recipe.id);
-    const chosen=bindings.filter(b=>selectedKeys.has(bindingKey(b)));
-    if(!chosen.length)continue;
-    const parameters=checkMaterialParameters(registry.get(recipe.implementation),{...recipe.parameters,...patch});
-    if(Object.keys(patch).every(key=>recipe.parameters[key]===parameters[key]))continue;
-    changedAny=true;
-    if(chosen.length===bindings.length){recipe.parameters=parameters;continue;}
-    const copy={...recipe,id:id(),name:recipe.name+' · selection',parameters};
-    next.recipes.push(copy);
-    for(const binding of chosen)binding.recipeId=copy.id;
-   }
-   return changedAny?apply(next,'Edit selected material properties'):false;
+   const next=editSelectionDocument(materials.read(),patch,ids);
+   return next?apply(next,'Edit selected material properties'):false;
   },
   create({objectId,slot:requested,implementation='asset-surface',name,parameters:requestedParameters}={}){
    const entry=selectedById(objectId),slots=materials.slots(entry),slot=requested!==undefined?slots.find(s=>s.key===requested):(slots.find(s=>s.key===slotKey)||slots[0]);if(!slot)throw Error('Choose a material slot');
@@ -122,15 +129,28 @@ export function installMaterialInspector({document,root,materials,definitions,ed
   hint.textContent=bulk.fields.length?'Property edits affect this selection; shared finishes outside it keep their values.':'Assign a finish or select finishes with common editable properties.';
   root.append(hint);
   for(const field of bulk.fields){
-   const row=document.createElement('label');row.className='transform-row';row.textContent=field.label+' ';
+   const row=document.createElement('label');row.className='transform-row';
+   const grip=document.createElement('span');grip.textContent=field.label;row.append(grip);
    const input=document.createElement('input');input.type=field.mixed&&field.type==='color'?'text':field.type;input.className='transform-input';input.dataset.selectionMaterialParam=field.key;
    input.setAttribute('aria-label',field.label);input.value=field.mixed?'':field.value;
    if(field.mixed)input.placeholder=field.type==='color'?'Mixed · #RRGGBB':'Mixed';
    for(const key of ['min','max','step'])if(field[key]!==undefined)input[key]=field[key];
-   input.onchange=()=>run(()=>{
-    if(field.type==='number'&&input.value==='')return sync(true);
-    return api.editSelection({[field.key]:field.type==='number'?input.valueAsNumber:input.value});
-   });
+   const read=()=>field.type==='number'?input.valueAsNumber:input.value;
+   if(input.type==='text'){
+    input.onchange=()=>run(()=>input.value?api.editSelection({[field.key]:read()}):sync(true));
+   }else{
+    input.addEventListener('input',()=>run(()=>{
+     const active=edits.state().active;
+     if(active?.id!==target||input.value==='')return;
+     const next=editSelectionDocument(active.before,{[field.key]:read()},undefined,recipeId=>{
+      if(!draftIds.has(recipeId))draftIds.set(recipeId,id());
+      return draftIds.get(recipeId);
+     });
+     edits.preview(next??active.before);
+    }));
+    sessions.push(installSceneControlHistory({controls:[input],edits,id:target,label:'Edit selected '+field.label,onError:e=>error(e.message)}));
+    if(field.type==='number'&&!field.mixed)sessions.push(installRelativeNumberDrag({input,grip,step:field.step}));
+   }
    row.append(input);root.append(row);
   }
  }
@@ -177,5 +197,5 @@ export function installMaterialInspector({document,root,materials,definitions,ed
    row.append(grip,input);root.append(row);if(field.type==='number')sessions.push(installRelativeNumberDrag({input,grip,step:field.step}));
   }
  }
- edits.subscribe(()=>{sync();changed();});sync();return {...api,sync};
+ edits.subscribe(state=>{if(state.active?.id!==target)draftIds.clear();sync();changed();});sync();return {...api,sync};
 }

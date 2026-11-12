@@ -12263,7 +12263,7 @@ async function initScene() {
     openWorkbenchTab: tab => setActiveTab(tab),
   });
   window.kaminosWorkspace = authoringWorkspace;
-  materialInspector=installMaterialInspector({document,root:document.getElementById("authoring-material-properties"),materials:sceneMaterials,definitions:sceneMaterialPrograms,edits:scenePlacementTools.edits,selected:id=>id?workingScene.objects.find(e=>e.id===id):selectedSceneObjectEntry(),selection:readSceneSelection,assertAvailable:assertSceneConstructionAvailable,changed:()=>window._kaminosDirty?.(),error:setInfo});
+  materialInspector=installMaterialInspector({document,root:document.getElementById("authoring-material-properties"),materials:sceneMaterials,definitions:sceneMaterialPrograms,edits:scenePlacementTools.edits,selected:id=>id?workingScene.objects.find(e=>e.id===id):selectedSceneObjectEntry(),selection:readSceneSelection,isEditable:isSceneItemEditable,assertAvailable:assertSceneConstructionAvailable,changed:()=>window._kaminosDirty?.(),error:setInfo});
   window.kaminosMaterials=materialInspector;
   scenePlacementTools.addHistoryScope(document.getElementById("authoring-material-properties"));
   cameraViews=createCameraViews({
