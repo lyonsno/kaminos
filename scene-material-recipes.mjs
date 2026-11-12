@@ -72,7 +72,7 @@ function projectSlots(source,derived){
  return derived.flatMap((slot,i)=>{const matches=source.filter(s=>s.base.name&&s.base.name===slot.base.name);const match=sameLayout?source[i]:matches.length===1?matches[0]:null;return match?[{slot,source:match}]:[];});
 }
 export function createSceneMaterials({entries,definitions,retainedEntries=()=>[],representations=()=>[],changed=()=>{}}) {
- let state={recipes:[],bindings:[]},unsupported=new WeakSet();const active=new Map();
+ let state={recipes:[],bindings:[]},unsupported=new WeakSet();const active=new Map(),listeners=new Set();
  const registry=new Map(definitions.map(d=>[d.id,d]));
  const key=b=>JSON.stringify([b.objectId,b.slot]);
  const objectMap=()=>{const result=new Map([...retainedEntries(),...entries()].map(e=>[e.id,e]));for(const runtime of active.values())if(runtime.ownerEntry?.burnable?.enabled&&!result.has(runtime.ownerEntry.id))result.set(runtime.ownerEntry.id,runtime.ownerEntry);return result;};
@@ -124,10 +124,10 @@ export function createSceneMaterials({entries,definitions,retainedEntries=()=>[]
   }
   for(const [id,runtime]of active)if(staged.get(id)!==runtime)release(runtime);
   for(const target of targets){const runtime=staged.get(target.id);if(runtime){if(!(target.entry.burnable?.enabled&&active.get(target.id)===runtime))runtime.slot.set(runtime.program.material);runtime.recipe=target.recipe;runtime.ownerEntry=target.entry;}}
-  active.clear();for(const [id,runtime]of staged)active.set(id,runtime);state=next;unsupported=nextUnsupported;changed();
+  active.clear();for(const [id,runtime]of staged)active.set(id,runtime);state=next;unsupported=nextUnsupported;changed();for(const listener of listeners)listener();
  }
  const read=()=>copy(state);
- return {read,write,check,async prepare(raw){const next=checkedMaterialDocument(raw,definitions);await Promise.all(next.recipes.map(r=>registry.get(r.implementation).prepare?.(copy(r.parameters))));return next;},sync:()=>write(state),recipe:id=>copy(state.recipes.find(r=>r.id===id)??null),canDisplay:(_root,representation)=>!unsupported.has(representation),
+ return {read,write,check,subscribe(listener){listeners.add(listener);return ()=>listeners.delete(listener);},async prepare(raw){const next=checkedMaterialDocument(raw,definitions);await Promise.all(next.recipes.map(r=>registry.get(r.implementation).prepare?.(copy(r.parameters))));return next;},sync:()=>write(state),recipe:id=>copy(state.recipes.find(r=>r.id===id)??null),canDisplay:(_root,representation)=>!unsupported.has(representation),
   slots:entry=>materialSlots(entry?.object).map(slot=>({...slot,base:active.get(key({objectId:entry.id,slot:slot.key}))?.base??slot.material,recipeId:state.bindings.find(b=>b.objectId===entry.id&&b.slot===slot.key)?.recipeId??null})),
   validateSlots(id,object){const slots=new Set(materialSlots(object).map(s=>s.key));for(const b of state.bindings)if(b.objectId===id&&!slots.has(b.slot))throw Error(`Geometry would remove assigned material slot ${b.slot}; unassign it first`);},
   bindings:id=>copy(state.bindings.filter(b=>b.objectId===id).map(({objectId,...binding})=>binding)),

@@ -3380,7 +3380,7 @@ import {createSceneBurnBody,originalBurnMaterial} from './scene-burn-body.mjs';
 import {createLogGasSourceGpu} from './live-log-gas-source.mjs';
 import { installSceneNavigation } from './scene-navigation.mjs';
 import { frameBox, frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
-import { DEFAULT_STUDIO_LOOK_ID, STUDIO_LOOK_LIBRARY, appendArrivalPivot, arrivalObstacleBoxes, assetArrivalFramingWindow, chooseAppendAnchor, computeAssetArrivalFraming, computeAssetArrivalPlacement, createLoadingTelemetryTracker, extractGeneratedMeshSha, inspectArrivalMaterialProfile, planArrivalStudioLights, prepareArrivedMeshMaterials, resolveAssetArrivalMode, resolveEarlyLowLodMeshSha, resolveStudioLook, resolveStudioLookFromSearch } from './asset-arrival.mjs';
+import { DEFAULT_STUDIO_LOOK_ID, STUDIO_LOOK_LIBRARY, appendArrivalPivot, arrivalObstacleBoxes, assetArrivalFramingWindow, chooseAppendAnchor, computeAssetArrivalFraming, computeAssetArrivalPlacement, createLoadingTelemetryTracker, extractGeneratedMeshSha, inspectArrivalMaterialProfile, planArrivalStudioLights, sceneRecordsWithStudioLights, prepareArrivedMeshMaterials, resolveAssetArrivalMode, resolveEarlyLowLodMeshSha, resolveStudioLook, resolveStudioLookFromSearch } from './asset-arrival.mjs';
 import { promptForFileName, sanitizeFileStem } from './scene-file-names.mjs';
 import { exportCloneInWorld } from './scene-export.mjs';
 import { pickSavedScene } from './scene-load-picker.mjs';
@@ -14125,7 +14125,7 @@ async function installOwnerWorkbenchEntry() {
     async open(){await workbenchViewerReady;if(!workbenchSceneHost)throw Error('Shared scene host unavailable');setActiveTab('assets');return workbenchSceneHost.open();},
     refreshPresentation:refreshWorkbenchAssetPresentation,
     renderer:()=>renderer,objects:()=>workingScene.objects,select:id=>window.selectSceneObject(id),
-    materials:{create:options=>materialInspector.create(options),edit:(id,patch)=>materialInspector.edit(id,patch),read:()=>sceneMaterials.read(),subscribe:fn=>scenePlacementTools.edits.subscribe(fn)},
+    materials:{create:options=>materialInspector.create(options),edit:(id,patch)=>materialInspector.edit(id,patch),read:()=>sceneMaterials.read(),subscribe:fn=>sceneMaterials.subscribe(fn)},
     ground:()=>({center:[groundPlane.position.x,groundPlane.position.y,groundPlane.position.z],height:groundPlane.position.y,radius:5,visible:groundPlane.visible}),
     frame:objects=>{frameObjects(objects,camera,controls);window._kaminosDirty?.();},
     setTransform:(id,pose)=>window.kaminosSetSceneObjectTransform(id,pose),
@@ -25905,7 +25905,8 @@ function editOwnedFireSettings(ownerId,kind,patch) {
 }
 
 function buildSceneData(capture = null) {
-  const objects = workingScene.objects.map(serializeSceneObject);
+  const objects = sceneRecordsWithStudioLights(workingScene.objects.map(serializeSceneObject),arrivalLightingState.plan?.lights,
+    [studioKeyLight?.visible===true,studioRimLight?.visible===true]);
   const activeObject = objects.find(obj => obj.id === workingScene.activeObjectId) || objects[0] || null;
   const provenance = provenanceForSource(activeObject?.source || modelSourceUrl);
 

@@ -362,7 +362,9 @@ export function prepareArrivedMeshMaterials(
         if (!tex || typeof tex !== 'object') continue;
         if ((tex.anisotropy ?? 1) < targetAnisotropy) {
           tex.anisotropy = targetAnisotropy;
-          tex.needsUpdate = true;
+          // TextureLoader publishes the image and upload version together.
+          // Keep its null-image placeholder unversioned until that callback.
+          if (tex.image !== null) tex.needsUpdate = true;
         }
         if (!seenTextures.has(tex)) {
           seenTextures.add(tex);
@@ -423,6 +425,16 @@ export function prepareArrivedMeshMaterials(
 // Plan a two-light studio rig (warm three-quarter Key + cool grazing Rim)
 // scaled and aimed at the arriving asset's bounds, with optional material-aware
 // tuning adjustments for dark-metallic, specular-metallic, bright-matte, or balanced surfaces.
+// Snapshot visible fallback lights as ordinary authored light records. Reading
+// a scene must not promote the rig or alter selection, history or live lights.
+export function sceneRecordsWithStudioLights(objects,lights,visible){
+ const result=[...objects],ids=new Set(objects.map(o=>o.id));
+ for(const [i,light] of (lights??[]).entries())if(visible[i]&&!ids.has(light.id)){
+  result.push(structuredClone(light));ids.add(light.id);
+ }
+ return result;
+}
+
 export function planArrivalStudioLights({
   bounds = null,
   groundY = -0.85,

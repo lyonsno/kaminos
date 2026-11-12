@@ -99,3 +99,12 @@ test('a removed Burning user retains its owned program until root retirement whi
  const materials=createSceneMaterials({entries:()=>entries,definitions:[definition]});materials.write({recipes:[recipe],bindings:[a,b].map(e=>({objectId:e.id,slot:'.:0',recipeId:recipe.id}))});const program=b.object.material,wrapper=new MeshStandardMaterial();b.burnable={enabled:true};b.object.material=wrapper;entries=[a];materials.sync();assert.equal(b.object.material,wrapper);assert.equal(disposed,0);assert.equal(materials.document().bindings.length,1);
  const change=materials.read();change.recipes[0].parameters.roughness=.8;assert.throws(()=>materials.check(change),/Disable Burning/);b.object.material=program;materials.releaseObject(b.object);assert.equal(disposed,1);
 });
+
+test('material observers receive restored library state and can unsubscribe',()=>{
+ const materials=createSceneMaterials({entries:()=>[],definitions:[{id:'standard-surface',version:1,check:p=>structuredClone(p)}]});
+ const seen=[],stop=materials.subscribe(()=>seen.push(materials.read()));
+ materials.write({recipes:[recipe],bindings:[]});
+ assert.equal(seen[0].recipes[0].parameters.roughness,.3);
+ assert.throws(()=>materials.write({recipes:[{...recipe,version:99}],bindings:[]}));
+ assert.equal(seen.length,1);stop();materials.write({recipes:[],bindings:[]});assert.equal(seen.length,1);
+});

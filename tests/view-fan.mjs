@@ -5,6 +5,7 @@ import {createSceneObjectRecord} from '../scene-object-record.mjs';
 import {buildSceneDocument,planSceneRestore,isReloadableSceneObjectRecord} from '../scene-persistence-core.js';
 import {Group} from '../lib/three.core.js';
 import * as viewFan from '../view-fan.mjs';
+import * as arrival from '../asset-arrival.mjs';
 
 const image='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=';
 const view={position:[0,0,3],target:[0,0,0],up:[0,1,0],near:.01,far:100,fov:40};
@@ -50,3 +51,23 @@ test('neighborhood extent determines the camera field without an artificial angu
  assert.ok(rows[1].view.fov>175,'a valid wide neighborhood must not silently narrow to a preset field');
  for(const row of rows){assert.ok(Math.abs(Math.hypot(...row.view.position)-3)<1e-12);assert.deepEqual(row.view.target,[0,0,0]);}
 });
+
+test('scene export includes visible implicit studio lights without promoting or duplicating them',()=>{
+ assert.equal(typeof arrival.sceneRecordsWithStudioLights,'function','the visible default rig must survive source-scene reconstruction');
+ const plan=arrival.planArrivalStudioLights(),objects=[{id:'material',type:'pbr'}];
+ const saved=arrival.sceneRecordsWithStudioLights(objects,plan.lights,[true,true]);
+ assert.equal(saved.length,3);assert.equal(objects.length,1,'taking a scene snapshot must not change the working scene');
+ assert.deepEqual(saved.slice(1).map(r=>r.light),plan.lights.map(r=>r.light));
+ assert.equal(arrival.sceneRecordsWithStudioLights(saved,plan.lights,[true,true]).length,3);
+ assert.deepEqual(arrival.sceneRecordsWithStudioLights(objects,plan.lights,[false,false]),objects);
+});
+
+ test('arrival preparation leaves an unloaded native texture pending until its image arrives',async()=>{
+  const {Texture,Mesh,PlaneGeometry,MeshBasicMaterial}=await import('../lib/three.core.js');
+  const texture=new Texture(),root=new Mesh(new PlaneGeometry(),new MeshBasicMaterial({map:texture}));
+  arrival.prepareArrivedMeshMaterials(root,{maxAnisotropy:16});
+  assert.equal(texture.anisotropy,16);
+  assert.equal(texture.version,0,'null image must not become an uploadable GPU texture');
+  texture.image={width:1,height:1,complete:true};texture.needsUpdate=true;
+  assert.equal(texture.version,1,'the image loader can publish the prepared texture normally');
+ });
