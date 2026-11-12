@@ -10,7 +10,7 @@ import * as arrival from '../asset-arrival.mjs';
 const image='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=';
 const view={position:[0,0,3],target:[0,0,0],up:[0,1,0],near:.01,far:100,fov:40};
 const fan=()=>({schema:'kaminos.view-fan.v1',anchor:{objectId:'material',position:[0,0,0],normal:[0,0,1],uv:[.4,.6]},
- sourceView:view,context:{version:9,objects:[],camera:view},radius:.4,spread:25,cardWidth:.8,
+ sourceView:view,context:{version:9,objects:[{id:'material',type:'pbr',source:'kaminos:neumip-carrier',neuralCarrier:{surface:'folded'}}],camera:view},radius:.4,spread:25,cardWidth:.8,
  views:[{angle:0,view,image,width:1,height:1}],renderer:{route:'viewport',backend:'WebGPU'}});
 const record=()=>({id:'fan',type:'pbr',source:'kaminos:view-fan',label:'View fan',viewFan:fan(),
  transform:{position:[1,2,3],rotation:[0,.2,0],scale:[1,1,1]}});
@@ -71,3 +71,23 @@ test('scene export includes visible implicit studio lights without promoting or 
   texture.image={width:1,height:1,complete:true};texture.needsUpdate=true;
   assert.equal(texture.version,1,'the image loader can publish the prepared texture normally');
  });
+
+test('source context excludes fan-only selection, header and warm-cache references',()=>{
+ const raw={...fan().context,objects:[...fan().context.objects,record()],activeObjectId:'fan',activeGroupId:'only-fan',selectionIds:['fan'],groups:[{id:'only-fan',objectIds:['fan']},{id:'mixed',objectIds:['fan','material']}],model:{source:viewFan.VIEW_FAN_SOURCE},provenance:{source_url:viewFan.VIEW_FAN_SOURCE},transform:{position:[1,2,3]},materials:{color:'bad'},lodPreparation:{context:'old-fan-context'},editorDisplay:{hiddenIds:['fan','material']}};
+ const result=viewFan.sourceSceneWithoutFans(raw);assert.equal(result.model,null);assert.equal(result.provenance,null);assert.equal(result.transform,null);assert.equal(result.materials,null);assert.equal(result.lodPreparation,null);
+ assert.deepEqual(result.groups.map(g=>g.id),['mixed']);assert.equal(result.activeGroupId,null);assert.deepEqual(result.editorDisplay.hiddenIds,['material']);assert.equal(raw.objects.length,2);
+ assert.doesNotThrow(()=>planSceneRestore(result));
+});
+test('fan admission rejects a retained context without its source carrier',()=>{
+ const raw=record();raw.viewFan.context.objects=[];assert.equal(isReloadableSceneObjectRecord(raw),false);
+});
+test('captured-scene restore selects the fan without dangling current group membership',()=>{
+ assert.equal(typeof viewFan.viewFanRestoreDocument,'function');
+ const context={...fan().context,activeGroupId:'source-group',activeFieldId:'water-field',groups:[{id:'source-group',objectIds:['material']}]};
+ const result=viewFan.viewFanRestoreDocument(context,{...record(),groupId:'new-group'});
+ assert.equal(result.activeObjectId,'fan');assert.equal(result.activeGroupId,null);assert.equal(result.activeFieldId,null);assert.equal(result.objects.at(-1).groupId,null);assert.deepEqual(result.selectionIds,['fan']);assert.equal(context.objects.length,1);
+});
+test('a recognized fan root retains its owner type without caller metadata',()=>{
+ const root=new Group();root.userData.kaminosViewFan=fan();
+ const entry=createSceneObjectRecord(root,{}, {id:'fan'});assert.equal(entry.type,'pbr');assert.deepEqual(entry.viewFan,fan());
+});

@@ -12767,11 +12767,11 @@ async function initScene() {
       restore(previous){
         if(!begun)return;
         const errors=[],attempt=fn=>{try{fn();}catch(error){errors.push(error);}};
-        outputCaptureExtent=null;manualInspectionRender=previous.manual;
+        outputCaptureExtent=null;
         attempt(()=>{for(const [root,visible] of hiddenFans)root.visible=visible;});attempt(()=>restoreDrawing?.());
         attempt(()=>{camera.zoom=previous.zoom;writeAuthoredCameraView(previous.view);});
         attempt(()=>{renderer.setPixelRatio(previous.pixelRatio);syncViewportRendererSize();});
-        attempt(()=>{sceneGI.resetHistory('fan-restored');freshDraw();});markDirty();
+        attempt(()=>{sceneGI.resetHistory('fan-restored');if(freshDraw()===false)throw Error('The viewport did not restore the working view');});manualInspectionRender=previous.manual;markDirty();
         if(errors.length)throw new AggregateError(errors,'Fan viewport restoration failed');
       }});
   };

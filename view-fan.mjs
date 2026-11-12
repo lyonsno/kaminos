@@ -21,6 +21,7 @@ export function checkedViewFan(raw){
  const f=structuredClone(raw);
  if(f?.schema!=='kaminos.view-fan.v1'||!f.context||!Array.isArray(f.context.objects)||!f.renderer?.route)throw Error('Fan needs its source scene and renderer context');
  if(typeof f.anchor?.objectId!=='string')throw Error('Fan needs a source object');
+ if(!Number.isInteger(f.context.version)||f.context.version<=0||!f.context.objects.some(o=>o.id===f.anchor.objectId&&o.source!==VIEW_FAN_SOURCE))throw Error('Fan context needs its retained source carrier');
  vector(f.anchor.position,'anchor');vector(f.anchor.normal,'normal');checkedFanView(f.sourceView);
  for(const k of ['radius','cardWidth'])positive(f[k],k);
  if(!Number.isFinite(f.spread)||f.spread<0)throw Error('Invalid angular spread');
@@ -63,11 +64,29 @@ export function viewFanCameras({sourceView,anchor,radius,spread}){
 export function sourceSceneWithoutFans(raw){
  const scene=structuredClone(raw),removed=new Set(scene.objects.filter(o=>o.source===VIEW_FAN_SOURCE).map(o=>o.id));
  scene.objects=scene.objects.filter(o=>!removed.has(o.id));
- scene.groups=(scene.groups??[]).map(g=>({...g,objectIds:g.objectIds.filter(id=>!removed.has(id))}));
+ scene.groups=(scene.groups??[]).map(g=>({...g,objectIds:g.objectIds.filter(id=>!removed.has(id))})).filter(g=>g.objectIds.length);
+ if(!scene.groups.some(g=>g.id===scene.activeGroupId))scene.activeGroupId=null;
+ if(scene.editorDisplay?.hiddenIds)scene.editorDisplay.hiddenIds=scene.editorDisplay.hiddenIds.filter(id=>!removed.has(id));
  scene.selectionIds=(scene.selectionIds??[]).filter(id=>!removed.has(id));
- if(removed.has(scene.activeObjectId))scene.activeObjectId=null;
+ if(removed.has(scene.activeObjectId)){
+  scene.activeObjectId=null;
+  // These legacy single-object fields described the removed active fan.
+  // The remaining authored objects retain their complete source records.
+  scene.model=null;scene.provenance=null;scene.transform=null;scene.materials=null;
+ }
+ if(removed.size)scene.lodPreparation=null;
  if(scene.materialLibrary?.bindings)scene.materialLibrary.bindings=scene.materialLibrary.bindings.filter(b=>!removed.has(b.objectId));
  return scene;
+}
+
+export function viewFanRestoreDocument(raw,record){
+ const context=structuredClone(raw),fan=structuredClone(record);
+ if(!fan?.viewFan)throw Error('The selected fan is absent');
+ checkedViewFan(fan.viewFan);
+ if(!context.groups?.some(g=>g.id===fan.groupId))fan.groupId=null;
+ context.objects=context.objects.filter(o=>o.id!==fan.id);context.objects.push(fan);
+ context.activeObjectId=fan.id;context.activeGroupId=null;context.activeFieldId=null;context.selectionIds=[fan.id];
+ return context;
 }
 
 export function createViewFan(record,{loadTexture=image=>new TextureLoader().load(image)}={}){
@@ -106,6 +125,6 @@ export function viewFanPose(sourceView,position){
 export const viewFanRecordDomain={type:'pbr',source:VIEW_FAN_SOURCE,
  check:r=>({...r,viewFan:checkedViewFan(r.viewFan)}),fields:r=>({viewFan:checkedViewFan(r.viewFan)}),
  recognize:object=>!!object.userData.kaminosViewFan,
- capture:entry=>({source:VIEW_FAN_SOURCE,viewFan:checkedViewFan(entry.object.userData.kaminosViewFan)}),
+ capture:entry=>({type:'pbr',source:VIEW_FAN_SOURCE,viewFan:checkedViewFan(entry.object.userData.kaminosViewFan)}),
  reloadable:r=>{checkedViewFan(r.viewFan);return true;},
  load:(r,loaders,options)=>loaders.constructed(createViewFan(r),r,options)};

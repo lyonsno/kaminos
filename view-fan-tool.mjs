@@ -1,4 +1,4 @@
-import {createViewFan,viewFanCameras,viewFanPose,updateViewFanAnchor,sourceSceneWithoutFans,VIEW_FAN_SOURCE} from './view-fan.mjs';
+import {createViewFan,viewFanCameras,viewFanPose,updateViewFanAnchor,sourceSceneWithoutFans,viewFanRestoreDocument,VIEW_FAN_SOURCE} from './view-fan.mjs';
 
 export function installViewFanTool({THREE,document,viewport,camera,entries,readView,writeView,capture,readContext,
  mount,releaseTree,readSelected,redraw,onFrame,installNumberDrag,openDocument}){
@@ -24,9 +24,8 @@ export function installViewFanTool({THREE,document,viewport,camera,entries,readV
  command('Original view',()=>writeView(selected.object.userData.kaminosViewFan.sourceView));
  command('Update from scene',()=>update(selected.id,{}));
  command('Restore captured scene',()=>{
-  const record=selected,fan=record.object.userData.kaminosViewFan,context=structuredClone(fan.context);
-  context.objects.push({...readContext().objects.find(o=>o.id===record.id)});context.activeObjectId=record.id;context.selectionIds=[record.id];
-  return openDocument(context);
+  const record=selected,fan=record.object.userData.kaminosViewFan;
+  return openDocument(viewFanRestoreDocument(fan.context,readContext().objects.find(o=>o.id===record.id)));
  });
  panel.append(commands);const description=document.createElement('p');description.className='small';description.textContent='Captured viewport views. Spread and neighborhood edits re-evaluate the current scene. The cross marks the selected carrier location.';panel.append(description);
  document.getElementById('transform-inspector').append(panel);
@@ -53,6 +52,7 @@ export function installViewFanTool({THREE,document,viewport,camera,entries,readV
   return position.addScaledVector(normal,-camera.position.distanceTo(new THREE.Vector3(...anchor.position))*.10).toArray();
  }
  function captureFan(anchor,options={}){
+  if(!entries().some(e=>e.id===anchor.objectId&&e.source!==VIEW_FAN_SOURCE))throw Error('The selected source is no longer in the scene');
   const sourceView=options.sourceView??readView(),distance=new THREE.Vector3(...sourceView.position).distanceTo(new THREE.Vector3(...anchor.position));
   const radius=options.radius??distance*Math.tan(sourceView.fov*Math.PI/360)*.30,spread=options.spread??25;
   const views=viewFanCameras({sourceView,anchor:anchor.position,radius,spread}),context=sourceSceneWithoutFans(readContext());

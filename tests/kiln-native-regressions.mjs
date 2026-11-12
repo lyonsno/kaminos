@@ -6,6 +6,7 @@ import {createSceneEdits} from '../scene-edit-session.mjs';
 import {checkedPromptRelief,promptReliefRecord,restorePromptRelief} from '../inference-kiln-record.mjs';
 import {createSceneFlameHDR} from '../scene-flame-hdr.mjs';
 import {createSceneBloom,checkedSceneBloom} from '../scene-bloom.mjs';
+import {sceneRecordsWithStudioLights} from '../asset-arrival.mjs';
 import {captureLodPreparation} from '../scene-lod-startup.mjs';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const section=(start,end)=>html.slice(html.indexOf(start),html.indexOf(end,html.indexOf(start)));
@@ -47,7 +48,7 @@ test('native HDR follows zero/positive width and gain transitions without toggli
 test('production scene save and restore retain authored Bloom and default old documents',async()=>{
  const authored=checkedSceneBloom({enabled:true,composeFlame:true,strength:.15,radius:.8}),element={value:'1',checked:false},v={toArray:()=>[0,0,0]};let restored;
  const context={volumePrototype:null,readFireRendering:()=>({}),restoreFireRendering(){},workingScene:{objects:[],selection:{ids:[]}},serializeSceneObject:x=>x,serializeSceneGroups:()=>[],provenanceForSource:()=>null,modelSourceUrl:null,buildSceneDocument:x=>x,activeSceneComposition:null,waterFeature:{setup:null},cameraViews:null,sceneCameras:null,viewportDisplay:{},camera:{position:v,up:v},controls:{target:v},sceneEnvironment:{document:()=>({})},groundPlane:{visible:true,position:{y:0},material:{color:{getHexString:()=>''},roughness:1}},getVolumePrimitiveState:()=>[],flameDomainTranslation:[0,0,0],flameDomainScale:1,flameDomainFollowSource:false,sceneGISettings:{},sceneAO:{document:()=>({})},sceneBloom:{read:()=>({settings:authored}),set:value=>restored=checkedSceneBloom(value)},checkedSceneBloom,bloomControls:{sync(){}},backdropMesh:null,document:{getElementById:()=>element},setSceneGIControls(){}};
- Object.assign(context,{sceneMaterials:{document:()=>({recipes:[],bindings:[]})},restorePlan:{reflections:null},restoreSceneReflectionSettings(){},window:{},captureLodPreparation,sceneLodContext:()=>({}),sceneBeautyLods:null});
+ Object.assign(context,{sceneRecordsWithStudioLights,arrivalLightingState:{plan:null},studioKeyLight:null,studioRimLight:null,sceneMaterials:{document:()=>({recipes:[],bindings:[]})},restorePlan:{reflections:null},restoreSceneReflectionSettings(){},window:{},captureLodPreparation,sceneLodContext:()=>({}),sceneBeautyLods:null});
  vm.createContext(context);vm.runInContext(section('function buildSceneData(', 'function isCompositionAuthoring()'),context);const saved=context.buildSceneData();assert.deepEqual(structuredClone(saved.postprocessing.bloom),authored);
  const apply=section('  // Apply postprocessing','  if (data.postprocessing)');Object.assign(context,{sceneLoadRequests:{isCurrent:()=>true},loadRequestId:1});for(const data of [saved,{}]){context.data=data;await vm.runInContext('(async()=>{'+apply+'})()',context);assert.deepEqual(restored,data===saved?authored:checkedSceneBloom({}));}
 });
