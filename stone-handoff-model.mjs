@@ -41,8 +41,8 @@ fn stoneCheapAverage(center:f32,extent:f32,period:f32)->f32{return (stoneCheapIn
  let color=vec3<f32>(${m.color.map(f).join(',')});let F0=mix(vec3<f32>(0.04),color,${f(m.metalness)});let F=F0+(vec3<f32>(1.0)-F0)*pow(1.0-vh,5.0);
  return color*${f(1-m.metalness)}*(vec3<f32>(1.0)-F)/3.141592653589793+F*D*Gv*Gl/max(4.0*nl*nv,1e-8);
 }`;
- const stripWeight=`fn stoneStripIntegral(x:f32)->f32 {if(x<=${f(r.inner)}){return 0.0;}if(x>=${f(r.inner+r.collar)}){return x-${f(r.inner+r.collar/2)};}let t=(x-${f(r.inner)})/${f(r.collar)};return ${f(r.collar)}*(t*t*t-0.5*t*t*t*t);}
-fn stoneHandoffWeight(uv:vec2<f32>,lod:f32)->f32 {let extent=exp2(lod)*${f(r.width/sizes[0])};let center=uv.x*${f(r.width)};if(center-extent*0.5>=${f(r.inner+r.collar)}){return 0.0;}if(center+extent*0.5<=${f(r.inner)}){return 1.0;}return clamp(1.0-(stoneStripIntegral(center+extent*0.5)-stoneStripIntegral(center-extent*0.5))/extent,0.0,1.0);}`;
+ const stripWeight=`fn stoneHandoffWeight(uv:vec2<f32>,lod:f32)->f32 {let extent=exp2(lod)*${f(r.width/sizes[0])};let center=uv.x*${f(r.width)};if(center-extent*0.5>=${f(r.inner+r.collar)}){return 0.0;}if(center+extent*0.5<=${f(r.inner)}){return 1.0;}return clamp(1.0-(stoneStripIntegral(center+extent*0.5)-stoneStripIntegral(center-extent*0.5))/extent,0.0,1.0);}
+fn stoneStripIntegral(x:f32)->f32 {if(x<=${f(r.inner)}){return 0.0;}if(x>=${f(r.inner+r.collar)}){return x-${f(r.inner+r.collar/2)};}let t=(x-${f(r.inner)})/${f(r.collar)};return ${f(r.collar)}*(t*t*t-0.5*t*t*t*t);}`;
  return {weight:r.kind==='strip'?stripWeight:weight,flat};
 }
 export function writeStoneHandoffModel(model){
