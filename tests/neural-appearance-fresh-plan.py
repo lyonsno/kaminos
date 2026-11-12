@@ -22,4 +22,10 @@ class FreshPlan(unittest.TestCase):
   self.assertGreater(storage_bytes(large,0,128,4)['checkpointEstimateBytes'],storage_bytes(small,0,128,4)['checkpointEstimateBytes'])
   for value in [[],[0],[True],[-1],[16.5],'128,128']:
    with self.subTest(value=value),self.assertRaises(ValueError):validate_plan({'hiddenLayers':value},128)
+ def test_procedural_material_storage_preserves_inputs_instead_of_dumping_derivatives(self):
+  from neural_appearance_fresh_plan import validate_plan,storage_bytes
+  p=validate_plan({'resolution':512,'checkpointPeriod':1000,'sourceBatchStorage':'procedural-replay'},100000);size=storage_bytes(p,0,100000,4096)
+  self.assertEqual(size['rawResponseBytes'],4096*44);self.assertEqual(size['regenerableResponseBytes'],100000*65536*44)
+  self.assertLess(size['requiredBytes'],20*1024**3)
+  with self.assertRaises(ValueError):validate_plan({'sourceBatchStorage':'discard'},128)
 if __name__=='__main__':unittest.main()

@@ -8,7 +8,7 @@ integration choices, not the complete encoder/sampler/auxiliary pipeline.
 """
 import argparse,hashlib,json,os,pathlib,shutil,subprocess,traceback,uuid
 from neural_appearance_fresh_plan import validate_plan,blocks,storage_bytes
-from neural_appearance_source_stream import SourceStream,load_batch_arrays
+from neural_appearance_source_stream import create_source_stream,load_batch_arrays
 
 
 def digest(path):return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
@@ -17,7 +17,7 @@ def atomic_json(path,value):
 
 def run(args):
  out=pathlib.Path(args.output).resolve();out.mkdir(parents=True,exist_ok=True);stream=None
- report={'status':'running','phase':'admission','job':os.environ.get('GREENROOM_JOB_ID'),'repoRoot':str(pathlib.Path.cwd()),'configPath':str(pathlib.Path(args.config).resolve()),'checkpoints':[],'rawBatches':[]}
+ report={'status':'running','phase':'admission','job':os.environ.get('GREENROOM_JOB_ID'),'repoRoot':str(pathlib.Path.cwd()),'configPath':str(pathlib.Path(args.config).resolve()),'checkpoints':[],'rawBatches':[],'proceduralBatches':[]}
  canonical=out/'report.json';previous=canonical.read_bytes() if canonical.exists() else None;canonical_allowed=previous is None
  attempt=out/'attempts'/(uuid.uuid4().hex+'.json') if previous is not None else None
  def publish():
@@ -30,14 +30,14 @@ def run(args):
   report['sourceCommit']=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
   if report['sourceCommit']!=os.environ.get('EXPECTED_COMMIT') or subprocess.check_output(['git','status','--porcelain'],text=True).strip():raise RuntimeError('Pinned clean training source required')
   config_path=pathlib.Path(args.config).resolve();config=json.loads(config_path.read_bytes());report['config']=config;report['configHash']=digest(config_path);report['sourceHash']=config['capture']['sourceSha256'];plan=validate_plan(config['fit'],args.until);report['effectiveRecipe']=plan
-  report['claim']='Released single-instance direct optimization on own geometric integral; no encoder, reference-importance mixture, sampler, auxiliary decoder or FP16 arithmetic claim.'
+  report['claim']='Released single-instance direct optimization on '+('the ported PatternedMetal reference graph (not NVIDIA backend execution)' if config['capture'].get('kind')=='nvidia-patterned-metal' else 'own geometric integral')+'; no encoder, reference-importance mixture, sampler, auxiliary decoder or FP16 arithmetic claim.'
   resume=json.loads(pathlib.Path(args.resume).read_bytes()) if args.resume else None;start=0
   if resume:
    if any(resume.get(k)!=report[k] for k in ['sourceCommit','configHash','sourceHash']) or resume.get('output')!=str(out) or resume.get('schema')!='kaminos.appearance-fit-resume.v1':raise ValueError('Resume source/config/output identity changed')
    start=resume['step']
    if type(start) is not int or start<1 or start>=args.until or start%plan['checkpointPeriod']:raise ValueError('Resume must advance a complete retained checkpoint')
    if digest(resume['state']['path'])!=resume['state']['sha256']:raise ValueError('Resume optimizer/parameter digest mismatch')
-   report['checkpoints']=resume['checkpoints'];report['rawBatches']=resume['rawBatches'];report['resumedFrom']=str(pathlib.Path(args.resume).resolve())
+   report['checkpoints']=resume['checkpoints'];report['rawBatches']=resume['rawBatches'];report['proceduralBatches']=resume.get('proceduralBatches',[]);report['resumedFrom']=str(pathlib.Path(args.resume).resolve())
   heldout_count=config['capture']['heldout'];size=storage_bytes(plan,start,args.until,heldout_count);report['storage']={**size,'freeBytes':shutil.disk_usage(out).free}
   if size['requiredBytes']>report['storage']['freeBytes']:raise RuntimeError('Insufficient space for all raw inputs and checkpoints; no capture attempted')
   report['phase']='runtime';publish()
@@ -55,7 +55,7 @@ def run(args):
    prior_path=attempt.with_suffix('.prior.json');prior_path.write_bytes(previous);report['previousReport']={'path':str(prior_path),'sha256':hashlib.sha256(previous).hexdigest()};canonical_allowed=True
   source_out=out/('source-'+report['job']+'-'+str(start));report['phase']='source-start';publish()
   if source_out.exists():raise ValueError('Source invocation already exists; preserve it and use a distinct execution job')
-  stream=SourceStream(pathlib.Path.cwd(),config_path,source_out,report['sourceCommit'],report['sourceHash'],args.resume,resume['sourceCounter'] if resume else 0)
+  stream=create_source_stream(pathlib.Path.cwd(),config_path,source_out,report['sourceCommit'],report['sourceHash'],args.resume,resume['sourceCounter'] if resume else 0)
   stream.start();report['sourceReady']=stream.ready
   if resume:
    heldout=resume['heldout'];hq,ht=load_batch_arrays(heldout)
@@ -70,10 +70,11 @@ def run(args):
    item={'step':step,'heldoutTrainingLoss':float(loss.item()),'heldoutLogL1':float(log_loss.item()),'predictions':{'path':str(predicted_path),'sha256':digest(predicted_path)},**bundle};report['checkpoints'].append(item)
    state_path=target/'training-state.npz';temporary=target/'training-state.pending.npz';pool.save_state(str(temporary));temporary.replace(state_path)
    state={'schema':'kaminos.appearance-fit-resume.v1','output':str(out),'sourceCommit':report['sourceCommit'],'configHash':report['configHash'],'sourceHash':report['sourceHash'],'step':step,'sourceCounter':stream.counter,'sourceStates':dict(stream.states),'state':{'path':str(state_path),'sha256':digest(state_path)},'heldout':heldout,'checkpoints':list(report['checkpoints']),'rawBatches':list(report['rawBatches'])}
+   state.update(proceduralBatches=list(report['proceduralBatches']),sourceRuntime=stream.ready.get('runtime'))
    atomic_json(target/'resume.json',state);report['latestResume']=str(target/'resume.json');publish();print(json.dumps(item),flush=True)
   if not resume:checkpoint(0)
   for begin,count,batch in blocks(plan,start,args.until):
-   report['phase']='source-batch';report['completedSteps']=begin;publish();(q,t),receipt=stream.batch('training',batch,count);report['rawBatches'].append(receipt);q,t=mx.array(q),mx.array(t);report['phase']='fit';publish()
+   report['phase']='source-batch';report['completedSteps']=begin;publish();(q,t),receipt=stream.batch('training',batch,count);report['proceduralBatches' if receipt.get('storage')=='procedural-replay' else 'rawBatches'].append(receipt);q,t=mx.array(q),mx.array(t);report['phase']='fit';publish()
    for offset in range(count):
     step=begin+offset;learning_rate=appearance_learning_rate(step,plan['steps'],plan['learningRate'],plan['cosineEndScale']);losses=pool.step(q[offset*batch:(offset+1)*batch],t[offset*batch:(offset+1)*batch],learning_rate)
    report['lastTrainingLoss']=float(losses[0].item());report['completedSteps']=begin+count;publish()

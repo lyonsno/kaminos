@@ -1,6 +1,13 @@
 """Caller-owned, integrity-checked source stream. No route or stale-batch fallback."""
 import hashlib,json,os,pathlib,re,subprocess
 HASH=re.compile(r'^[a-f0-9]{64}$')
+def create_source_stream(repo,config,out,expected_commit,expected_source_hash,resume_path=None,resume_counter=0):
+ settings=json.loads(pathlib.Path(config).read_bytes());kind=settings['capture'].get('kind','geometry')
+ if kind=='nvidia-patterned-metal':
+  from neural_appearance_reference_stream import ReferenceStream
+  return ReferenceStream(repo,config,out,expected_commit,expected_source_hash,resume_path,resume_counter)
+ if kind!='geometry' or settings['fit'].get('sourceBatchStorage','raw-arrays')!='raw-arrays':raise ValueError('Unsupported source route/storage; geometry requires all raw arrays')
+ return SourceStream(repo,config,out,expected_commit,expected_source_hash,resume_path,resume_counter)
 def validate_batch_reply(request,reply,identity):
  if not isinstance(reply,dict) or reply.get('schema')!='kaminos.appearance-source-batch.v1':raise ValueError('Source batch schema required')
  if type(reply.get('id')) is not int or reply['id']!=request['id'] or type(reply.get('rows')) is not int or reply['rows']!=request['batchSize']*request['batches']:raise ValueError('Requested source batch identity/count changed')

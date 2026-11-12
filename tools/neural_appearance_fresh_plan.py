@@ -6,7 +6,8 @@ requires one instance and unnormalized latents. Multi-instance encoding is separ
 import math
 
 def validate_plan(options,until):
- p={'steps':100000,'batch':65536,'batchesPerBlock':64,'checkpointPeriod':128,'resolution':256,'seed':41,'candidates':1,'latentNormalization':False,'learningRate':.001,'cosineEndScale':.01,'adamEpsilon':1e-7,'lossKind':'L1WithPowerLog','lossPower':3.,'hiddenLayers':[16,16],**options}
+ p={'steps':100000,'batch':65536,'batchesPerBlock':64,'checkpointPeriod':128,'resolution':256,'seed':41,'candidates':1,'latentNormalization':False,'learningRate':.001,'cosineEndScale':.01,'adamEpsilon':1e-7,'lossKind':'L1WithPowerLog','lossPower':3.,'hiddenLayers':[16,16],'sourceBatchStorage':'raw-arrays',**options}
+ if p['sourceBatchStorage'] not in ['raw-arrays','procedural-replay']:raise ValueError('Explicit source batch storage required')
  if not isinstance(p['hiddenLayers'],list) or not p['hiddenLayers'] or any(type(w) is not int or w<1 for w in p['hiddenLayers']):raise ValueError('Positive integer decoder hidden layers required')
  for k in ['steps','batch','batchesPerBlock','checkpointPeriod','resolution','seed']:
   if type(p[k]) is not int or p[k]<(0 if k=='seed' else 1):raise ValueError('Valid direct optimization '+k+' required')
@@ -28,9 +29,14 @@ def storage_bytes(plan,start,until,heldout):
  # All input rows and labels survive. Checkpoints include the latent bundle,
  # raw predictions and complete parameters/Adam state. JSON/ZIP allowances are
  # estimates, explicitly surfaced; they never cap stored results.
- raw=((until-start)*plan['batch']+(heldout if start==0 else 0))*11*4
+ procedural=plan['sourceBatchStorage']=='procedural-replay'
+ regenerable=(until-start)*plan['batch']*11*4 if procedural else 0
+ raw=((0 if procedural else (until-start)*plan['batch'])+(heldout if start==0 else 0))*11*4
  sizes=[24,*plan['hiddenLayers'],3]
  parameters=(plan['resolution']**2*8+12*8+sum(i*o+o for i,o in zip(sizes,sizes[1:])))*4
  checkpoints=sum(1 for step,number,_ in blocks(plan,start,until) if (step+number)%plan['checkpointPeriod']==0 or step+number==until)+(1 if start==0 else 0)
  archive=checkpoints*(parameters*4+heldout*3*4+65536)
- return {'rawResponseBytes':raw,'parameterBytes':parameters,'checkpointEstimateBytes':archive,'requiredBytes':raw+archive,'estimate':'All rows retained; parameter/optimizer ZIP and decoder JSON overhead estimated'}
+ # Procedural recipes retain both full RNG states and batch digests; 16KiB is
+ # an estimate per generated block, not a cap on any recipe or output.
+ recipes=sum(1 for _ in blocks(plan,start,until))*16384 if procedural else 0
+ return {'rawResponseBytes':raw,'regenerableResponseBytes':regenerable,'parameterBytes':parameters,'checkpointEstimateBytes':archive,'recipeEstimateBytes':recipes,'requiredBytes':raw+archive+recipes,'estimate':('Source inputs/RNG/identities/digests retained for complete regeneration; raw heldout retained. ' if procedural else 'All raw rows retained. ')+'Parameter/optimizer ZIP, JSON and recipe overhead estimated; no output cap.'}
