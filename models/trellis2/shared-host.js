@@ -80,13 +80,17 @@ export async function createTrellisSharedHost({appGpu,sharedGpu,host,prototype,s
     snapshot(){return{session:session.snapshot(),foreground:foreground?.snapshot()??null,
       foregroundOwnership:application?'application':'bridge',disposed,
       activeRun:active?{runId:active.runId,status:active.status,error:active.error}:null};},
-    async beginRun({runId,signal,scheduling}={}){
+    async beginRun({runId,signal,scheduling,onTelemetry}={}){
       assertOpen();if(active)throw Error('TRELLIS host has an active or held run');
       if(scheduling!==undefined&&scheduling!=='per-duty-fence-task')throw Error('unsupported TRELLIS scheduling policy');
       if(typeof runId!=='string'||!runId.trim())throw Error('explicit TRELLIS run id required');
       if(signal!==undefined&&typeof signal?.aborted!=='boolean')throw Error('actual abort signal required');
       throwIfStopped(signal);
       const sleep=scheduling==='per-duty-fence-task'?createTrellisFrameAwareSleep({queue,signal,perDutyFence:true}):null;
+      if(onTelemetry!==undefined&&typeof onTelemetry!=='function')throw TypeError('telemetry observer must be a function');
+      let listenerErrors=0,operationSequence=0;
+      const emit=event=>{try{onTelemetry?.({...event,runId,routeId:GENERATION_ROUTE});}catch{listenerErrors++;}};
+      const clock=()=>globalThis.performance.now();
       const state={runId,status:'starting',error:null};active=state;
       let frameRun,route;
       try{
@@ -130,14 +134,26 @@ export async function createTrellisSharedHost({appGpu,sharedGpu,host,prototype,s
         }});
       };
       const runtime=Object.freeze({...route.runtime,
+        defineComputeKernel(input){
+          const sequence=++operationSequence,start=clock(),name=input.name??input.label??'compute-kernel';
+          emit({kind:'kernel-prepare',status:'started',name,sequence});
+          try{const kernel=route.runtime.defineComputeKernel(input);emit({kind:'kernel-prepare',status:'completed',name,sequence,durationMs:clock()-start,authority:'host-operation-wall-time-not-gpu-completion'});return kernel;}
+          catch(error){emit({kind:'kernel-prepare',status:'failed',name,sequence,durationMs:clock()-start,error:{name:error.name,message:error.message}});throw error;}
+        },
         async runKernel(kernel,options={}){
           throwIfStopped(signal);
+          const sequence=++operationSequence,start=clock(),name=kernel.name;
+          emit({kind:'kernel',status:'started',name,sequence,stage:options.stage??name,metadata:options.metadata??{}});
+          try{
           const dispatch=options.dispatch;
           // Runtime resolves dispatch after servicing foreground work and
           // immediately before encoding: Stop can arrive during that service.
-          return route.runtime.runKernel(kernel,{...options,dispatch:boundary=>{
+          const result=await route.runtime.runKernel(kernel,{...options,dispatch:boundary=>{
             throwIfStopped(signal);return typeof dispatch==='function'?dispatch(boundary):dispatch;
           }});
+          emit({kind:'kernel',status:'completed',name,sequence,durationMs:clock()-start,authority:'host-operation-wall-time-not-gpu-completion'});
+          return result;
+          }catch(error){emit({kind:'kernel',status:'failed',name,sequence,durationMs:clock()-start,error:{name:error.name,message:error.message}});throw error;}
         },
         readTensor(tensor,options={}){
           const reading=(async()=>{
@@ -168,6 +184,7 @@ export async function createTrellisSharedHost({appGpu,sharedGpu,host,prototype,s
       return Object.freeze({
         runId,route:Object.freeze({...route,runtime,enqueue}),
         scheduling:()=>sleep?.snapshot()??{kind:'current-timer-zero-delay'},
+        telemetry:()=>({listenerErrors}),
         withForeground(phase,work){
           throwIfStopped(signal);return frameRun.withForeground(phase,work);
         },

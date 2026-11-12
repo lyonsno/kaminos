@@ -28396,7 +28396,7 @@ function setupAuthoringAssets(){
   };
   window.kaminosTrellisHistory=trellisHistoryBridge;
   document.dispatchEvent(new Event('kaminos-trellis-history-installed'));
-  const trellisPageRunInner=async({pixels,highResolutionPixels,image,label='TRELLIS page',signal,onPhase,onInput,onPreview,finishMesh=true,textureSize=1024,scheduling,finishingMode='original-remesh'}={})=>{
+  const trellisPageRunInner=async({pixels,highResolutionPixels,image,label='TRELLIS page',signal,onPhase,onInput,onPreview,finishMesh=true,textureSize=1024,scheduling,onTelemetry,finishingMode='original-remesh'}={})=>{
     const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};
     const [{runTrellisInPage,createTrellisPageCheckpoints},{createBrowserMeshPostprocess},{createWasmXatlasUnwrapper}]=await Promise.all([
       import('./authoring-trellis-page.mjs'),import('./models/trellis2/mesh-cleanup.js'),import('./models/trellis2/wasm-xatlas.js')]);
@@ -28457,8 +28457,9 @@ function setupAuthoringAssets(){
     const {createBrowserMaterialBaker}=await import('./models/trellis2/material-bake.js');
     const bakeMaterial=createBrowserMaterialBaker({WorkerClass:Worker,signal,projectPositions:postprocessMesh.projectMaterialPositions,
       withCpu:postprocessMesh.withCpu});
+    try{onTelemetry?.({kind:'configuration',source:config.source,checkpointManifestSha256:pack.manifestSha256,imageSha256,pipelineType:pack.manifest.pipelineType,textureSize,finishingMode,scheduling:scheduling??'current-timer-zero-delay'});}catch(error){console.warn('TRELLIS telemetry observer failed during configuration',error);}
     try{
-      const result=await runTrellisInPage({appGpu,runId,manifest:pack.manifest,fetchTensor:pack.fetchTensor,pixelValues,highResolutionPixelValues,signal,onPhase,onPreview:previewForProduct,scheduling,decoderActivationStorage:'f16',finishMesh:finishMesh!==false,textureSize,
+      const result=await runTrellisInPage({appGpu,runId,manifest:pack.manifest,fetchTensor:pack.fetchTensor,pixelValues,highResolutionPixelValues,signal,onPhase,onTelemetry,onPreview:previewForProduct,scheduling,decoderActivationStorage:'f16',finishMesh:finishMesh!==false,textureSize,
         // Stop reaches the finishing providers too (cleanup and UV in workers where supported).
         finishing:{postprocessMesh,bakeMaterial,unwrapMesh:createWasmXatlasUnwrapper({WorkerClass:Worker,signal,normalMode:finishingMode==='original-remesh'?'source-original':'post-uv'})},
         provenance:{checkpointManifestSha256:pack.manifestSha256,
@@ -28486,6 +28487,7 @@ function setupAuthoringAssets(){
   // Page TRELLIS is reserved from the first step (config, input, preparation, U2Net) to its
   // end, so the picker, Stop routing, SF3D, Klein and the queued route all see it.
   const trellisPageRun=async options=>{
+    if(options?.admission!==undefined&&!['lease','queue'].includes(options.admission))throw Error('TRELLIS admission must be lease or queue');
     if(meshBusy('sf3d')||meshBusy('trellis')||meshBusy('trellisPage')||authoringImageGenerator?.busy())throw Error('Another model is generating');
     meshRunning.trellisPage=true;redraw();
     try{
@@ -28497,7 +28499,7 @@ function setupAuthoringAssets(){
         const json=await r.json();if(!r.ok)throw Error(json.error||`HTTP ${r.status}`);return json;};
       let outcome;
       try{
-        outcome=await withGreenroomLease({post,runId:crypto.randomUUID(),route:'trellis2.image-generation.webgpu.v0',signal:options?.signal,
+        outcome=await withGreenroomLease({post,runId:crypto.randomUUID(),route:'trellis2.image-generation.webgpu.v0',signal:options?.signal,admission:options?.admission??'lease',
           // The app GPU host's ledger of model runs whose settlement is unresolved (U2Net, TRELLIS).
           unsettledWork:async()=>(await appGpuHost())?.unsettledRuns?.()??[],
           onWait:wait=>{options?.onPhase?.({phase:'waiting-for-gpu',heldBy:wait.heldBy});setInfo(`TRELLIS waits for the GPU: Greenroom ${wait.heldBy?.length?`job ${wait.heldBy.join(', ')}`:'lease'} holds it`);}},
@@ -28539,6 +28541,7 @@ function setupAuthoringAssets(){
           :{status:'unavailable',message:'This server mounts no TRELLIS checkpoint package (KAMINOS_TRELLIS_CHECKPOINT_ROOT)'};redraw();
       }).catch(error=>{trellisPageAvailability={status:'unavailable',message:`TRELLIS availability: ${error.message}`};redraw();});
       authoringTrellisPageGenerator=createTrellisPageAuthoringGeneration({availability:()=>trellisPageAvailability,changed:()=>redraw(),
+        readFrame:()=>{const f=volumePrototype?.debugState?.();return f?.active?{frameCount:f.frameCount,simStepCount:f.simStepCount,queueDoneMs:f.timing?.queueDoneMs??null,queueProbePending:f.timing?.queueProbePending??false}:null;},
         blocked:()=>authoringImageGenerator?.busy()?'An image is generating. Generate the mesh when it is saved.':meshBusy('sf3d')?'Stable Fast 3D is generating.':meshBusy('trellis')?'TRELLIS is generating.':meshBusy('trellisPage')?'TRELLIS is generating on this page.':null,
         runPage:trellisPageRun,persist:(glb,generation,label,extra)=>persistTrellisPageRun({glb,generation,label,...extra})});
     }

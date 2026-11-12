@@ -131,3 +131,23 @@ test('remeshing GPU duties service an actual scene frame before encoding and pre
   await frame.completion;await run.finish();await bridge.dispose();await f.close();
  }
 });
+
+test('actual Kit kernel execution emits operation identity and wall timing without another GPU wait',async()=>{
+ const f=await fixture(),bridge=await createTrellisSharedHost({appGpu:f.appGpu}),observed=[];
+ const run=await bridge.beginRun({runId:'live-operation',onTelemetry:e=>observed.push(e)});
+ const terminal=await submit(run),waitsBeforeFinish=f.events.filter(e=>e==='gpu-settled').length;
+ await run.finish();await bridge.dispose();await f.close();
+ assert.equal(terminal.status,'succeeded');
+ assert.deepEqual(observed.filter(e=>e.kind==='kernel').map(e=>[e.status,e.name]),[['started',kernel.name],['completed',kernel.name]]);
+ assert.equal(waitsBeforeFinish,0,'observability adds no queue drain');
+ const done=observed.find(e=>e.kind==='kernel'&&e.status==='completed');assert.ok(Number.isFinite(done.durationMs)&&done.durationMs>=0);
+ assert.equal(done.authority,'host-operation-wall-time-not-gpu-completion');
+});
+
+test('a failed live telemetry listener cannot fail model execution or settlement',async()=>{
+ const f=await fixture(),bridge=await createTrellisSharedHost({appGpu:f.appGpu});
+ const run=await bridge.beginRun({runId:'bad-observer',onTelemetry:()=>{throw Error('display failed');}});
+ const terminal=await submit(run),diagnostic=run.telemetry?.();
+ await run.finish();await bridge.dispose();await f.close();
+ assert.equal(terminal.status,'succeeded');assert.ok(diagnostic?.listenerErrors>=2,'observer errors stay visible as diagnostic failures');
+});

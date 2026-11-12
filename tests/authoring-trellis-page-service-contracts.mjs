@@ -91,6 +91,12 @@ test('page TRELLIS is reserved from its first step to its end (index.html wrappe
   const third=ctx.run({});while(!release)await new Promise(r=>setTimeout(r,0));
   assert.ok(infos.some(m=>/without a Greenroom lease/.test(m)),'announced before the run finishes');
   release();assert.equal((await third).generation.gpuLease.status,'unconfigured');assert.deepEqual(events,['claim','run']);
+  // Automated consumers can join FIFO through the existing queued-lease protocol.
+  release=null;events.length=0;ctx.fetch=async(_,{body})=>{const b=JSON.parse(body);events.push(b.action);return {ok:true,json:async()=>['queued-claim','claim'].includes(b.action)?{status:'held',leaseId:'queued-native',ttlSeconds:120}:{status:'released'}};};
+  const queued=ctx.run({admission:'queue'});while(!release)await new Promise(r=>setTimeout(r,0));release();await queued;
+  assert.deepEqual(events,['queued-claim','run','release'],'queued admission reaches the real page wrapper');
+  events.length=0;ctx.trellisPageRunInner=async()=>{events.push('run');return {};};await assert.rejects(ctx.run({admission:'outside'}),/lease or queue/);assert.deepEqual(events,[],'the caller cannot turn queued admission into a coordination bypass');
+
 });
 
 test('the service prepares its own input and shows the cutout it used',async()=>{
@@ -163,4 +169,49 @@ test('a stopped run saves nothing, even with surfels attached',async()=>{
   const {s}=service({runPage:async({signal})=>{await new Promise(r=>setTimeout(r,5));throw Object.assign(signal.reason??new DOMException('stopped','AbortError'),{trellisSurfelsRun:finishingFailure().trellisSurfelsRun});},
     persist:async()=>{persisted++;return {};}});
   const running=s.run(input);s.stop();assert.equal(await running,null);assert.equal(persisted,0);
+});
+
+test('elapsed progress keeps advancing inside one long phase and its timer ends with the run',async()=>{
+  let now=0,finish,tick,cleared=false;
+  const {s,states}=service({now:()=>now,setInterval:(callback,ms)=>{assert.equal(ms,1000);tick=callback;return 42;},clearInterval:id=>{assert.equal(id,42);cleared=true;},
+    runPage:async({onPhase})=>{onPhase({phase:'sparse-structure-sampling'});return new Promise(resolve=>{finish=()=>resolve({glb,generation:{runId:'clock'},label:'clock'});});}});
+  const running=s.run(input);await new Promise(resolve=>setTimeout(resolve,0));
+  now=18000;assert.equal(typeof tick,'function','an active phase schedules elapsed-time refresh');tick();
+  assert.equal(s.read().progress,'Shape structure · 18s');
+  now=83000;tick();assert.equal(s.read().progress,'Shape structure · 1m 23s','time does not depend on a new model-phase event');
+  assert.ok(states.some(state=>state.progress==='Shape structure · 1m 23s'),'the UI receives the refresh');
+  finish();await running;assert.equal(cleared,true,'no refresh timer remains after completion');
+  const complete=s.read().progress;now=100000;tick();assert.equal(s.read().progress,complete,'a late callback cannot overwrite completion');
+});
+
+test('elapsed refresh is stopped on cancellation, inference failure and persistence failure',async()=>{
+  for(const outcome of ['stop','inference','persistence']){
+    let settle,tick,cleared=false;
+    const {s}=service({setInterval:callback=>{tick=callback;return 7;},clearInterval:id=>{assert.equal(id,7);cleared=true;},
+      runPage:({signal,onPhase})=>{onPhase({phase:'sparse-structure-sampling'});return new Promise((resolve,reject)=>{settle=()=>outcome==='inference'?reject(Error('model failed')):resolve({glb,generation:{runId:'clock'},label:'clock'});signal.addEventListener('abort',()=>reject(signal.reason));});},
+      persist:async()=>{if(outcome==='persistence')throw Error('disk full');return {name:'clock.glb'};}});
+    const running=s.run(input);await new Promise(resolve=>setTimeout(resolve,0));
+    if(outcome==='stop'){s.stop();await running;}else{settle();await assert.rejects(running,outcome==='inference'?/model failed/:/disk full/);}
+    assert.equal(cleared,true,outcome);const status=s.read().status;tick();assert.equal(s.read().status,status);
+  }
+});
+
+test('live telemetry preserves fine operations and phase details without publishing once per kernel',async()=>{
+  let finish,clock=0;const {s,states}=service({now:()=>clock,runPage:async({onPhase,onTelemetry})=>{
+    await onPhase({phase:'dinov3-block7-attention',block:7,totalBlocks:24,custom:'retained'});
+    if(onTelemetry)for(let i=0;i<2001;i++){
+      onTelemetry({kind:'kernel',status:'started',name:'fine-kernel',sequence:i,metadata:{block:7,head:i}});
+      onTelemetry({kind:'kernel',status:'completed',name:'fine-kernel',sequence:i,durationMs:2,authority:'host-operation-wall-time-not-gpu-completion'});
+    }
+    return new Promise(resolve=>{finish=()=>resolve({glb,generation:{runId:'fine'},label:'fine'});});
+  }});
+  const running=s.run(input);await new Promise(r=>setTimeout(r,0));
+  assert.equal(s.read().telemetry?.phase?.phase,'dinov3-block7-attention','the raw phase survives the plain stage label');
+  assert.equal(s.read().telemetry.completedOperations,2001);
+  assert.equal(s.read().telemetry.latestOperation.name,'fine-kernel');
+  assert.equal(typeof s.telemetry,'function','the complete trace is inspectable while waiting');
+  const raw=s.telemetry();assert.equal(raw.input.source,input.source);assert.equal(raw.events.filter(e=>e.kind==='kernel').length,4002,'no hidden event retention cap');
+  assert.equal(raw.events.find(e=>e.kind==='phase').custom,'retained');
+  assert.ok(states.length<20,'kernel observations do not cause thousands of DOM updates');
+  finish();await running;assert.equal(s.telemetry().terminal,'complete');
 });

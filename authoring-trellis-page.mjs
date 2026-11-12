@@ -1,3 +1,4 @@
+import {createTrellisLiveTelemetry} from './trellis-live-telemetry.mjs';
 // TRELLIS 2 in this page: the selected image's prepared pixels run on the app GPU host
 // (app-gpu-host.mjs) through the model's own bridge (models/trellis2/shared-host.js), and
 // the learned fields are finished into a GLB in the page. No server model process, no GPU
@@ -17,7 +18,7 @@ const MODEL_DEPS=async()=>{
 // activation memory); it needs shader-f16 on the shared device.
 // Every run also yields a surfel asset (trellis-surfels.mjs) from the decoded field, built from the raw
 // mesh before any cleanup. finishMesh:false stops there: no cleanup, UV or bake, and no mesh GLB.
-export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixelValues,highResolutionPixelValues,finishing,finishMesh=true,textureSize=1024,decoderActivationStorage,scheduling,signal,onPhase=()=>{},onPreview,runId=`authoring-trellis-page-${globalThis.crypto.randomUUID()}`,provenance={},deps}){
+export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixelValues,highResolutionPixelValues,finishing,finishMesh=true,textureSize=1024,decoderActivationStorage,scheduling,signal,onPhase=()=>{},onTelemetry,onPreview,runId=`authoring-trellis-page-${globalThis.crypto.randomUUID()}`,provenance={},deps}){
   if(!Number.isSafeInteger(textureSize)||textureSize<1||!Number.isSafeInteger(textureSize**2))
     throw TypeError('positive representable texture size required');
   if(!(pixelValues instanceof Float32Array)||pixelValues.length!==512*512*3)
@@ -47,7 +48,7 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
     return onPhase(event);
   };
   try{
-    run=await host.beginRun({runId,signal:stop,scheduling});
+    run=await host.beginRun({runId,signal:stop,scheduling,onTelemetry});
     finishing?.postprocessMesh?.setExecutionContext?.({withCpu:(phase,work)=>run.withForeground(phase,work),withGpu:(phase,work)=>run.withGpuDuty(phase,work)});
     await timed({phase:'checkpoint-loading'});
     // CPU/network spans open a foreground window so scene frames run while they wait;
@@ -104,7 +105,7 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
     if(run){
       const gpu=await run.route?.runtime?.settleGpuTiming?.().catch(()=>null);
       closePhase();
-      timing={scheduling:run.scheduling?.()??{kind:'current-timer-zero-delay'},gpu:gpu?{...gpu}:run.route?.runtime?.profile?.gpuTiming??null,stages:stageSummary(run.route?.runtime?.profile),phases:phases.map(p=>({phase:p.phase,modelRole:p.modelRole,
+      timing={telemetry:run.telemetry?.()??null,scheduling:run.scheduling?.()??{kind:'current-timer-zero-delay'},gpu:gpu?{...gpu}:run.route?.runtime?.profile?.gpuTiming??null,stages:stageSummary(run.route?.runtime?.profile),phases:phases.map(p=>({phase:p.phase,modelRole:p.modelRole,
         wallMs:Math.round(p.endMs-p.startMs),gpuMs:p.gpuStart==null?null:Math.round(((p===phases.at(-1)?gpu?.totalGpuMs??p.gpuEnd:p.gpuEnd)-p.gpuStart)*10)/10}))};
       const report=await run.finish().catch(error=>({status:'held',error}));
       released=report?.status==='released';
@@ -172,8 +173,10 @@ const STAGES=[[/^(dinov3|load-dinov3|checkpoint-loading)/,'Reading the image'],[
   [/^post-model-(mesh-extraction|material-readback|mesh-postprocess)/,'Cleaning the mesh'],[/^post-model-uv/,'Unwrapping UVs'],[/^post-model-(texture-bake|pbr-glb)/,'Baking textures']];
 export function trellisPageStage(phase){return STAGES.find(([pattern])=>pattern.test(String(phase||'')))?.[1]??'Generating';}
 
-export function createTrellisPageAuthoringGeneration({availability,runPage,persist,changed=()=>{},blocked=()=>null,now=()=>Date.now()}){
-  let active=false,abort=null,started=0;
+export function createTrellisPageAuthoringGeneration({availability,runPage,persist,changed=()=>{},blocked=()=>null,now=()=>Date.now(),
+  setInterval=globalThis.setInterval,clearInterval=globalThis.clearInterval,readFrame=()=>null}){
+  let active=false,abort=null,started=0,live=null,lastTelemetryPublish=0;
+  const traces=[];
   let state={status:'idle',progress:'TRELLIS 2 runs in this page on its GPU; it takes many minutes.',stage:null,percent:null,canStop:false,error:null,results:[],pending:null};
   const publish=()=>changed(structuredClone({...state,pending:state.pending?{label:state.pending.label}:null}));
   const set=values=>{Object.assign(state,values);publish();};
@@ -199,8 +202,10 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
     read(){
       const view={...structuredClone({...state,pending:null}),pending:state.pending?{label:state.pending.label}:null};
       if(state.status==='idle'||state.status==='unavailable'){const reason=unavailable();return reason?{...view,status:'unavailable',error:reason}:{...view,status:'idle'};}
+      if(live)view.telemetry=live.summary();
       return view;
     },
+    telemetry:({all=false}={})=>all?traces.map(trace=>trace.export()):live?.export()??null,
     stop(){if(!active||!abort||abort.signal.aborted)return false;abort.abort(new DOMException('TRELLIS stopped','AbortError'));set({status:'stopping',canStop:false,progress:'Stopping at the next GPU step…'});return true;},
     async retryPersistence(){
       if(active)throw Error('Generation is already running');if(!state.pending)throw Error('No generated output needs saving');
@@ -213,10 +218,18 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
       const cutout=input?.source;if(!cutout)throw Error('Choose a source image');
       const reason=unavailable();if(reason)throw Error(reason);
       active=true;abort=new AbortController();started=now();let phase='inference';
+      live=createTrellisLiveTelemetry({input,now,readFrame});const runTelemetry=live;traces.push(live);lastTelemetryPublish=started-250;
+      const onTelemetry=event=>{live.record(event);if(now()-lastTelemetryPublish>=250){lastTelemetryPublish=now();publish();}};
       set({status:'running',error:null,inputPreview:null,stage:'Reading the image',canStop:true,progress:'Starting TRELLIS in this page…'});
+      // Elapsed time is independent of model-phase announcements.
+      const clock=setInterval(()=>{
+        if(active&&live===runTelemetry&&state.status==='running'){runTelemetry.heartbeat();set({progress:`${state.stage} · ${elapsed()}`});}
+      },1000);
+      clock?.unref?.();
       const label=(input.label||input.name||'Generated').replace(/\.[^.]+$/,'');
       try{
-        const out=await runPage({image:{source:cutout},label,signal:abort.signal,onInput:used=>set({inputPreview:{...used,input:input.source}}),onPhase:event=>{
+        const out=await runPage({image:{source:cutout},label,signal:abort.signal,onTelemetry,onInput:used=>set({inputPreview:{...used,input:input.source}}),onPhase:event=>{
+          live.record({...event,kind:'phase'});
           const stage=trellisPageStage(event?.phase);set({stage,progress:`${stage} · ${elapsed()}`});}});
         state.pending={glb:out.glb,generation:{...out.generation,input:{...out.generation?.input,source:input.source}},label:out.label||label,surfelGlb:out.surfelGlb??null,surfels:out.surfels??null,levelInputs:out.levelInputs??null};
         phase='persistence';return await storePending();
@@ -236,7 +249,7 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
           throw error;
         }
         set({status:'failed',error:`${phase}: ${error?.message||error}`,stage:null});throw error;
-      }finally{active=false;abort=null;state.canStop=false;publish();}
+      }finally{clearInterval(clock);live.finish(state.status);active=false;abort=null;state.canStop=false;publish();}
     },
   };
 }
