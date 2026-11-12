@@ -1,6 +1,6 @@
 import {buildHandoffMath,STONE_HANDOFF_ARCHITECTURE} from './stone-handoff-model.mjs';
 import {MeshStandardNodeMaterial,DataTexture,RGBAFormat,FloatType,NearestFilter,NearestMipmapNearestFilter,RepeatWrapping,NoColorSpace,DoubleSide} from './lib/three.webgpu.js';
-import {Fn,uniform,texture,wgslFn,uv,positionViewDirection,TBNViewMatrix,normalView,dFdx,dFdy,sqrt,log2,max,If} from './lib/three.tsl.js';
+import {Fn,uniform,texture,wgslFn,uv,positionViewDirection,TBNViewMatrix,normalView,dFdx,dFdy,sqrt,log2,max,If,vec3} from './lib/three.tsl.js';
 import {buildNeumipWGSL} from './neumip-shader.mjs';
 
 function pack(level,block) {
@@ -16,8 +16,12 @@ function latentTexture(levels,block,name) {
   t.generateMipmaps=false;t.flipY=false;if(levels.length>1)t.mipmaps=mips;t.needsUpdate=true;return t;
 }
 
-export function createNeumipMaterial(model,{uvScale=3,gain=4,richEnabled=true}={}) {
+export function createNeumipMaterial(model,{uvScale=3,gain=4,richEnabled=true,display='composed',residualGain=1}={}) {
+  if(!['composed','residual','weighted-residual','routing'].includes(display))throw Error('Unknown residual display');
+  if(display!=='composed'&&!model.handoff)throw Error('Residual displays require a paired model');
+  if(!Number.isFinite(residualGain)||residualGain<0)throw Error('Residual gain must be finite and nonnegative');
   if(model.architecture===STONE_HANDOFF_ARCHITECTURE&&!model.handoff)throw Error('Paired residual requires its cheap endpoint and routing');
+  const diagnosticGain=uniform(residualGain);
   const scale=uniform(uvScale),brightness=uniform(gain),shaders=buildNeumipWGSL(model);
   const textures=[latentTexture([model.offset],0,'NeuMIP offset0'),latentTexture([model.offset],1,'NeuMIP offset1'),latentTexture(model.mips,0,'NeuMIP appearance0'),latentTexture(model.mips,1,'NeuMIP appearance1')];
   const bilinear=wgslFn(shaders.bilinear),offset=wgslFn(shaders.offset),featuresFn=wgslFn(shaders.features,[bilinear,offset]),mainFn=wgslFn(shaders.main);
@@ -28,7 +32,7 @@ export function createNeumipMaterial(model,{uvScale=3,gain=4,richEnabled=true}={
   const coords=uv().mul(scale),view=positionViewDirection.mul(TBNViewMatrix).negate().toVar('neumipView');
   const lod=Fn(()=>{const dx=dFdx(coords).mul(model.mips[0].width),dy=dFdy(coords).mul(model.mips[0].height);return max(0,log2(sqrt(dx.dot(dx).add(dy.dot(dy))).div(1.2)));})().toVar('neumipLOD');
   const support=paired?wgslFn(math.weight)(coords,lod).mul(richSwitch).toVar('stoneRichSupport'):null;
-  const features=featuresFn(coords,view,lod,...(paired?[support]:[]),...tex.slice(0,4)).toVar('neumipFeaturesShared');
+  const features=featuresFn(coords,view,lod,...(paired?[display==='residual'?uniform(1):support]:[]),...tex.slice(0,4)).toVar('neumipFeaturesShared');
   const cheapFn=paired?wgslFn(`fn stoneCheapResponse(uv:vec2<f32>,view:vec2<f32>,light:vec2<f32>,lod:f32,map:texture_2d<f32>)->vec3<f32>{let l=clamp(lod+${Math.log2(model.handoff.cheap[0].width/model.offset.width).toFixed(1)},0.0,f32(textureNumLevels(map)-1u));let lo=i32(floor(l));let hi=min(lo+1,i32(textureNumLevels(map)-1u));let logScale=mix(nmBilinear(map,uv,lo).rgb,nmBilinear(map,uv,hi).rgb,fract(l));return stoneFlatResponse(view,light)*exp(logScale);}`,[bilinear,wgslFn(math.flat)]):null;
 
   class NeumipMaterial extends MeshStandardNodeMaterial {
@@ -38,11 +42,19 @@ export function createNeumipMaterial(model,{uvScale=3,gain=4,richEnabled=true}={
       // discover them when constructing its shared NodeBuilderState cache key.
       return `${super.customProgramCacheKey()}:neumip:${this.uuid}`;
     }
+    setupLighting(builder) {
+      // Encode once after summing actual scene lights, before NodeMaterial clamps
+      // outgoing radiance to zero. Encoding per light would add neutral repeatedly.
+      if(display==='routing')return vec3(support);
+      const light=super.setupLighting(builder);
+      return display==='composed'?light:light.mul(diagnosticGain).mul(.5).add(.5).clamp(0,1);
+    }
     setupLightingModel(builder) {
       const lighting=super.setupLightingModel(builder);
       lighting.direct=({lightDirection,lightColor,reflectedLight})=>{
         const dir=lightDirection.mul(TBNViewMatrix).negate();
-        const response=paired?Fn(()=>{const result=cheapFn(coords,view.xy,dir.xy,lod,tex[4]).toVar();If(support.greaterThan(0),()=>{result.addAssign(mainFn(features.element(0),features.element(1),view.xy,dir.xy).mul(support));});return result;})():mainFn(features.element(0),features.element(1),view.xy,dir.xy);
+        const response=paired?Fn(()=>{if(display==='residual')return mainFn(features.element(0),features.element(1),view.xy,dir.xy);
+          const result=(display==='weighted-residual'?vec3(0):cheapFn(coords,view.xy,dir.xy,lod,tex[4])).toVar();If(support.greaterThan(0),()=>{result.addAssign(mainFn(features.element(0),features.element(1),view.xy,dir.xy).mul(support));});return result;})():mainFn(features.element(0),features.element(1),view.xy,dir.xy);
         reflectedLight.directDiffuse.addAssign(response.mul(lightColor).mul(normalView.dot(lightDirection).max(0)).mul(brightness));
       };
       // The checkpoint supplies a directional BTF, not a diffuse environment proxy.
@@ -52,10 +64,11 @@ export function createNeumipMaterial(model,{uvScale=3,gain=4,richEnabled=true}={
     }
   }
   const material=new NeumipMaterial();material.name='NeuMIP author material';material.side=DoubleSide;
+  if(display!=='composed'){material.toneMapped=false;material.fog=false;}
   // Reuse standard node-material setup, but this is not a standard diffuse/GGX
   // receiver. The scene's diffuse SSGI adapter must not invent white bounce here.
   material.isMeshStandardNodeMaterial=false;material.isNeumipMaterial=true;
-  material.userData.neumip={source:model.source??null,lighting:'native direct point/spot/directional lights',indirect:'not evaluated',model:paired?'authored-cheap-plus-signed-residual':'author-web-export',precision:'source float32; manual bilinear and authored mip interpolation'};
+  material.userData.neumip={source:model.source??null,lighting:'native direct point/spot/directional lights',indirect:'not evaluated',model:paired?'authored-cheap-plus-signed-residual':'author-web-export',display,precision:'source float32; manual bilinear and authored mip interpolation'};
   let disposed=false;material.addEventListener('dispose',()=>{if(disposed)return;disposed=true;for(const t of textures)t.dispose();});
-  return {material,settings:{scale,gain:brightness,richEnabled:richSwitch},textures,read:()=>({...material.userData.neumip,uvScale:scale.value,gain:brightness.value})};
+  return {material,settings:{scale,gain:brightness,richEnabled:richSwitch,residualGain:diagnosticGain},textures,read:()=>({...material.userData.neumip,uvScale:scale.value,gain:brightness.value,residualGain:diagnosticGain.value})};
 }

@@ -1,0 +1,27 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Signed residual render check</title><link rel="icon" href="data:,">
+<script type="module">
+import * as THREE from '../lib/three.webgpu.js';
+import {createNeumipMaterial} from '../neumip-material.mjs';
+import {createNeumipStudent} from '../neumip-training.mjs';
+import {handoffWeight} from '../stone-handoff-model.mjs';
+try{
+ const routing={width:.7,depth:.7,inner:.08,collar:.04};
+ const model=createNeumipStudent({resolution:64,handoff:{cheapResolution:4,routing,material:{color:[.4,.35,.3],roughness:.8,metalness:0}}});
+ const head=model.layers.find(l=>l.name==='main.mpl3');head.weights.fill(0);head.biases.set([-.2,.4,0,0,0,0]);
+ const renderer=new THREE.WebGPURenderer({antialias:false});await renderer.init();if(!renderer.backend.isWebGPUBackend)throw Error('Actual WebGPU required');renderer.setSize(64,64);renderer.setPixelRatio(1);renderer.toneMapping=THREE.NoToneMapping;
+ const scene=new THREE.Scene(),camera=new THREE.OrthographicCamera(-.5,.5,.5,-.5,.1,10);camera.position.set(0,0,2);camera.lookAt(0,0,0);camera.updateMatrixWorld();
+ const geometry=new THREE.PlaneGeometry(1,1);geometry.computeTangents();const mesh=new THREE.Mesh(geometry);scene.add(mesh);
+ const lights=[0,1].map(()=>{const light=new THREE.DirectionalLight(0xffffff,1);light.position.set(0,0,2);scene.add(light);return light;});
+ const target=new THREE.RenderTarget(64,64,{type:THREE.HalfFloatType,format:THREE.RGBAFormat});
+ window.residualRenderAssay={identity:{backend:'WebGPU',adapter:renderer.backend.device.adapterInfo??null,resolution:64,head:[-.2,.4,0]},async run(display,gain=1,count=1){
+  for(let i=0;i<lights.length;i++)lights[i].visible=i<count;
+  const bundle=createNeumipMaterial(model,{uvScale:1,gain:1,display,residualGain:gain});mesh.material=bundle.material;
+  try{renderer.setRenderTarget(target);await renderer.renderAsync(scene,camera);await renderer.backend.device.queue.onSubmittedWorkDone();const raw=await renderer.readRenderTargetPixelsAsync(target,0,0,64,64),row=raw.length/64;
+   return [[16,16],[0,0],[10,16]].map(([x,y])=>{const uv=[(x+.5)/64,1-(y+.5)/64],lod=Math.max(0,Math.log2(Math.SQRT2/1.2)),weight=handoffWeight(uv,lod,64,routing),factor=display==='weighted-residual'?weight:1;
+    const expected=display==='routing'?[weight,weight,weight]:[-.2,.4,0].map(r=>Math.max(0,Math.min(1,.5+.5*gain*factor*count*r)));
+    return {x,y,uv,lod,weight,actual:Array.from(raw.slice(y*row+x*4,y*row+x*4+3),THREE.DataUtils.fromHalfFloat),expected};});
+  }finally{bundle.material.dispose();}
+ },async dispose(){target.dispose();geometry.dispose();for(const light of lights)light.dispose();await renderer.dispose();}};
+ window.residualRenderLoaded=true;
+}catch(e){window.residualRenderFailure=e.stack;console.error(e);}
+</script></html>
