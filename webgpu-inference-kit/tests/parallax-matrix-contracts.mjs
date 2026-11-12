@@ -1,6 +1,6 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
-import {createParallaxPoses,captureParallaxMatrix} from '../src/parallax-matrix.js';
+import {createParallaxPoses,captureParallaxMatrix,transformParallaxFrame} from '../src/parallax-matrix.js';
 const setup={center:[0,0,0],normal:[0,0,1],tangent:[1,0,0],distance:2,elevations:[30,60],azimuths:[0,90,180,270]};
 const poses=createParallaxPoses(setup);
 assert.equal(poses.length,8);
@@ -29,4 +29,25 @@ await failing('partial output must persist failure',{async capture(){throw Error
 await failing('blank output refused',{async capture(){return {file:'empty.png',width:0,height:0,bytes:0};}},/capture/);
 
 await failing('identity drift between paired captures',{async read(){const state=await adapter.read();if(mode==='learned')state.identity={...state.identity,checkpoint:'other'};return state;}},/identity/);
+
+for(const bad of [[],[0],[0,0],[0,0,0,0],[0,NaN,0]]){
+ let count=0;await failing('malformed actual vector must fail',{async read(){const s=await adapter.read();if(++count>1)s.view={...s.view,position:bad};return s;}},/view/);
+}
+reports.length=0;
+await assert.rejects(captureParallaxMatrix({poses:poses.slice(0,1),variants:['source','learned'],adapter:{...adapter,async setView(next){if(next.position[0]===9)return;view=structuredClone(next);}}}),/restor/i);
+assert.equal(reports.at(-1).status,'failed');view=structuredClone(initial);mode='source';
+reports.length=0;
+await assert.rejects(captureParallaxMatrix({poses:poses.slice(0,1),variants:['source','learned'],adapter:{...adapter,async setView(next){if(next.position[0]===9)throw Error('restore camera rejected');view=structuredClone(next);}}}),/restor/i);
+assert.equal(mode,'source','variant restoration must still run after camera restoration throws');view=structuredClone(initial);
+
+const world=transformParallaxFrame({center:[0,0,0],normal:[0,1,1],tangent:[1,0,0]},[1,0,0,0,0,2,0,0,0,0,1,0,4,5,6,1]);
+assert.deepEqual(world.center,[4,5,6]);
+const n=world.normal.map(x=>x/Math.hypot(...world.normal));
+assert.ok(Math.abs(n[1]-1/Math.sqrt(5))<1e-10,'world normal must follow the transformed chart plane');
+assert.ok(Math.abs(n[2]-2/Math.sqrt(5))<1e-10);
 console.log('parallax matrix contracts passed');
+await assert.rejects(captureParallaxMatrix({poses:poses.slice(0,1),variants:['source','learned'],adapter:{...adapter,async setVariant(next){if(next==='source'&&mode==='learned')return;mode=next;}}}),/restor/i);mode='source';view=structuredClone(initial);
+let captureFailed=false;
+await assert.rejects(captureParallaxMatrix({poses:poses.slice(0,1),variants:['learned'],adapter:{...adapter,async capture(){captureFailed=true;throw Error('original capture failure');},async setView(next){if(captureFailed&&next.position[0]===9)throw Error('restore failure');view=structuredClone(next);}}}),/original capture failure/);
+assert.match(reports.at(-1).error,/original capture failure/);assert.ok(reports.at(-1).restoreErrors.length>0);assert.equal(mode,'source');view=structuredClone(initial);
+assert.throws(()=>transformParallaxFrame({center:[0,0,0],normal:[0,1,0],tangent:[1,0,0]},Array(16).fill(0)),/matrix|Singular/);

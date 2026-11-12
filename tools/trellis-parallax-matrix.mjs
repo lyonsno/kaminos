@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {createParallaxPoses,captureParallaxMatrix} from '../webgpu-inference-kit/src/parallax-matrix.js';
+import {createParallaxPoses,captureParallaxMatrix,transformParallaxFrame} from '../webgpu-inference-kit/src/parallax-matrix.js';
 const [inputPath]=process.argv.slice(2);
 if(!inputPath)throw Error('Usage: node tools/trellis-parallax-matrix.mjs MANIFEST.json');
 const config=JSON.parse(await fs.readFile(inputPath,'utf8')),out=path.resolve(config.output);
@@ -25,9 +25,9 @@ try{
  report.initial=await state();assert.equal(report.initial.comparison.learnedAvailable,true);assert.equal(report.initial.comparison.checkpoint.id,config.checkpoint);assert.equal(report.initial.comparison.checkpoint.sha256,config.checkpointSha256);
  const candidate=await invoke('inspectCandidate');
  const elements=candidate.transforms.sourceWorld;
- const direction=d=>[0,1,2].map(i=>elements[i]*d[0]+elements[4+i]*d[1]+elements[8+i]*d[2]);
  const region=report.initial.region,center=report.initial.comparison.worldCenter;
- const setup={center,normal:direction(region.normal),tangent:direction(region.tangent),distances:config.distanceFactors?.map(f=>f*report.initial.comparison.tileSize)??[config.distance??report.initial.comparison.tileSize*2.5],elevations:config.elevations,azimuths:config.azimuths};
+ const frame=transformParallaxFrame({center:region.origin,normal:region.normal,tangent:region.tangent},elements);
+ const setup={...frame,center,distances:config.distanceFactors?.map(f=>f*report.initial.comparison.tileSize)??[config.distance??report.initial.comparison.tileSize*2.5],elevations:config.elevations,azimuths:config.azimuths};
  report.setup=setup;report.sourceTransform=elements;report.poses=createParallaxPoses(setup);
  const read=async()=>{const s=await state();return {view:s.comparison.view,variant:s.comparison.requested,effective:s.comparison.effective,lighting:s.sceneLights,identity:{checkpoint:s.comparison.checkpoint,source:s.comparison.sourceIdentity,context:s.comparison.contextIdentity,backend:report.renderer.rendererBackend},comparison:s.comparison};};
  const settle=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
@@ -44,4 +44,4 @@ try{
  await fs.writeFile(path.join(out,'index.html'),`<!doctype html><meta charset="utf-8"><title>TRELLIS parallax matrix</title><style>body{background:#16181b;color:#eee;font:15px system-ui;margin:20px}h1{font-size:24px}h2{font-size:18px}h3{font-size:14px;margin:6px}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.pair{display:flex;gap:3px}figure{margin:0;flex:1;min-width:0}img{width:100%;display:block}section{background:#24272c;padding:4px}a{color:#9df}code{overflow-wrap:anywhere}button{padding:8px 14px;margin:4px;background:#343943;color:white;border:1px solid #738299;cursor:pointer}button[aria-pressed=true]{background:#155378}body[data-mode=source] .learned,body[data-mode=learned] .source{display:none}@media(max-width:800px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}</style><h1>${html(config.checkpoint)}: parallax matrix</h1><p>Fixed lights · ${report.poses.length} camera poses · source and learned at the same pose · learned MIP 0. Elevation is above the material chart; azimuth runs around its normal. Click an image for its full capture.</p><nav>Magnification: ${distances.map((d,i)=>`<button data-pick="${i}" aria-pressed="${i===Math.floor(distances.length/2)}">${(report.initial.comparison.tileSize/d).toFixed(2)}× footprint · distance ${d.toFixed(3)}</button>`).join('')}</nav><nav>Show: ${['paired','source','learned'].map(mode=>`<button data-mode="${mode}" aria-pressed="${mode==='paired'}">${mode}</button>`).join('')}</nav><p>Checkpoint <code>${html(config.checkpointSha256)}</code> · <a href="report.json">full report</a></p>${sections}<script>document.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-distance]').forEach(s=>s.hidden=s.dataset.distance!==b.dataset.pick);document.querySelectorAll('[data-pick]').forEach(x=>x.setAttribute('aria-pressed',x===b))});document.querySelectorAll('button[data-mode]').forEach(b=>b.onclick=()=>{document.body.dataset.mode=b.dataset.mode;document.querySelectorAll('button[data-mode]').forEach(x=>x.setAttribute('aria-pressed',x===b))});</script>`);
  report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=String(error.stack??error);process.exitCode=1;}
-finally{await context?.close();await persist();console.log(JSON.stringify({status:report.status,phase:report.phase,out,error:report.error}));}
+finally{try{await context?.close();}catch(error){report.cleanupError=String(error.stack??error);report.status='failed';process.exitCode=1;}finally{await persist();}console.log(JSON.stringify({status:report.status,phase:report.phase,out,error:report.error}));}

@@ -20,7 +20,8 @@ export function createParallaxPoses({center,normal,tangent,distance,distances=[d
  return poses;
 }
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
-const sameView=(a,b)=>['position','target','up'].every(k=>Array.isArray(a?.[k])&&Array.isArray(b?.[k])&&a[k].every((x,i)=>Math.abs(x-b[k][i])<=1e-6*Math.max(1,Math.abs(x))))&&['fov','zoom','near','far'].every(k=>b[k]===undefined||a[k]===b[k]);
+const finiteVector=v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite);
+const sameView=(a,b)=>['position','target','up'].every(k=>finiteVector(a?.[k])&&finiteVector(b?.[k])&&a[k].every((x,i)=>Math.abs(x-b[k][i])<=1e-6*Math.max(1,Math.abs(x))))&&['fov','zoom','near','far'].every(k=>b[k]===undefined||a[k]===b[k]);
 export async function captureParallaxMatrix({poses,variants,adapter}){
  const report={schema:'kaminos.parallax-matrix.v1',status:'running',phase:'initial',captures:[]};let initial,primary;
  try{
@@ -49,8 +50,27 @@ export async function captureParallaxMatrix({poses,variants,adapter}){
   report.status='complete';report.phase='complete';
  }catch(error){primary=error;report.status='failed';report.error=String(error.stack??error);}
  finally{
-  if(initial)try{await adapter.setView(initial.view);await adapter.setVariant(initial.variant);}catch(error){report.restoreError=String(error.stack??error);report.status='failed';primary??=error;}
+  if(initial){
+   const errors=[];
+   try{await adapter.setView(initial.view);}catch(error){errors.push(error);}
+   try{await adapter.setVariant(initial.variant);}catch(error){errors.push(error);}
+   try{
+    report.restored=structuredClone(await adapter.read());
+    if(!sameView(report.restored.view,initial.view)||report.restored.variant!==initial.variant||report.restored.effective!==initial.effective)errors.push(Error('Host restoration did not restore the initial view and effective variant'));
+   }catch(error){errors.push(error);}
+   if(errors.length){report.restoreErrors=errors.map(error=>String(error.stack??error));report.status='failed';primary??=new AggregateError(errors,'Host restoration failed');}
+  }
   await adapter.persist(structuredClone(report));
  }
  if(primary)throw primary;return report;
+}
+
+export function transformParallaxFrame({center,normal,tangent},matrix){
+ center=vector(center,'center');normal=vector(normal,'normal');tangent=vector(tangent,'tangent');
+ if(!Array.isArray(matrix)||matrix.length!==16||!matrix.every(Number.isFinite)||matrix[3]!==0||matrix[7]!==0||matrix[11]!==0||matrix[15]!==1)throw Error('A finite affine matrix is required');
+ const direction=v=>[0,1,2].map(i=>matrix[i]*v[0]+matrix[4+i]*v[1]+matrix[8+i]*v[2]);
+ const columns=[matrix.slice(0,3),matrix.slice(4,7),matrix.slice(8,11)],cofactors=[cross(columns[1],columns[2]),cross(columns[2],columns[0]),cross(columns[0],columns[1])],det=dot(columns[0],cofactors[0]);
+ if(!Number.isFinite(det)||det===0)throw Error('Singular material frame transform');
+ const worldNormal=[0,1,2].map(i=>cofactors.reduce((s,c,j)=>s+c[i]*normal[j],0)/det);
+ return {center:direction(center).map((x,i)=>x+matrix[12+i]),normal:unit(worldNormal,'normal'),tangent:unit(direction(tangent),'tangent')};
 }

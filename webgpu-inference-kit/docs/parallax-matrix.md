@@ -17,6 +17,11 @@ await captureParallaxMatrix({poses, variants: ['source', 'learned'], adapter});
 Elevation is measured above the chart tangent plane, azimuth from its tangent
 around its normal. Distance changes screen magnification without changing the
 material's physical UV mapping. Lists are caller-owned and are not truncated.
+Use `transformParallaxFrame(frame, columnMajorMatrix4)` to move a local chart
+into world space: it transforms the normal by inverse transpose and the tangent
+by the linear transform, including nonuniform scaling. Singular/non-affine
+transforms are refused.
+
 The generated `up` vector keeps the chart orientation consistent around the
 hemisphere. A host must support these orientations to use the complete grid.
 
@@ -37,8 +42,9 @@ host has honestly reported its backend or returned stale/blank pixels: inspect
 frames and use consumer checks for those host-specific failure paths.
 
 Reports are persisted before work, after each capture and on failure, preserving
-completed captures, failure phase and last observed state. The initial camera
-and variant are restored on success or failure; restoration errors fail the run.
+completed captures, failure phase and last observed state. Camera and variant restoration are attempted independently on success or failure,
+then checked through the host readback. Restoration errors fail the run without
+replacing an earlier capture error.
 The host owns any other state it mutates. No timer, GPU submission or new device
 is created by this helper.
 
