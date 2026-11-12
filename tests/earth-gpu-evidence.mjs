@@ -1,0 +1,6 @@
+// kaminos-test: node
+import test from 'node:test';import assert from 'node:assert/strict';import {assertEarthAdapter,assertEarthSource,earthPhysicalEvidence} from '../earth-gpu/evidence.mjs';import {makeEarthState} from '../earth-gpu/material.mjs';
+test('physical witness rejects fallback, stale source, changed steps, inverted and sub-tray states',()=>{
+ assert.throws(()=>assertEarthAdapter({isFallbackAdapter:true,vendor:'software'}));assert.throws(()=>assertEarthAdapter({isFallbackAdapter:false}));assert.throws(()=>assertEarthSource({commit:'old',dirty:false},{commit:'new'}));assert.throws(()=>assertEarthSource({commit:'same',dirty:true},{commit:'same'}));
+ const state=makeEarthState({count:1,clods:1,materialLevels:0});state.solver={route:'webgpu/rigid-sphere-pairs/yielding-tetrahedra',grains:1,steps:4};const expected={grains:1,steps:4};assert.equal(earthPhysicalEvidence(state,expected).inverted,0);assert.throws(()=>earthPhysicalEvidence(state,{...expected,steps:5}));const inverted=structuredClone(state),ids=inverted.material.tets[0].ids;[ids[0],ids[1]]=[ids[1],ids[0]];assert.throws(()=>earthPhysicalEvidence(inverted,expected));const below=structuredClone(state);for(const n of below.material.nodes)n.p[1]-=.1;assert.throws(()=>earthPhysicalEvidence(below,expected));assert.throws(()=>earthPhysicalEvidence({...state,floats:[]},expected));
+});

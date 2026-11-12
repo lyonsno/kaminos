@@ -6,7 +6,7 @@ Select and move the translucent forming tool through the ordinary native editor.
 Pause and local refinement are available beside the specimen; no left-panel
 interaction is required.
 
-The default contains32,768rigid grains. `experiment_inputs` accepts explicit
+The default contains 32,768 rigid grains. `experiment_inputs` accepts explicit
 `count`, `clods`, `materialLevels`, `iterations`, `dt`, and `paused` values.
 An initial material level subdivides every tetrahedron into eight; later
 `refine({group})` or the tool's local refinement acts on the worked state.
@@ -36,7 +36,7 @@ Through `window.kaminosWorkbenchExperiments.invoke`:
 - `snapshot()` returns the full worked grain, material, plasticity and transition
   state. It is an explicit readback, separate from the live rendering path.
 
-The initial scene uses100display units per metre. The physical solver's clock
+The initial scene uses 100 display units per metre. The physical solver's clock
 is explicit. Two steps are offered per viewport frame; pending GPU batches block
 additional submissions, so simulated time and wall time can differ. `read()`
 reports completed steps, simulated time, phase populations and errors. Physical
@@ -51,3 +51,5 @@ mixed contact. `node tools/earth-gpu-study.mjs OUTPUT` records source/adapter,
 actual numerical states, timings and failure phase. Larger simulations and
 performance measurements belong in Greenroom; a tiny numerical unit test is
 not evidence of full-population throughput.
+
+The current continuous phase retains connected component topology: it can deform around grains but does not yet provide clay-clay contact, merging, tearing or general embedding/coalescence. The forming tool and grains both contact the continuous element boundary. Plastic rest metrics remain realizable at the represented rest volume; their canonical edge-frame evolution is an exploratory anisotropic rule. Refinement reuses already retained edge midpoints across successive local calls. GPU-only draw geometry does not supply CPU picking: native selection uses the tray/tool.

@@ -20,7 +20,7 @@ ${EARTH_GPU_MATH_WGSL}`);
  material.depthNode=Fn(()=>{const clip=cameraProjectionMatrix.mul(modelViewMatrix.mul(vec4(eye.add(ray.mul(hit.w)),1)));return clip.z.div(clip.w);})();
  const base=new THREE.PlaneGeometry(2,2),geometry=new THREE.InstancedBufferGeometry().copy(base);base.dispose();geometry.instanceCount=state.grainCount*2;
  geometry.boundingBox=new THREE.Box3(new THREE.Vector3(-state.width/2,0,-state.depth/2),new THREE.Vector3(state.width/2,.01,state.depth/2));geometry.boundingSphere=geometry.boundingBox.getBoundingSphere(new THREE.Sphere());
- const grains=new THREE.Mesh(geometry,material);grains.name='Rigid mineral grains';grains.frustumCulled=false;grains.receiveShadow=true;grains.castShadow=false;grains.userData.kaminosPreserveAnalyticalPicking=true;
+ const grains=new THREE.Mesh(geometry,material);grains.name='Rigid mineral grains';grains.frustumCulled=false;grains.receiveShadow=true;grains.castShadow=false;grains.raycast=()=>{};
  // The clay boundary is the actual material-element boundary used by contacts.
  // No density meshing, CPU pose readback, or surface extraction runs per frame.
  const positions=new Float32Array(state.faceCount*9),indices=new Float32Array(state.faceCount*3);
@@ -28,7 +28,7 @@ ${EARTH_GPU_MATH_WGSL}`);
  const clayGeometry=new THREE.BufferGeometry();clayGeometry.setAttribute('position',new THREE.BufferAttribute(positions,3));clayGeometry.setAttribute('materialNode',new THREE.BufferAttribute(indices,1));clayGeometry.boundingBox=geometry.boundingBox.clone();clayGeometry.boundingSphere=geometry.boundingSphere.clone();
  const clayMaterial=new THREE.MeshStandardNodeMaterial({color:0x8e6340,roughness:.94,flatShading:true,side:THREE.DoubleSide});
  const clayPoint=wgslFn('fn earth_material_point(id:u32,data:ptr<storage,array<vec4f>,read>)->vec3f{return (*data)[id*6u].xyz;}');clayMaterial.positionNode=clayPoint({id:attribute('materialNode','float').toUint(),data:words});
- const clay=new THREE.Mesh(clayGeometry,clayMaterial);clay.name='Yielding fine matrix';clay.frustumCulled=false;clay.receiveShadow=true;clay.castShadow=false;
+ const clay=new THREE.Mesh(clayGeometry,clayMaterial);clay.raycast=()=>{};clay.name='Yielding fine matrix';clay.frustumCulled=false;clay.receiveShadow=true;clay.castShadow=false;
  const group=new THREE.Group();group.add(grains,clay);
  return {group,bodyBuffer,read:()=>({grainSurface:'exact analytic sphere intersections and fragment depth',matrixSurface:'retained Lagrangian element boundary',poseReadbacksPerFrame:0}),dispose(){group.removeFromParent();geometry.dispose();material.dispose();clayGeometry.dispose();clayMaterial.dispose();if(renderer.backend.get(data).buffer)renderer.backend.destroyAttribute(data);}};
 }

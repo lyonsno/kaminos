@@ -11,7 +11,7 @@ function restPoints(l){
 export function materialFaces(material){
  const faces=new Map();
  for(const [tet,t]of material.tets.entries())if(!t.damage)for(let opposite=0;opposite<4;opposite++){
-  if(t.surface&&!t.surface[opposite])continue;let ids=t.ids.filter((_,i)=>i!==opposite);const [a,b,c]=ids.map(i=>material.nodes[i].p),d=material.nodes[t.ids[opposite]].p;
+  if(t.surface&&!t.surface[opposite])continue;let ids=t.ids.filter((_,i)=>i!==opposite);const [a,b,c]=ids.map(i=>material.nodes[i].reference),d=material.nodes[t.ids[opposite]].reference;
   if(tetVolume(a,b,c,d)>0)[ids[1],ids[2]]=[ids[2],ids[1]];
   const key=ids.slice().sort((a,b)=>a-b).join(':');if(faces.has(key))faces.delete(key);else faces.set(key,{ids,tet,opposite,group:t.group});
  }return [...faces.values()];
@@ -19,7 +19,7 @@ export function materialFaces(material){
 export function materialMasses(material){const m=new Float64Array(material.nodes.length);for(const t of material.tets)for(const i of t.ids)m[i]+=Math.abs(t.rest)*material.density/4;return m;}
 export function refineMaterial(material,selected=new Set(material.tets.map((_,i)=>i))){
  if(!(selected instanceof Set)||[...selected].some(i=>!Number.isInteger(i)||i<0||i>=material.tets.length))throw Error('Refinement selects actual retained tetrahedra');
- const out=structuredClone(material),midpoints=new Map(),oldTets=material.tets,surfaceFlags=oldTets.map(()=>[false,false,false,false]);for(const f of materialFaces(material))surfaceFlags[f.tet][f.opposite]=true;out.tets=[];
+ const out=structuredClone(material),midpoints=new Map(material.nodes.flatMap((n,i)=>n.parents?[[[...n.parents].sort((a,b)=>a-b).join(':'),i]]:[])),oldTets=material.tets,surfaceFlags=oldTets.map(()=>[false,false,false,false]);for(const f of materialFaces(material))surfaceFlags[f.tet][f.opposite]=true;out.tets=[];
  const midpoint=(a,b)=>{const key=[a,b].sort((x,y)=>x-y).join(':');if(midpoints.has(key))return midpoints.get(key);const na=material.nodes[a],nb=material.nodes[b],node={};for(const field of ['p','v','reference'])node[field]=na[field].map((v,k)=>(v+nb[field][k])/2);node.parents=[a,b];const id=out.nodes.push(node)-1;midpoints.set(key,id);return id;};
  for(const [ti,t]of oldTets.entries()){
   if(!selected.has(ti)){out.tets.push({...structuredClone(t),surface:surfaceFlags[ti]});continue;}

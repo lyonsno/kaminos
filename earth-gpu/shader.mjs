@@ -64,12 +64,18 @@ fn contact(i:u32,j:u32,armI:vec3f,armJ:vec3f,n:vec3f,penetration:f32){
    let arm=sphereArm(b,lobe);let center=b.p.xyz+arm;let radius=sphereRadius(b,lobe);let bary=triBary(center,a,c,d);let point=a*bary.x+c*bary.y+d*bary.z;let delta=center-point;let dist=length(delta);let side=dot(center-a,outward);
    if(dist>=radius||side< -radius*.5){continue;}let n=select(outward,delta/max(dist,1e-30),side>0.0);let gradient=cross(arm,n);let ids=face.xyz;
    var effective=b.p.w+dot(gradient,invInertia(b,gradient));for(var k=0u;k<3u;k++){effective+=bodies[ids[k]].p.w*bary[k]*bary[k];}
-   let lambda=(radius-dist)/max(effective,1e-30)*.35;var correction=n*lambda;
+   let penetration=select(radius-side,radius-dist,side>0.0);let lambda=penetration/max(effective,1e-30)*.35;var correction=n*lambda;
    var relative=b.p.xyz-before[i].p.xyz;for(var k=0u;k<3u;k++){relative-=(bodies[ids[k]].p.xyz-before[ids[k]].p.xyz)*bary[k];}
    let tangent=relative-n*dot(relative,n);let speed=length(tangent);if(speed>1e-12){correction-=tangent/speed*min(p.law.y*lambda,speed/max(effective,1e-30)*.35);}
    addDelta(i,correction*b.p.w,invInertia(b,cross(arm,correction)));for(var k=0u;k<3u;k++){addDelta(ids[k],-correction*(bodies[ids[k]].p.w*bary[k]),vec3f(0));}
   }
  }
+}
+// The tool uses the same continuous boundary as grain contact, even between vertices.
+@compute @workgroup_size(64) fn formingContacts(@builtin(global_invocation_id) id:vec3u){
+ let fi=id.x;if(fi>=p.counts.w||p.tool.w<=0.0){return;}let ids=faces[fi].xyz;let a=bodies[ids.x].p.xyz;let b=bodies[ids.y].p.xyz;let c=bodies[ids.z].p.xyz;
+ let bary=triBary(p.tool.xyz,a,b,c);let point=a*bary.x+b*bary.y+c*bary.z;let delta=point-p.tool.xyz;let dist=length(delta);if(dist>=p.tool.w){return;}let area=cross(b-a,c-a);if(length(area)<1e-20){return;}let n=select(-normalize(area),delta/max(dist,1e-30),dist>1e-20);var effective=0.0;for(var k=0u;k<3u;k++){effective+=bodies[ids[k]].p.w*bary[k]*bary[k];}
+ let lambda=(p.tool.w-dist)/max(effective,1e-30)*.35;var correction=n*lambda;var relative=-(p.tool.xyz-p.previousTool.xyz);for(var k=0u;k<3u;k++){relative+=(bodies[ids[k]].p.xyz-before[ids[k]].p.xyz)*bary[k];}let tangent=relative-n*dot(relative,n);let speed=length(tangent);if(speed>1e-12){correction-=tangent/speed*min(p.law.y*lambda,speed/max(effective,1e-30)*.35);}for(var k=0u;k<3u;k++){addDelta(ids[k],correction*(bodies[ids[k]].p.w*bary[k]),vec3f(0));}
 }
 // Disjoint element colors allow local Gauss-Seidel solves without racing on nodes.
 @compute @workgroup_size(64) fn material(@builtin(global_invocation_id) id:vec3u){
@@ -91,7 +97,7 @@ fn contact(i:u32,j:u32,armI:vec3f,armJ:vec3f,n:vec3f,penetration:f32){
   let arm=sphereArm(b,lobe);let radius=sphereRadius(b,lobe);let center=b.p.xyz+arm;
   let lower=vec3f(-p.domain.x*.5,0,-p.domain.y*.5)+vec3f(radius);let upper=vec3f(p.domain.x*.5,1e10,p.domain.y*.5)-vec3f(radius);let difference=clamp(center,lower,upper)-center;
   if(length(difference)>0.0){let n=normalize(difference);let g=cross(arm,n);let effective=b.p.w+dot(g,invInertia(b,g));let impulse=difference/max(effective,1e-30);b.p=vec4f(b.p.xyz+impulse*b.p.w,b.p.w);b.q=normalize(b.q+qmul(vec4f(invInertia(b,cross(arm,impulse))*.5,0),b.q));}
-  if(p.tool.w>0.0){let delta=b.p.xyz+arm-p.tool.xyz;let dist=length(delta);let overlap=p.tool.w+radius-dist;if(overlap>0.0){let n=select(vec3f(0,1,0),delta/max(dist,1e-30),dist>1e-20);let g=cross(arm,n);let effective=b.p.w+dot(g,invInertia(b,g));var correction=n*(overlap/max(effective,1e-30));let relative=(b.p.xyz-before[i].p.xyz)-(p.tool.xyz-p.previousTool.xyz);let tangent=relative-n*dot(relative,n);let speed=length(tangent);if(speed>1e-12){correction-=tangent/speed*min(p.law.y*overlap/max(effective,1e-30),speed/max(effective,1e-30));}b.p=vec4f(b.p.xyz+correction*b.p.w,b.p.w);b.q=normalize(b.q+qmul(vec4f(invInertia(b,cross(arm,correction))*.5,0),b.q));}}
+  if(p.tool.w>0.0&&i<p.counts.y){let delta=b.p.xyz+arm-p.tool.xyz;let dist=length(delta);let overlap=p.tool.w+radius-dist;if(overlap>0.0){let n=select(vec3f(0,1,0),delta/max(dist,1e-30),dist>1e-20);let g=cross(arm,n);let effective=b.p.w+dot(g,invInertia(b,g));var correction=n*(overlap/max(effective,1e-30));let relative=(b.p.xyz-before[i].p.xyz)-(p.tool.xyz-p.previousTool.xyz);let tangent=relative-n*dot(relative,n);let speed=length(tangent);if(speed>1e-12){correction-=tangent/speed*min(p.law.y*overlap/max(effective,1e-30),speed/max(effective,1e-30));}b.p=vec4f(b.p.xyz+correction*b.p.w,b.p.w);b.q=normalize(b.q+qmul(vec4f(invInertia(b,cross(arm,correction))*.5,0),b.q));}}
  }
  // The tool and floor share the same material domain. Tool projection is not
  // permitted to publish points below the tray.
@@ -99,5 +105,14 @@ fn contact(i:u32,j:u32,armI:vec3f,armJ:vec3f,n:vec3f,penetration:f32){
  bodies[i]=b;
 }
 @compute @workgroup_size(64) fn finish(@builtin(global_invocation_id) id:vec3u){let i=id.x;if(i>=p.counts.x){return;}var b=bodies[i];b.v=vec4f((b.p.xyz-before[i].p.xyz)/p.domain.w*exp(-p.law.z*p.domain.w),b.v.w);let dq=qmul(b.q,qconj(before[i].q));b.w=vec4f(dq.xyz*select(-2.0,2.0,dq.w>=0.0)/p.domain.w*exp(-p.law.z*p.domain.w),b.w.w);bodies[i]=b;}
-@compute @workgroup_size(64) fn plastic(@builtin(global_invocation_id) id:vec3u){let ti=id.x;if(ti>=p.counts.z){return;}var t=tets[ti];let edge=array<vec2u,6>(vec2u(0,1),vec2u(0,2),vec2u(0,3),vec2u(1,2),vec2u(1,3),vec2u(2,3));for(var k=0u;k<6u;k++){let len=distance(bodies[t.ids[edge[k].x]].p.xyz,bodies[t.ids[edge[k].y]].p.xyz);var rest=t.rest1[0];if(k<4u){rest=t.rest0[k];}else{rest=t.rest1[k-4u];}if(abs(len/rest-1.0)>t.law.y){rest+=(len-rest)*(1.0-exp(-t.law.z*p.domain.w));if(k<4u){t.rest0[k]=rest;}else{t.rest1[k-4u]=rest;}}}tets[ti]=t;}
+// Update one realizable canonical rest tetrahedron, then normalize its volume.
+// Distances remain objective under a world-space rotation; the canonical edge
+// frame is a prototype plastic law, not an isotropic calibrated clay model.
+fn canonical(l:array<f32,6>)->array<vec3f,4>{let x=l[0];let cx=(x*x+l[1]*l[1]-l[3]*l[3])/(2.0*x);let cy=sqrt(max(1e-30,l[1]*l[1]-cx*cx));let dx=(x*x+l[2]*l[2]-l[4]*l[4])/(2.0*x);let dy=(l[1]*l[1]+l[2]*l[2]-l[5]*l[5]-2.0*cx*dx)/(2.0*cy);let dz=sqrt(max(1e-30,l[2]*l[2]-dx*dx-dy*dy));return array<vec3f,4>(vec3f(0),vec3f(x,0,0),vec3f(cx,cy,0),vec3f(dx,dy,dz));}
+@compute @workgroup_size(64) fn plastic(@builtin(global_invocation_id) id:vec3u){
+ let ti=id.x;if(ti>=p.counts.z){return;}var t=tets[ti];let edge=array<vec2u,6>(vec2u(0,1),vec2u(0,2),vec2u(0,3),vec2u(1,2),vec2u(1,3),vec2u(2,3));var old:array<f32,6>;var current:array<f32,6>;var strain=0.0;
+ for(var k=0u;k<6u;k++){if(k<4u){old[k]=t.rest0[k];}else{old[k]=t.rest1[k-4u];}current[k]=distance(bodies[t.ids[edge[k].x]].p.xyz,bodies[t.ids[edge[k].y]].p.xyz);strain=max(strain,abs(current[k]/old[k]-1.0));}
+ if(strain<=t.law.y){return;}var r=canonical(old);let destination=canonical(current);let alpha=1.0-exp(-t.law.z*p.domain.w);for(var k=1u;k<4u;k++){r[k]=mix(r[k],destination[k],alpha);}let volume=signedVolume(r[0],r[1],r[2],r[3]);if(volume<=1e-30){return;}let scale=pow(t.law.x/volume,1.0/3.0);
+ for(var k=0u;k<6u;k++){let len=distance(r[edge[k].x],r[edge[k].y])*scale;if(k<4u){t.rest0[k]=len;}else{t.rest1[k-4u]=len;}}tets[ti]=t;
+}
 `;
