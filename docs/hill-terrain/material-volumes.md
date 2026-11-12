@@ -98,3 +98,27 @@ and debt separately; these do not establish a shared-frame-budget pass. The app'
 counts render calls rather than physical presentation. Performance checks must
 separate composed step-plus-render service cost, natural Play advancement and
 actual display cadence.
+
+### Specimen scale
+
+The rock pile's scale fields use the same `setScale(patch)` operation as
+Workbench automation. `previewScale(patch)` estimates the construction;
+the operation checks the estimate and actual placement before replacing the
+specimen. Width, depth and height are requested physical extents; the effective
+grid rounds outward to whole cells. Changing particle spacing leaves the
+transfer grid unchanged. Rock count changes the number of represented solids,
+while initially released rocks determines how many start free. Rocks retain
+their size and fit in at most four supported layers. Cell size can reduce the
+step under the existing elastic stability criterion.
+
+A committed edit rebuilds paused. The recipe retains the initial scale; it is
+not a snapshot of evolved poses or material state. Preflight bounds major CPU
+and GPU arrays to a 512 MiB interactive construction envelope, checks effective
+storage binding and dispatch limits, and refuses a contact arena that cannot
+hold the possible pairs. The byte estimate includes worst-case surface
+positions/normals and an upper bound on initial soil particles. It is not a
+measurement of total process or system memory. Large edits still use the
+current dense surface reservation. In scaled recipes, each submission is
+bounded to one 60 Hz quantum (rounded to whole physical steps); interactive
+Play pauses visibly on more than half a second of service debt. Explicit
+Advance still processes the complete requested duration in chunks.

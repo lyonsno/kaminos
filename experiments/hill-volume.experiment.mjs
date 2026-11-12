@@ -4,6 +4,7 @@ import {storage,vertexIndex,instanceIndex,Fn,vec4,uint,transformNormalToView} fr
 import {makeVolumeSpecimen,volumeConfig,packVolumeBodies,weatherBody,volumePoseAnchors} from './hill-terrain/volume-model.mjs';
 import {createViewportPosePin} from '../viewport-pose-pin.mjs';
 import {createVolumeGPU} from './hill-terrain/volume-gpu.mjs';
+import {scaleAllocation} from './hill-terrain/volume-scale.mjs';
 import {createVolumePlayback} from './hill-terrain/volume-playback.mjs';
 
 export default {
@@ -11,21 +12,42 @@ export default {
  async create({host,inputs={},record=()=>{}}){
   let initialConfig={...(inputs.config??{})};
   let model=makeVolumeSpecimen(initialConfig),solver=null,renderer=null,starting=null,playing=false,disposed=false,error=null,advancing=false,generation=0,growthEnabled=false,shoveEnabled=true,shoveGesture=null,shoveResume=false,shoveAiming=false,shoveEpoch=0,anchorControls=null,anchorsVisible=inputs.anchorsVisible??true,operationTail=Promise.resolve(),queuedOperations=0;
-  let playback=createVolumePlayback({dt:model.config.dt});
+  const clock=()=>createVolumePlayback({dt:model.config.dt,...(model.config.scale?{maxBatchSeconds:1/60}:{})});
+  let playback=clock();
   let releaseRenderer;const rendererAvailable=new Promise(resolve=>{releaseRenderer=resolve;});
   const session=await host.scene.open(),root=new THREE.Group();root.name='Rock and soil volume specimen';
   const settings={rock:7,weatherDepth:.025,growthRate:.025,pushRadius:.55,pushSpeed:1.5,pushX:-.7,pushY:.4,pushZ:1.0,rockPushX:0,rockPushY:0,rockPushZ:2,shoveGain:2,...inputs.settings};
   const floor=new THREE.Mesh(new THREE.BoxGeometry(4.8,.12,4.8),new MeshStandardNodeMaterial({color:0x575f4d,roughness:1}));floor.position.set(0,-.07,.5);floor.receiveShadow=true;root.add(floor);
   const syncFloor=()=>{if(model.config.fixture!=='hundred-rocks'){floor.geometry.dispose();floor.geometry=new THREE.BoxGeometry(4.8,.12,4.8);floor.position.set(0,-.07,.5);}else{const c=model.config,w=c.dimensions[0]*c.cell,d=c.dimensions[2]*c.cell;floor.geometry.dispose();floor.geometry=new THREE.BoxGeometry(w,.12,d);floor.position.set(c.origin[0]+w/2,-.07,c.origin[2]+d/2);}};syncFloor();
-  let asset,renderObjects=[],attributes=[],nodes=[],status,playButton,growthToggle,contactToggle,rockSelect,soilHeightInput,soilHeightLabel,soilHeightDragging=false,soilHeightPending=false;
+  let asset,renderObjects=[],attributes=[],nodes=[],status,playButton,growthToggle,contactToggle,rockSelect,soilHeightInput,soilHeightLabel,soilHeightDragging=false,soilHeightPending=false,scalePanel,scaleInfo,scaleWarning,scaleRejection,scaleDraft=false,scalePending=false,scaleFields=[];
+  const scaleValues=()=>model.config.scale??{width:model.config.dimensions[0]*model.config.cell,depth:model.config.dimensions[2]*model.config.cell,height:model.config.dimensions[1]*model.config.cell,cell:model.config.cell,spacing:model.config.spacing,rocks:model.bodies.length,freeRocks:0};
+  const scaleConfig=patch=>{
+   if(model.config.fixture!=='hundred-rocks')throw Error('Choose the rock pile to tune scale');
+   return volumeConfig({...initialConfig,scale:{...scaleValues(),...patch}});
+  };
+  const limits=()=>renderer?.backend?.device?.limits;
+  const estimate=patch=>{
+   try{const c=scaleConfig(patch);return{ok:true,scale:c.scale,dimensions:c.dimensions,...scaleAllocation(c,limits())};}
+   catch(e){return{ok:false,reason:e.message};}
+  };
+  const syncScale=()=>{
+   if(!scalePanel)return;
+   scalePanel.style.display=model.config.fixture==='hundred-rocks'?'':'none';
+   if(!scaleDraft&&!scalePending)for(const {key,input} of scaleFields)input.value=String(Number(scaleValues()[key].toPrecision(8)));
+   if(solver&&!scaleDraft&&!scalePending){
+    const g=solver.read(),free=model.bodies.reduce((n,b)=>n+Number(!b.anchored),0);
+    scaleInfo.textContent=scaleRejection??`${g.bodyCount} rocks · ${free} released · ${g.config.dimensions.join(' × ')} grid · ${(g.gpuBufferBytes/1048576).toFixed(0)} MiB GPU buffers · ${(g.config.dt*1000).toFixed(2)} ms step`;
+   }
+  };
   const anchorRecords=()=>{root.updateMatrixWorld(true);return volumePoseAnchors(model,solver?.read().drive.height??model.runtime?.driveHeight??0).map(a=>({...a,generation,worldPoint:a.specimenPoint?new THREE.Vector3(...a.specimenPoint).applyMatrix4(root.matrixWorld).toArray():null,worldFace:a.specimenFace.map(p=>new THREE.Vector3(...p).applyMatrix4(root.matrixWorld).toArray())}));};
   const read=()=>({id:'hill-volume',objectId:asset?.id,initialized:Boolean(solver),generation,playing,advancing,queuedOperations,growthEnabled,playback:playback.read(),shove:shoveGesture?.read()??null,anchors:anchorRecords(),anchorsVisible,error,settings:{...settings},source:model.source,conditioning:model.conditioning,weatheredMass:model.weatheredMass,
    gpu:solver?.read()??null,view:session.readView(),continuation:'settings/initial configuration via recipe; evolved state via explicit snapshot',capabilities:{heightfieldInput:false,soilPlasticity:true,reciprocalSoilRock:true,representedJointRelease:true,newFracture:false,ecologicalSuccession:false}});
-  const sync=()=>{if(status)status.textContent=error?error:!solver?'Constructing material volume…':`${solver.read().particleCount.toLocaleString()} material samples · ${solver.read().seconds.toFixed(2)} s · ${playing?'running':'paused'}${advancing?' · computing':''}${playing&&playback.read().physicalSecondsPerWallSecond!==null?' · physics '+playback.read().physicalSecondsPerWallSecond.toFixed(2)+'× wall · host '+playback.read().hostFrameHz.toFixed(0)+' Hz':''}${playing&&playback.read().pendingSeconds>.1?' · '+playback.read().pendingSeconds.toFixed(2)+' s behind':''}`;if(playButton)playButton.textContent=playing?'Pause':'Play';if(growthToggle)growthToggle.checked=growthEnabled;if(contactToggle)contactToggle.checked=model.config.conditionContacts;if(soilHeightInput){soilHeightInput.parentNode.hidden=model.config.fixture!=='hundred-rocks';if(!soilHeightDragging&&!soilHeightPending)soilHeightInput.value=String(model.config.pileSoilHeight);soilHeightInput.max=String(model.config.origin[1]+(model.config.dimensions[1]-2.1)*model.config.cell-.001);if(!soilHeightDragging&&!soilHeightPending)soilHeightLabel.textContent='Initial soil height · '+model.config.pileSoilHeight.toFixed(2)+' m (resets)';}if(rockSelect&&rockSelect.options.length!==model.bodies.length){rockSelect.replaceChildren();model.bodies.forEach((b,i)=>{const o=rockSelect.ownerDocument.createElement('option');o.value=i;o.textContent=b.id;rockSelect.append(o);});rockSelect.value=String(settings.rock);}};
+  const sync=()=>{syncScale();if(status)status.textContent=error??scaleWarning??(!solver?'Constructing material volume…':`${solver.read().particleCount.toLocaleString()} material samples · ${solver.read().seconds.toFixed(2)} s · ${playing?'running':'paused'}${advancing?' · computing':''}${playing&&playback.read().physicalSecondsPerWallSecond!==null?' · physics '+playback.read().physicalSecondsPerWallSecond.toFixed(2)+'× wall · host '+playback.read().hostFrameHz.toFixed(0)+' Hz':''}${playing&&playback.read().pendingSeconds>.1?' · '+playback.read().pendingSeconds.toFixed(2)+' s behind':''}`);if(playButton)playButton.textContent=playing?'Pause':'Play';if(growthToggle)growthToggle.checked=growthEnabled;if(contactToggle)contactToggle.checked=model.config.conditionContacts;if(soilHeightInput){soilHeightInput.parentNode.hidden=model.config.fixture!=='hundred-rocks';if(!soilHeightDragging&&!soilHeightPending)soilHeightInput.value=String(model.config.pileSoilHeight);soilHeightInput.max=String(model.config.origin[1]+(model.config.dimensions[1]-2.1)*model.config.cell-.001);if(!soilHeightDragging&&!soilHeightPending)soilHeightLabel.textContent='Initial soil height · '+model.config.pileSoilHeight.toFixed(2)+' m (resets)';}if(rockSelect&&rockSelect.options.length!==model.bodies.length){rockSelect.replaceChildren();model.bodies.forEach((b,i)=>{const o=rockSelect.ownerDocument.createElement('option');o.value=i;o.textContent=b.id;rockSelect.append(o);});rockSelect.value=String(settings.rock);}};
   function releaseDisplay(){for(const m of renderObjects){root.remove(m);m.geometry.dispose();m.material.dispose();}for(const n of nodes)n.dispose();if(renderer)for(const a of attributes)renderer._attributes.delete(a);renderObjects=[];attributes=[];nodes=[];}
   async function initialize(r){
+   try{
    renderer=r;if(!r.backend?.isWebGPUBackend||!r.backend.device)throw Error('Volume specimen requires native host WebGPU');
-   const packed=packVolumeBodies(model.bodies),c=model.config,maxVertices=c.dimensions.map(v=>v-1).reduce((n,v)=>n*v,1)*36;
+   const {maxVertices}=scaleAllocation(model.config,r.backend.device.limits),packed=packVolumeBodies(model.bodies);
    const attribute=(n,size=4,indirect=false)=>{const a=indirect?new IndirectStorageBufferAttribute(new Uint32Array(n),size):new StorageBufferAttribute(new Float32Array(n*size),size);attributes.push(a);const node=storage(a,indirect?'uint':'vec4',n);nodes.push(node);const init=Fn(()=>node.element(instanceIndex).assign(indirect?uint(0):vec4(0)))().compute(n);nodes.push(init);r.compute(init);return{a,node,raw:r.backend.get(a).buffer};};
    const soilP=attribute(maxVertices),soilN=attribute(maxVertices),rockP=attribute(packed.vertices.length/4),rockN=attribute(packed.vertices.length/4),indirect=attribute(4,1,true);
    const mesh=(p,n,color,label)=>{const geo=new THREE.BufferGeometry();geo.setAttribute('position',p.a);const mat=new MeshStandardNodeMaterial({color,roughness:.95});mat.positionNode=p.node.element(vertexIndex).xyz;mat.normalNode=transformNormalToView(n.node.element(vertexIndex).xyz);const m=new THREE.Mesh(geo,mat);m.name=label;m.frustumCulled=false;m.castShadow=true;m.receiveShadow=true;m.raycast=()=>{};m.userData.kaminosDynamicGeometry=true;root.add(m);renderObjects.push(m);return m;};
@@ -33,20 +55,25 @@ export default {
    mesh(rockP,rockN,0xa59a86,'Retained authored rock volumes');
    solver=await createVolumeGPU({device:r.backend.device,model,display:{soilPositions:soilP.raw,soilNormals:soilN.raw,rockPositions:rockP.raw,rockNormals:rockN.raw,indirect:indirect.raw}});
    if(disposed){solver.dispose();solver=null;return;}if(growthEnabled)solver.setDrive(settings.growthRate);sync();session.redraw();
+   }catch(e){releaseDisplay();throw e;}
   }
   floor.onBeforeRender=r=>{if(disposed)return;renderer=r;releaseRenderer(r);if(starting||solver||error)return;starting=initialize(r).catch(e=>{error=e.message;playing=false;sync();session.redraw();});};
   try{asset=await session.attach(root,{owned:true,metadata:{label:root.name,source:'hill:direct-3d-material-volumes-v1',type:'experiment'}});}catch(e){floor.geometry.dispose();floor.material.dispose();await session.dispose();throw e;}
-  const defaultView=()=>model.config.fixture==='hundred-rocks'?{position:[7.5,5.0,8.5],target:[0,.8,0],fov:42}:{position:[4.5,3.1,5.0],target:[0,.55,.45],fov:42};session.setView(inputs.view??defaultView());
+  const defaultView=()=>model.config.scale?{position:[model.config.scale.width*1.12,Math.max(5,model.config.scale.height*1.16),model.config.scale.depth*1.11],target:[0,.8,0],fov:42}:model.config.fixture==='hundred-rocks'?{position:[7.5,5.0,8.5],target:[0,.8,0],fov:42}:{position:[4.5,3.1,5.0],target:[0,.55,.45],fov:42};session.setView(inputs.view??defaultView());
   async function requireSolver(){await starting;if(!solver)throw Error(error||'Material source is not mounted');if(disposed)throw Error('Specimen disposed');return solver;}
-  async function runSteps(n,playbackBatch=false){if(!Number.isSafeInteger(n)||n<0)throw Error('Choose a nonnegative physical step count');const s=await requireSolver();if(advancing)throw Error('A material operation is pending');advancing=true;sync();try{if(playbackBatch){await s.advance(n);session.redraw();}else{let remaining=n;while(remaining>0){const batch=playback.plan(remaining),started=performance.now();await s.advance(batch);playback.observe(batch,(performance.now()-started)/1000);remaining-=batch;session.redraw();}}}catch(e){error=e.message;playing=false;throw e;}finally{advancing=false;if(playbackBatch)playback.complete();sync();}return read();}
+  async function runSteps(n,playbackBatch=false){if(!Number.isSafeInteger(n)||n<0)throw Error('Choose a nonnegative physical step count');const s=await requireSolver();if(advancing)throw Error('A material operation is pending');advancing=true;sync();try{if(playbackBatch){await s.advance(n);session.redraw();}else{let remaining=n;while(remaining>0){const batch=playback.plan(remaining),started=performance.now();await s.advance(batch);playback.observe(batch,(performance.now()-started)/1000);remaining-=batch;session.redraw();}}}catch(e){error=e.message;playing=false;throw e;}finally{advancing=false;if(playbackBatch)playback.complete();sync();}return playbackBatch?undefined:read();}
   const stopFrame=session.onFrame(({deltaSeconds})=>{
    if(!playing||!solver||disposed||error)return;playback.add(deltaSeconds);
-   if(advancing||queuedOperations)return;const n=playback.take();if(!n)return;
+   if(advancing||queuedOperations)return;
+   // Let one outstanding batch drain. Stop accumulating time once the scene
+   // has missed a perceptible half second; keep the debt visible until Play.
+   if(model.config.scale&&playback.read().pendingSeconds>.5){playing=false;scaleWarning='Playback paused: simulation is more than 0.5 s behind. Reduce scale or press Play to continue.';sync();return;}
+   const n=playback.take();if(!n)return;
    runSteps(n,true).catch(()=>{});
   });
   async function releaseRock(rock){const s=await requireSolver();if(advancing)await s.done();s.release(rock);record({kind:'hill-volume.joint-release',constraint:'pose-anchor',rock,id:'pose-anchor:'+model.bodies[rock].id});sync();session.redraw();return read();}
   const operations={
-   async setPlaying(value){await requireSolver();playing=Boolean(value);playback.reset();sync();session.redraw();record({kind:'hill-volume.play',value:playing});return read();},
+   async setPlaying(value){await requireSolver();playing=Boolean(value);scaleWarning=null;playback.reset();sync();session.redraw();record({kind:'hill-volume.play',value:playing});return read();},
    async advance(seconds=.1){if(!Number.isFinite(seconds)||seconds<0)throw Error('Choose nonnegative physical time');playing=false;playback.reset();const result=await runSteps(Math.round(seconds/model.config.dt));record({kind:'hill-volume.advance',seconds,effective:result.gpu});return result;},
    setSettings(patch){for(const [k,v] of Object.entries(patch)){if(!(k in settings)||!Number.isFinite(v))throw Error('Invalid specimen setting '+k);if(['weatherDepth','pushRadius','shoveGain'].includes(k)&&v<=0)throw Error(k+' must be positive');if(k==='rock'&&(!Number.isInteger(v)||!model.bodies[v]))throw Error('Choose an existing rock');}Object.assign(settings,patch);if(growthEnabled)solver?.setDrive(settings.growthRate);sync();record({kind:'hill-volume.settings',effective:{...settings}});return read();},
    async push(){const s=await requireSolver();if(advancing)await s.done();s.push({center:[settings.pushX,settings.pushY,settings.pushZ],radius:settings.pushRadius,velocity:[settings.pushSpeed,0,0]});record({kind:'hill-volume.impulse',settings:{...settings}});return runSteps(1);},
@@ -62,22 +89,32 @@ export default {
    async pushRock(){const s=await requireSolver();const velocity=[settings.rockPushX,settings.rockPushY,settings.rockPushZ];s.pushRock(settings.rock,velocity);record({kind:'hill-volume.rock-impulse',rock:settings.rock,velocity});return runSteps(1);},
    async setGrowth(value){if(typeof value!=='boolean')throw Error('Growth enabled must be boolean');const s=await requireSolver();growthEnabled=value;s.setDrive(value?settings.growthRate:0);sync();record({kind:'hill-volume.growth',rate:value?settings.growthRate:0});return read();},
    async weather(){playing=false;const s=await requireSolver();await s.done();await s.synchronizeModel();const result=weatherBody(model,settings.rock,settings.weatherDepth);s.dispose();solver=null;releaseDisplay();generation++;starting=initialize(renderer).catch(e=>{error=e.message;throw e;});await starting;record({kind:'hill-volume.weather',rock:settings.rock,depth:settings.weatherDepth,...result});sync();return{...read(),weathering:result};},
-   async reset(){playing=false;growthEnabled=false;if(solver){await solver.done().catch(()=>{});solver.dispose();solver=null;}model=makeVolumeSpecimen(initialConfig);playback=createVolumePlayback({dt:model.config.dt});settings.rock=Math.min(settings.rock,model.bodies.length-1);syncFloor();releaseDisplay();generation++;playback.reset();error=null;starting=null;if(renderer){starting=initialize(renderer);await starting;}sync();session.redraw();record({kind:'hill-volume.reset'});return read();},
+   async reset(nextConfig=initialConfig){const nextModel=makeVolumeSpecimen(nextConfig,limits());playing=false;scaleWarning=null;growthEnabled=false;if(solver){await solver.done().catch(()=>{});solver.dispose();solver=null;}initialConfig=nextConfig;model=nextModel;playback=clock();settings.rock=Math.min(settings.rock,model.bodies.length-1);syncFloor();releaseDisplay();generation++;playback.reset();error=null;starting=null;if(renderer){starting=initialize(renderer).catch(e=>{error=e.message;sync();session.redraw();throw e;});await starting;}sync();session.redraw();record({kind:'hill-volume.reset'});return read();},
    frame(){session.setView(defaultView());session.redraw();return read();},
    async snapshot(){await operationTail;return(await requireSolver()).snapshot();},
    recipe(){return{config:model.config,settings:{...settings},view:session.readView(),anchorsVisible};},
    gpu(){if(!solver)throw Error('Material source not mounted');root.updateMatrixWorld(true);return{device:renderer.backend.device,...solver.resources,generation,coordinateSpace:'specimen-local',localToWorld:root.matrixWorld.toArray(),source:read().source};}
   };
   const resetInitial=operations.reset;
-  operations.setSoilHeight=async height=>{if(model.config.fixture!=='hundred-rocks')throw Error('Choose the hundred-rock pile to edit its soil fill');const next={...initialConfig,pileSoilHeight:height};volumeConfig({...model.config,pileSoilHeight:height});initialConfig=next;const result=await resetInitial();record({kind:'hill-volume.initial-soil-height',height});return result;};
-  operations.setFixture=async fixture=>{if(!['outcrop','hundred-rocks'].includes(fixture))throw Error('Choose an existing specimen');initialConfig={...initialConfig,fixture};delete initialConfig.origin;delete initialConfig.dimensions;const result=await resetInitial();session.setView(defaultView());record({kind:'hill-volume.fixture',fixture});return result;};
-  operations.setInitialContacts=async value=>{if(typeof value!=='boolean')throw Error('Contact preparation must be boolean');initialConfig={...initialConfig,conditionContacts:value};const result=await resetInitial();record({kind:'hill-volume.initial-contact-preparation',value,conditioning:model.conditioning});return result;};
+  operations.reset=()=>resetInitial();
+  operations.previewScale=estimate;
+  operations.setScale=async patch=>{
+   const next={...initialConfig,scale:scaleConfig(patch).scale};
+   scaleRejection=null;
+   const result=await resetInitial(next);
+   if(patch.width!==undefined||patch.depth!==undefined||patch.height!==undefined)session.setView(defaultView());
+   record({kind:'hill-volume.scale',config:model.config});
+   return result;
+  };
+  operations.setSoilHeight=async height=>{if(model.config.fixture!=='hundred-rocks')throw Error('Choose the hundred-rock pile to edit its soil fill');const next={...initialConfig,pileSoilHeight:height};const result=await resetInitial(next);record({kind:'hill-volume.initial-soil-height',height});return result;};
+  operations.setFixture=async fixture=>{if(!['outcrop','hundred-rocks'].includes(fixture))throw Error('Choose an existing specimen');const next={...initialConfig,fixture};delete next.origin;delete next.dimensions;delete next.scale;const result=await resetInitial(next);session.setView(defaultView());record({kind:'hill-volume.fixture',fixture});return result;};
+  operations.setInitialContacts=async value=>{if(typeof value!=='boolean')throw Error('Contact preparation must be boolean');const result=await resetInitial({...initialConfig,conditionContacts:value});record({kind:'hill-volume.initial-contact-preparation',value,conditioning:model.conditioning});return result;};
   // Human and agent actions share one order. Playback waits while an action
   // drains the prior physical batch; repeated clicks preserve every request.
-  for(const key of ['setPlaying','setSettings','advance','push','pushRock','release','setGrowth','weather','reset','setInitialContacts','beginShove','shove','cancelShove','setShoveEnabled','releaseAnchor','setAnchorsVisible','releaseAll','setFixture','setSoilHeight']){
+  for(const key of ['setPlaying','setSettings','advance','push','pushRock','release','setGrowth','weather','reset','setInitialContacts','beginShove','shove','cancelShove','setShoveEnabled','releaseAnchor','setAnchorsVisible','releaseAll','setFixture','setSoilHeight','setScale']){
    const fn=operations[key];operations[key]=(...args)=>{
     const requested=structuredClone(args);queuedOperations++;if(['advance','weather','reset','setInitialContacts','setFixture','setSoilHeight'].includes(key))playing=false;sync();
-    const task=operationTail.then(async()=>{if(['reset','setInitialContacts','setFixture','setSoilHeight'].includes(key)){await Promise.resolve(starting).catch(()=>{});await solver?.done().catch(()=>{});}else{await rendererAvailable;await starting;await solver?.done();}if(disposed)throw Error('Specimen disposed');if(['reset','weather','setInitialContacts','setPlaying','advance','push','pushRock','release','releaseAnchor','releaseAll','setFixture','setSoilHeight','setGrowth'].includes(key)){shoveAiming=false;shoveResume=false;shoveEpoch++;}return fn(...requested);});
+    const task=operationTail.then(async()=>{if(['reset','setInitialContacts','setFixture','setSoilHeight','setScale'].includes(key)){await Promise.resolve(starting).catch(()=>{});await solver?.done().catch(()=>{});}else{await rendererAvailable;await starting;await solver?.done();}if(disposed)throw Error('Specimen disposed');if(['reset','weather','setInitialContacts','setPlaying','advance','push','pushRock','release','releaseAnchor','releaseAll','setFixture','setSoilHeight','setScale','setGrowth'].includes(key)){shoveAiming=false;shoveResume=false;shoveEpoch++;}return fn(...requested);});
     operationTail=task.catch(()=>{});return task.finally(()=>{queuedOperations--;sync();});
    };
   }
@@ -87,7 +124,27 @@ export default {
   return{read,operations,
    mount({root:panel,document,invoke}){
     const description=document.createElement('p');description.textContent='3D material specimen · frictional soil and rigid rock held by pose anchors. Start paused; inspect the initial bank, then advance or play.';panel.append(description);
-    const fixtureSelect=document.createElement('select');fixtureSelect.setAttribute('aria-label','Material specimen');for(const [value,label] of [['outcrop','Small outcrop'],['hundred-rocks','Hundred-rock pile']]){const o=document.createElement('option');o.value=value;o.textContent=label;fixtureSelect.append(o);}fixtureSelect.value=model.config.fixture;fixtureSelect.addEventListener('change',()=>invoke('setFixture',fixtureSelect.value).catch(e=>{error=e.message;sync();}));panel.append(fixtureSelect);const soilControl=document.createElement('label');soilHeightLabel=document.createElement('span');soilHeightInput=document.createElement('input');soilHeightInput.type='range';soilHeightInput.min='.18';soilHeightInput.step='.01';soilHeightInput.setAttribute('aria-label','Initial soil height');soilHeightInput.addEventListener('input',()=>{soilHeightLabel.textContent='Initial soil height · '+Number(soilHeightInput.value).toFixed(2)+' m (resets on release)';});soilHeightInput.addEventListener('pointerdown',()=>{soilHeightDragging=true;});for(const type of ['pointerup','pointercancel','blur'])soilHeightInput.addEventListener(type,()=>{soilHeightDragging=false;});soilHeightInput.addEventListener('change',()=>{soilHeightPending=true;invoke('setSoilHeight',Number(soilHeightInput.value)).catch(e=>{error=e.message;}).finally(()=>{soilHeightPending=false;sync();});});soilControl.append(soilHeightLabel,soilHeightInput);panel.append(soilControl);
+    const fixtureSelect=document.createElement('select');fixtureSelect.setAttribute('aria-label','Material specimen');for(const [value,label] of [['outcrop','Small outcrop'],['hundred-rocks','Rock pile']]){const o=document.createElement('option');o.value=value;o.textContent=label;fixtureSelect.append(o);}fixtureSelect.value=model.config.fixture;fixtureSelect.addEventListener('change',()=>invoke('setFixture',fixtureSelect.value).catch(e=>{error=e.message;sync();}));panel.append(fixtureSelect);const soilControl=document.createElement('label');soilHeightLabel=document.createElement('span');soilHeightInput=document.createElement('input');soilHeightInput.type='range';soilHeightInput.min='.18';soilHeightInput.step='.01';soilHeightInput.setAttribute('aria-label','Initial soil height');soilHeightInput.addEventListener('input',()=>{soilHeightLabel.textContent='Initial soil height · '+Number(soilHeightInput.value).toFixed(2)+' m (resets on release)';});soilHeightInput.addEventListener('pointerdown',()=>{soilHeightDragging=true;});for(const type of ['pointerup','pointercancel','blur'])soilHeightInput.addEventListener(type,()=>{soilHeightDragging=false;});soilHeightInput.addEventListener('change',()=>{soilHeightPending=true;invoke('setSoilHeight',Number(soilHeightInput.value)).catch(e=>{error=e.message;}).finally(()=>{soilHeightPending=false;sync();});});soilControl.append(soilHeightLabel,soilHeightInput);panel.append(soilControl);
+    scalePanel=document.createElement('fieldset');const scaleTitle=document.createElement('legend');scaleTitle.textContent='Specimen scale';scalePanel.append(scaleTitle);
+    const scaleHint=document.createElement('p');scaleHint.textContent='Drag or type. Rebuilds paused on release or commit.';scalePanel.append(scaleHint);
+    scaleInfo=document.createElement('p');scalePanel.append(scaleInfo);panel.append(scalePanel);
+    for(const [key,label,step,min] of [['rocks','Rock count',1,1],['freeRocks','Initially released rocks',1,0],['width','Region width (m)',.08,.01],['depth','Region depth (m)',.08,.01],['height','Region height (m)',.08,.01],['cell','Grid cell size (m)',.002,.001],['spacing','Soil particle spacing (m)',.002,.001]]){
+     const row=document.createElement('label'),grip=document.createElement('span'),input=document.createElement('input');
+     grip.textContent=label;input.type='number';input.step=step>=1?'1':'any';input.min=String(min);input.className='transform-input';input.setAttribute('aria-label',label);
+     const scrub=host.controls.installNumberDrag({input,grip,step});
+     scaleFields.push({key,input,scrub});row.append(grip,input);scalePanel.insertBefore(row,scaleInfo);
+     input.addEventListener('input',()=>{
+      scaleRejection=null;scaleDraft=true;const x=estimate({[key]:input.valueAsNumber});
+      scaleInfo.textContent=x.ok?`Proposed · ${x.scale.rocks} rocks · ${x.dimensions.join(' × ')} grid · ≤${x.particleCapacity.toLocaleString()} soil samples · ${(x.majorBytes/1048576).toFixed(0)} MiB major arrays · ${(1000*x.dt).toFixed(2)} ms step`:x.reason;
+     });
+     input.addEventListener('pointercancel',()=>{scaleDraft=false;syncScale();});
+     input.addEventListener('blur',()=>{if(scaleDraft&&!scalePending){scaleDraft=false;syncScale();}});
+     input.addEventListener('change',()=>{
+      const next=input.valueAsNumber;if(next===scaleValues()[key]){scaleDraft=false;syncScale();return;}
+      scalePending=true;scaleDraft=false;for(const f of scaleFields)f.input.disabled=true;
+      invoke('setScale',{[key]:next}).then(()=>{scalePending=false;sync();}).catch(e=>{scalePending=false;scaleRejection=(solver?'Kept previous settings · ':'Could not build specimen · ')+e.message;sync();}).finally(()=>{for(const f of scaleFields)f.input.disabled=false;});
+     });
+    }
     status=document.createElement('p');status.setAttribute('role','status');panel.append(status);
     const button=(label,op,arg)=>{const b=document.createElement('button');b.textContent=label;b.type='button';b.addEventListener('click',()=>invoke(op,typeof arg==='function'?arg():arg).catch(e=>{error=e.message;sync();}));panel.append(b);return b;};
     const anchorToggle=document.createElement('input');anchorToggle.type='checkbox';anchorToggle.checked=anchorsVisible;const anchorLabel=document.createElement('label');anchorLabel.append(anchorToggle,' Show pose anchors');panel.append(anchorLabel);anchorToggle.addEventListener('change',()=>invoke('setAnchorsVisible',anchorToggle.checked).catch(e=>{error=e.message;sync();}));
@@ -100,7 +157,7 @@ export default {
     field('pushX','Push center X',.05);field('pushY','Push center Y',.05);field('pushZ','Push center Z',.05);field('pushRadius','Push radius',.05);field('pushSpeed','Push velocity X',.1);button('Push material','push');
     field('growthRate','Growth velocity',.005);const growth=document.createElement('label'),toggle=document.createElement('input');growthToggle=toggle;toggle.type='checkbox';toggle.setAttribute('aria-label','Prescribed growth');toggle.addEventListener('change',()=>invoke('setGrowth',toggle.checked).catch(e=>{error=e.message;sync();}));growth.append(toggle,document.createTextNode('Prescribed growth'));panel.append(growth);sync();
    },
-   async dispose(){anchorControls?.dispose();anchorControls=null;await shoveGesture?.dispose();shoveGesture=null;disposed=true;playing=false;releaseRenderer(null);stopFrame();try{await operationTail;await Promise.resolve(starting).catch(()=>{});await solver?.done();}finally{solver?.dispose();releaseDisplay();floor.geometry.dispose();floor.material.dispose();await session.dispose();if(window.kaminosHillVolume===api)delete window.kaminosHillVolume;}}
+   async dispose(){for(const f of scaleFields)f.scrub.dispose();anchorControls?.dispose();anchorControls=null;await shoveGesture?.dispose();shoveGesture=null;disposed=true;playing=false;releaseRenderer(null);stopFrame();try{await operationTail;await Promise.resolve(starting).catch(()=>{});await solver?.done();}finally{solver?.dispose();releaseDisplay();floor.geometry.dispose();floor.material.dispose();await session.dispose();if(window.kaminosHillVolume===api)delete window.kaminosHillVolume;}}
   };
  }
 };

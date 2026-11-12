@@ -1,3 +1,4 @@
+import {pileScaleConfig,scaleAllocation} from './volume-scale.mjs';
 import {createRockOutcrop,buildConvexRock} from './rock-geometry.mjs';
 import {convexFeatures,conditionRockPoses,verticalContactHeight} from './convex-contact.mjs';
 export const PARTICLE_WORDS=36,BODY_WORDS=40;
@@ -28,43 +29,66 @@ function inverse3(m){
 export function volumeConfig(input={}){
  const defaults=input.fixture==='hundred-rocks'?{origin:[-3.36,-.36,-3.84],dimensions:[56,36,64]}:{};
  const c={fixture:'outcrop',pileSoilHeight:.65,contactIterations:8,cell:.12,spacing:.075,dt:.0015,density:1600,rockDensity:2400,bulk:12000,shear:5000,friction:.65,contactFriction:.6,gravity:9.81,origin:[-2.4,-.36,-1.8],dimensions:[40,30,40],conditionContacts:true,...defaults,...input};
+ if(c.scale!==undefined){
+  if(c.fixture!=='hundred-rocks')throw Error('Scale controls require the pile specimen');
+  if(!c.scale||typeof c.scale!=='object'||Array.isArray(c.scale))throw Error('Invalid scale settings');
+  const {scale,origin,dimensions}=pileScaleConfig(c.scale);Object.assign(c,{scale,origin,dimensions,cell:scale.cell,spacing:scale.spacing});
+ }
  if(!['outcrop','hundred-rocks'].includes(c.fixture))throw Error('Unknown material fixture');if(!Number.isSafeInteger(c.contactIterations)||c.contactIterations<1)throw Error('Contact iterations must be a positive integer');
  for(const k of ['cell','spacing','dt','density','rockDensity','bulk','shear'])if(!Number.isFinite(c[k])||c[k]<=0)throw Error('Invalid volume '+k);
  for(const k of ['friction','contactFriction','gravity'])if(!Number.isFinite(c[k])||c[k]<0)throw Error('Invalid volume '+k);
  if(!Array.isArray(c.origin)||c.origin.length!==3||!c.origin.every(Number.isFinite)||!Array.isArray(c.dimensions)||c.dimensions.length!==3||!c.dimensions.every(x=>Number.isInteger(x)&&x>=8))throw Error('Invalid material domain');
- if(c.dt>c.cell/Math.sqrt((c.bulk+4*c.shear/3)/c.density)*.2)throw Error('Time step exceeds explicit elastic CFL');
+ const stableDt=c.cell/Math.sqrt((c.bulk+4*c.shear/3)/c.density)*.2;
+ if(c.scale)c.dt=Math.min(c.dt,stableDt);else if(c.dt>stableDt)throw Error('Time step exceeds explicit elastic CFL');
+ if(c.dt<=0||!Number.isFinite(c.dt))throw Error('Time step exceeds explicit elastic CFL');
  if(!Number.isFinite(c.pileSoilHeight)||c.pileSoilHeight<.18||c.fixture==='hundred-rocks'&&c.pileSoilHeight>=c.origin[1]+(c.dimensions[1]-2.1)*c.cell)throw Error('Initial soil height must fit inside the physical material domain');
  if(typeof c.conditionContacts!=='boolean')throw Error('Contact preparation must be boolean');
  return c;
 }
-export function makeVolumeSpecimen(input={}){
- const config=volumeConfig(input),source=createRockOutcrop({origin:[0,.53,.45]});
+export function makeVolumeSpecimen(input={},limits){
+ const config=volumeConfig(input),allocation=config.scale?scaleAllocation(config,limits):null,source=createRockOutcrop({origin:[0,.53,.45]});
  let bodies=source.solids.map(s=>{const m=rockMoments(s,config.rockDensity);return{id:s.id,bed:s.bed,position:m.center,rotation:[0,0,0,1],velocity:[0,0,0],omega:[0,0,0],anchored:true,
   solid:buildConvexRock(s.planes.map(p=>[...p.slice(0,3),p[3]-dot(p.slice(0,3),m.center)])),mass:m.mass,inertia:m.inertia,volume:m.volume};});
  let conditioning;
  if(config.fixture==='hundred-rocks'){
   const templates=bodies.map(b=>{const solid=buildConvexRock(b.solid.planes.map(p=>[...p.slice(0,3),p[3]*.65])),m=rockMoments(solid,config.rockDensity);return{...b,solid,mass:m.mass,inertia:m.inertia,volume:m.volume};});
   const half=[0,1,2].map(k=>Math.max(...templates.map(b=>Math.max(...b.solid.positions.filter((_,i)=>i%3===k).map(Math.abs))))),pitch=half.map(v=>2*v+.04);bodies=[];
-  for(let y=0;y<4;y++)for(let z=0;z<5;z++)for(let x=0;x<5;x++){
-   const b=templates[(x+3*z+2*y)%templates.length],next={...b,id:`pile-${y}-${z}-${x}`,bed:y,position:[(x-2)*pitch[0],0,(z-2)*pitch[2]],rotation:[0,0,0,1],velocity:[0,0,0],omega:[0,0,0]};
-   next.position[1]=y?verticalContactHeight(next,bodies[(y-1)*25+z*5+x])+1e-5:-Math.min(...b.solid.positions.filter((_,i)=>i%3===1))+1e-5;bodies.push(next);
+  const maxColumns=[0,2].map(k=>Math.floor((config.dimensions[k]*config.cell-4.2*config.cell-2*half[k])/pitch[k])+1);
+  const total=config.scale?.rocks??100;
+  let nx=5,nz=5;
+  if(config.scale){
+   nx=Math.min(nx,maxColumns[0]);nz=Math.min(nz,maxColumns[1]);
+   if(nx<1||nz<1||total>4*maxColumns[0]*maxColumns[1])throw Error('Rock count does not fit the region at the current rock size; widen or deepen the region');
+   while(nx*nz*4<total){
+    if(nx<maxColumns[0]&&(nz===maxColumns[1]||nx/nz<=maxColumns[0]/maxColumns[1]))nx++;else nz++;
+   }
   }
+  outer:for(let y=0;y<4;y++)for(let z=0;z<nz;z++)for(let x=0;x<nx;x++){
+   if(bodies.length===total)break outer;
+   const b=templates[(x+3*z+2*y)%templates.length],next={...b,id:`pile-${y}-${z}-${x}`,bed:y,position:[(x-(nx-1)/2)*pitch[0],0,(z-(nz-1)/2)*pitch[2]],rotation:[0,0,0,1],velocity:[0,0,0],omega:[0,0,0]};
+   next.position[1]=y?verticalContactHeight(next,bodies[(y-1)*nx*nz+z*nx+x])+1e-5:-Math.min(...b.solid.positions.filter((_,i)=>i%3===1))+1e-5;
+   if(config.scale&&next.position[1]+half[1]>(config.dimensions[1]-2.1)*config.cell+config.origin[1])throw Error('Rock stack does not fit the region height');
+   bodies.push(next);
+  }
+  if(config.conditionContacts)for(let i=0;i<(config.scale?.freeRocks??0);i++)bodies[total-1-i].anchored=false;
+  else if(config.scale?.freeRocks)throw Error('Enable starting contact preparation before releasing rocks');
   conditioning={kind:'disjoint source-bounded stack',verticalShifts:bodies.map(()=>0),maxShift:0};
  }else conditioning=config.conditionContacts?conditionRockPoses(bodies):{kind:'unconditioned authored poses',maxShift:0,verticalShifts:bodies.map(()=>0)};
  const width=2*Math.max(...bodies.map(b=>Math.max(...b.solid.positions.filter((_,i)=>i%3!==1).map(Math.abs))))+.1,buckets=new Map();
  for(const b of bodies){const key=[0,2].map(k=>Math.floor(b.position[k]/width)).join(',');if(!buckets.has(key))buckets.set(key,[]);buckets.get(key).push(b);}
  const neighbors=(x,z)=>{const out=[],ix=Math.floor(x/width),iz=Math.floor(z/width);for(let i=-1;i<=1;i++)for(let j=-1;j<=1;j++)out.push(...(buckets.get([ix+i,iz+j].join(','))??[]));return out;};
- const particles=[],h=config.spacing;
+ const particles=allocation?new Float32Array(allocation.particleCapacity*PARTICLE_WORDS):[],h=config.spacing;let cursor=0;
  // Explicit volume occupancy, independent of the old terrain source. Two
  // lobes, a low apron and a hollow surround the retained authored outcrop.
- const pile=config.fixture==='hundred-rocks',bounds=pile?[-3.0,3.0,-3.45,3.45]:[-1.95,1.95,-1.35,2.35];
+ const pile=config.fixture==='hundred-rocks',bounds=allocation?[-allocation.bounds[0]/2,allocation.bounds[0]/2,-allocation.bounds[1]/2,allocation.bounds[1]/2]:pile?[-3,3,-3.45,3.45]:[-1.95,1.95,-1.35,2.35];
+ const sx=allocation?allocation.bounds[0]/6:1,sz=allocation?allocation.bounds[1]/6.9:1;
  for(let x=bounds[0]+h/2;x<bounds[1];x+=h)for(let z=bounds[2]+h/2;z<bounds[3];z+=h){
-  const localBodies=neighbors(x,z);const top=pile?.18+(config.pileSoilHeight-.18)*Math.exp(-((x/2.5)**4+(z/3.1)**4)):.20+.72*Math.exp(-((x+.95)**2/.32+(z-.25)**2/1.1))+.30*Math.exp(-((x-.9)**2/.45+(z-1.0)**2/.65))-.16*Math.exp(-((x-.25)**2/.25+(z-1.55)**2/.30));
+  const localBodies=neighbors(x,z);const top=pile?.18+(config.pileSoilHeight-.18)*Math.exp(-((x/(2.5*sx))**4+(z/(3.1*sz))**4)):.20+.72*Math.exp(-((x+.95)**2/.32+(z-.25)**2/1.1))+.30*Math.exp(-((x-.9)**2/.45+(z-1.0)**2/.65))-.16*Math.exp(-((x-.25)**2/.25+(z-1.55)**2/.30));
   for(let y=h/2;y<top;y+=h){const p=[x,y,z];if(localBodies.some(b=>contains(b.solid,p.map((v,k)=>v-b.position[k]),h*.1)))continue;
-   const row=Array(PARTICLE_WORDS).fill(0);row.splice(0,8,...p,config.density*h**3,0,0,0,h**3);particles.push(...row);
+   const row=Array(PARTICLE_WORDS).fill(0);row.splice(0,8,...p,config.density*h**3,0,0,0,h**3);if(allocation){particles.set(row,cursor);cursor+=PARTICLE_WORDS;}else particles.push(...row);
   }
  }
- return{config,bodies,particles:new Float32Array(particles),weatheredMass:0,history:[],conditioning,source:'direct-3d-material-volumes-v1'};
+ return{config,bodies,particles:allocation?particles.subarray(0,cursor):new Float32Array(particles),weatheredMass:0,history:[],conditioning,source:'direct-3d-material-volumes-v1'};
 }
 export function packVolumeBodies(bodies){
  const body=new Float32Array(bodies.length*BODY_WORDS),ints=new Uint32Array(body.buffer),planes=[],triangles=[],vertices=[],vertexBodies=[],convex=[],convexOwners=[];

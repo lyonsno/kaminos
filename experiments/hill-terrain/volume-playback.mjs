@@ -3,12 +3,12 @@
 // incremental cost of one step can trap playback at one step per host frame.
 // Measured allowance governs extra catch-up work, never the current-frame due
 // work. All unserved time remains credit, including after a host/queue stall.
-export function createVolumePlayback({dt,frameBudgetSeconds=1/120/4,now=()=>performance.now()/1000}){
+export function createVolumePlayback({dt,frameBudgetSeconds=1/120/4,maxBatchSeconds=Infinity,now=()=>performance.now()/1000}){
  if(!Number.isFinite(dt)||dt<=0||!Number.isFinite(frameBudgetSeconds)||frameBudgetSeconds<=0)throw Error('Playback needs positive timestep and frame budget');
  let credit=0,stepSeconds=null,inFlight=null,hostSeconds=0,hostFrames=0,completedSeconds=0;
  const frameIntervals=[1/120,1/120];
  const frameSeconds=()=>[...frameIntervals].sort((a,b)=>a-b)[Math.floor(frameIntervals.length/2)];
- const plan=available=>Math.min(available,Math.max(1,Math.ceil(frameSeconds()/dt),stepSeconds===null?0:Math.floor(frameBudgetSeconds/stepSeconds)));
+ const plan=available=>Math.min(available,Math.max(1,Math.ceil(maxBatchSeconds/dt)),Math.max(1,Math.ceil(frameSeconds()/dt),stepSeconds===null?0:Math.floor(frameBudgetSeconds/stepSeconds)));
  const observe=(steps,seconds)=>{if(steps>0&&Number.isFinite(seconds)&&seconds>0)stepSeconds=seconds/steps;};
  return{
   add(seconds){if(!Number.isFinite(seconds)||seconds<0||!Number.isFinite(credit+seconds))throw Error('Playback frame time must be finite and nonnegative');credit+=seconds;if(seconds>0){hostSeconds+=seconds;hostFrames++;frameIntervals.push(seconds);if(frameIntervals.length>3)frameIntervals.shift();}},
