@@ -13,6 +13,13 @@ source geometry above the selected projected width.
 
 ## Work with a source region
 
+Choose the intended geometry stage before isolating a region. The first raw
+triangle extraction is not the dense reconstructed surface before reduction,
+even when both have millions of triangles. See the TRELLIS developer guide's
+[surface-stage selection](../models/trellis2/developer-guide.md#choose-the-surface-stage-before-inspecting-or-learning-detail)
+for the saved-stage distinctions and material-transfer requirements. In
+particular, raw aligned material rows cannot be reindexed onto rebuilt geometry.
+
 Open `/?workspace=workbench&experiment=trellis-support`. The default source is an
 existing Metal-finished machined graphite/metal plate:
 

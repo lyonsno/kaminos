@@ -150,6 +150,46 @@ value and output directory to try a different mesh size from the same
 generation. If generation fails, inspect `generated/report.json` before
 attempting export; it names the failing stage.
 
+### Choose the surface stage before inspecting or learning detail
+
+The decoded fields, first extracted triangles, rebuilt dense surface and final
+GLB are different outputs. A file described as "raw" or "high resolution" does
+not identify which one it contains. Record the producer route, stage and mesh
+digest when selecting a source for rendering, material baking or neural training.
+
+| Representation or stage | What it contains | Appropriate interpretation |
+| --- | --- | --- |
+| Sparse occupancy preview | Occupied cells on the coarse shape support | Volume/shape progress; no fine surface mesh or PBR appearance |
+| Decoded geometry and material fields | Learned geometry parameters and sparse appearance attributes | Inputs to extraction and finishing, rather than a finished renderable surface |
+| Raw extracted mesh | The first triangle extraction from decoded geometry | Can contain layered, fragmented or open surface structure; a large triangle count does not establish a continuous surface |
+| Hole-prefilled original mesh | Raw extraction with the finisher's short boundary holes filled | Still precedes surface reconstruction; prefill alone is not the rebuilt surface |
+| Dense rebuilt mesh, before reduction | Narrow-band surface reconstruction | Inspect this stage when the goal is continuous geometry with detail that simplification may remove; verify that the wanted detail survives the rebuild itself |
+| Reduced mesh | Rebuilt geometry simplified toward the chosen triangle count | Useful geometry size for export; not evidence of all detail present before reduction |
+| UV-expanded, material-baked GLB | Reduced geometry, UV seams, normals and baked PBR maps | Finished asset; UV expansion can increase vertex count without adding geometric detail |
+
+The original Metal finishing reference records `raw`, `filled_original`,
+`rebuilt`, `reduced`, `uv` and `normals` in its stage report. When captures were
+enabled, these are saved as `00-raw.npz` through `05-normals.npz`.
+These filenames belong to that route, not to every browser run. The browser
+[original remesher](original-remesh.js) provides an `onReconstruction` callback
+with the rebuilt vertices and triangles immediately before reduction. Consult
+the actual run's retention report; do not assume that an intermediate was saved.
+
+Rebuilding changes topology and vertex locations. Raw per-vertex material rows
+cannot simply be attached by index to rebuilt vertices. The browser remesher's
+`projectMaterialPositions` projects material-query positions onto the filled
+original source; the finishing pipeline then samples the sparse material field.
+A dense geometry-only export has no equivalent PBR transfer merely because it
+looks continuous. Keep geometry inspection, appearance transfer and a matched
+lighting-teacher check distinct when choosing training labels.
+
+Compare the same feature before rebuilding, after rebuilding and after reduction
+before attributing lost detail to a particular stage. Reconstruction parameters
+such as band width and projection back to the original surface can also affect
+the result. Triangle counts alone cannot select the best teacher. Likewise,
+successful learning from a raw extraction establishes fidelity to that source;
+it does not establish fidelity to the rebuilt or finished asset.
+
 ## Embedding generation in a browser application
 
 The model uses a registered inference-kit **route**, which groups model work
