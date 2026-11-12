@@ -68,7 +68,7 @@ export function createOwnerSceneSession(hooks) {
       task.then(() => attaching.delete(root), () => attaching.delete(root));
       return task;
     },
-    readView() {active(); return structuredClone(hooks.readView());},
+    readView(options) {active(); return structuredClone(hooks.readView(options));},
     setView(view) {active(); return structuredClone(hooks.setView(structuredClone(view)));},
     redraw() {active(); return hooks.redraw();},
     onFrame,

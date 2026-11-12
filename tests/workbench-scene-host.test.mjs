@@ -7,8 +7,8 @@ const {createWorkbenchFrameService=unavailable,createWorkbenchSceneHost=unavaila
  if(error.code==='ERR_MODULE_NOT_FOUND'&&error.url?.endsWith('/workbench-scene-host.mjs'))return {};
  throw error;
 });
-function harness(){
- const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(45,1,.1,100);
+function harness(camera=new THREE.PerspectiveCamera(45,1,.1,100)){
+ const scene=new THREE.Scene();
  camera.position.set(0,1,5);
  const controls={target:new THREE.Vector3(),enableDamping:true,update(){camera.lookAt(this.target);}};
  const rows=new Map(),loads=[],removed=[];let id=0;
@@ -59,4 +59,15 @@ test('owned tree cleanup preserves shared geometry, materials and textures',()=>
  for(const [resource,name]of [[geometry,'geometry'],[material,'material'],[texture,'texture']])resource.addEventListener('dispose',()=>events.push(name));
  disposeOwnedSceneTree(a,[b]);assert.deepEqual(events,[]);assert.equal(material.map,texture);
  disposeOwnedSceneTree(a,[]);assert.deepEqual(events.sort(),['geometry','material','texture']);
+});
+test('opt-in scene projection uses the actual perspective or orthographic camera',()=>{
+ for(const camera of [new THREE.PerspectiveCamera(50,1.7,.1,100),new THREE.OrthographicCamera(-3,3,2,-2,.1,100)]){
+  const h=harness(camera),session=h.host.open();camera.position.set(3,2,6);camera.lookAt(0,0,0);camera.zoom=1.3;camera.updateProjectionMatrix();camera.updateMatrixWorld(true);
+  const view=session.readView({matrices:true});
+  assert.equal(view.clipFromWorld?.length,16,'Spatial labels need actual camera projection, including orthographic views');
+  const matrix=new THREE.Matrix4().fromArray(view.clipFromWorld),point=new THREE.Vector3(.4,.3,-.2),expected=point.clone().project(camera),actual=point.clone().applyMatrix4(matrix);
+  assert.ok(actual.distanceTo(expected)<1e-12);assert.deepEqual(view.clipDepth,[-1,1]);
+  view.clipFromWorld[0]=999;assert.notEqual(session.readView({matrices:true}).clipFromWorld[0],999);
+  assert.equal('clipFromWorld' in session.readView(),false,'Normal retained camera state stays unchanged');
+ }
 });

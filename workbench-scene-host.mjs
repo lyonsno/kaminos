@@ -1,4 +1,5 @@
 import {createOwnerSceneSession} from './owner-scene-session.mjs';
+import {WebGPUCoordinateSystem} from './lib/three.core.js';
 
 // This clock is driven by the application's existing frame loop. Each new
 // subscription starts at zero elapsed time, including a producer's resume.
@@ -52,7 +53,11 @@ function vector(value,name){
 }
 
 export function createWorkbenchSceneHost({scene,camera,controls,loadAsset,registerObject,findObject,removeObject,redraw,onFrame,resourceConsumers=()=>[scene]}) {
- const readView=()=>({schema:'kaminos.workbench-scene-view.v0',position:camera.position.toArray(),target:controls.target.toArray(),up:camera.up.toArray(),fov:camera.fov,zoom:camera.zoom,near:camera.near,far:camera.far});
+ const readView=({matrices=false}={})=>{
+  const view={schema:'kaminos.workbench-scene-view.v0',position:camera.position.toArray(),target:controls.target.toArray(),up:camera.up.toArray(),fov:camera.fov,zoom:camera.zoom,near:camera.near,far:camera.far};
+  if(matrices){camera.updateWorldMatrix(true,false);view.clipFromWorld=camera.projectionMatrix.clone().multiply(camera.matrixWorldInverse).toArray();view.clipDepth=[camera.coordinateSystem===WebGPUCoordinateSystem?0:-1,1];}
+  return view;
+ };
  const setView=view=>{
   const next={...readView(),up:[0,1,0],...view};
   for(const name of ['position','target','up'])next[name]=vector(next[name],name);
