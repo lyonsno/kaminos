@@ -64,7 +64,8 @@ export function createNeumipMaterial(model,{uvScale=3,gain=4,richEnabled=true,di
     }
   }
   const material=new NeumipMaterial();material.name='NeuMIP author material';material.side=DoubleSide;
-  if(display!=='composed'){material.toneMapped=false;material.fog=false;}
+  // Workbench applies its global display transform after material evaluation.
+  if(display!=='composed')material.fog=false;
   // Reuse standard node-material setup, but this is not a standard diffuse/GGX
   // receiver. The scene's diffuse SSGI adapter must not invent white bounce here.
   material.isMeshStandardNodeMaterial=false;material.isNeumipMaterial=true;
