@@ -2,7 +2,7 @@ import {createViewFan,viewFanCameras,viewFanPose,updateViewFanAnchor,sourceScene
 
 export function installViewFanTool({THREE,document,viewport,camera,entries,readView,writeView,capture,readContext,
  mount,releaseTree,readSelected,redraw,onFrame,installNumberDrag,openDocument}){
- let armed=false,busy=false,gesture=null,timer=null,selected=null;
+ let armed=false,busy=false,gesture=null,timer=null,selected=null;const pending=new Set(),drags=[];
  const button=document.createElement('button');button.type='button';button.id='view-fan-pull';button.textContent='Pull view fan';
  button.title='Drag from a material neighborhood to pull out contextual views';
  Object.assign(button.style,{position:'absolute',top:'48px',left:'12px',zIndex:'45',padding:'7px 12px',background:'#243b46',color:'#d9edf4',border:'1px solid #577785',borderRadius:'5px'});
@@ -16,11 +16,11 @@ export function installViewFanTool({THREE,document,viewport,camera,entries,readV
   const row=document.createElement('label'),grip=document.createElement('span'),input=document.createElement('input');
   grip.textContent=label;input.type='number';input.step='any';input.min=key==='spread'?'0':'0.000001';input.className='transform-input';input.setAttribute('aria-label',label);
   Object.assign(row.style,{display:'flex',gap:'8px',alignItems:'center',margin:'9px 0'});Object.assign(input.style,{width:'92px',marginLeft:'auto'});
-  row.append(grip,input);panel.append(row);controls[key]=input;installNumberDrag({input,grip,step});
-  input.addEventListener('input',()=>{if(!selected||!input.value||!input.validity.valid)return;clearTimeout(timer);const id=selected.id;timer=setTimeout(()=>{timer=null;update(id,{[key]:Number(input.value)}).catch(fail);},120);});
+  row.append(grip,input);panel.append(row);controls[key]=input;drags.push(installNumberDrag({input,grip,step}));
+  input.addEventListener('input',()=>{if(!selected||!input.value||!input.validity.valid)return;clearTimeout(timer);pending.clear();pending.add(key);const id=selected.id,value=Number(input.value);timer=setTimeout(()=>{timer=null;update(id,{[key]:value}).catch(fail).finally(()=>{pending.delete(key);sync();});},120);});
  }
  const commands=document.createElement('div');commands.style.cssText='display:flex;gap:6px;flex-wrap:wrap';
- const command=(label,action)=>{const node=document.createElement('button');node.type='button';node.textContent=label;node.onclick=()=>Promise.resolve().then(action).catch(fail);commands.append(node);};
+ const command=(label,action)=>{const node=document.createElement('button');node.type='button';node.className='btn';node.style.cssText='font:inherit;font-size:11px;padding:6px;background:#29343b;color:#dce8ed;border:1px solid #4b5e68;border-radius:4px';node.textContent=label;node.onclick=()=>Promise.resolve().then(action).catch(fail);commands.append(node);};
  command('Original view',()=>writeView(selected.object.userData.kaminosViewFan.sourceView));
  command('Update from scene',()=>update(selected.id,{}));
  command('Restore captured scene',()=>{
@@ -56,9 +56,9 @@ export function installViewFanTool({THREE,document,viewport,camera,entries,readV
   const sourceView=options.sourceView??readView(),distance=new THREE.Vector3(...sourceView.position).distanceTo(new THREE.Vector3(...anchor.position));
   const radius=options.radius??distance*Math.tan(sourceView.fov*Math.PI/360)*.30,spread=options.spread??25;
   const views=viewFanCameras({sourceView,anchor:anchor.position,radius,spread}),context=sourceSceneWithoutFans(readContext());
-  const captured=capture(views,options.resolution??256);
+  const resolution=options.resolution??options.views?.[0]?.width??256,captured=capture(views,resolution);
   return {schema:'kaminos.view-fan.v1',anchor:structuredClone(anchor),sourceView,context,radius,spread,cardWidth:options.cardWidth??radius*1.35,
-   views:captured,renderer:{route:'ordinary viewport compositor',backend:'WebGPU',state:context.postprocessing??null},capturedAt:new Date().toISOString()};
+   resolution,views:captured,renderer:{route:'ordinary viewport compositor',backend:'WebGPU',state:context.postprocessing??null},capturedAt:new Date().toISOString()};
  }
  async function create({anchor,placement,...options}){
   if(busy)throw Error('A view fan is being created');
@@ -77,7 +77,8 @@ export function installViewFanTool({THREE,document,viewport,camera,entries,readV
   busy=true;
   try{
    const previous=entry.object.userData.kaminosViewFan;
-   const next=patch.cardWidth!==undefined?{...previous,cardWidth:patch.cardWidth}:captureFan(previous.anchor,{...previous,...patch});
+   const sizingOnly=Object.keys(patch).length===1&&patch.cardWidth!==undefined;
+   const next=sizingOnly?{...previous,cardWidth:patch.cardWidth}:captureFan(previous.anchor,{...previous,...patch});
    const built=createViewFan({viewFan:next}),old=new THREE.Group();
    for(const child of [...entry.object.children])old.add(child);
    entry.object.userData.kaminosViewFan=next;
@@ -94,16 +95,16 @@ export function installViewFanTool({THREE,document,viewport,camera,entries,readV
  function up(event){
   if(!gesture||event.pointerId!==gesture.id)return;
   event.preventDefault();event.stopImmediatePropagation();const g=gesture;gesture=null;viewport.releasePointerCapture(event.pointerId);setArmed(false);
-  const x=Math.abs(event.clientX-g.x)+Math.abs(event.clientY-g.y)<5?g.x:g.x+(event.clientX-g.x),y=Math.abs(event.clientX-g.x)+Math.abs(event.clientY-g.y)<5?g.y-110:event.clientY;
+  const x=event.clientX,y=Math.abs(event.clientX-g.x)+Math.abs(event.clientY-g.y)<5?g.y-110:event.clientY;
   create({anchor:g.anchor,placement:placementAt(x,y,g.anchor)}).catch(fail);
  }
  function cancel(event){if(event.key==='Escape'&&armed){if(gesture&&viewport.hasPointerCapture(gesture.id))viewport.releasePointerCapture(gesture.id);gesture=null;setArmed(false);event.preventDefault();event.stopImmediatePropagation();}}
  function sync(){
   selected=readSelected();if(selected?.source!==VIEW_FAN_SOURCE)selected=null;panel.hidden=!selected;
-  if(selected){const data=selected.object.userData.kaminosViewFan;for(const [key,input] of Object.entries(controls))if(document.activeElement!==input||input.readOnly)input.value=String(data[key]);}
+  if(selected){const data=selected.object.userData.kaminosViewFan;for(const [key,input] of Object.entries(controls))if(!pending.has(key)&&(document.activeElement!==input||input.readOnly))input.value=String(data[key]);}
   for(const entry of entries())if(entry.source===VIEW_FAN_SOURCE)updateViewFanAnchor(entry.object);
  }
  const unsubscribe=onFrame(sync);viewport.addEventListener('pointerdown',down,true);viewport.addEventListener('pointerup',up,true);document.addEventListener('keydown',cancel,true);
  const read=()=>({armed,busy,fans:entries().filter(e=>e.source===VIEW_FAN_SOURCE).map(e=>({id:e.id,anchor:e.object.userData.kaminosViewFan.anchor,views:e.object.userData.kaminosViewFan.views.map(v=>({angle:v.angle,view:v.view,width:v.width,height:v.height})),sourceView:e.object.userData.kaminosViewFan.sourceView}))});
- return {read,create,update,pick:(x,y)=>pick(x,y).anchor,arm:()=>setArmed(true),dispose(){clearTimeout(timer);unsubscribe();viewport.removeEventListener('pointerdown',down,true);viewport.removeEventListener('pointerup',up,true);document.removeEventListener('keydown',cancel,true);button.remove();message.remove();panel.remove();}};
+ return {read,get:id=>{const entry=entries().find(e=>e.id===id&&e.source===VIEW_FAN_SOURCE);if(!entry)throw Error('View fan is absent');return structuredClone(entry.object.userData.kaminosViewFan);},create,update,pick:(x,y)=>pick(x,y).anchor,arm:()=>setArmed(true),dispose(){clearTimeout(timer);for(const drag of drags)drag?.dispose?.();unsubscribe();viewport.removeEventListener('pointerdown',down,true);viewport.removeEventListener('pointerup',up,true);document.removeEventListener('keydown',cancel,true);button.remove();message.remove();panel.remove();}};
 }

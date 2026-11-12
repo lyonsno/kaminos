@@ -12736,6 +12736,14 @@ async function initScene() {
   // Contextual view fans use the ordinary compositor. Temporary camera draws
   // and the final restored draw finish synchronously before browser presentation.
   const captureFanBatch=(views,size)=>{
+    const freshDraw=()=>{
+      // PassNode caches its source once per renderer animation frame. A batch
+      // of manual camera draws needs the same frame advance the installed
+      // Three Animation loop performs; physics clocks are not stepped here.
+      const frame=renderer._nodes?.nodeFrame;if(!frame)throw Error('The active renderer cannot advance a manual viewport frame');
+      frame.update();renderer.info.frame=frame.frameId;
+      return renderSceneFrame();
+    };
     let begun=false,restoreDrawing=null,hiddenFans=[];
     return captureViewFan({views,size,
       snapshot:()=>({view:readAuthoredCameraView(),zoom:camera.zoom,pixelRatio:renderer.getPixelRatio(),manual:manualInspectionRender}),
@@ -12753,7 +12761,7 @@ async function initScene() {
         camera.zoom=1;writeAuthoredCameraView(view);camera.aspect=1;camera.updateProjectionMatrix();
         sceneGI.resetHistory('fan-camera');
         const before=sceneFrameCount;
-        if(renderSceneFrame()===false||sceneFrameCount===before)throw Error('The viewport did not present the requested fan view');
+        if(freshDraw()===false||sceneFrameCount===before)throw Error('The viewport did not present the requested fan view');
       },
       copy(){const shot=captureComposedCanvases({host:renderer.domElement,document,label:'View fan'});return {image:shot.image,width:shot.width,height:shot.height};},
       restore(previous){
@@ -12763,7 +12771,7 @@ async function initScene() {
         attempt(()=>{for(const [root,visible] of hiddenFans)root.visible=visible;});attempt(()=>restoreDrawing?.());
         attempt(()=>{camera.zoom=previous.zoom;writeAuthoredCameraView(previous.view);});
         attempt(()=>{renderer.setPixelRatio(previous.pixelRatio);syncViewportRendererSize();});
-        attempt(()=>{sceneGI.resetHistory('fan-restored');renderSceneFrame();});markDirty();
+        attempt(()=>{sceneGI.resetHistory('fan-restored');freshDraw();});markDirty();
         if(errors.length)throw new AggregateError(errors,'Fan viewport restoration failed');
       }});
   };

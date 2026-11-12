@@ -1,5 +1,5 @@
 import {Group,Mesh,PlaneGeometry,MeshBasicMaterial,TextureLoader,SRGBColorSpace,DoubleSide,
- BufferGeometry,Line,LineBasicMaterial,Vector3,Quaternion} from './lib/three.webgpu.js';
+ BufferGeometry,Line,LineBasicMaterial,Vector3,Quaternion,Matrix4} from './lib/three.webgpu.js';
 
 export const VIEW_FAN_SOURCE='kaminos:view-fan';
 const vector=(a,name)=>{if(!Array.isArray(a)||a.length!==3||!a.every(Number.isFinite))throw Error(`Invalid fan ${name}`);return [...a];};
@@ -56,7 +56,7 @@ export function viewFanCameras({sourceView,anchor,radius,spread}){
  const up=new Vector3(...view.up).normalize();
  return [-spread,0,spread].map(angle=>{
   const position=offset.clone().applyAxisAngle(up,angle*Math.PI/180).add(target);
-  return {angle,view:{...view,position:position.toArray(),target:target.toArray(),up:up.toArray(),fov:Math.min(175,2*Math.atan(radius/distance)*180/Math.PI)}};
+  return {angle,view:{...view,position:position.toArray(),target:target.toArray(),up:up.toArray(),fov:2*Math.atan(radius/distance)*180/Math.PI}};
  });
 }
 
@@ -98,9 +98,9 @@ export function updateViewFanAnchor(root){
  for(const node of root.children)if(node.userData.viewFanStem){node.geometry.attributes.position.setXYZ(0,...anchor.toArray());node.geometry.attributes.position.needsUpdate=true;node.geometry.computeBoundingSphere();}
 }
 export function viewFanPose(sourceView,position){
- const q=new Quaternion(),direction=new Vector3(...sourceView.position).sub(new Vector3(...sourceView.target)).normalize();
+ const q=new Quaternion();
  // Quaternion from a camera gives a stable readable plane for the initial fan.
- q.setFromUnitVectors(new Vector3(0,0,1),direction);
+ q.setFromRotationMatrix(new Matrix4().lookAt(new Vector3(...sourceView.position),new Vector3(...sourceView.target),new Vector3(...sourceView.up)));
  return {position:vector(position,'placement'),quaternion:q};
 }
 export const viewFanRecordDomain={type:'pbr',source:VIEW_FAN_SOURCE,

@@ -44,3 +44,9 @@ test('view capture restores the borrowed viewport after a draw or pixel-copy fai
   assert.equal(state,'original');assert.equal(restores,1);
  }
 });
+
+test('neighborhood extent determines the camera field without an artificial angular clamp',()=>{
+ const rows=viewFan.viewFanCameras({sourceView:view,anchor:[0,0,0],radius:100,spread:25});
+ assert.ok(rows[1].view.fov>175,'a valid wide neighborhood must not silently narrow to a preset field');
+ for(const row of rows){assert.ok(Math.abs(Math.hypot(...row.view.position)-3)<1e-12);assert.deepEqual(row.view.target,[0,0,0]);}
+});
