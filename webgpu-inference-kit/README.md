@@ -80,6 +80,8 @@ await sam.close();
 
 No Python, MLX, diagnostic server or Kaminos application is needed. Model setup downloads a pinned checkpoint and verifies every converted weight. The model files are about 3.4 GB and use Meta's SAM License. [Start with SAM](./docs/sam-getting-started.md) for setup, instance selection, resource ownership and shared-session integration.
 
+For an initially selected object across successive frames, the source checkout also includes a [SAM 3.1 video tracker and camera/video application](./docs/sam-video.md). It carries temporal memory and shares the host's foreground scheduler; its prepared video model is separate from the image detector above.
+
 ## Turn A Photograph Into A Surface You Can Relight
 
 [![Four synchronized views compare the original photograph, recovered depth, image-based relighting and inferred materials with glow](https://raw.githubusercontent.com/lyonsno/kaminos/main/demos/material-photo/comparison.png)](https://lyonsno.github.io/kaminos/inference-kit/material-photo/)

@@ -3,6 +3,36 @@ import { createWebGpuInferenceSession, createWebGpuForegroundService, requestBro
 import { createSam31VideoTracker, createSam31LiveLoop } from '@kaminos/webgpu-inference-kit/sam';
 import { createSamVideoPreview } from './sam-video-preview.mjs';
 
+export function advanceSamVideoFrame(video, { afterTime, signal } = {}) {
+  if (signal?.aborted) return Promise.reject(new DOMException(String(signal.reason || 'stopped'), 'AbortError'));
+  if (video.ended) return Promise.resolve(false);
+  return new Promise((resolve, reject) => {
+    let callback, settled = false;
+    const finish = (value, error) => {
+      if (settled) return;
+      settled = true;
+      video.pause();
+      if (callback !== undefined) video.cancelVideoFrameCallback(callback);
+      video.removeEventListener('ended', ended);
+      video.removeEventListener('error', failed);
+      signal?.removeEventListener('abort', aborted);
+      if (error) reject(error); else resolve(value);
+    };
+    const ended = () => finish(false);
+    const failed = () => finish(false, video.error || new Error('video playback failed'));
+    const aborted = () => finish(false, new DOMException(String(signal.reason || 'stopped'), 'AbortError'));
+    const frame = (_now, metadata) => {
+      if (metadata.mediaTime > afterTime) finish(true);
+      else callback = video.requestVideoFrameCallback(frame);
+    };
+    video.addEventListener('ended', ended);
+    video.addEventListener('error', failed);
+    signal?.addEventListener('abort', aborted, { once: true });
+    callback = video.requestVideoFrameCallback(frame);
+    Promise.resolve(video.play()).catch(error => finish(false, error));
+  });
+}
+
 export function createSamVideoPixels(source, result, view = 'overlay') {
   if (!['overlay', 'cutout', 'mask'].includes(view)) throw new Error('unknown video mask view');
   if (!Number.isInteger(result.objectSlot) || result.objectSlot < 0 || result.objectSlot >= 16) throw new Error('invalid object slot');
@@ -84,6 +114,7 @@ export async function mountSamVideoPage(document) {
           stream = acquired; video.srcObject = stream;
         }
         await video.play();
+        if (file) video.pause();
         if (closed) throw new Error('video application is closed');
         preview.setSource(video); status(file ? file.name : 'Camera live');
       } catch (error) { releaseMedia(); throw error; }
@@ -121,6 +152,7 @@ export async function mountSamVideoPage(document) {
   }));
   byId('capture').onclick = () => handle(async () => {
     if (tracker.snapshot().status === 'tracking') tracker.reset();
+    if (objectUrl) video.pause();
     seed = capture(); paint.width = seedCanvas.width = seed.width; paint.height = seedCanvas.height = seed.height;
     redrawSeed(); last = null; byId('frame').textContent = 'Authored seed mask'; status('Seed captured');
   });
@@ -139,9 +171,14 @@ export async function mountSamVideoPage(document) {
     const mask = Uint8Array.from({ length: paint.width * paint.height }, (_, i) => painted[i * 4 + 3] ? 1 : 0);
     if (!mask.some(Boolean)) throw new Error('initial object mask is empty');
     if (tracker.snapshot().status === 'tracking') tracker.reset();
-    loop = createSam31LiveLoop({ tracker, getFrame: async () => {
-      if (video.ended) throw new Error('Video ended');
-      return capture();
+    let previousMediaTime = seed.mediaTime;
+    loop = createSam31LiveLoop({ tracker, getFrame: async ({ signal }) => {
+      if (objectUrl && !await advanceSamVideoFrame(video, { afterTime: previousMediaTime, signal })) {
+        loop.stop('Video ended');
+        throw new DOMException('Video ended', 'AbortError');
+      }
+      const frame = capture(); previousMediaTime = frame.mediaTime;
+      return frame;
     }, onFrame(frame) {
       last = { ...frame, packageId: tracker.packageId }; drawResult();
       byId('frame').textContent = `Captured frame ${frame.result.frameIndex} | score ${frame.result.objectScores[frame.result.objectSlot].toFixed(3)}`;
