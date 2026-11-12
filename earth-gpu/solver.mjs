@@ -2,7 +2,7 @@ import {EARTH_GPU_WGSL} from './shader.mjs';
 import {retainMaterial,packMaterial,refineMaterial} from './material.mjs';
 export async function createEarthGpuSolver({device,state,bodyBuffer=null,iterations=6,dt=1/480,gravity=9.81,friction=.65,damping=1.5,shaderCode=EARTH_GPU_WGSL}){
  if(!device||!Number.isSafeInteger(iterations)||iterations<1||!(dt>0&&Number.isFinite(dt))||![gravity,friction,damping].every(x=>Number.isFinite(x)&&x>=0))throw Error('Valid GPU device and physical solver settings required');
- const owned=[],count=state.floats.length/24,grainCount=state.grainCount,cell=state.radius*4.2;
+ const owned=[],count=state.floats.length/24,grainCount=state.grainCount,cell=state.radius*4.2,materialColors=state.materialColors??0,slots=materialColors+1;
  let disposed=false,pending=false,failure=null,stepsDone=state.physicalSteps??0,capturing=0,lastTool=[0,0,0,0],capacity=1,uniform,group,completion=Promise.resolve();
  const dims=[Math.ceil(state.width/cell),Math.ceil(Math.max(...Array.from({length:count},(_,i)=>state.floats[i*24+1]))/cell)+8,Math.ceil(state.depth/cell)],cells=dims.reduce((a,b)=>a*b,1);
  const allocate=(size,label,usage=GPUBufferUsage.STORAGE)=>{if(size>device.limits.maxStorageBufferBindingSize||size>device.limits.maxBufferSize)throw Error(label+' exceeds effective GPU buffer capacity');const b=device.createBuffer({size:Math.max(16,size),usage:usage|GPUBufferUsage.COPY_DST|((usage&GPUBufferUsage.MAP_READ)?0:GPUBufferUsage.COPY_SRC),label});owned.push(b);return b;};
@@ -25,16 +25,16 @@ export async function createEarthGpuSolver({device,state,bodyBuffer=null,iterati
   return {bodies,tets,configuration:{dt,iterations,gravity,friction,damping,cell,dims},
    advance({steps=1,tool=null}={}){
     if(disposed||failure)throw Error(failure||'Earth GPU disposed');if(pending||capturing)return false;if(!Number.isSafeInteger(steps)||steps<1)throw Error('Explicit positive step count required');
-    const nextTool=tool?[...tool.position,tool.radius]:[0,0,0,0];if(nextTool.length!==4||!nextTool.every(Number.isFinite)||nextTool[3]<0)throw Error('Invalid material tool pose');reserve(steps);
-    const params=new ArrayBuffer(steps*256);
-    for(let s=0;s<steps;s++){const u=new Uint32Array(params,s*256,24),f=new Float32Array(params,s*256,24);u.set([count,grainCount,state.material.tets.length,state.faceCount,...dims,state.tieCount]);f.set([state.width,state.depth,cell,dt],8);const start=lastTool[3]>0?lastTool:nextTool;
-     f.set(nextTool.map((x,k)=>start[k]+(x-start[k])*(s+1)/steps),12);f.set(nextTool.map((x,k)=>start[k]+(x-start[k])*s/steps),16);f.set([gravity,friction,damping,0],20);}
+    const nextTool=tool?[...tool.position,tool.radius]:[0,0,0,0];if(nextTool.length!==4||!nextTool.every(Number.isFinite)||nextTool[3]<0)throw Error('Invalid material tool pose');reserve(steps*slots);
+    const params=new ArrayBuffer(steps*slots*256);
+    for(let s=0;s<steps;s++)for(let color=0;color<slots;color++){const offset=(s*slots+color)*256,u=new Uint32Array(params,offset,24),f=new Float32Array(params,offset,24);u.set([count,grainCount,state.material.tets.length,state.faceCount,...dims,state.tieCount]);f.set([state.width,state.depth,cell,dt],8);const start=lastTool[3]>0?lastTool:nextTool;
+     f.set(nextTool.map((x,k)=>start[k]+(x-start[k])*(s+1)/steps),12);f.set(nextTool.map((x,k)=>start[k]+(x-start[k])*s/steps),16);f.set([gravity,friction,damping,color-1],20);}
     device.queue.writeBuffer(uniform,0,params);const encoder=device.createCommandEncoder({label:'Live mixed earth physical steps'});
     for(let s=0;s<steps;s++){
-     encodeStage(encoder,'predict',count,s);
+     const step=s*slots;encodeStage(encoder,'predict',count,step);
      for(let iteration=0;iteration<iterations;iteration++){
-      encodeStage(encoder,'clear',Math.max(count,cells),s);encodeStage(encoder,'index',grainCount,s);encodeStage(encoder,'grainContacts',grainCount,s);encodeStage(encoder,'materialContacts',grainCount,s);encodeStage(encoder,'material',state.material.tets.length,s);encodeStage(encoder,'transition',state.tieCount,s);encodeStage(encoder,'apply',count,s);
-     }encodeStage(encoder,'finish',count,s);encodeStage(encoder,'plastic',state.material.tets.length,s);
+      encodeStage(encoder,'clear',Math.max(count,cells),step);encodeStage(encoder,'index',grainCount,step);encodeStage(encoder,'grainContacts',grainCount,step);encodeStage(encoder,'materialContacts',grainCount,step);encodeStage(encoder,'transition',state.tieCount,step);encodeStage(encoder,'apply',count,step);for(let color=0;color<materialColors;color++)encodeStage(encoder,'material',state.material.tets.length,step+color+1);
+     }encodeStage(encoder,'finish',count,step);encodeStage(encoder,'plastic',state.material.tets.length,step);
     }
     device.queue.submit([encoder.finish()]);lastTool=nextTool;pending=true;
     completion=device.queue.onSubmittedWorkDone().then(()=>{stepsDone+=steps;}).catch(e=>{failure=String(e);}).finally(()=>{pending=false;});return true;

@@ -68,10 +68,11 @@ export function packMaterial(state){
  for(const [i,n]of material.nodes.entries()){const mass=masses[i];if(!(mass>0))throw Error('Material point has no represented mass');bodies.set([...n.p,massScale/mass,0,0,0,1,...n.v,0,0,0,0,0,0,0,1,0,0,0,0,mass],(grainCount+i)*BODY_WORDS);}
  const degrees=new Uint32Array(material.nodes.length);for(const t of material.tets)for(const i of t.ids)degrees[i]++;for(let i=0;i<degrees.length;i++)bodies[(grainCount+i)*24+23]=Math.max(1,degrees[i]);
  const tets=new Float32Array(Math.max(1,material.tets.length)*20),u=new Uint32Array(tets.buffer);
- for(const [i,t]of material.tets.entries()){u.set(t.ids.map(x=>x+grainCount),i*20);tets.set([t.rest,.12,6,t.damage],i*20+4);tets.set(t.plastic,i*20+8);u[i*20+16]=t.group;u[i*20+17]=t.level??0;}
+ const nodeColors=material.nodes.map(()=>new Set());let materialColors=0;
+ for(const [i,t]of material.tets.entries()){let color=0;while(t.ids.some(id=>nodeColors[id].has(color)))color++;for(const id of t.ids)nodeColors[id].add(color);materialColors=Math.max(materialColors,color+1);u[i*20+18]=color;u.set(t.ids.map(x=>x+grainCount),i*20);tets.set([t.rest,.12,6,t.damage],i*20+4);tets.set(t.plastic,i*20+8);u[i*20+16]=t.group;u[i*20+17]=t.level??0;}
  const faces=materialFaces(material),triangles=new Uint32Array(Math.max(1,faces.length)*4);for(const [i,t]of faces.entries())triangles.set([...t.ids.map(x=>x+grainCount),t.tet],i*4);
  const ties=new Uint32Array(Math.max(1,material.ties?.length??0)*4);for(const [i,t]of (material.ties??[]).entries())ties.set([...t.ids.map(x=>x+grainCount),0],i*4);
- return {...state,floats:bodies,tets,triangles,ties,faceCount:faces.length,tieCount:material.ties?.length??0};
+ return {...state,materialColors,floats:bodies,tets,triangles,ties,faceCount:faces.length,tieCount:material.ties?.length??0};
 }
 export function retainMaterial(state,floats,tetFloats){
  if(floats.length!==state.floats.length||tetFloats.length!==state.tets.length)throw Error('Complete live GPU material state required');

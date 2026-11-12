@@ -71,15 +71,16 @@ fn contact(i:u32,j:u32,armI:vec3f,armJ:vec3f,n:vec3f,penetration:f32){
   }
  }
 }
+// Disjoint element colors allow local Gauss-Seidel solves without racing on nodes.
 @compute @workgroup_size(64) fn material(@builtin(global_invocation_id) id:vec3u){
- let ti=id.x;if(ti>=p.counts.z){return;}let t=tets[ti];if(t.law.w>0.5){return;}let ids=t.ids;var x:array<vec3f,4>;var im:array<f32,4>;var degree=1.0;
- for(var k=0u;k<4u;k++){x[k]=bodies[ids[k]].p.xyz;im[k]=bodies[ids[k]].p.w;degree=max(degree,bodies[ids[k]].inertia.w);}
- let relaxation=.7/(degree*6.0);let edge=array<vec2u,6>(vec2u(0,1),vec2u(0,2),vec2u(0,3),vec2u(1,2),vec2u(1,3),vec2u(2,3));
- for(var k=0u;k<6u;k++){let a=edge[k].x;let b=edge[k].y;let delta=x[a]-x[b];let len=length(delta);var rest=t.rest1[0];if(k<4u){rest=t.rest0[k];}else{rest=t.rest1[k-4u];}if(len>1e-20){let correction=delta/len*((rest-len)/max(im[a]+im[b],1e-30)*relaxation);addDelta(ids[a],correction*im[a],vec3f(0));addDelta(ids[b],-correction*im[b],vec3f(0));}}
+ let ti=id.x;if(ti>=p.counts.z){return;}let t=tets[ti];if(t.law.w>0.5||t.history.z!=u32(p.law.w)){return;}let ids=t.ids;var x:array<vec3f,4>;var im:array<f32,4>;
+ for(var k=0u;k<4u;k++){x[k]=bodies[ids[k]].p.xyz;im[k]=bodies[ids[k]].p.w;}
+ let edge=array<vec2u,6>(vec2u(0,1),vec2u(0,2),vec2u(0,3),vec2u(1,2),vec2u(1,3),vec2u(2,3));
+ for(var k=0u;k<6u;k++){let a=edge[k].x;let b=edge[k].y;let delta=x[a]-x[b];let len=length(delta);var rest=t.rest1[0];if(k<4u){rest=t.rest0[k];}else{rest=t.rest1[k-4u];}if(len>1e-20){let correction=delta/len*((rest-len)/max(im[a]+im[b],1e-30)*.25);x[a]+=correction*im[a];x[b]-=correction*im[b];}}
  let g1=cross(x[2]-x[0],x[3]-x[0])/6.0;let g2=cross(x[3]-x[0],x[1]-x[0])/6.0;let g3=cross(x[1]-x[0],x[2]-x[0])/6.0;let gradients=array<vec3f,4>(-g1-g2-g3,g1,g2,g3);
  var denominator=0.0;for(var k=0u;k<4u;k++){denominator+=im[k]*dot(gradients[k],gradients[k]);}
- let volume=signedVolume(x[0],x[1],x[2],x[3]);let lambda=(t.law.x-volume)/max(denominator,1e-30)*(.7/degree);
- for(var k=0u;k<4u;k++){addDelta(ids[k],gradients[k]*(lambda*im[k]),vec3f(0));}
+ let volume=signedVolume(x[0],x[1],x[2],x[3]);let lambda=(t.law.x-volume)/max(denominator,1e-30)*.9;
+ for(var k=0u;k<4u;k++){bodies[ids[k]].p=vec4f(x[k]+gradients[k]*(lambda*im[k]),im[k]);}
 }
 @compute @workgroup_size(64) fn transition(@builtin(global_invocation_id) id:vec3u){let ti=id.x;if(ti>=p.grid.w){return;}let ids=ties[ti].xyz;let error=bodies[ids.x].p.xyz-(bodies[ids.y].p.xyz+bodies[ids.z].p.xyz)*.5;let inv=bodies[ids.x].p.w+(bodies[ids.y].p.w+bodies[ids.z].p.w)*.25;let correction=-error/max(inv,1e-30)*.35;addDelta(ids.x,correction*bodies[ids.x].p.w,vec3f(0));addDelta(ids.y,-correction*bodies[ids.y].p.w*.5,vec3f(0));addDelta(ids.z,-correction*bodies[ids.z].p.w*.5,vec3f(0));}
 @compute @workgroup_size(64) fn apply(@builtin(global_invocation_id) id:vec3u){
@@ -91,7 +92,11 @@ fn contact(i:u32,j:u32,armI:vec3f,armJ:vec3f,n:vec3f,penetration:f32){
   let lower=vec3f(-p.domain.x*.5,0,-p.domain.y*.5)+vec3f(radius);let upper=vec3f(p.domain.x*.5,1e10,p.domain.y*.5)-vec3f(radius);let difference=clamp(center,lower,upper)-center;
   if(length(difference)>0.0){let n=normalize(difference);let g=cross(arm,n);let effective=b.p.w+dot(g,invInertia(b,g));let impulse=difference/max(effective,1e-30);b.p=vec4f(b.p.xyz+impulse*b.p.w,b.p.w);b.q=normalize(b.q+qmul(vec4f(invInertia(b,cross(arm,impulse))*.5,0),b.q));}
   if(p.tool.w>0.0){let delta=b.p.xyz+arm-p.tool.xyz;let dist=length(delta);let overlap=p.tool.w+radius-dist;if(overlap>0.0){let n=select(vec3f(0,1,0),delta/max(dist,1e-30),dist>1e-20);let g=cross(arm,n);let effective=b.p.w+dot(g,invInertia(b,g));var correction=n*(overlap/max(effective,1e-30));let relative=(b.p.xyz-before[i].p.xyz)-(p.tool.xyz-p.previousTool.xyz);let tangent=relative-n*dot(relative,n);let speed=length(tangent);if(speed>1e-12){correction-=tangent/speed*min(p.law.y*overlap/max(effective,1e-30),speed/max(effective,1e-30));}b.p=vec4f(b.p.xyz+correction*b.p.w,b.p.w);b.q=normalize(b.q+qmul(vec4f(invInertia(b,cross(arm,correction))*.5,0),b.q));}}
- }bodies[i]=b;
+ }
+ // The tool and floor share the same material domain. Tool projection is not
+ // permitted to publish points below the tray.
+ if(i>=p.counts.y){b.p.y=max(0.0,b.p.y);}
+ bodies[i]=b;
 }
 @compute @workgroup_size(64) fn finish(@builtin(global_invocation_id) id:vec3u){let i=id.x;if(i>=p.counts.x){return;}var b=bodies[i];b.v=vec4f((b.p.xyz-before[i].p.xyz)/p.domain.w*exp(-p.law.z*p.domain.w),b.v.w);let dq=qmul(b.q,qconj(before[i].q));b.w=vec4f(dq.xyz*select(-2.0,2.0,dq.w>=0.0)/p.domain.w*exp(-p.law.z*p.domain.w),b.w.w);bodies[i]=b;}
 @compute @workgroup_size(64) fn plastic(@builtin(global_invocation_id) id:vec3u){let ti=id.x;if(ti>=p.counts.z){return;}var t=tets[ti];let edge=array<vec2u,6>(vec2u(0,1),vec2u(0,2),vec2u(0,3),vec2u(1,2),vec2u(1,3),vec2u(2,3));for(var k=0u;k<6u;k++){let len=distance(bodies[t.ids[edge[k].x]].p.xyz,bodies[t.ids[edge[k].y]].p.xyz);var rest=t.rest1[0];if(k<4u){rest=t.rest0[k];}else{rest=t.rest1[k-4u];}if(abs(len/rest-1.0)>t.law.y){rest+=(len-rest)*(1.0-exp(-t.law.z*p.domain.w));if(k<4u){t.rest0[k]=rest;}else{t.rest1[k-4u]=rest;}}}tets[ti]=t;}
