@@ -93,7 +93,7 @@ export function createGranularPreparation(input={},saved=null,{activeIds=null}={
  let time=saved?.time??0,lidHeight=saved?.lidHeight??c.width*2,containerX=saved?.containerX??0,phase=saved?.phase?structuredClone(saved.phase):null,history=structuredClone(saved?.history??[]),disposed=false;
  validatePhysicalState(saved??{time,lidHeight,containerX,phase,history,grains:[]},all);
  const walls=[];
- function plane(position,normal){const b=new CANNON.Body({type:CANNON.Body.KINEMATIC,mass:0,shape:new CANNON.Plane()});b.position.set(...position);b.quaternion.setFromVectors(new CANNON.Vec3(0,0,1),new CANNON.Vec3(...normal));w.addBody(b);return b;}
+ function plane(position,normal){const b=new CANNON.Body({type:CANNON.Body.KINEMATIC,mass:0,shape:new CANNON.Plane()});b.position.set(...position);b.quaternion.setFromVectors(new CANNON.Vec3(0,0,1),new CANNON.Vec3(...normal));b.aabbNeedsUpdate=true;w.addBody(b);return b;}
  walls.push({body:plane([containerX,0,0],[0,1,0]),x:0});
  for(const [axis,sign]of [[0,-1],[0,1],[2,-1],[2,1]]){const x=axis===0?sign*c.width/2:0;walls.push({body:plane([x+containerX,0,axis===2?sign*c.width/2:0],[axis===0?-sign:0,0,axis===2?-sign:0]),x});}
  const lid=plane([containerX,lidHeight,0],[0,-1,0]);lid.collisionResponse=phase?.kind!=='pour';const grains=[];
@@ -108,7 +108,7 @@ export function createGranularPreparation(input={},saved=null,{activeIds=null}={
    lidHeight=Math.max(lidHeight,y+g.radius+c.radius);lid.position.y=lidHeight;b.position.set(x,y,z);b.quaternion.set(...g.quaternion);
   }
   if(active&&!active.has(g.id)){b.velocity.set(0,0,0);b.angularVelocity.set(0,0,0);}
-  w.addBody(b);grains.push({ingredient:g,body:b});
+  b.aabbNeedsUpdate=true;w.addBody(b);grains.push({ingredient:g,body:b});
  };
  if(saved){if(!Array.isArray(saved.grains)||saved.grains.length>all.length)throw Error('Invalid deposited inventory');for(const [i,row]of saved.grains.entries()){if(row.id!==i)throw Error('Invalid deposited identity');add(all[i],row);}}
  const top=()=>grains.reduce((h,g)=>{const pose={position:g.body.position.toArray(),quaternion:g.body.quaternion.toArray()};return g.ingredient.vertices.reduce((height,p)=>Math.max(height,transform(p,pose)[1]),h);},0);
@@ -130,7 +130,7 @@ export function createGranularPreparation(input={},saved=null,{activeIds=null}={
   lid.collisionResponse=kind!=='pour';phase={kind,elapsed:0,seconds,from:lidHeight,target,strain,amplitude,frequency,initialCount:grains.length,...(kind==='pour'?{pourTarget}:{})};
   for(const g of grains)g.body.wakeUp();history.push({kind,options:{seconds,strain,amplitude,frequency,...(kind==='pour'?{count:pourTarget-grains.length}:{})},started:time});return read();
  }
- function advance(seconds){
+ function advance(seconds,{summary=true}={}){
   if(disposed)throw Error('Preparation disposed');positive(seconds,'duration');
   const n=Math.ceil(seconds/c.dt),dt=seconds/n;
   for(let i=0;i<n&&phase;i++){
@@ -146,11 +146,16 @@ export function createGranularPreparation(input={},saved=null,{activeIds=null}={
    w.step(step);containerX=nextX;lidHeight=nextLid;time+=step;phase.elapsed=next;
    if(next>=phase.seconds-1e-12){history.at(-1).completed=time;phase=null;lid.collisionResponse=true;containerX=0;for(const wall of walls){wall.body.position.x=wall.x;wall.body.velocity.set(0,0,0);}lid.position.set(0,lidHeight,0);lid.velocity.set(0,0,0);}
   }
-  return read();
+  return summary?read():{phase:phase?{kind:phase.kind,elapsed:phase.elapsed,seconds:phase.seconds}:null};
  }
- return {read,snapshot,start,advance,dispose(){disposed=true;for(const b of [...w.bodies])w.removeBody(b);}};
+ const readGrains=ids=>{if(!Array.isArray(ids)||ids.some(id=>!Number.isSafeInteger(id)||id<0||id>=grains.length))throw Error('Invalid grain read identities');return ids.map(id=>row(grains[id]));};
+ return {read,snapshot,readGrains,start,advance,dispose(){disposed=true;for(const b of [...w.bodies])w.removeBody(b);}};
 }
 function transform(p,row){const q=row.quaternion,v=cross(q.slice(0,3),p),vv=cross(q.slice(0,3),v);return p.map((x,k)=>x+2*q[3]*v[k]+2*vv[k]+row.position[k]);}
+export function validatePreparationSnapshot(snapshot){
+ if(snapshot?.schema!==PREPARATION_SCHEMA)throw Error('Explicit preparation snapshot required');
+ const c=checkpointRecipe(snapshot);validateIngredients(snapshot.ingredients,c);validatePhysicalState(snapshot,snapshot.ingredients);return c;
+}
 export function preparationSource(snapshot,{container=false}={}){
  if(snapshot?.schema!==PREPARATION_SCHEMA)throw Error('Explicit preparation snapshot required');
  if(!snapshot.recipe||!Array.isArray(snapshot.ingredients)||!Array.isArray(snapshot.grains))throw Error('Incomplete preparation snapshot inventory');if(!snapshot.grains.length&&!container)throw Error('No poured grains in material source');

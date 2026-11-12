@@ -1,5 +1,5 @@
 import * as CANNON from './node_modules/cannon-es/dist/cannon-es.js';
-import {createGranularPreparation,preparationCollisionHull,preparationSource} from './granular-preparation.mjs';
+import {createGranularPreparation,preparationCollisionHull,preparationSource,validatePreparationSnapshot} from './granular-preparation.mjs';
 const finite=(v,name,zero=false)=>{if(!Number.isFinite(v)||(zero?v<0:v<=0))throw Error('Invalid '+name);return v;};
 const integer=(v,name)=>{if(!Number.isSafeInteger(v)||v<1)throw Error('Invalid '+name);return v;};
 const clone=value=>structuredClone(value);
@@ -42,7 +42,7 @@ export function makeStudyState(input={}){
  }
  function stateDiameter(){return 2*recipe.radius*factor;}
  const state={schema:'kaminos.granular-preparation.v1',recipe:{...recipe,count:ingredients.length,radius:recipe.radius*factor},ingredients,grains,time:0,lidHeight:Math.max(...grains.map((g,i)=>g.position[1]+ingredients[i].radius))+maxR,containerX:0,phase:null,history:[]};
- preparationSource(state);return {configuration:c,state,fineIds:fine.map(g=>g.id),anchorIds:coarse.map(g=>g.id),nominalDiameter:2*state.recipe.radius};
+ validatePreparationSnapshot(state);return {configuration:c,state,fineIds:fine.map(g=>g.id),anchorIds:coarse.map(g=>g.id),nominalDiameter:2*state.recipe.radius};
 }
 export function relaxPatch(snapshot,{activeIds,commitIds=activeIds,seconds,lidHeight=snapshot.lidHeight}){
  if(!Array.isArray(commitIds)||new Set(commitIds).size!==commitIds.length||commitIds.some(id=>!activeIds.includes(id)))throw Error('Invalid committed grain identities');finite(seconds,'local relaxation duration');finite(lidHeight,'lid height');if(snapshot.phase)throw Error('Patch input must be a completed parent stage');
@@ -90,7 +90,7 @@ export async function runOverlapCase(initial,{configuration,caseDefinition,fineI
  return {state,prepared,loading,metrics:packingMetrics(state,anchorIds),activeParticleSteps:work,committedParticleSteps:committedWork,visits,evaluationVisits,requestedStrain:c.stages?c.strain:0,effectiveStrain:1-loading.effectiveEnd/loading.startTop};
 }
 export async function loadStudyState(manifest,record,caseId,readBytes){
- if(manifest?.schema!=='kaminos.granular-overlap-study.v2'||manifest.effectiveRoute!=='cannon-es-0.20.0-cpu/convex-grains/frozen-neighbor-patches'||typeof manifest.source?.commit!=='string'||!manifest.source.commit||![false,''].includes(manifest.source.dirty))throw Error('Unverified overlap study source or route');
+ if(manifest?.schema!=='kaminos.granular-overlap-study.v2'||!['cannon-es-0.20.0-cpu/convex-grains/frozen-neighbor-patches','cannon-es-0.20.0-cpu/convex-grains/local-context-patches'].includes(manifest.effectiveRoute)||typeof manifest.source?.commit!=='string'||!manifest.source.commit||![false,''].includes(manifest.source.dirty))throw Error('Unverified overlap study source or route');
  if(!manifest.configuration||typeof manifest.configuration!=='object'||Object.keys(studyConfiguration()).some(key=>!Object.hasOwn(manifest.configuration,key)))throw Error('Incomplete overlap manifest configuration');const c=studyConfiguration(manifest.configuration);
  if(!Array.isArray(manifest.anchorIds)||!manifest.anchorIds.length||new Set(manifest.anchorIds).size!==manifest.anchorIds.length||manifest.anchorIds.some(id=>!Number.isSafeInteger(id)||id<0)||!Array.isArray(manifest.cases))throw Error('Invalid overlap manifest anchor or case inventory');finite(manifest.nominalDiameter,'manifest nominal diameter');
  const definition=overlapCases(c).find(entry=>entry.id===caseId),entry=manifest.cases.find(entry=>entry.id===caseId);
@@ -105,5 +105,5 @@ export async function loadStudyState(manifest,record,caseId,readBytes){
   if(state.time!==initial.time||state.overlapPreparation.parentClockHeldAt!==initial.time)throw Error('Comparison parent clock changed');
   for(const id of manifest.anchorIds)if(JSON.stringify(state.grains[id])!==JSON.stringify(initial.grains[id]))throw Error('Comparison prescribed anchor moved');
  }
- preparationSource(state);return state;
+ validatePreparationSnapshot(state);return state;
 }

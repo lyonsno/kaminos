@@ -101,3 +101,25 @@ cases remain unavailable. Agent operations use the same contribution: `reload`,
 `select({id})`, `render`, `regions`, `renderSettings` and `renderCapture`. Camera,
 selection, transforms and lighting remain native. This is a controlled comparison
 surface, not the finished material-authoring cabinet.
+
+## Fine-grain locality experiment
+
+`tools/granular-fine-study.mjs CONFIG OUT EXPECTED_SHA` supports an explicit
+`pilot` (three named representative regions, no completed specimen claim) and
+`settle` (all regions and all requested settling passes) mode. The 300x recipe is
+`experiments/granular-fine-300x.json`: 76,800 fine grains at fixed total volume,
+about 0.226 mm nominal diameter, a 12x12 region grid, and dt 1/1440 s.
+Every final visible grain uses its own solved rigid-hull pose.
+
+Each job constructs dynamic core/halo bodies and frozen neighbours whose bounding
+spheres intersect its retained three-dimensional bounds. Large parent stones are
+indexed separately. Each substep must keep every active enclosing sphere within
+those bounds; escape discards the prediction and retries from the same input
+with doubled padding. Core commits and sequential exchange retain the previous
+provisional semantics. Fresh/restored body poses invalidate their initial AABBs.
+
+Initialization, solve, trajectory writes and final spatial diagnostics have
+separate timings. Pilot projections use initial sampled costs and do not measure
+evolving contact density. Pilot-only cases have no completed snapshot. Full runs
+retain initial hulls, all committed deltas, full-pass checkpoints and final state.
+Source triangles are derived from these same saved hulls rather than duplicated.

@@ -1,0 +1,15 @@
+{
+  "mode": "pilot",
+  "fineCount": 76800,
+  "grid": [12, 12],
+  "contextPaddingDiameters": 2,
+  "study": {
+    "seed": 41,
+    "width": 0.024,
+    "fineSolidVolume": 2.65e-7,
+    "coarseRadius": 0.0035,
+    "dt": 0.0006944444444444445,
+    "settleSeconds": 0.8,
+    "localSeconds": 0.025
+  }
+}
