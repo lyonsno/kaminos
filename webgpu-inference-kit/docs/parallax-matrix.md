@@ -59,3 +59,30 @@ storage. This is saved-checkpoint inspection, not a performance measurement or
 new training. No package release or adoption by another material owner is implied.
 
 Run the helper's contracts with `npm run test:parallax-matrix` in this directory.
+
+## Overview and opposed local neighborhoods
+
+The TRELLIS capture now writes two direct-choice studies. Hemisphere overview
+uses a continuous azimuth strip per elevation; strips never wrap into misleading
+second rows. Local angular matrices use columns of azimuth offsets and rows of
+elevation offsets around named anchors, with increasing elevation upward.
+
+`createLocalParallaxPoses({...frame, distances, anchors, yawOffsets, pitchOffsets})`
+returns these neighborhoods. Each anchor supplies `id`, optional `label`,
+`azimuth` and `elevation`; the helper preserves its identity and offset metadata.
+Choose two anchors with opposed azimuths when macro geometry is asymmetric
+around the chart. For example, azimuth90/270 at elevation20 inspect opposite
+sides while remaining in the same trained hemisphere. These are opposed sides,
+not antipodal directions; a single-sided material's back remains unsupported.
+
+The CLI accepts `local: {anchors, yawOffsets, pitchOffsets, distances}`. Its
+local default uses two opposed anchors and one middle camera distance to keep
+this inspection cheap; `local: false` or `overview: false` selects only the
+wanted study. Configure anchors from the geometry rather than assuming generic
+Side A/B necessarily expose its underside. An unsupported effective renderer
+still fails capture instead of substituting source as learned evidence.
+
+`renderParallaxGallery({title, captures, reportUrl})` creates the retained HTML
+from capture rows, without re-running inference or owning a browser. Existing
+captures without group metadata remain an overview. The host serves the HTML
+and its relative artifact paths.

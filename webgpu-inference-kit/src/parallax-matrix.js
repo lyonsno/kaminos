@@ -74,3 +74,19 @@ export function transformParallaxFrame({center,normal,tangent},matrix){
  const worldNormal=[0,1,2].map(i=>cofactors.reduce((s,c,j)=>s+c[i]*normal[j],0)/det);
  return {center:direction(center).map((x,i)=>x+matrix[12+i]),normal:unit(worldNormal,'normal'),tangent:unit(direction(tangent),'tangent')};
 }
+
+// Local angle-space neighborhoods; opposite azimuth anchors inspect two sides
+// without claiming a single-sided material can represent its back hemisphere.
+export function createLocalParallaxPoses(options){
+ const {anchors,yawOffsets=[-10,0,10],pitchOffsets=[-10,0,10]}=options;
+ if(!Array.isArray(anchors)||!anchors.length||new Set(anchors.map(a=>a.id)).size!==anchors.length||anchors.some(a=>typeof a.id!=='string'||!a.id))throw Error('Named unique angular anchors required');
+ for(const [name,list]of [['yaw',yawOffsets],['pitch',pitchOffsets]])if(!Array.isArray(list)||!list.length||Array.from(list).some(x=>!Number.isFinite(x)))throw Error(`Finite ${name} offsets required`);
+ const result=[];
+ for(const anchor of anchors)for(const pitchOffset of pitchOffsets)for(const yawOffset of yawOffsets){
+  const poses=createParallaxPoses({...options,elevations:[anchor.elevation+pitchOffset],azimuths:[anchor.azimuth+yawOffset]});
+  for(const pose of poses)result.push({...pose,id:`local-${result.length}`,group:'local',anchorId:anchor.id,anchorLabel:anchor.label??anchor.id,anchorElevation:anchor.elevation,anchorAzimuth:anchor.azimuth,yawOffset,pitchOffset});
+ }
+ return result;
+}
+
+export {renderParallaxGallery} from './parallax-gallery.js';

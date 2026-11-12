@@ -56,3 +56,10 @@ for(const key of ['position','target','up'])for(const bad of [new Array(3),[0,,0
 }
 
 console.log('parallax matrix contracts passed');
+const {createLocalParallaxPoses}=await import('../src/parallax-matrix.js');
+const local=createLocalParallaxPoses({...setup,distances:[2,4],anchors:[{id:'above',label:'Above',azimuth:90,elevation:20},{id:'below',label:'Below',azimuth:270,elevation:20}],yawOffsets:[-10,0,10],pitchOffsets:[-5,0,5]});
+assert.equal(local.length,36);
+assert.equal(new Set(local.map(p=>p.id)).size,36);
+assert.equal(local.filter(p=>p.anchorId==='below'&&p.yawOffset===0&&p.pitchOffset===0)[0].azimuth,270);
+assert.ok(local.every(p=>p.view.position.every(Number.isFinite)));
+assert.throws(()=>createLocalParallaxPoses({...setup,anchors:[{id:'bad',azimuth:0,elevation:5}],yawOffsets:[0],pitchOffsets:[-10]}),/elevation/);
