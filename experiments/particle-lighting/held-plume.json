@@ -1,0 +1,34 @@
+{
+  "schema": "kaminos.held-particle-lighting.v1",
+  "authority": "captured-native-fixture",
+  "sourceCommit": "604daf5b41f16685c72e136f6b819fc8676fc120",
+  "step": 32,
+  "slots": 8192,
+  "active": 5695,
+  "recordBytes": 96,
+  "bytes": 786432,
+  "sha256": "fb9dcf12652cc8be8e77ad84c03533be018d2a3b2e186017b7cba8f0fc8e8e70",
+  "records": "held-plume.records.f32",
+  "origin": [
+    -1,
+    -1,
+    -1
+  ],
+  "extent": [
+    2,
+    3,
+    2
+  ],
+  "settings": {
+    "radius": 0.1,
+    "stretch": 0.2,
+    "flowAlignment": 0,
+    "expansion": 0.3,
+    "supportFloor": 0,
+    "gain": 0.6,
+    "stateLife": 1,
+    "lifeFade": 0.2,
+    "extinction": 36.0
+  },
+  "sourceLimit": "Complete camera-acquired held population; view-independent lighting over admitted retained particles, not proof of complete physical material coverage or live source-owned birth."
+}
