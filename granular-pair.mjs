@@ -3,6 +3,12 @@ import {INGREDIENTS} from './granular-preparation.mjs';
 const random=seed=>()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
 // One cell is at least the largest sum of two body radii. Every possible
 // finite-body contact is in this cell or one of its 26 neighbours.
+export class PairOverlapHistory{
+ constructor(){this.current=new Map();this.previous=new Map();}
+ set(i,j){if(j<i)[i,j]=[j,i];this.current.set(`${i}:${j}`,[i,j]);}
+ tick(){this.previous=this.current;this.current=new Map();}
+ getDiff(additions,removals){for(const [k,v]of this.current)if(!this.previous.has(k))additions.push(...v);for(const [k,v]of this.previous)if(!this.current.has(k))removals.push(...v);}
+}
 export class PairGrid extends C.Broadphase{
  constructor(bodies,planes){super();this.grains=bodies;this.planes=planes;this.cell=2*bodies.reduce((r,b)=>Math.max(r,b.boundingRadius),0);}
  collisionPairs(world,p1,p2){const cells=new Map(),h=this.cell;for(const b of this.grains){if(b.aabbNeedsUpdate)b.updateAABB();const k=[b.position.x,b.position.y,b.position.z].map(x=>Math.floor(x/h)),key=k.join(',');let c=cells.get(key);if(!c)cells.set(key,c={k,rows:[]});c.rows.push(b);}
@@ -20,6 +26,7 @@ export function makePairBed({count=4096,seed=41,width,dt=1/120,friction=.6,separ
  if(!Number.isSafeInteger(count)||count<1||!Number.isSafeInteger(seed)||!(dt>0&&Number.isFinite(dt))||!(separation>0&&separation<1.5)||!(friction>=0&&Number.isFinite(friction)))throw Error('Invalid pair bed configuration');
  const rng=random(seed),world=new C.World({gravity:new C.Vec3(0,-50,0)}),bodies=[],ingredients=[],planes=[];let solidVolume=0;
  world.collisionMatrix=new C.ObjectCollisionMatrix();world.collisionMatrixPrevious=new C.ObjectCollisionMatrix();
+ world.bodyOverlapKeeper=new PairOverlapHistory();world.shapeOverlapKeeper=new PairOverlapHistory();world.doProfiling=true;
  world.solver.iterations=10;world.defaultContactMaterial.friction=friction;world.defaultContactMaterial.restitution=.01;world.defaultContactMaterial.contactEquationStiffness=1e4;world.defaultContactMaterial.contactEquationRelaxation=4;
  for(let i=0;i<count;i++){
   const r=.38*(.8+.4*rng()),s=r*(.85+.15*rng()),distance=r*separation,overlap=r+s-distance;

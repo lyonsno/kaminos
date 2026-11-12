@@ -17,6 +17,13 @@ union volume, centre placement uses lobe-volume weighting, and inertia is
 Cannon's compound bounding-box approximation. This exploratory mass model is
 not the exact inertia of a uniform-density sphere union.
 
+Contact history and overlap-event records use sparse full-identity maps rather
+than dense all-pairs storage or 16-bit packed identities. Optional `resume`
+names a hashed retained snapshot and its completed step count; input geometry
+and physical configuration must match before poses and velocities are restored.
+The continuation restarts sleeping/contact-event history, so it is a numerical
+relaxation continuation, not an exact replay of event timing.
+
 The complete radius-aware cell broadphase visits all neighboring cells and
 physical tray planes. Its cell width is twice the maximum grain bound. This
 changes cost, not collision shape. The physics kernel has no grain-count cap.
