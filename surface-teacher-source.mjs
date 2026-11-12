@@ -6,7 +6,11 @@ export function createGrassTeacherSource(options={}) {
  if(typeof config.periodic!=='boolean')throw Error('periodic must be a boolean');
  for(const key of ['height','width','depth','bladeWidth'])if(!Number.isFinite(config[key])||config[key]<=0)throw Error(`${key} must be positive and finite`);
  if(!Number.isSafeInteger(config.seed)||!Number.isSafeInteger(config.blades)||config.blades<1||!Number.isSafeInteger(config.segments)||config.segments<2||!Number.isFinite(config.bend))throw Error('finite seed/bend and positive integer blade/segment counts required');
- const tufts=config.tufts;
+ const row=config.row,tufts=config.tufts;
+ if(row!==undefined){
+  if(!row||!Number.isFinite(row.angle)||!Array.isArray(row.phase)||row.phase.length!==2||!row.phase.every(Number.isFinite)||!Number.isFinite(row.span)||row.span<=0||!Number.isFinite(row.minHeightFraction)||row.minHeightFraction<=0||row.minHeightFraction>1)throw Error('Invalid row angle, phase, span or minHeightFraction');
+  if(tufts!==undefined)throw Error('Row and tuft layouts are alternatives');
+ }
  if(tufts!==undefined){
   const pair=p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite);
   if(!tufts||!Array.isArray(tufts.centres)||!tufts.centres.length||!tufts.centres.every(pair)||!Number.isFinite(tufts.radius)||tufts.radius<=0||!['uniform','radial'].includes(tufts.grading)||!Number.isFinite(tufts.rimFraction)||tufts.rimFraction<=0||tufts.rimFraction>1||!Array.isArray(tufts.cuts)||!tufts.cuts.every(c=>c&&pair(c.min)&&pair(c.max)&&c.min.every((v,i)=>v<c.max[i])&&Number.isFinite(c.height)&&c.height>0))throw Error('Invalid tuft centres, radius, grading, rimFraction or cut patches');
@@ -37,13 +41,15 @@ export function createGrassTeacherSource(options={}) {
  const columns=Math.ceil(Math.sqrt(config.blades*w/d)),rows=Math.ceil(config.blades/columns);
  for(let i=0;i<config.blades;i++){
   const r0=random(),r1=random(),radiusFraction=tufts?Math.sqrt(r0):0,tuft=tufts?.centres[i%tufts.centres.length];
-  const x=tufts?tuft[0]+tufts.radius*radiusFraction*Math.cos(2*Math.PI*r1):((i%columns+.2+.6*r0)/columns-.5)*w*(config.periodic?1:.9);
-  const z=tufts?tuft[1]+tufts.radius*radiusFraction*Math.sin(2*Math.PI*r1):((Math.floor(i/columns)+.2+.6*r1)/rows-.5)*d*(config.periodic?1:.9);
+  const along=row?(config.blades===1?0:i/(config.blades-1)-.5)*row.span*Math.min(w,d):0;
+  const x=row?row.phase[0]*w+Math.cos(row.angle)*along:tufts?tuft[0]+tufts.radius*radiusFraction*Math.cos(2*Math.PI*r1):((i%columns+.2+.6*r0)/columns-.5)*w*(config.periodic?1:.9);
+  const z=row?row.phase[1]*d+Math.sin(row.angle)*along:tufts?tuft[1]+tufts.radius*radiusFraction*Math.sin(2*Math.PI*r1):((Math.floor(i/columns)+.2+.6*r1)/rows-.5)*d*(config.periodic?1:.9);
   const heightFactor=tufts?.grading==='radial'?tufts.rimFraction+(1-tufts.rimFraction)*(1-radiusFraction**2):1;
-  const angle=random()*Math.PI*2,lean=(random()-.5)*2*config.bend,height=config.height*(.65+.35*random())*heightFactor;
+  const randomAngle=random()*Math.PI*2,randomLean=(random()-.5)*2*config.bend,randomHeight=config.height*(.65+.35*random())*heightFactor;
+  const angle=row?-row.angle:randomAngle,lean=row?config.bend:randomLean,height=row?config.height*(config.blades===1?1:row.minHeightFraction+(1-row.minHeightFraction)*i/(config.blades-1)):randomHeight;
   cutHeight=Infinity;
   for(const cut of tufts?.cuts??[])if(x>=cut.min[0]&&x<cut.max[0]&&z>=cut.min[1]&&z<cut.max[1])cutHeight=Math.min(cutHeight,cut.height);
-  const width=config.bladeWidth*(.75+.5*random()),centres=[],widths=[],left=[],right=[];
+  const randomWidth=config.bladeWidth*(.75+.5*random()),width=row?config.bladeWidth:randomWidth,centres=[],widths=[],left=[],right=[];
   for(let j=0;j<=config.segments;j++){
    const t=j/config.segments,drift=lean*height*t*t;
    const centre=[x+Math.sin(angle)*drift,height*t,z+Math.cos(angle)*drift];

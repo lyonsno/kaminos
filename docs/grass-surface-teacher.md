@@ -1,5 +1,11 @@
 # Grass surface teacher
 
+## Controlled blade row
+
+`createGrassTeacherSource` also accepts an optional `row` layout for studying identifiable blades with increasing height. For example, use `blades: 6`, `height: 2.4`, `width: 4.8`, `depth: 4.8`, `bladeWidth: .216`, `bend: .12`, and `row: {angle: 0, phase: [0, 0], span: .75, minHeightFraction: 1/6}`. The six heights increase from .4 to 2.4. All blades share the same width, taper, orientation and normalized bend; their roots are evenly spaced over .75 times the smaller patch dimension. `height` remains the maximum height, and `bend` is the common lateral tip displacement divided by blade height.
+
+`angle` rotates the row and every blade together in the ground plane. `phase` translates roots by fractions of patch width and depth. With `periodic: true`, translated geometry is wrapped into the canonical cell and the teacher repeats it for primary and secondary transport. Center and edge phases are translated presentations of the same periodic material. Rotating a row inside a fixed square repeat lattice can change the arrangement of neighboring repeats. The row and tuft layouts are alternatives; malformed row parameters refuse. Omitting `row` retains the existing random and tuft geometry.
+
 Open the Workbench experiment `grass-surface-teacher` to inspect a frozen explicit ribbon patch with surface path tracing. The source is intentionally coarse and fixed. It exists to make blade tips, middles, roots, shadows and backing easy to compare under camera movement before fitting a learned material. It is not a botanical grass model or a periodic production material.
 
 Use the ordinary scene camera. The source mesh is a registered scene object. Select it in the native inspector and manipulate its transform. Existing native scene lights illuminate it; Add → Light creates an ordinary editable spot light. Source controls change blade count, height, width, bend and seed. Quality controls change path depth, constant environment radiance, image scale, reconstruction and tracing pause. The geometry, materials and transport function are shared by progressive images and explicit raw ray queries.
