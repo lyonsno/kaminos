@@ -16,12 +16,13 @@ function latentTexture(levels,block,name) {
   t.generateMipmaps=false;t.flipY=false;if(levels.length>1)t.mipmaps=mips;t.needsUpdate=true;return t;
 }
 
-export function createNeumipMaterial(model,{uvScale=3,gain=4,richEnabled=true,display='composed',residualGain=1}={}) {
+export function createNeumipMaterial(model,{uvScale=3,gain=4,richEnabled=true,display='composed',residualGain=1,lodOverride=-1}={}) {
   if(!['composed','residual','weighted-residual','routing'].includes(display))throw Error('Unknown residual display');
   if(display!=='composed'&&!model.handoff)throw Error('Residual displays require a paired model');
   if(!Number.isFinite(residualGain)||residualGain<0)throw Error('Residual gain must be finite and nonnegative');
   if(model.architecture===STONE_HANDOFF_ARCHITECTURE&&!model.handoff)throw Error('Paired residual requires its cheap endpoint and routing');
-  const diagnosticGain=uniform(residualGain);
+  if(!Number.isFinite(lodOverride)||lodOverride< -1)throw Error('LOD override must be -1 (automatic) or nonnegative');
+  const diagnosticGain=uniform(residualGain),footprintLOD=uniform(lodOverride);
   const scale=uniform(uvScale),brightness=uniform(gain),shaders=buildNeumipWGSL(model);
   const textures=[latentTexture([model.offset],0,'NeuMIP offset0'),latentTexture([model.offset],1,'NeuMIP offset1'),latentTexture(model.mips,0,'NeuMIP appearance0'),latentTexture(model.mips,1,'NeuMIP appearance1')];
   const bilinear=wgslFn(shaders.bilinear),offset=wgslFn(shaders.offset),featuresFn=wgslFn(shaders.features,[bilinear,offset]),mainFn=wgslFn(shaders.main);
@@ -30,7 +31,7 @@ export function createNeumipMaterial(model,{uvScale=3,gain=4,richEnabled=true,di
   if(paired)textures.push(latentTexture(model.handoff.cheap,0,'Stone cheap correction'));
   const tex=textures.map(t=>texture(t));
   const coords=uv().mul(scale),view=positionViewDirection.mul(TBNViewMatrix).negate().toVar('neumipView');
-  const lod=Fn(()=>{const size=vec2(model.mips[0].width,model.mips[0].height),dx=dFdx(coords).mul(size),dy=dFdy(coords).mul(size);return max(0,log2(sqrt(dx.dot(dx).add(dy.dot(dy))).div(1.2)));})().toVar('neumipLOD');
+  const lod=Fn(()=>{const selected=max(0,footprintLOD).toVar();If(footprintLOD.lessThan(0),()=>{const size=vec2(model.mips[0].width,model.mips[0].height),dx=dFdx(coords).mul(size),dy=dFdy(coords).mul(size);selected.assign(max(0,log2(sqrt(dx.dot(dx).add(dy.dot(dy))).div(1.2))));});return selected;})().toVar('neumipLOD');
   const support=paired?wgslFn(math.weight)(coords,lod).mul(richSwitch).toVar('stoneRichSupport'):null;
   const features=featuresFn(coords,view,lod,...(paired?[display==='residual'?uniform(1):support]:[]),...tex.slice(0,4)).toVar('neumipFeaturesShared');
   const cheapFn=paired?wgslFn(`fn stoneCheapResponse(uv:vec2<f32>,view:vec2<f32>,light:vec2<f32>,lod:f32,map:texture_2d<f32>)->vec3<f32>{let l=clamp(lod+${Math.log2(model.handoff.cheap[0].width/model.offset.width).toFixed(1)},0.0,f32(textureNumLevels(map)-1u));let lo=i32(floor(l));let hi=min(lo+1,i32(textureNumLevels(map)-1u));let logScale=mix(nmBilinear(map,uv,lo).rgb,nmBilinear(map,uv,hi).rgb,fract(l));return stoneFlatResponse(view,light)*exp(logScale);}`,[bilinear,wgslFn(math.flat)]):null;
@@ -71,5 +72,5 @@ export function createNeumipMaterial(model,{uvScale=3,gain=4,richEnabled=true,di
   material.isMeshStandardNodeMaterial=false;material.isNeumipMaterial=true;
   material.userData.neumip={source:model.source??null,lighting:'native direct point/spot/directional lights',indirect:'not evaluated',model:paired?'authored-cheap-plus-signed-residual':'author-web-export',display,precision:'source float32; manual bilinear and authored mip interpolation'};
   let disposed=false;material.addEventListener('dispose',()=>{if(disposed)return;disposed=true;for(const t of textures)t.dispose();});
-  return {material,settings:{scale,gain:brightness,richEnabled:richSwitch,residualGain:diagnosticGain},textures,read:()=>({...material.userData.neumip,uvScale:scale.value,gain:brightness.value,residualGain:diagnosticGain.value})};
+  return {material,settings:{scale,gain:brightness,richEnabled:richSwitch,residualGain:diagnosticGain,lodOverride:footprintLOD},textures,read:()=>({...material.userData.neumip,uvScale:scale.value,gain:brightness.value,residualGain:diagnosticGain.value,lodOverride:footprintLOD.value})};
 }

@@ -10,6 +10,7 @@ export function createHandoffState(spec,resolution){
  if(!r||![r.width,r.depth,r.inner,r.collar].every(Number.isFinite)||r.width<=0||r.depth<=0||r.inner<0||r.collar<=0||(r.kind==='strip'?r.inner+r.collar>=r.width:r.inner+r.collar>=Math.min(r.width,r.depth)/4))throw Error('Invalid handoff routing');
  if(!m||!Array.isArray(m.color)||m.color.length!==3||!m.color.every(x=>Number.isFinite(x)&&x>=0)||!Number.isFinite(m.roughness)||m.roughness<0||m.roughness>1||!Number.isFinite(m.metalness)||m.metalness<0||m.metalness>1)throw Error('Invalid handoff material');
  if(!Number.isInteger(Math.log2(cheapResolution))||cheapResolution<2||cheapResolution>width||!Number.isInteger(Math.log2(cheapHeight))||cheapHeight<2||cheapHeight>height)throw Error('Invalid cheap field resolution');
+ if(cheapResolution/width!==cheapHeight/height)throw Error('Cheap and rich fields must preserve footprint aspect ratio');
  const cheap=[];for(let w=cheapResolution,h=cheapHeight;Math.max(w,h)>=2;w=Math.max(1,w/2),h=Math.max(1,h/2))cheap.push({width:w,height:h,channels:3,data:new Float32Array(w*h*3)});
  return {routing:{...r},material:{...m,color:[...m.color]},cheap};
 }
@@ -26,7 +27,7 @@ export function buildHandoffMath(handoff,resolution){
  const r=handoff.routing,m=handoff.material;
  const sizes=Array.isArray(resolution)?resolution:[resolution,resolution];
  const weight=`fn stoneHandoffWeight(uv:vec2<f32>,lod:f32)->f32 {
- let span=exp2(lod)/${f(sizes[0])};let cycle=fract(uv*2.0);let distance=min(cycle,vec2<f32>(1.0)-cycle)*vec2<f32>(${f(r.width/2)},${f(r.depth/2)});let halfWidth=span*vec2<f32>(${f(r.width)},${f(r.depth)})*0.5;if(all(distance>=vec2<f32>(${f(r.inner+r.collar)})+halfWidth)){return 0.0;}let x=stoneCheapAverage(uv.x*${f(r.width)},span*${f(r.width)},${f(r.width/2)});let y=stoneCheapAverage(uv.y*${f(r.depth)},span*${f(r.depth)},${f(r.depth/2)});return clamp(1.0-x*y,0.0,1.0);
+ let span=vec2<f32>(exp2(lod))/vec2<f32>(${f(sizes[0])},${f(sizes[1])});let cycle=fract(uv*2.0);let distance=min(cycle,vec2<f32>(1.0)-cycle)*vec2<f32>(${f(r.width/2)},${f(r.depth/2)});let halfWidth=span*vec2<f32>(${f(r.width)},${f(r.depth)})*0.5;if(all(distance>=vec2<f32>(${f(r.inner+r.collar)})+halfWidth)){return 0.0;}let x=stoneCheapAverage(uv.x*${f(r.width)},span.x*${f(r.width)},${f(r.width/2)});let y=stoneCheapAverage(uv.y*${f(r.depth)},span.y*${f(r.depth)},${f(r.depth/2)});return clamp(1.0-x*y,0.0,1.0);
 }
 fn stoneCheapHalf(x:f32)->f32 {if(x<=${f(r.inner)}){return 0.0;}if(x>=${f(r.inner+r.collar)}){return x-${f(r.inner+r.collar/2)};}let t=(x-${f(r.inner)})/${f(r.collar)};return ${f(r.collar)}*(t*t*t-0.5*t*t*t*t);}
 fn stoneCheapIntegral(x:f32,period:f32)->f32 {let k=floor(x/period);let q=x-k*period;let total=2.0*stoneCheapHalf(period*0.5);if(q<=period*0.5){return k*total+stoneCheapHalf(q);}return (k+1.0)*total-stoneCheapHalf(period-q);}

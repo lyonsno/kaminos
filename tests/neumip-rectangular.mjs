@@ -24,3 +24,6 @@ test('marked shoulder retains relief through the fade and flat endpoint with sur
  assert.ok(s.triangles.some(t=>t.a[0]<-.08)&&s.triangles.some(t=>t.a[0]>.08));assert.equal(s.chart.boundary,'clamp');assert.ok(new Set(s.triangles.map(t=>t.materialIndex)).size>1);
  for(const t of s.triangles){const u=t.b.map((v,i)=>v-t.a[i]),v=t.c.map((v,i)=>v-t.a[i]);assert.ok(u[2]*v[0]-u[0]*v[2]>0);}
 });
+test('a single cheap LOD cannot silently change footprint aspect ratio',()=>{
+ assert.throws(()=>createNeumipStudent({resolution:32,height:16,chart,handoff:{...handoff,cheapResolution:16,cheapHeight:16}}),/aspect/);
+});
