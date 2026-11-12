@@ -22,7 +22,8 @@ export function contactGraphConfig(model,packed,limits){
  return{capacity,possible,offset,bytes:Math.max(offset+capacity*CONTACT_BYTES,offset+CONTACT_BYTES),faces:data,polygonCapacity:maxFace+maxPlanes,needsCapacityReadback:capacity<possible};
 }
 
-export function contactGraphKernels({bodyCount,polygonCapacity}){return `
+export function contactGraphKernels({bodyCount,polygonCapacity,spherePairs=false}){return `
+const SPHERE_CONTACT:bool=${spherePairs};
 const CONTACT_BODY_COUNT:u32=${bodyCount}u;
 const PATCH_POLYGON_SIZE:u32=${polygonCapacity}u;
 struct Contact {
@@ -96,19 +97,61 @@ fn make_contact(ai:u32,bi:u32,a:Body,b:Body,frame:vec4f)->Contact{
   }
  }}}
 }
+${spherePairs?`
+fn sphere_patch(i:u32,j:u32,a:Body,b:Body)->Contact{
+ var c:Contact;c.ids=vec4u(i,j,0u,0u);
+ var deepest=0.;var buriedNormal=vec3f(0.);var buriedA=vec3f(0.);var buriedB=vec3f(0.);
+ for(var k=0u;k<2u;k++){for(var l=0u;l<2u;l++){
+  let x=world_lobe(i,k,a);let y=world_lobe(j,l,b);
+  let d=x.xyz-y.xyz;let len=length(d);let depth=x.w+y.w-len;if(depth<=0.){continue;}
+  let n=select(vec3f(0.,1.,0.),d/max(len,1e-12),len>1e-12);
+  let pa=x.xyz-x.w*n;let pb=y.xyz+y.w*n;
+  let otherA=world_lobe(i,1u-k,a);let otherB=world_lobe(j,1u-l,b);
+  if(distance(pa,otherA.xyz)<otherA.w-1e-6||distance(pb,otherB.xyz)<otherB.w-1e-6){
+   if(depth>deepest){deepest=depth;buriedNormal=n;buriedA=pa;buriedB=pb;}continue;
+  }
+  let at=u32(c.normal.w);
+  c.localA[at]=vec4f(invrot(a.q,pa-a.p.xyz),0.);
+  c.localB[at]=vec4f(invrot(b.q,pb-b.p.xyz),0.);
+  c.position[at]=vec4f(0.,n);c.normal.w+=1.;
+ }}
+ if(c.normal.w==0.&&deepest>0.){
+  c.localA[0]=vec4f(invrot(a.q,buriedA-a.p.xyz),0.);
+  c.localB[0]=vec4f(invrot(b.q,buriedB-b.p.xyz),0.);
+  c.position[0]=vec4f(0.,buriedNormal);c.normal.w=1.;
+ }
+ return c;
+}
+@compute @workgroup_size(64) fn generate_sphere_contacts(@builtin(global_invocation_id) id:vec3u){
+ let i=id.x;if(i>=arrayLength(&bodies)){return;}let a=bodies[i];
+ let extent=a.size.x+spatial.origin.w*.5;let lo=bucket(a.p.xyz-vec3f(extent));let hi=bucket(a.p.xyz+vec3f(extent));
+ for(var x=lo.x;x<=hi.x;x++){for(var y=lo.y;y<=hi.y;y++){for(var z=lo.z;z<=hi.z;z++){
+  var link=atomicLoad(&bodyHeads[bucket_index(vec3i(x,y,z))]);
+  while(link>0u){let j=link-1u;link=bodyLinks[j];let b=bodies[j];
+   if(j<=i||(a.p.w==0.&&b.p.w==0.)||distance(a.p.xyz,b.p.xyz)>a.size.x+b.size.x){continue;}
+   var c=sphere_patch(i,j,a,b);if(c.normal.w==0.){continue;}
+   let index=atomicAdd(&graph.header[0],1u);
+   if(index>=arrayLength(&graph.contacts)){atomicStore(&graph.header[1],1u);continue;}
+   c.ids.z=atomicExchange(&graph.heads[i],index+1u);c.ids.w=atomicExchange(&graph.heads[j],index+1u);
+   atomicAdd(&graph.degrees[i],1u);atomicAdd(&graph.degrees[j],1u);graph.contacts[index]=c;
+  }
+ }}}
+}
+`:''}
 @compute @workgroup_size(1) fn prepare_contacts(){
  let count=min(atomicLoad(&graph.header[0]),arrayLength(&graph.contacts));
  contactDispatch[0]=(count+63u)/64u;contactDispatch[1]=1u;contactDispatch[2]=1u;
 }
 @compute @workgroup_size(64) fn solve_contacts(@builtin(global_invocation_id) id:vec3u){
  if(atomicLoad(&graph.header[1])>0u||id.x>=atomicLoad(&graph.header[0])){return;}
- var c=graph.contacts[id.x];var a=bodies[c.ids.x];var b=bodies[c.ids.y];let n=c.normal.xyz;
+ var c=graph.contacts[id.x];var a=bodies[c.ids.x];var b=bodies[c.ids.y];
  let degree=max(select(0u,atomicLoad(&graph.degrees[c.ids.x]),a.p.w>0.),select(0u,atomicLoad(&graph.degrees[c.ids.y]),b.p.w>0.));let relax=1./f32(max(1u,degree));
  var before:array<vec4f,4>;var beforeP:array<f32,4>;
  for(var k=0u;k<u32(c.normal.w);k++){before[k]=c.impulse[k];beforeP[k]=c.position[k].x;}
  // A patch is a small block: its points share local body responses. Global
  // Jacobi iterations couple these blocks through the per-body gather.
  for(var sweep=0u;sweep<4u;sweep++){for(var k=0u;k<u32(c.normal.w);k++){
+  let n=select(c.normal.xyz,c.position[k].yzw,SPHERE_CONTACT);
   let ra=rot(a.q,c.localA[k].xyz);let rb=rot(b.q,c.localB[k].xyz);let rel=a.v.xyz+cross(a.w.xyz,ra)-b.v.xyz-cross(b.w.xyz,rb);
   let kn=max(pair_effective(a,b,ra,rb,n),1e-12);let old=c.impulse[k];let normal=max(0.,old.w-dot(rel,n)/kn);let dn=normal-old.w;
   let normalImpulse=n*dn;let after=rel+normalImpulse*(a.p.w+b.p.w)+cross(responsive_inertia(a,cross(ra,normalImpulse)),ra)+cross(responsive_inertia(b,cross(rb,normalImpulse)),rb);
@@ -124,8 +167,9 @@ fn make_contact(ai:u32,bi:u32,a:Body,b:Body,frame:vec4f)->Contact{
  }}
  for(var k=0u;k<u32(c.normal.w);k++){
   let next=before[k]+(c.impulse[k]-before[k])*relax;
-  c.delta[k]=vec4f(n*(next.w-before[k].w)+next.xyz-before[k].xyz,0.);c.impulse[k]=next;
-  let position=beforeP[k]+(c.position[k].x-beforeP[k])*relax;c.position[k]=vec4f(position,position-beforeP[k],0.,0.);
+  let n=select(c.normal.xyz,c.position[k].yzw,SPHERE_CONTACT);
+  let position=beforeP[k]+(c.position[k].x-beforeP[k])*relax;c.position[k].x=position;
+  c.delta[k]=vec4f(n*(next.w-before[k].w)+next.xyz-before[k].xyz,position-beforeP[k]);c.impulse[k]=next;
  }graph.contacts[id.x]=c;
 }
 
@@ -145,7 +189,7 @@ var<workgroup> graphSumQ:array<vec4f,64>;
   if(lane==0u){var current=link;for(var k=0u;k<64u;k++){graphLinks[k]=current;if(current>0u){let ids=graph.contacts[current-1u].ids;current=select(ids.w,ids.z,ids.x==i);}}graphContinuation=current;}
   workgroupBarrier();let entry=graphLinks[lane];
   if(entry>0u){let c=graph.contacts[entry-1u];let first=c.ids.x==i;let sign=select(-1.,1.,first);
-   for(var k=0u;k<u32(c.normal.w);k++){var local=c.localB[k].xyz;if(first){local=c.localA[k].xyz;}let r=rot(original.q,local);let J=c.delta[k].xyz*sign;let P=c.normal.xyz*c.position[k].y*sign;
+   for(var k=0u;k<u32(c.normal.w);k++){var local=c.localB[k].xyz;if(first){local=c.localA[k].xyz;}let r=rot(original.q,local);let J=c.delta[k].xyz*sign;let P=select(c.normal.xyz,c.position[k].yzw,SPHERE_CONTACT)*c.delta[k].w*sign;
     dv+=J*original.p.w;dw+=inverse_inertia(original,cross(r,J));dp+=P*original.p.w;dq+=inverse_inertia(original,cross(r,P));
    }
   }link=workgroupUniformLoad(&graphContinuation);
@@ -156,7 +200,8 @@ var<workgroup> graphSumQ:array<vec4f,64>;
   
   // worldFeatures describe the integrated pose, so floor position is corrected
   // from local source vertices instead of reading stale transformed supports.
-  var lowest=vec3f(0.,1e30,0.);for(var k=0u;k<u32(b.i1.w);k++){let p=b.p.xyz+rot(b.q,convexData[u32(b.i0.w)+k].xyz);if(p.y<lowest.y){lowest=p;}}
+  var lowest=vec3f(0.,1e30,0.);
+  ${spherePairs?`for(var k=0u;k<2u;k++){let l=world_lobe(i,k,b);let p=l.xyz-vec3f(0.,l.w,0.);if(p.y<lowest.y){lowest=p;}}`:`for(var k=0u;k<u32(b.i1.w);k++){let p=b.p.xyz+rot(b.q,convexData[u32(b.i0.w)+k].xyz);if(p.y<lowest.y){lowest=p;}}`}
   let influence=exp(-dot(lowest.xz,lowest.xz)/.75);let floor=cfg.drive.x*influence;
   if(lowest.y<floor){b=contact_body(b,vec3f(0,1,0),floor-lowest.y,lowest,vec3f(0.,cfg.drive.y*influence,0.));}nextBodies[i]=b;
  }

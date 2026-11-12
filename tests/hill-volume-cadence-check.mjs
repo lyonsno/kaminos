@@ -5,3 +5,12 @@ for(const mutate of [r=>r.hardware.isFallbackAdapter=true,r=>r.effective.fixture
  const r=structuredClone(sample);mutate(r);assert.throws(()=>checkHillCadence(r),'Wrong route, blank/partial/cached frame or missing advancement must fail');
 }
 assert.doesNotThrow(()=>checkHillCadence(sample));
+
+const pairs={bodyCount:800,collision:'sphere-pair',freeRocks:800};
+const scale=structuredClone(sample);
+Object.assign(scale.effective,pairs);
+assert.doesNotThrow(()=>checkHillCadence(scale,pairs));
+for(const patch of [{collision:'convex'},{freeRocks:16},{bodyCount:100}]){
+ const wrong=structuredClone(scale);Object.assign(wrong.effective,patch);
+ assert.throws(()=>checkHillCadence(wrong,pairs));
+}

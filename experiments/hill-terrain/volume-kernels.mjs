@@ -1,8 +1,10 @@
+import {SPHERE_PAIR_WGSL} from './volume-sphere-pairs.mjs';
 import {SOIL_MATERIAL_WGSL} from './soil-material.mjs';
 // Quadratic 27-node APIC transfers follow the pinned Splash MLS implementation
 // (vendor/splash-mls-mpm). SI mass/volume, frictional stress and reciprocal rigid
 // impulses are specimen-specific. Grid entries hold momentum, then velocity.
-export const VOLUME_KERNELS=SOIL_MATERIAL_WGSL+`
+export const VOLUME_KERNELS=volumeKernels();
+export function volumeKernels(spherePairs=false){return SOIL_MATERIAL_WGSL+`
 struct Particle { p:vec4f, v:vec4f, C:mat3x3f, stress:mat3x3f, memory:vec4f }
 struct Cell { x:atomic<i32>, y:atomic<i32>, z:atomic<i32>, mass:atomic<i32> }
 struct Body { p:vec4f,q:vec4f,v:vec4f,w:vec4f,i0:vec4f,i1:vec4f,i2:vec4f,shape:vec4u,size:vec4f,rest:vec4f }
@@ -87,11 +89,11 @@ fn contact_velocity(point:vec3f,velocity:vec3f,mass:f32,margin:f32)->vec3f{
  for(var x=lo.x;x<=hi.x;x++){for(var y=lo.y;y<=hi.y;y++){for(var z=lo.z;z<=hi.z;z++){
  var link=atomicLoad(&bodyHeads[bucket_index(vec3i(x,y,z))]);while(link>0u){let i=link-1u;link=bodyLinks[i];
   let b=bodies[i];let r=point-b.p.xyz;if(length(r)>b.size.x+margin){continue;}
-  let bv=b.v.xyz+cross(b.w.xyz,r);let rel=v-bv;let coarse=plane_frame(point,b);
+  let bv=b.v.xyz+cross(b.w.xyz,r);let rel=v-bv;let coarse=${spherePairs?'sphere_frame(point,b,i)':'plane_frame(point,b)'};
   // Plane distance is a lower bound on finite convex-surface distance. Even
   // the full relative speed cannot close this gap during this substep.
   if(coarse.w>margin+length(rel)*cfg.forces.x){continue;}
-  let f=finite_frame(point,b,coarse);let vn=dot(rel,f.xyz);
+  let f=${spherePairs?'coarse':'finite_frame(point,b,coarse)'};let vn=dot(rel,f.xyz);
   if(f.w>margin+max(0.,-vn)*cfg.forces.x||vn>=0.){continue;}
   let effective=1./mass+b.p.w+select(0.,dot(f.xyz,cross(inverse_inertia(b,cross(r,f.xyz)),r)),b.p.w>0.);
   let jn=-vn/max(effective,1e-12);var impulse=f.xyz*jn;
@@ -140,7 +142,7 @@ fn contact_velocity(point:vec3f,velocity:vec3f,mass:f32,margin:f32)->vec3f{
  let corrected=contact_velocity(p.p.xyz,p.v.xyz,p.p.w,0.);p.v=vec4f(corrected,p.v.w);
  let extent=spatial.origin.w*.5;let loBody=bucket(p.p.xyz-vec3f(extent));let hiBody=bucket(p.p.xyz+vec3f(extent));
  for(var x=loBody.x;x<=hiBody.x;x++){for(var y=loBody.y;y<=hiBody.y;y++){for(var z=loBody.z;z<=hiBody.z;z++){
- var link=atomicLoad(&bodyHeads[bucket_index(vec3i(x,y,z))]);while(link>0u){let i=link-1u;link=bodyLinks[i];let b=bodies[i];if(distance(p.p.xyz,b.p.xyz)>b.size.x){continue;}let f=plane_frame(p.p.xyz,b);if(f.w<0.){p.p=vec4f(p.p.xyz-f.xyz*f.w,p.p.w);}}
+ var link=atomicLoad(&bodyHeads[bucket_index(vec3i(x,y,z))]);while(link>0u){let i=link-1u;link=bodyLinks[i];let b=bodies[i];if(distance(p.p.xyz,b.p.xyz)>b.size.x){continue;}let f=${spherePairs?'sphere_frame(p.p.xyz,b,i)':'plane_frame(p.p.xyz,b)'};if(f.w<0.){p.p=vec4f(p.p.xyz-f.xyz*f.w,p.p.w);}}
  }}}
  let influence=exp(-dot(p.p.xz,p.p.xz)/.75);let floor=cfg.drive.x*influence;
  if(p.p.y<floor){p.p.y=floor;p.v.y=max(cfg.drive.y*influence,p.v.y);}
@@ -242,7 +244,7 @@ fn pair_impulse(a:Body,b:Body,n:vec3f,point:vec3f)->vec3f{
  if(bottom.y<floor){body=contact_body(body,vec3f(0,1,0),floor-bottom.y,bottom,vec3f(0.,cfg.drive.y*influence,0.));}nextBodies[i]=body;}
 }
 
-`;
+`+(spherePairs?SPHERE_PAIR_WGSL:'');}
 
 export const SURFACE_KERNELS=`
 struct Cell { x:i32,y:i32,z:i32,mass:i32 }

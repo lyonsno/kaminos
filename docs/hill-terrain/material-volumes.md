@@ -122,3 +122,21 @@ current dense surface reservation. In scaled recipes, each submission is
 bounded to one 60 Hz quantum (rounded to whole physical steps); interactive
 Play pauses visibly on more than half a second of service debt. Explicit
 Advance still processes the complete requested duration in chunks.
+
+### Two-sphere collision comparison
+
+Choose **Two-sphere rock contacts** or use `collision: "sphere-pair"` in
+the initial config. The pile keeps the same source meshes, initial poses,
+mass, inertia and mesh picking. Each rock owns two overlapping spheres
+fitted inside its convex mesh. Each body pair tests four lobe pairs and
+keeps exposed contacts with their own normals; deep overlap with no
+exposed contact uses the deepest lobe pair as a recovery direction.
+Soil uses the union's boundary for contact; the floor uses lobe supports.
+This can let visual corners penetrate or make broad rocks roll differently.
+The original convex collision path remains selectable.
+
+For an all-free fixture set `scale.freeRocks` equal to `scale.rocks`. Drag
+directly on a visible rock to shove it. Playback retains bounded submissions
+and keeps going when behind; the HUD exposes physical time separately.
+Changing collision mode rebuilds the starting recipe paused. Contact arena
+reservation and dense soil surface allocation remain unchanged.

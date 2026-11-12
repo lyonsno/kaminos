@@ -2,7 +2,7 @@
 // and the CPU arrays that dominate this path, not free memory on the machine.
 export const DEFAULT_PILE_SCALE=Object.freeze({width:6.72,depth:7.68,height:4.32,cell:.12,spacing:.075,rocks:100,freeRocks:0});
 const MiB=1024**2;
-const BASE_BINDING=128*MiB, CONSTRUCTION_BYTES=512*MiB;
+const CONSTRUCTION_BYTES=512*MiB;
 export function pileScaleConfig(input){
  const scale={...DEFAULT_PILE_SCALE,...input};
  for(const key of Object.keys(scale))if(!Object.hasOwn(DEFAULT_PILE_SCALE,key))throw Error('Unknown scale setting '+key);
@@ -19,7 +19,7 @@ export function volumeSurfaceCapacity(dimensions){
 export function scaleAllocation(config,limits){
  const {dimensions,scale}=config,{cubes,maxVertices,surfaceBufferBytes}=volumeSurfaceCapacity(dimensions);
  const gridCells=dimensions.reduce((n,v)=>n*v,1);
- const limit=Math.min(limits?.maxStorageBufferBindingSize??BASE_BINDING,limits?.maxBufferSize??BASE_BINDING);
+ const limit=Math.min(limits?.maxStorageBufferBindingSize??CONSTRUCTION_BYTES,limits?.maxBufferSize??CONSTRUCTION_BYTES);
  if(!Number.isSafeInteger(surfaceBufferBytes)||surfaceBufferBytes>limit)throw Error('Soil surface buffer exceeds the '+Math.floor(limit/MiB)+' MiB storage binding limit');
  if(gridCells>64*(limits?.maxComputeWorkgroupsPerDimension??65535))throw Error('Grid exceeds the compute dispatch limit');
  const extent=dimensions.map(n=>n*config.cell);

@@ -1,3 +1,4 @@
+import {fitSpherePair} from './volume-sphere-pairs.mjs';
 import {pileScaleConfig,scaleAllocation} from './volume-scale.mjs';
 import {createRockOutcrop,buildConvexRock} from './rock-geometry.mjs';
 import {convexFeatures,conditionRockPoses,verticalContactHeight} from './convex-contact.mjs';
@@ -28,7 +29,8 @@ function inverse3(m){
 }
 export function volumeConfig(input={}){
  const defaults=input.fixture==='hundred-rocks'?{origin:[-3.36,-.36,-3.84],dimensions:[56,36,64]}:{};
- const c={fixture:'outcrop',pileSoilHeight:.65,contactIterations:8,cell:.12,spacing:.075,dt:.0015,density:1600,rockDensity:2400,bulk:12000,shear:5000,friction:.65,contactFriction:.6,gravity:9.81,origin:[-2.4,-.36,-1.8],dimensions:[40,30,40],conditionContacts:true,...defaults,...input};
+ const c={collision:'convex',fixture:'outcrop',pileSoilHeight:.65,contactIterations:8,cell:.12,spacing:.075,dt:.0015,density:1600,rockDensity:2400,bulk:12000,shear:5000,friction:.65,contactFriction:.6,gravity:9.81,origin:[-2.4,-.36,-1.8],dimensions:[40,30,40],conditionContacts:true,...defaults,...input};
+ if(!['convex','sphere-pair'].includes(c.collision))throw Error('Unknown rock collision mode');
  if(c.scale!==undefined){
   if(c.fixture!=='hundred-rocks')throw Error('Scale controls require the pile specimen');
   if(!c.scale||typeof c.scale!=='object'||Array.isArray(c.scale))throw Error('Invalid scale settings');
@@ -74,6 +76,10 @@ export function makeVolumeSpecimen(input={},limits){
   else if(config.scale?.freeRocks)throw Error('Enable starting contact preparation before releasing rocks');
   conditioning={kind:'disjoint source-bounded stack',verticalShifts:bodies.map(()=>0),maxShift:0};
  }else conditioning=config.conditionContacts?conditionRockPoses(bodies):{kind:'unconditioned authored poses',maxShift:0,verticalShifts:bodies.map(()=>0)};
+ if(config.collision==='sphere-pair'){
+  const fitted=new Map();
+  for(const b of bodies){if(!fitted.has(b.solid))fitted.set(b.solid,fitSpherePair(b.solid));b.lobes=fitted.get(b.solid);}
+ }
  const width=2*Math.max(...bodies.map(b=>Math.max(...b.solid.positions.filter((_,i)=>i%3!==1).map(Math.abs))))+.1,buckets=new Map();
  for(const b of bodies){const key=[0,2].map(k=>Math.floor(b.position[k]/width)).join(',');if(!buckets.has(key))buckets.set(key,[]);buckets.get(key).push(b);}
  const neighbors=(x,z)=>{const out=[],ix=Math.floor(x/width),iz=Math.floor(z/width);for(let i=-1;i<=1;i++)for(let j=-1;j<=1;j++)out.push(...(buckets.get([ix+i,iz+j].join(','))??[]));return out;};
@@ -91,10 +97,11 @@ export function makeVolumeSpecimen(input={},limits){
  return{config,bodies,particles:allocation?particles.subarray(0,cursor):new Float32Array(particles),weatheredMass:0,history:[],conditioning,source:'direct-3d-material-volumes-v1'};
 }
 export function packVolumeBodies(bodies){
- const body=new Float32Array(bodies.length*BODY_WORDS),ints=new Uint32Array(body.buffer),planes=[],triangles=[],vertices=[],vertexBodies=[],convex=[],convexOwners=[];
+ const body=new Float32Array(bodies.length*BODY_WORDS),ints=new Uint32Array(body.buffer),planes=[],triangles=[],vertices=[],vertexBodies=[],convex=[],convexOwners=[],lobes=[];
  for(let i=0;i<bodies.length;i++){
   const b=bodies[i],j=i*BODY_WORDS,inv=inverse3(b.inertia);body.set([...b.position,b.anchored?0:1/b.mass,...b.rotation,...b.velocity,0,...b.omega,0],j);
   for(let k=0;k<3;k++)body.set([...inv.slice(k*3,k*3+3),0],j+16+k*4);
+  if(b.lobes)for(const l of b.lobes)lobes.push(...l);
   const features=convexFeatures(b.solid);body[j+19]=convex.length/4;body[j+23]=features.vertices.length;for(const p of features.vertices){convex.push(...p,0);convexOwners.push(i);}body[j+27]=convex.length/4;body[j+35]=features.edges.length;for(const e of features.edges){convex.push(...e,0);convexOwners.push(i);}
   ints.set([planes.length/4,b.solid.planes.length,triangles.length/12,b.solid.positions.length/9],j+28);
   for(const p of b.solid.planes)planes.push(...p);
@@ -103,7 +110,7 @@ export function packVolumeBodies(bodies){
   for(let k=0;k<b.solid.positions.length;k+=9)for(let q=0;q<3;q++)triangles.push(...b.solid.positions.slice(k+q*3,k+q*3+3),0);
   body.set([radius,b.mass,b.volume,features.edges.length],j+32);body.set([...(b.restPosition??b.position),0],j+36);
  }
- return{body,planes:new Float32Array(planes),triangles:new Float32Array(triangles),vertices:new Float32Array(vertices),vertexBodies:new Uint32Array(vertexBodies),convex:new Float32Array(convex),convexOwners:new Uint32Array(convexOwners)};
+ return{body,lobes:new Float32Array(lobes),planes:new Float32Array(planes),triangles:new Float32Array(triangles),vertices:new Float32Array(vertices),vertexBodies:new Uint32Array(vertexBodies),convex:new Float32Array(convex),convexOwners:new Uint32Array(convexOwners)};
 }
 export function rotate(q,v){const t=cross(q.slice(0,3),v).map(x=>x*2),u=cross(q.slice(0,3),t);return v.map((x,i)=>x+q[3]*t[i]+u[i]);}
 export function weatherBody(model,index,distance){
@@ -121,7 +128,7 @@ export function weatherBody(model,index,distance){
  // Uniform recession may move the centroid: recenter and carry its world pose.
  const shift=rotate(b.rotation,moments.center);b.position=b.position.map((v,k)=>v+shift[k]);if(b.restPosition)b.restPosition=b.restPosition.map((v,k)=>v+shift[k]);
  b.velocity=b.velocity.map((v,k)=>v+cross(b.omega,shift)[k]);
- b.solid=buildConvexRock(next.planes.map(p=>[...p.slice(0,3),p[3]-dot(p.slice(0,3),moments.center)]));b.mass=moments.mass;b.inertia=moments.inertia;b.volume=moments.volume;
+ b.solid=buildConvexRock(next.planes.map(p=>[...p.slice(0,3),p[3]-dot(p.slice(0,3),moments.center)]));if(b.lobes)b.lobes=fitSpherePair(b.solid);b.mass=moments.mass;b.inertia=moments.inertia;b.volume=moments.volume;
  const particles=new Float32Array(model.particles.length+added.length);particles.set(model.particles);particles.set(added,model.particles.length);model.particles=particles;model.weatheredMass+=lostMass;
  return{lostMass,addedParticles:samples.length};
 }
