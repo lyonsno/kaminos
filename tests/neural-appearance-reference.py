@@ -34,6 +34,13 @@ class PatternedReference(unittest.TestCase):
   color=mx.full((3,3),.3);rough=mx.full((3,),.25);metal=mx.ones((3,));n=mx.array([[0.,0.,1.]]*3)
   wi=mx.array([[0.,0.,1.],[.6,0.,.8],[0.,0.,-1.]]);wo=mx.array([[0.,0.,1.],[-.6,0.,.8],[0.,0.,1.]])
   actual=np.asarray(material_response(color,rough,metal,n,wi,wo));self.assertTrue(np.isfinite(actual).all());np.testing.assert_array_equal(actual[2],0);self.assertGreater(float(actual[1].mean()),float(actual[0].mean()))
+ def test_native_and_coarse_footprints_match_published_sigma(self):
+  from neural_appearance_patterned_metal import reference_footprint
+  point=reference_footprint(4096);coarse=reference_footprint(512)
+  self.assertEqual(point['mode'],'point');self.assertEqual(point['referenceSamples'],1)
+  self.assertEqual(coarse['mipLevel'],3);self.assertEqual(coarse['mode'],'gaussian-response');self.assertAlmostEqual(coarse['sigmaUV'],.65*4/4096);self.assertEqual(coarse['trainingSamples'],64);self.assertEqual(coarse['referenceSamples'],256)
+  for resolution in [0,513,8192,512.]:
+   with self.assertRaises(ValueError):reference_footprint(resolution)
  def test_query_replay_and_point_footprint_are_explicit(self):
   import numpy as np
   from neural_appearance_patterned_metal import reference_queries

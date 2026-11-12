@@ -4,8 +4,9 @@ Graph: NVlabs/neuralappearance@305b4b9c, assets/materials/PatternedMetal.mtlx.
 BSDF equations: its pinned falcor2@d629c967 mx139 reference implementation,
 including the default turquin_analytic compensation, GGX/Fresnel, visible-normal
 repair and dielectric layer pass-through. This is a port, not NVIDIA execution.
-The single-mip target is point evaluation with bilinear source-map sampling;
-there is no spatial box averaging or geometry/path-tracing sample budget.
+Native mip0 is point evaluation. Coarser latent grids use the published
+Gaussian prefilter of evaluated responses, with native texel-center snapping.
+There is no geometry/path-tracing sample budget.
 """
 import hashlib,json,math,pathlib
 import numpy as np
@@ -83,6 +84,28 @@ def reference_queries(rng,count,resolution):
   valid=(wi[:,2]>=1e-3)&(wo[:,2]>=0);result[pending[valid],2:5]=wi[valid];result[pending[valid],5:8]=wo[valid];pending=pending[~valid]
  if len(pending):raise ValueError('Published directional validity attempts exhausted')
  return result
+
+def reference_footprint(resolution):
+ """Published filter_sigma(mip_level, native_resolution), one selected mip."""
+ if type(resolution) is not int or resolution<1 or resolution>4096 or resolution&(resolution-1):raise ValueError('Power-of-two latent resolution in1..4096 required')
+ mip=12-int(math.log2(resolution));sigma=0. if mip==0 else .65*.5*(1<<mip)/4096
+ return {'mode':'point' if mip==0 else 'gaussian-response','nativeMapSampling':'bilinear-repeat','nativeResolution':4096,'latentResolution':resolution,'mipLevel':mip,'sigmaUV':sigma,'uvSnap':'latent-texel-center','filteredUvSnap':'native-texel-center','trainingSamples':1 if mip==0 else 64,'referenceSamples':1 if mip==0 else 256}
+
+def filtered_response(evaluate,queries,rng,footprint,reference=False):
+ """Port of eval_target_bsdf_lod + sample_2d_gaussian, not parameter filtering.
+
+ Sequential accumulation retains the published sample count without building
+ all64/256 samples' BSDF intermediates at once. RNG state remains replayable.
+ """
+ q=np.asarray(queries,dtype=np.float32)
+ if footprint['mipLevel']==0:return evaluate(mx.array(q))
+ samples=footprint['referenceSamples' if reference else 'trainingSamples'];total=mx.zeros((len(q),3))
+ for _ in range(samples):
+  u=rng.random((len(q),2));radius=np.sqrt(-2*np.log(np.maximum(u[:,0],np.finfo(float).tiny)));phi=2*math.pi*u[:,1]
+  uv=q[:,:2]+footprint['sigmaUV']*radius[:,None]*np.stack([np.cos(phi),np.sin(phi)],axis=-1)
+  sample=q.copy();sample[:,:2]=(np.floor(uv*4096)+.5)/4096
+  total=total+evaluate(mx.array(sample));mx.eval(total)
+ return total/samples
 
 class PatternedMetal:
  def __init__(self,manifest):
