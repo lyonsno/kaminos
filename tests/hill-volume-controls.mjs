@@ -15,12 +15,12 @@ function accountingDevice(fence=async()=>{}){
   queue:{writeBuffer(b,o,data){const raw=new Uint8Array(data.buffer,data.byteOffset,data.byteLength);new Uint8Array(b.bytes,o,raw.length).set(raw);writes.push({label:b.label,offset:o,length:raw.length});},submit(){},onSubmittedWorkDone:fence}};
  return{device,writes,batches};
 }
-async function instance({fence,config={dimensions:[8,8,8],spacing:.15}}={}){
+async function instance({fence,playing=false,config={dimensions:[8,8,8],spacing:.15}}={}){
  const {device,writes,batches}=accountingDevice(fence),map=new Map(),events=[];let root,view={},frame;
  const renderer={backend:{isWebGPUBackend:true,device,get(a){if(!map.has(a)){const b=device.createBuffer({size:a.array.byteLength});new Uint8Array(b.bytes).set(new Uint8Array(a.array.buffer));map.set(a,{buffer:b});}return map.get(a);}},compute(){},_attributes:{delete:a=>map.get(a)?.buffer.destroy()}};
  const session={attach:async r=>{root=r;return{id:'volume-test',root:r};},setView:v=>view=v,readView:()=>view,redraw(){},onFrame:fn=>{frame=fn;return()=>{frame=null;};},dispose:async()=>{}};
  const host={scene:{open:async()=>session}};
- const value=await experiment.create({host,inputs:{config},record:e=>events.push(e)});
+ const value=await experiment.create({host,inputs:{config,playing},record:e=>events.push(e)});
  return{value,renderer,writes,batches,events,tick:seconds=>frame?.({deltaSeconds:seconds}),render(){root.children[0].onBeforeRender(renderer);}};
 }
 test('queued release retains the selected rock before subsequent edits',async()=>{
@@ -35,7 +35,7 @@ test('queued material impulse retains its requested velocity before later edits'
  const i=await instance();try{i.render();await i.value.operations.setPlaying(false);await Promise.all([i.value.operations.push(),i.value.operations.setSettings({pushSpeed:9})]);const gpu=i.value.operations.gpu();assert.equal(new Float32Array(gpu.params.bytes)[20],1.5);assert.equal(i.value.read().settings.pushSpeed,9);}finally{await i.value.dispose();}
 });
 test('Reset during aim supersedes the captured playback state',async()=>{
- const i=await instance();try{i.render();await i.value.operations.setPlaying(true);await i.value.operations.beginShove({origin:[0,1,2],direction:[0,0,-1]});assert.equal(i.value.read().playing,false);await i.value.operations.reset();await i.value.operations.cancelShove();assert.equal(i.value.read().playing,false,'Cancelling a stale drag must not restart a reset specimen');}finally{await i.value.dispose();}
+ const i=await instance();try{i.render();await i.value.operations.setPlaying(true);await i.value.operations.beginShove({origin:[0,1,2],direction:[0,0,-1]});assert.equal(i.value.read().playing,false);await i.value.operations.reset();const running=i.value.read().playing;const steps=i.value.read().gpu.completedSteps;await i.value.operations.cancelShove();assert.equal(i.value.read().playing,running,'Cancelling a stale drag must not change reset playback');assert.equal(i.value.read().gpu.completedSteps,steps);}finally{await i.value.dispose();}
 });
 test('spatial release targets its rock without changing the sidebar selection',async()=>{
  const i=await instance();try{i.render();await i.value.operations.setPlaying(false);await i.value.operations.release(0);const writes=i.writes.filter(w=>w.label==='Hill volume rigid state'&&w.length===4);assert.equal(writes.at(-1).offset,12,'The pin must release its own rock, not the sidebar rock');assert.equal(i.value.read().settings.rock,7);}finally{await i.value.dispose();}
@@ -91,5 +91,20 @@ test('scale preflight rejects before replacing the live specimen, and admitted c
   assert.ok(grid.gpu.gridCells>finer.gpu.gridCells);
   assert.equal(grid.gpu.config.spacing,.12);
   assert.equal(i.value.operations.recipe().config.scale.width,4);
+ }finally{await i.value.dispose();}
+});
+
+test('an all-free pile tracks count in both directions and keeps Play across a valid rebuild',async()=>{
+ const i=await instance({playing:true,config:{fixture:'hundred-rocks',collision:'sphere-pair',scale:{width:4,depth:5,height:2.8,cell:.2,spacing:.16,rocks:12,freeRocks:12}}});
+ try{
+  i.render();await i.value.operations.setSettings({shoveGain:2});
+  const small=await i.value.operations.setScale({rocks:8});
+  assert.equal(small.gpu.bodyCount,8);assert.equal(small.anchors.filter(a=>!a.attached).length,8);
+  const larger=await i.value.operations.setScale({rocks:14});
+  assert.equal(larger.anchors.filter(a=>!a.attached).length,14);
+  assert.equal(larger.playing,true);
+  i.tick(.016);await i.value.operations.setSettings({shoveGain:2});assert.ok(i.value.read().gpu.completedSteps>0);
+  await i.value.operations.setPlaying(false);
+  assert.equal((await i.value.operations.setScale({rocks:10})).playing,false,'explicit pause survives a scale edit');
  }finally{await i.value.dispose();}
 });

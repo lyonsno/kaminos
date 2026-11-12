@@ -120,7 +120,7 @@ positions/normals and an upper bound on initial soil particles. It is not a
 measurement of total process or system memory. Large edits still use the
 current dense surface reservation. In scaled recipes, each submission is
 bounded to one 60 Hz quantum (rounded to whole physical steps); interactive
-Play pauses visibly on more than half a second of service debt. Explicit
+Play reports service debt without stopping. Explicit
 Advance still processes the complete requested duration in chunks.
 
 ### Two-sphere collision comparison
@@ -136,7 +136,10 @@ This can let visual corners penetrate or make broad rocks roll differently.
 The original convex collision path remains selectable.
 
 For an all-free fixture set `scale.freeRocks` equal to `scale.rocks`. Drag
-directly on a visible rock to shove it. Playback retains bounded submissions
+directly on a visible rock and flick before release. The release speed
+and direction set the impulse; a longer stroke increases its gain. Playback retains bounded submissions
 and keeps going when behind; the HUD exposes physical time separately.
-Changing collision mode rebuilds the starting recipe paused. Contact arena
+Playback starts on by default and valid edits resume it unless paused. Use
+`playing: false` to open an exact-step comparison. In an all-free pile,
+changing rock count keeps every rock free. Contact arena
 reservation and dense soil surface allocation remain unchanged.

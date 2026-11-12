@@ -23,3 +23,18 @@ assert.equal(event(canvas,'pointerdown').defaultPrevented,true);await flush();as
 event(canvas,'pointermove');await flush();event(canvas,'pointerdown');await flush();event(canvas,'pointermove',{clientX:270});event(doc,'keydown',{key:'Escape'});await flush();event(canvas,'pointerup');await flush();assert.equal(commits.length,1);assert.equal(cancels,1);assert.equal(controls.enabled,true);
 active=false;event(canvas,'pointermove');assert.equal(event(canvas,'pointerdown').defaultPrevented,false,'Authoring pointer events stay native');active=true;pickHit={...pickHit,released:false};event(canvas,'pointermove');await flush();assert.equal(event(canvas,'pointerdown').defaultPrevented,false,'Attached rock cannot begin a shove');
 pickHit={...pickHit,released:true};event(canvas,'pointermove');await flush();event(canvas,'pointerdown');await flush();await tool.dispose();assert.equal(cancels,2);assert.equal(controls.enabled,true);assert.equal(viewport.children.length,0);assert.equal(frame,null);
+
+// Same endpoint, distinct release motion; a held stroke must not act as a fling.
+const flingTool=mountViewportImpulseGesture({document:doc,viewport,canvas,camera,controls,isActive:()=>active,onFrame:f=>{frame=f;return()=>{};},pick:async()=>pickHit,begin:async()=>pickHit,commit:async v=>commits.push(v),cancel:async()=>{},onError:e=>{throw e;},fling:true});
+async function stroke(duration,hold){
+ const fire=(type,x,t)=>{const e=new Event(type,{cancelable:true});Object.assign(e,{button:0,buttons:0,pointerId:1,clientX:x,clientY:200});Object.defineProperty(e,'timeStamp',{value:t});canvas.dispatchEvent(e);};
+ fire('pointermove',200,1000);await flush();fire('pointerdown',200,1010);await flush();
+ for(let i=1;i<=4;i++)fire('pointermove',200+25*i,1010+duration*i/4);
+ fire('pointerup',300,1010+duration+hold);await flush();
+ return Math.hypot(...commits.at(-1).velocity);
+}
+const quick=await stroke(80,1),slow=await stroke(600,1),held=await stroke(80,250);
+assert.ok(quick>slow*3,'Release speed drives the impulse at equal displacement');
+assert.ok(held<quick*.1,'Stopping before release sheds the flick momentum');
+assert.ok(quick>10*2*Math.log1p(1),'A committed flick is substantially stronger than the old drag');
+await flingTool.dispose();
