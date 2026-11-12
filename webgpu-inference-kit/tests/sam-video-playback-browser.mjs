@@ -12,10 +12,10 @@ const { values: args } = parseArgs({ options: Object.fromEntries(['out', 'chrome
 for (const name of ['out', 'chrome', 'playwright', 'clip']) if (!args[name]) throw new Error(`--${name} is required`);
 const out = resolve(args.out), root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const report = { status: 'running', authority: 'actual-browser-upload-and-seed-flow; mocked-model-no-segmentation-quality-claim', phase: 'setup', cases: [] };
-let browser, server;
-await mkdir(out, { recursive: false });
+let browser, server, initialized = false;
 const save = () => writeFile(resolve(out, 'report.json'), JSON.stringify(report, null, 2));
 try {
+  await mkdir(out, { recursive: false }); initialized = true;
   report.chrome = await realpath(args.chrome);
   if (report.chrome.includes('/Google Chrome.app/')) throw new Error('installed GUI Chrome is not an automation executable');
   report.source = { commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
@@ -78,5 +78,9 @@ try {
   for (let i = 1; i < repaired.length; i++) assert.ok(repaired[i].time > repaired[i - 1].time, 'successive captures must advance decoded media time');
   report.status = 'passed'; report.phase = 'complete';
 } catch (error) { report.status = 'failed'; report.error = String(error.stack || error); process.exitCode = 1; }
-finally { await browser?.close(); await new Promise(resolve => server ? server.close(resolve) : resolve()); await save(); }
+finally {
+  await browser?.close(); await new Promise(resolve => server ? server.close(resolve) : resolve());
+  if (initialized) try { await save(); } catch (error) { report.status = 'failed'; report.outputReportError = String(error); process.exitCode = 1; }
+  if (process.env.EPISTAXIS_JOB_PRIMARY_OUTPUT) await writeFile(process.env.EPISTAXIS_JOB_PRIMARY_OUTPUT, JSON.stringify(report, null, 2));
+}
 console.log(JSON.stringify(report));

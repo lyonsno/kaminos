@@ -194,4 +194,21 @@ for (const mode of ['stop', 'failure']) {
   assert.equal(f.events.includes('session-closed'), false);
   await foregroundService.dispose();
 }
+{
+  const f = fixture(), foregroundService = createWebGpuForegroundService({ device: f.session.device, routeId: 'host' });
+  const tracker = await createSam31VideoTrackerForTest({ ...options, inferenceSession: f.session, foregroundService }, f.deps);
+  let settlements = 0;
+  f.session.queue.onSubmittedWorkDone = async () => { if (++settlements === 1) throw new Error('settlement failed once'); };
+  const first = tracker.close();
+  assert.equal(tracker.close(), first, 'concurrent close calls coalesce');
+  await assert.rejects(first, /settlement failed once/);
+  await assert.rejects(tracker.initialize({ ...input(0), mask: new Uint8Array([1, 0, 0, 0]) }), /close failed|closed/);
+  await tracker.close(); await tracker.close();
+  assert.equal(tracker.snapshot().status, 'closed');
+  for (const event of ['released', 'driver-closed', 'detached']) assert.equal(f.events.filter(e => e === event).length, 1);
+  assert.equal(f.listeners.size, 0);
+  assert.equal(f.events.includes('session-closed'), false);
+  assert.equal(foregroundService.snapshot().disposed, false);
+  await foregroundService.dispose();
+}
 console.log('SAM3.1 video tracker session ownership, foreground admission and cancellation contracts passed (mock device)');

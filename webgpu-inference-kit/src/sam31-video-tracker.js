@@ -135,6 +135,8 @@ async function createTracker(options, dependencies) {
           if (closing) return closing;
           runner.stop('SAM tracker closed');
           closing = (async () => { await Promise.allSettled([pending]); return engine.close(); })();
+          const attempt = closing;
+          attempt.catch(() => { if (closing === attempt) closing = null; });
           return closing;
         } } : {}),
       snapshot: () => ({ ...engine.snapshot(), packageId: modelRuntime.packageId, inferenceSessionId: session.sessionId,

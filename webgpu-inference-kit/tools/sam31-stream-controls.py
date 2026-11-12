@@ -16,10 +16,13 @@ CONTROLS = {
 
 
 def extract(checkpoint, out):
-    out.mkdir(parents=True, exist_ok=True)
-    report = {"schema": "kaminos.sam31-stream-controls.v1", "status": "running", "phase": "checkpoint-hash",
+    report = {"schema": "kaminos.sam31-stream-controls.v1", "status": "running", "phase": "output-initialization",
               "checkpoint": str(checkpoint.resolve()), "controls": {}}
+    initialized = False
     try:
+        out.mkdir(parents=True, exist_ok=True)
+        initialized = True
+        report["phase"] = "checkpoint-hash"
         with checkpoint.open("rb") as stream:
             actual = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
         report["checkpointSha256"] = actual
@@ -50,10 +53,17 @@ def extract(checkpoint, out):
         report.update(status="failed", error=str(error))
         raise
     finally:
-        text = json.dumps(report, indent=2)
-        (out / "controls.json").write_text(text)
+        report_error = None
+        if initialized:
+            try:
+                (out / "controls.json").write_text(json.dumps(report, indent=2))
+            except Exception as error:
+                report.update(status="failed", outputReportError=str(error))
+                report_error = error
         if os.environ.get("EPISTAXIS_JOB_PRIMARY_OUTPUT"):
-            Path(os.environ["EPISTAXIS_JOB_PRIMARY_OUTPUT"]).write_text(text)
+            Path(os.environ["EPISTAXIS_JOB_PRIMARY_OUTPUT"]).write_text(json.dumps(report, indent=2))
+        if report_error:
+            raise report_error
 
 
 if __name__ == "__main__":

@@ -38,6 +38,24 @@ try {
       'each control must resolve through the resident model alias contract');
   }
   assert.equal(JSON.parse(await readFile(join(base, 'model.json'), 'utf8')).components.stream, undefined);
+  const reportBlocked = structuredClone(model);
+  reportBlocked.staticArtifacts[0].file = 'prepare-report.json/weight.bin';
+  const { schema: blockedSchema, packageId: blockedId, ...blockedIdentity } = reportBlocked;
+  reportBlocked.packageId = 'sam31-tracker-model-package:' + sha256(canonicalSam3IdentityJson(blockedIdentity));
+  await mkdir(join(base, 'prepare-report.json'));
+  await writeFile(join(base, 'prepare-report.json/weight.bin'), bytes);
+  await writeFile(join(base, 'report-blocked-model.json'), JSON.stringify(reportBlocked));
+  const previousPrimary = process.env.EPISTAXIS_JOB_PRIMARY_OUTPUT;
+  process.env.EPISTAXIS_JOB_PRIMARY_OUTPUT = join(directory, 'independent-report.json');
+  try {
+    await assert.rejects(tool.prepareSam31StreamPackage({ modelPath: join(base, 'report-blocked-model.json'),
+      controlsPath: join(controls, 'controls.json'), outDir: join(directory, 'report-blocked') }), /report failed/);
+    const failure = JSON.parse(await readFile(process.env.EPISTAXIS_JOB_PRIMARY_OUTPUT, 'utf8'));
+    assert.equal(failure.status, 'failed'); assert.ok(failure.outputReportError);
+  } finally {
+    if (previousPrimary === undefined) delete process.env.EPISTAXIS_JOB_PRIMARY_OUTPUT;
+    else process.env.EPISTAXIS_JOB_PRIMARY_OUTPUT = previousPrimary;
+  }
   await writeFile(join(controls, 'valid.bin'), 'truncated');
   await assert.rejects(tool.prepareSam31StreamPackage({ modelPath: join(base, 'model.json'), controlsPath: join(controls, 'controls.json'), outDir: join(directory, 'bad') }), /control.*identity/i);
   assert.equal(JSON.parse(await readFile(join(directory, 'bad', 'prepare-report.json'), 'utf8')).status, 'failed');

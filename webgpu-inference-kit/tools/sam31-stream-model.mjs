@@ -18,9 +18,11 @@ function local(directory, file) {
 }
 export async function prepareSam31StreamPackage({ modelPath, controlsPath, outDir }) {
   const output = resolve(outDir);
-  await mkdir(output, { recursive: false });
-  const report = { schema: 'kaminos.sam31-stream-package-preparation.v1', status: 'running', phase: 'inputs', modelPath, controlsPath };
+  const report = { schema: 'kaminos.sam31-stream-package-preparation.v1', status: 'running', phase: 'output-initialization', modelPath, controlsPath };
+  let initialized = false, failure;
   try {
+    await mkdir(output, { recursive: false }); initialized = true;
+    report.phase = 'inputs';
     const model = JSON.parse(await readFile(modelPath, 'utf8'));
     if (model.schema !== contract.modelPackageSchema || model.packageId !== identity(model)) throw new Error('base model identity mismatch');
     const controls = JSON.parse(await readFile(controlsPath, 'utf8'));
@@ -70,8 +72,16 @@ export async function prepareSam31StreamPackage({ modelPath, controlsPath, outDi
       modelPackage: { file: 'sam31-model-package.json', schema: projected.schema, sha256: sha256(modelText) } }, null, 2));
     Object.assign(report, { status: 'complete', phase: 'complete', packageId: projected.packageId });
     return report;
-  } catch (error) { report.status = 'failed'; report.error = String(error); throw error; }
-  finally { await writeFile(join(output, 'prepare-report.json'), JSON.stringify(report, null, 2)); }
+  } catch (error) { failure = error; report.status = 'failed'; report.error = String(error); throw error; }
+  finally {
+    const errors = [];
+    if (initialized) try { await writeFile(join(output, 'prepare-report.json'), JSON.stringify(report, null, 2)); }
+    catch (error) { report.status = 'failed'; report.outputReportError = String(error); errors.push(error); }
+    if (process.env.EPISTAXIS_JOB_PRIMARY_OUTPUT) try {
+      await writeFile(process.env.EPISTAXIS_JOB_PRIMARY_OUTPUT, JSON.stringify(report, null, 2));
+    } catch (error) { errors.push(error); }
+    if (errors.length) throw new AggregateError([...(failure ? [failure] : []), ...errors], 'SAM stream preparation report failed');
+  }
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const { values } = parseArgs({ options: { model: { type: 'string' }, controls: { type: 'string' }, out: { type: 'string' } } });
