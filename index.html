@@ -12263,7 +12263,7 @@ async function initScene() {
     openWorkbenchTab: tab => setActiveTab(tab),
   });
   window.kaminosWorkspace = authoringWorkspace;
-  materialInspector=installMaterialInspector({document,root:document.getElementById("authoring-material-properties"),materials:sceneMaterials,definitions:sceneMaterialPrograms,edits:scenePlacementTools.edits,selected:id=>id?workingScene.objects.find(e=>e.id===id):selectedSceneObjectEntry(),assertAvailable:assertSceneConstructionAvailable,changed:()=>window._kaminosDirty?.(),error:setInfo});
+  materialInspector=installMaterialInspector({document,root:document.getElementById("authoring-material-properties"),materials:sceneMaterials,definitions:sceneMaterialPrograms,edits:scenePlacementTools.edits,selected:id=>id?workingScene.objects.find(e=>e.id===id):selectedSceneObjectEntry(),selection:readSceneSelection,assertAvailable:assertSceneConstructionAvailable,changed:()=>window._kaminosDirty?.(),error:setInfo});
   window.kaminosMaterials=materialInspector;
   scenePlacementTools.addHistoryScope(document.getElementById("authoring-material-properties"));
   cameraViews=createCameraViews({
@@ -28228,7 +28228,7 @@ function setSceneSelection(ids,activeId=ids.at(-1)??null){
   workingScene.select(next.ids,next.activeId,[...(activeSceneComposition?['flame-field']:[]),...(waterFeature.setup?['water-field']:[])]);
   const mixedFields=next.ids.length>1&&next.ids.some(id=>id==='flame-field'||id==='water-field');
   currentMesh=mixedFields?null:next.ids.length>1?selectionTransformProxy():workingScene.activeFieldId==='flame-field'?flameDomainEditObject():workingScene.activeFieldId==='water-field'?waterDomainEditObject():workingScene.activeGroupId?groupProxy(selectedSceneGroupEntry()):selectedSceneObjectEntry()?.object||null;
-  renderSceneObjectList();updateTransformInspector();authoringWorkspace?.setContext('object');
+  renderSceneObjectList();updateTransformInspector();if(authoringWorkspace?.state?.()?.context!=='material')authoringWorkspace?.setContext('object');
   if(transformControls&&!window.kaminosPolyEdit?.active()){transformControls.detach();if(currentMesh){attachViewportGizmo(currentMesh);transformControls.setSpace(transformPreferences.orientation);if(workingScene.activeFieldId==='flame-field'||workingScene.activeFieldId==='water-field')transformControls.setMode('translate');}transformControls.visible=!!currentMesh;}
   updateSelectionFeedback();window._kaminosDirty?.();return structuredClone(workingScene.selection);
 }
@@ -28487,7 +28487,7 @@ function installSelectionInput(){
     if(polyEdit?.active()||viewPie?.state()||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||event.ctrlKey||event.metaKey||(event.altKey&&event.key.toLowerCase()!=='a')||greenroomPreviewIsActive()||scenePlacementTools.state().modal)return;
     if(box&&event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();stopBox();return;}
     if(event.key.toLowerCase()==='b'){event.preventDefault();beginBox();}
-    if(event.key.toLowerCase()==='a'){event.preventDefault();event.altKey?window.kaminosSelection.clear():window.kaminosSelection.all();}
+    if(!event.shiftKey&&event.key.toLowerCase()==='a'){event.preventDefault();event.altKey?window.kaminosSelection.clear():window.kaminosSelection.all();}
   },true);
   document.addEventListener('pointerdown',event=>{
     if(!box||viewportEventHitsInteractiveOverlay(event)||!viewportEventIsInsideCanvas(event)||event.target.closest?.('[data-vantage-ignore]'))return;

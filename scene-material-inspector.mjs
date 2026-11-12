@@ -1,14 +1,71 @@
 import {checkMaterialParameters} from './scene-material-recipes.mjs';
 import {installSceneControlHistory,installRelativeNumberDrag} from './scene-control-history.mjs';
-export function installMaterialInspector({document,root,materials,definitions,edits,selected,assertAvailable,changed,error}){
+export function installMaterialInspector({document,root,materials,definitions,edits,selected,selection=()=>({ids:[],memberIds:[]}),assertAvailable,changed,error}){
  const target='@scene-materials',registry=new Map(definitions.map(d=>[d.id,d]));
  edits.register(target,{read:materials.read,write:materials.write,check:materials.check});
  let slotKey=null,renderKey=null,sessions=[];const pendingSources=new Map();
  const id=()=>globalThis.crypto.randomUUID();
  const apply=(value,label)=>{assertAvailable();try{return edits.apply(target,value,label);}catch(e){if(edits.state().active?.id===target)edits.cancel();throw e;}};
+ const bulkTargets=(ids=selection().memberIds)=>{
+  const targets=[];let skipped=0;
+  for(const objectId of new Set(ids)){
+   const entry=selected(objectId),slots=entry&&!entry.burnable?.enabled?materials.slots(entry):[];
+   if(!slots.length){skipped++;continue;}
+   for(const slot of slots)targets.push({objectId,slot:slot.key,recipeId:slot.recipeId});
+  }
+  return {targets,skipped};
+ };
+ const bindingKey=b=>JSON.stringify([b.objectId,b.slot]);
+ function bulkView(state,ids){
+  const {targets,skipped}=bulkTargets(ids),recipesById=new Map(state.recipes.map(r=>[r.id,r]));
+  const bound=targets.map(t=>recipesById.get(t.recipeId));
+  const fields=bound.length&&bound.every(Boolean)?registry.get(bound[0].implementation).fields.filter(field=>
+   bound.every(r=>registry.get(r.implementation).fields.includes(field))
+  ).map(field=>{
+   const value=bound[0].parameters[field.key],mixed=bound.some(r=>r.parameters[field.key]!==value);
+   return {...field,mixed,value:mixed?null:value};
+  }):[];
+  const recipeId=targets[0]?.recipeId??null,mixed=targets.some(t=>t.recipeId!==recipeId);
+  return {targets,skipped,fields,recipeId:mixed?null:recipeId,mixed};
+ }
  const api={
   read:()=>materials.document(),
   slots:objectId=>materials.slots(selectedById(objectId)).map(({key,label,recipeId})=>({key,label,recipeId})),
+  readSelection(ids){
+   const {targets,...info}=bulkView(materials.read(),ids);
+   return {...info,slots:targets.length};
+  },
+  assignSelection(recipeId,ids){
+   const next=materials.read(),{targets}=bulkTargets(ids);
+   if(!targets.length)throw Error('Select an editable mesh surface');
+   if(recipeId!==null&&!next.recipes.some(r=>r.id===recipeId))throw Error('Material missing');
+   const changedTargets=targets.filter(t=>t.recipeId!==recipeId);
+   if(!changedTargets.length)return false;
+   const affected=new Set(changedTargets.map(bindingKey));
+   next.bindings=next.bindings.filter(b=>!affected.has(bindingKey(b)));
+   if(recipeId)next.bindings.push(...changedTargets.map(t=>({...t,recipeId})));
+   return apply(next,recipeId?'Assign material to selection':'Restore source materials on selection');
+  },
+  editSelection(patch,ids){
+   if(!patch||typeof patch!=='object'||Array.isArray(patch)||!Object.keys(patch).length)throw Error('Material selection edit requires a parameter patch');
+   const next=materials.read(),{targets,fields}=bulkView(next,ids);
+   if(Object.keys(patch).some(key=>!fields.some(f=>f.key===key)))throw Error('These material parameters are not shared by the selection');
+   const selectedKeys=new Set(targets.map(bindingKey));
+   let changedAny=false;
+   for(const recipe of next.recipes.slice()){
+    const bindings=next.bindings.filter(b=>b.recipeId===recipe.id);
+    const chosen=bindings.filter(b=>selectedKeys.has(bindingKey(b)));
+    if(!chosen.length)continue;
+    const parameters=checkMaterialParameters(registry.get(recipe.implementation),{...recipe.parameters,...patch});
+    if(Object.keys(patch).every(key=>recipe.parameters[key]===parameters[key]))continue;
+    changedAny=true;
+    if(chosen.length===bindings.length){recipe.parameters=parameters;continue;}
+    const copy={...recipe,id:id(),name:recipe.name+' · selection',parameters};
+    next.recipes.push(copy);
+    for(const binding of chosen)binding.recipeId=copy.id;
+   }
+   return changedAny?apply(next,'Edit selected material properties'):false;
+  },
   create({objectId,slot:requested,implementation='asset-surface',name,parameters:requestedParameters}={}){
    const entry=selectedById(objectId),slots=materials.slots(entry),slot=requested!==undefined?slots.find(s=>s.key===requested):(slots.find(s=>s.key===slotKey)||slots[0]);if(!slot)throw Error('Choose a material slot');
    if(entry.burnable?.enabled)throw Error('Disable Burning before changing its material');
@@ -48,7 +105,43 @@ export function installMaterialInspector({document,root,materials,definitions,ed
  function selectedById(objectId){const entry=objectId?selected(objectId):selected();if(!entry)throw Error('Select a mesh');return entry;}
  const failed=e=>{error(e.message);sync(true);};
  const run=action=>{try{Promise.resolve(action()).catch(failed);}catch(e){failed(e);}};
+ function syncBulk(state,bulk){
+  const title=document.createElement('h2');title.textContent='Selection materials';root.append(title);
+  const note=document.createElement('p');note.textContent=`${bulk.targets.length} editable surface slots${bulk.skipped?` · ${bulk.skipped} items without editable surfaces skipped`:''}. Assignment applies to all these slots.`;root.append(note);
+  if(!bulk.targets.length)return;
+  const row=document.createElement('label');row.textContent='Assign finish ';
+  const select=document.createElement('select');select.id='material-selection-assignment';
+  const {Option}=document.defaultView;
+  const mixed=new Option('Mixed materials','@mixed');mixed.disabled=true;select.add(mixed);
+  select.add(new Option('Source materials',''));
+  for(const recipe of state.recipes)select.add(new Option(recipe.name,recipe.id));
+  if(bulk.mixed)mixed.selected=true;else select.value=bulk.recipeId??'';
+  select.onchange=()=>run(()=>api.assignSelection(select.value||null));
+  row.append(select);root.append(row);
+  const hint=document.createElement('p');
+  hint.textContent=bulk.fields.length?'Property edits affect this selection; shared finishes outside it keep their values.':'Assign a finish or select finishes with common editable properties.';
+  root.append(hint);
+  for(const field of bulk.fields){
+   const row=document.createElement('label');row.className='transform-row';row.textContent=field.label+' ';
+   const input=document.createElement('input');input.type=field.mixed&&field.type==='color'?'text':field.type;input.className='transform-input';input.dataset.selectionMaterialParam=field.key;
+   input.setAttribute('aria-label',field.label);input.value=field.mixed?'':field.value;
+   if(field.mixed)input.placeholder=field.type==='color'?'Mixed · #RRGGBB':'Mixed';
+   for(const key of ['min','max','step'])if(field[key]!==undefined)input[key]=field[key];
+   input.onchange=()=>run(()=>{
+    if(field.type==='number'&&input.value==='')return sync(true);
+    return api.editSelection({[field.key]:field.type==='number'?input.valueAsNumber:input.value});
+   });
+   row.append(input);root.append(row);
+  }
+ }
  function sync(force=false){
+  const currentSelection=selection();
+  if(currentSelection.ids.length>1||currentSelection.ids.some(id=>id.startsWith('@group:'))){
+   const state=materials.read(),bulk=bulkView(state,currentSelection.memberIds);
+   const key=JSON.stringify(['selection',currentSelection.ids,bulk,state.recipes.map(r=>[r.id,r.name])]);
+   if((!force&&renderKey===key)||edits.state().active?.id===target)return;
+   sessions.forEach(s=>s.dispose?.());sessions=[];renderKey=key;root.replaceChildren();syncBulk(state,bulk);return;
+  }
   const entry=selected();const slots=materials.slots(entry);if(!slots.some(s=>s.key===slotKey))slotKey=slots[0]?.key??null;
   const slot=slots.find(s=>s.key===slotKey),state=materials.read(),recipe=state.recipes.find(r=>r.id===slot?.recipeId),definition=registry.get(recipe?.implementation);
   const key=JSON.stringify([entry?.id,slots.map(s=>[s.key,s.label]),slotKey,recipe?.id,state.recipes.map(r=>[r.id,r.name]),entry?.burnable?.enabled,definition?.resourceKey?.(recipe.parameters)]);
