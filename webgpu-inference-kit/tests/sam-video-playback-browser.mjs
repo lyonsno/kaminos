@@ -31,7 +31,8 @@ try {
       response.end(await readFile(file));
     } catch { response.writeHead(404); response.end(); }
   });
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  report.phase = 'server-start';
+  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
   const { chromium } = await import(pathToFileURL(resolve(args.playwright)).href);
   browser = await chromium.launchPersistentContext(resolve(out, 'profile'), { executablePath: report.chrome, headless: true,
     args: ['--use-mock-keychain', '--password-store=basic', '--no-first-run', '--no-default-browser-check'], timeout: 0 });
@@ -79,7 +80,11 @@ try {
   report.status = 'passed'; report.phase = 'complete';
 } catch (error) { report.status = 'failed'; report.error = String(error.stack || error); process.exitCode = 1; }
 finally {
-  await browser?.close(); await new Promise(resolve => server ? server.close(resolve) : resolve());
+  const cleanupErrors = [];
+  for (const close of [() => browser?.close(), () => new Promise(resolve => server ? server.close(resolve) : resolve())]) {
+    try { await close(); } catch (error) { cleanupErrors.push(String(error)); }
+  }
+  if (cleanupErrors.length) { report.status = 'failed'; report.cleanupErrors = cleanupErrors; process.exitCode = 1; }
   if (initialized) try { await save(); } catch (error) { report.status = 'failed'; report.outputReportError = String(error); process.exitCode = 1; }
   if (process.env.EPISTAXIS_JOB_PRIMARY_OUTPUT) await writeFile(process.env.EPISTAXIS_JOB_PRIMARY_OUTPUT, JSON.stringify(report, null, 2));
 }
