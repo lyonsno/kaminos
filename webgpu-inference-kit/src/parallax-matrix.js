@@ -1,5 +1,5 @@
 // No renderer, GPU device or inference scheduler is owned by this module.
-const vector=(value,name)=>{if(!Array.isArray(value)||value.length!==3||!value.every(Number.isFinite))throw Error(`${name} requires three finite numbers`);return [...value];};
+const vector=(value,name)=>{if(!Array.isArray(value)||value.length!==3||![0,1,2].every(i=>Number.isFinite(value[i])))throw Error(`${name} requires three finite numbers`);return [...value];};
 const dot=(a,b)=>a.reduce((s,x,i)=>s+x*b[i],0);
 const unit=(v,name)=>{const length=Math.hypot(...v);if(length<1e-12)throw Error(`${name} must have nonzero length`);return v.map(x=>x/length);};
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
@@ -20,7 +20,7 @@ export function createParallaxPoses({center,normal,tangent,distance,distances=[d
  return poses;
 }
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
-const finiteVector=v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite);
+const finiteVector=v=>Array.isArray(v)&&v.length===3&&[0,1,2].every(i=>Number.isFinite(v[i]));
 const sameView=(a,b)=>['position','target','up'].every(k=>finiteVector(a?.[k])&&finiteVector(b?.[k])&&a[k].every((x,i)=>Math.abs(x-b[k][i])<=1e-6*Math.max(1,Math.abs(x))))&&['fov','zoom','near','far'].every(k=>b[k]===undefined||a[k]===b[k]);
 export async function captureParallaxMatrix({poses,variants,adapter}){
  const report={schema:'kaminos.parallax-matrix.v1',status:'running',phase:'initial',captures:[]};let initial,primary;

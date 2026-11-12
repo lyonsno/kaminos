@@ -45,9 +45,14 @@ assert.deepEqual(world.center,[4,5,6]);
 const n=world.normal.map(x=>x/Math.hypot(...world.normal));
 assert.ok(Math.abs(n[1]-1/Math.sqrt(5))<1e-10,'world normal must follow the transformed chart plane');
 assert.ok(Math.abs(n[2]-2/Math.sqrt(5))<1e-10);
-console.log('parallax matrix contracts passed');
+
 await assert.rejects(captureParallaxMatrix({poses:poses.slice(0,1),variants:['source','learned'],adapter:{...adapter,async setVariant(next){if(next==='source'&&mode==='learned')return;mode=next;}}}),/restor/i);mode='source';view=structuredClone(initial);
 let captureFailed=false;
 await assert.rejects(captureParallaxMatrix({poses:poses.slice(0,1),variants:['learned'],adapter:{...adapter,async capture(){captureFailed=true;throw Error('original capture failure');},async setView(next){if(captureFailed&&next.position[0]===9)throw Error('restore failure');view=structuredClone(next);}}}),/original capture failure/);
 assert.match(reports.at(-1).error,/original capture failure/);assert.ok(reports.at(-1).restoreErrors.length>0);assert.equal(mode,'source');view=structuredClone(initial);
 assert.throws(()=>transformParallaxFrame({center:[0,0,0],normal:[0,1,0],tangent:[1,0,0]},Array(16).fill(0)),/matrix|Singular/);
+for(const key of ['position','target','up'])for(const bad of [new Array(3),[0,,0]]){
+ let reads=0;await failing(`sparse ${key} must fail`,{async read(){const s=await adapter.read();if(++reads>1&&reads<4)s.view={...s.view,[key]:bad};return s;}},/view/);
+}
+
+console.log('parallax matrix contracts passed');
