@@ -1,6 +1,7 @@
 // kaminos-test: manual — production rectangular WGSL and archive consumer.
 import fs from 'node:fs/promises';import path from 'node:path';import assert from 'node:assert/strict';import {execFileSync} from 'node:child_process';
 import {withKaminosGpu,evalWgslBatch,withGpuErrorScopes} from './shader-herder.mjs';
+import {SurfaceMaterialTeacher} from '../surface-material-teacher.mjs';
 import {createNeumipStudent,createNeumipTraining,neumipTrainingLayout} from '../neumip-training.mjs';import {buildNeumipWGSL} from '../neumip-shader.mjs';import {handoffWeight,buildHandoffMath} from '../stone-handoff-model.mjs';import {createShoulderStripSource} from '../shoulder-strip-source.mjs';
 const out=process.argv[2];if(!out)throw Error('Output required');await fs.mkdir(out,{recursive:true});const report={status:'running',phase:'configuration',repoRoot:process.cwd(),revision:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),job:process.env.GREENROOM_JOB_ID,checks:[]};const publish=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));const close=(a,b,t=2e-5)=>assert.ok(Math.abs(a-b)<t,`${a} != ${b}`);
 try{await publish();if(!report.job)throw Error('Greenroom required');
@@ -21,6 +22,19 @@ try{await publish();if(!report.job)throw Error('Greenroom required');
    const z=Math.sqrt(.8),shift=[.5*.4/z*.05,.5*.2/z*.1];close(runtime[0],1+.2+shift[0]+2*(.3+shift[1]));close(runtime[3],1+(.5/32)+2*(1-.5/16));report.checks.push({name:'production runtime/trainer anisotropic offset and clamped boundary',runtime,full:Array.from(full),cheap:Array.from(cheap)});
    learner.setTargets(Float32Array.from(full,x=>x+.03));const g=await learner.gradients(),idx=learner.layout.networks.offset_network.layers[3].biasesOffset,eps=.001,objective=a=>a.reduce((s,x,i)=>s+.5*(x-(full[i]+.03))**2,0);d.queue.writeBuffer(learner.buffers.parameters,idx*4,new Float32Array([.5+eps]));const plus=objective((await learner.evaluate()).rgb);d.queue.writeBuffer(learner.buffers.parameters,idx*4,new Float32Array([.5-eps]));const minus=objective((await learner.evaluate()).rgb);close(g.values[idx],(plus-minus)/(2*eps),2e-5);report.checks.push({name:'rectangular offset gradient',analytic:g.values[idx],numerical:(plus-minus)/(2*eps)});
   }finally{learner.dispose();resources.forEach(r=>r.destroy());}
+  const footprintRows=[];
+  for(const axis of [0,2]){
+   const triangles=[];const quad=(x0,x1,z0,z1,materialIndex)=>{const a=[x0,0,z0],b=[x1,0,z0],c=[x1,0,z1],e=[x0,0,z1];triangles.push({a,b:c,c:b,materialIndex},{a,b:e,c,materialIndex});};
+   if(axis===0){quad(-1,0,-1,1,0);quad(0,1,-1,1,1);}else{quad(-1,1,-1,0,0);quad(-1,1,0,1,1);}
+   const teacher=new SurfaceMaterialTeacher(d,{triangles,materials:[.2,.8].map(c=>({color:[c,c,c],roughness:.8,metalness:0})),lights:[],environment:0,bounces:1});
+   try{const q=new Float32Array(24);for(let i=0;i<3;i++){q[i*8]=.5;q[i*8+1]=.5;q[i*8+(axis===0?0:1)]+=[-.1,.1,.001][i]/(axis===0?.16:.08);}
+    const options={tileSize:.16,tileDepth:.08,referenceHeight:.00005,resolution:32,resolutionHeight:16,samples:4096,seed:41};
+    const rgb=await teacher.evaluateMaterial(q,options),fraction=(rgb[6]-rgb[0])/(rgb[3]-rgb[0]);close(fraction,.7,.035);
+    const wrong=axis===2?await teacher.evaluateMaterial(q,{...options,resolutionHeight:32}):null;
+    if(wrong){const fractionWrong=(wrong[6]-wrong[0])/(wrong[3]-wrong[0]);close(fractionWrong,.9,.035);assert.ok(Math.abs(fractionWrong-fraction)>.1);}
+    footprintRows.push({axis,rgb:Array.from(rgb),fraction,...(wrong?{wrongSquareResolutionRGB:Array.from(wrong)}:{})});
+   }finally{teacher.dispose();}
+  }report.checks.push({name:'production teacher square physical footprint on rectangular chart, with wrong-axis control',rows:footprintRows});
  },{onEvidence:e=>report.evidence=e});
  report.phase='source';await publish();const source=createShoulderStripSource();await fs.writeFile(path.join(out,'source.json'),JSON.stringify(source));report.source={triangles:source.triangles.length,chart:source.chart,routing:source.routing};report.status='passed';report.phase='complete';
 }catch(e){report.status='failed';report.error=e.stack;process.exitCode=1;}finally{await publish();console.log(JSON.stringify(report));}
