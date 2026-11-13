@@ -128,7 +128,7 @@ export function createSceneMaterials({entries,definitions,retainedEntries=()=>[]
   active.clear();for(const [id,runtime]of staged)active.set(id,runtime);state=next;unsupported=nextUnsupported;changed();
  }
  const read=()=>copy(state);
- return {read,write,check,async prepare(raw){const next=checkedMaterialDocument(raw,definitions);await Promise.all(next.recipes.map(r=>registry.get(r.implementation).prepare?.(copy(r.parameters))));return next;},sync:()=>write(state),recipe:id=>copy(state.recipes.find(r=>r.id===id)??null),canDisplay:(_root,representation)=>!unsupported.has(representation),
+ return {read,write,check,async prepare(raw){const next=checkedMaterialDocument(raw,definitions);const assigned=new Set(next.bindings.map(b=>b.recipeId));await Promise.all(next.recipes.filter(r=>assigned.has(r.id)).map(r=>registry.get(r.implementation).prepare?.(copy(r.parameters))));return next;},sync:()=>write(state),recipe:id=>copy(state.recipes.find(r=>r.id===id)??null),canDisplay:(_root,representation)=>!unsupported.has(representation),
   slots:entry=>materialSlots(entry?.object).map(slot=>({...slot,base:active.get(key({objectId:entry.id,slot:slot.key}))?.base??slot.material,recipeId:state.bindings.find(b=>b.objectId===entry.id&&b.slot===slot.key)?.recipeId??null})),
   validateSlots(id,object){const slots=new Set(materialSlots(object).map(s=>s.key));for(const b of state.bindings)if(b.objectId===id&&!slots.has(b.slot))throw Error(`Geometry would remove assigned material slot ${b.slot}; unassign it first`);},
   bindings:id=>copy(state.bindings.filter(b=>b.objectId===id).map(({objectId,...binding})=>binding)),

@@ -99,3 +99,14 @@ test('a removed Burning user retains its owned program until root retirement whi
  const materials=createSceneMaterials({entries:()=>entries,definitions:[definition]});materials.write({recipes:[recipe],bindings:[a,b].map(e=>({objectId:e.id,slot:'.:0',recipeId:recipe.id}))});const program=b.object.material,wrapper=new MeshStandardMaterial();b.burnable={enabled:true};b.object.material=wrapper;entries=[a];materials.sync();assert.equal(b.object.material,wrapper);assert.equal(disposed,0);assert.equal(materials.document().bindings.length,1);
  const change=materials.read();change.recipes[0].parameters.roughness=.8;assert.throws(()=>materials.check(change),/Disable Burning/);b.object.material=program;materials.releaseObject(b.object);assert.equal(disposed,1);
 });
+
+test('scene preparation only loads resources assigned by the restored scene',async()=>{
+ const requested=[];
+ const def={id:'fixture',version:1,check:p=>p,prepare:p=>{requested.push(p.source);if(p.source==='offline')throw Error('Offline checkpoint');}};
+ const materials=createSceneMaterials({entries:()=>[],definitions:[def]});
+ const recipes=[{id:'active',name:'Bound',implementation:'fixture',version:1,parameters:{source:'present'}},{id:'spare',name:'Spare',implementation:'fixture',version:1,parameters:{source:'offline'}}];
+ const raw={recipes,bindings:[{objectId:'a',slot:'.:0',recipeId:'active'}]};
+ assert.deepEqual(await materials.prepare(raw),raw);
+ assert.deepEqual(requested,['present']);
+ await assert.rejects(materials.prepare({...raw,bindings:[...raw.bindings,{objectId:'b',slot:'.:0',recipeId:'spare'}]}),/Offline checkpoint/);
+});

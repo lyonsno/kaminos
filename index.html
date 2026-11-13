@@ -2850,7 +2850,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div id="scene-lighting-preparation-status" role="status" hidden><span></span> <button type="button" hidden>Retry lighting</button></div>
       </div>
       <details id="rendering-flame-settings" open><summary>Flame</summary><section id="rendering-fire-controls" hidden aria-label="Fire illumination"><div id="rendering-fire-route-status" role="status"></div></section></details>
-      <details open><summary>Neural materials</summary><div class="field"><label for="scene-neural-resolution" title="Neural shading width and height relative to the viewport. Geometry and other materials stay at full resolution.">Shading resolution</label><select id="scene-neural-resolution"><option value="1">100% dimensions · 100% pixels</option><option value="0.75">75% dimensions · 56% pixels</option><option value="0.7071067811865476">71% dimensions · 50% pixels</option><option value="0.5">50% dimensions · 25% pixels</option><option value="0.25">25% dimensions · 6% pixels</option></select></div><div id="scene-neural-fallback-readout"></div></details>
+      <details open><summary>Neural materials</summary><div class="field"><label for="scene-neural-resolution" title="NeuMIP and NVIDIA direct shading width and height relative to the viewport. Geometry, scene reflections and other materials keep their own resolution.">Shading resolution</label><select id="scene-neural-resolution"><option value="1">100% dimensions · 100% pixels</option><option value="0.75">75% dimensions · 56% pixels</option><option value="0.7071067811865476">71% dimensions · 50% pixels</option><option value="0.5">50% dimensions · 25% pixels</option><option value="0.25">25% dimensions · 6% pixels</option></select></div><div id="scene-neural-fallback-readout"></div></details>
       <div id="rendering-light-study">
       <p class="rendering-description">Switch light contributions while viewing the same kiln. The flame, environment and authored geometry remain visible in every mode.</p>
       <label for="rendering-light-mode">Light contributions</label>
@@ -12051,6 +12051,12 @@ async function initScene() {
     controls.update();
     needsRender = true;
     return { position: camera.position.toArray(), target: controls.target.toArray() };
+  };
+  if(lightingWorkParams.get('neural_timing')==='1')window.kaminosNeuralTiming=async()=>{
+    if(!renderer.backend?.trackTimestamp)throw Error('Renderer GPU timestamps are unavailable');
+    const gpuMs=await renderer.resolveTimestampsAsync(THREE.TimestampQuery.RENDER);
+    if(!Number.isFinite(gpuMs)||gpuMs<=0)throw Error('No fresh renderer GPU timestamps');
+    return {gpuMs,scope:'whole renderer render passes',frame:sceneFrameCount,viewport:[renderer.domElement.width,renderer.domElement.height]};
   };
   let exclusiveInspectionRender=false,manualInspectionRender=false;
   window.__kaminosBeginSceneInspection=()=>{if(exclusiveInspectionRender)throw new Error('scene inspection draw session already active');exclusiveInspectionRender=true;return ()=>{exclusiveInspectionRender=false;};};

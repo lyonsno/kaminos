@@ -15,5 +15,5 @@ export const neuralAppearanceProgram={...neuralAppearanceDefinition,resourceKey:
   if(!slot?.mesh?.geometry?.getAttribute('uv'))throw Error('NVIDIA appearance requires surface UV coordinates');
   const bundle=bundles.get(key(parameters));if(!bundle||typeof bundle.then==='function')throw Error('Prepare the NVIDIA checkpoint before assignment');
   const runtime=createNeuralAppearanceMaterial(bundle,parameters);
-  return {material:runtime.material,update:p=>{runtime.settings.scale.value=p.uvScale;runtime.settings.gain.value=p.gain;},dispose:runtime.dispose};
+  return {material:runtime.material,update:p=>{runtime.settings.scale.value=p.uvScale;runtime.settings.gain.value=p.gain;runtime.settings.glossColor.value.set(p.reflectionColor);runtime.settings.glossRoughness.value=p.reflectionRoughness;},dispose:runtime.dispose};
  }};

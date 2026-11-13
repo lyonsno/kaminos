@@ -1,3 +1,4 @@
+import {isNeuralSourceMaterial} from './scene-neural-shading.mjs';
 import {TSL,Color} from './lib/three.webgpu.js';
 const {Fn,pass,mrt,context,vec4}=TSL;
 
@@ -71,7 +72,7 @@ export class SourceNeuralFallbackProbe{
   const cache=this.cache,p=pass(cache.capture.scene,cache.camera,{samples:0});
   p.name='Neural source fallback snapshot';p.transparent=false;
   p.contextNode=context({sceneReflectionLighting:null,sceneNeuralShading:cache,neuralShadingMode:'diagnostic-source'});
-  p.setMRT(mrt({output:Fn(([],builder)=>builder.material?.isNeumipMaterial?vec4((builder.material.lightsNode??builder.lightsNode).totalDiffuseNode,1):vec4(0))()}));
+  p.setMRT(mrt({output:Fn(([],builder)=>isNeuralSourceMaterial(builder.material)?vec4((builder.material.lightsNode??builder.lightsNode).totalDiffuseNode,1):vec4(0))()}));
   this.mask=p;return p;
  }
  ensureGpu(renderer){
@@ -110,7 +111,7 @@ export class SourceNeuralFallbackProbe{
   pass.setPipeline(pipeline);pass.setBindGroup(0,bind);pass.dispatchWorkgroups(Math.ceil(p.renderTarget.width/16),Math.ceil(p.renderTarget.height/16));pass.end();encoder.copyBufferToBuffer(counts,0,readback,0,16);device.queue.submit([encoder.finish()]);
   await readback.mapAsync(GPUMapMode.READ);
   let counters;try{counters=new Uint32Array(readback.getMappedRange().slice(0));}finally{readback.unmap();}
-  return sourceFallbackSummary(counters,{width:p.renderTarget.width,height:p.renderTarget.height,scale,capture,frame});
+  try{return sourceFallbackSummary(counters,{width:p.renderTarget.width,height:p.renderTarget.height,scale,capture,frame});}catch(error){throw Error(error.message+': '+Array.from(counters).join(','));}
  }
  disposeGpu(){this.gpu?.counts.destroy();this.gpu?.readback.destroy();this.gpu=null;}
  dispose(){this.mask?.dispose();this.mask=null;this.disposeGpu();}
@@ -118,7 +119,7 @@ export class SourceNeuralFallbackProbe{
 
 export function mountNeuralFallbackReadout(root,readout){
  const doc=root.ownerDocument,measure=doc.createElement('button'),stop=doc.createElement('button'),output=doc.createElement('p');
- measure.type=stop.type='button';measure.className=stop.className='btn';measure.style.flex='1';stop.style.width='auto';measure.textContent='Measure source fallback';stop.textContent='Clear';output.setAttribute('aria-live','polite');
+ measure.type=stop.type='button';measure.className=stop.className='btn';measure.style.flex='1';stop.style.width='auto';measure.textContent='Measure source shading';stop.textContent='Clear';output.setAttribute('aria-live','polite');
  const buttons=doc.createElement('div');buttons.style.display='flex';buttons.style.gap='6px';buttons.append(measure,stop);
  output.className='hint';root.append(buttons,output);
  const previous=readout.onChange;
@@ -127,7 +128,7 @@ export function mountNeuralFallbackReadout(root,readout){
   if(state.status==='snapshot'){
    const r=state.result,percent=r.fullRateFraction===null?'No neural pixels':`${(100*r.fullRateFraction).toFixed(1)}% full rate`;
    const label=r.requestedScale===1?'Native full-resolution shading':percent;
-   output.textContent=`Snapshot ${new Date(r.sampledAt).toLocaleTimeString()}: ${label} · ${r.fullRatePixels.toLocaleString()} / ${r.neuralPixels.toLocaleString()} neural source pixels. Receiving pass excluded. No background updates.`;
+   output.textContent=`Snapshot ${new Date(r.sampledAt).toLocaleTimeString()}: ${label} · ${r.fullRatePixels.toLocaleString()} / ${r.neuralPixels.toLocaleString()} NeuMIP + NVIDIA source pixels. Excludes receiving pass and GPU timing. No background updates.`;
   }else output.textContent=({off:'Off · no background sampling.',sampling:'Measuring one frame…',stale:'Scene changed · measure again.',failed:`Measurement failed: ${state.error}`})[state.status];
  };
  readout.onChange=state=>{previous(state);sync(state);};sync(readout.read());

@@ -6,6 +6,17 @@ export function installMaterialInspector({document,root,materials,definitions,ed
  let slotKey=null,renderKey=null,sessions=[],bulkGesture=false;const draftIds=new Map();const pendingSources=new Map();
  const id=()=>globalThis.crypto.randomUUID();
  const apply=(value,label)=>{assertAvailable();try{return edits.apply(target,value,label);}catch(e){if(edits.state().active?.id===target)edits.cancel();throw e;}};
+ const prepareUnbound=(recipeId,action)=>{
+  if(!recipeId)return action();
+  const document=materials.read(),recipe=document.recipes.find(r=>r.id===recipeId);
+  const definition=registry.get(recipe?.implementation);
+  if(!definition?.prepare||document.bindings.some(b=>b.recipeId===recipeId))return action();
+  return (async()=>{
+   await definition.prepare(recipe.parameters);assertAvailable();
+   if(JSON.stringify(materials.recipe(recipeId))!==JSON.stringify(recipe))throw Error('Material changed while loading; assign it again');
+   return action();
+  })();
+ };
  const bulkTargets=(ids=selection().memberIds)=>{
   const targets=[];let skipped=0;
   for(const objectId of new Set(ids)){
@@ -58,7 +69,8 @@ export function installMaterialInspector({document,root,materials,definitions,ed
    const {targets,...info}=bulkView(materials.read(),ids);
    return {...info,slots:targets.length};
   },
-  assignSelection(recipeId,ids){
+  assignSelection(recipeId,ids=selection().memberIds){
+   return prepareUnbound(recipeId,()=>{
    const next=materials.read(),{targets}=bulkTargets(ids);
    if(!targets.length)throw Error('Select an editable mesh surface');
    if(recipeId!==null&&!next.recipes.some(r=>r.id===recipeId))throw Error('Material missing');
@@ -68,6 +80,7 @@ export function installMaterialInspector({document,root,materials,definitions,ed
    next.bindings=next.bindings.filter(b=>!affected.has(bindingKey(b)));
    if(recipeId)next.bindings.push(...changedTargets.map(t=>({...t,recipeId})));
    return apply(next,recipeId?'Assign material to selection':'Restore source materials on selection');
+   });
   },
   editSelection(patch,ids){
    const next=editSelectionDocument(materials.read(),patch,ids);
@@ -106,7 +119,7 @@ export function installMaterialInspector({document,root,materials,definitions,ed
    }
    return apply(next,'Edit material');
   },
-  assign({objectId,slot,recipeId}={}){const entry=selectedById(objectId);if(entry.burnable?.enabled)throw Error('Disable Burning before changing its material');if(!materials.slots(entry).some(s=>s.key===slot))throw Error('Material slot missing');const next=materials.read();next.bindings=next.bindings.filter(b=>b.objectId!==entry.id||b.slot!==slot);if(recipeId)next.bindings.push({objectId:entry.id,slot,recipeId});return apply(next,'Assign material');},
+  assign({objectId,slot,recipeId}={}){const initial=selectedById(objectId);return prepareUnbound(recipeId,()=>{const entry=selectedById(initial.id);if(entry.object!==initial.object)throw Error('Material target changed while loading');if(entry.burnable?.enabled)throw Error('Disable Burning before changing its material');if(!materials.slots(entry).some(s=>s.key===slot))throw Error('Material slot missing');const next=materials.read();next.bindings=next.bindings.filter(b=>b.objectId!==entry.id||b.slot!==slot);if(recipeId)next.bindings.push({objectId:entry.id,slot,recipeId});return apply(next,'Assign material');});},
   makeUnique({objectId,slot}={}){const entry=selectedById(objectId);if(entry.burnable?.enabled)throw Error('Disable Burning before changing its material');const next=materials.read(),binding=next.bindings.find(b=>b.objectId===entry.id&&b.slot===slot);if(!binding)throw Error('Assign a material first');const recipe=structuredClone(next.recipes.find(r=>r.id===binding.recipeId));recipe.id=id();recipe.name+=' copy';next.recipes.push(recipe);binding.recipeId=recipe.id;apply(next,'Make material unique');return recipe.id;},
  };
  function selectedById(objectId){const entry=objectId?selected(objectId):selected();if(!entry)throw Error('Select a mesh');return entry;}

@@ -1,11 +1,11 @@
-// Hook only this renderer's converted physical materials. The source pass has
+// Hook physical materials and explicit specular proxies. The source pass has
 // no reflection context: scene radiance cannot recursively sample itself.
 export function installSceneReflectionLighting(renderer,owner){
  const library=renderer.library,previous=library.fromMaterial,wrapped=new WeakMap(),live=new Set();
  const collected=new FinalizationRegistry(ref=>live.delete(ref));
  function fromMaterial(material){
   const node=previous.call(this,material);
-  if(!node?.isMeshStandardNodeMaterial||wrapped.has(node))return node;
+  if((!node?.isMeshStandardNodeMaterial&&!node?.isNeuralAppearanceMaterial)||wrapped.has(node))return node;
   const original=node.setupLightingModel;
   const replacement=function(builder){
    const model=original.call(this,builder);

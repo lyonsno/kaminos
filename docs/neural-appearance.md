@@ -74,8 +74,9 @@ The explicit filtering policy is `nearest-authored-texel-mip`: nearest spatial
 texel and nearest authored level. It evaluates existing learned levels; it does
 not manufacture latent MIPs by averaging. This stable initial adapter does not
 reproduce the author's stochastic interpolation or supply temporal reconstruction.
-Its shading is currently full rate; NeuMIP's resolution control does not yet
-apply to this new program.
+Direct shading participates in the shared NeuMIP and NVIDIA resolution control.
+The source snapshot counts covered opaque pixels and reconstructed/full-rate
+source pixels. It excludes receiving work, reflection passes and GPU timing.
 
 The native Material inspector offers **NVIDIA neural appearance** through its
 ordinary **Create material** flow. Installed choices come from
@@ -97,7 +98,10 @@ object-property insertion order. UV coordinates are required on the target mesh.
 per shaded fragment and shares them across direct light queries. The trained
 response includes the macro light cosine, so the adapter does not multiply it
 again. Each material has a private program-cache identity. Area lights fail
-explicitly; environment and indirect response are currently absent.
+explicitly. Environment and scene reflections use the editable GGX reflection
+color and roughness with the mesh shading normal. The proxy supplies neither
+diffuse bounce nor learned environment response. The screen pass still has its
+ordinary visibility, coverage, projection and roughness limits.
 
 `tools/neural-appearance-fit.py CONFIG OUTPUT` runs through Greenroom with an
 MLX-enabled Python interpreter. Its optional capture stage consumes an existing

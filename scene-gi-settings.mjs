@@ -22,7 +22,7 @@ export function resolveSceneGISettings(value = {}) {
 }
 
 export function sceneGIReceives(material) {
-  return material.isNeumipMaterial !== true && material.transparent !== true && (material.isMeshStandardNodeMaterial === true || material.isMeshPhysicalNodeMaterial === true ||
+  return material.isNeumipMaterial !== true && material.isNeuralAppearanceMaterial !== true && material.transparent !== true && (material.isMeshStandardNodeMaterial === true || material.isMeshPhysicalNodeMaterial === true ||
     material.isMeshStandardMaterial === true || material.isMeshPhysicalMaterial === true);
 }
 

@@ -4,6 +4,9 @@
 <script type="importmap">{"imports":{"three/webgpu":"/lib/three.webgpu.js","three/tsl":"/lib/three.tsl.js"}}</script>
 <script type="module">
 import * as THREE from 'three/webgpu';
+import {createNeuralAppearanceMaterial} from '../neural-appearance-material.mjs';
+import {readNeuralAppearanceBundle} from '../neural-appearance-bundle.mjs';
+import {SourceNeuralFallbackProbe} from '../scene-neural-diagnostics.mjs';
 import {createSceneGI} from '../scene-gi.mjs';
 import {createViewProjection} from '../view-projection.mjs';
 THREE.Node.captureStackTrace=true;
@@ -43,6 +46,56 @@ window.reflectionAssay={
    frames.push({camera:camera.position.toArray(),block:box.position.toArray(),state:gi.reflections.state(),readback:{elements:values.length,rowElements:row},raw,resolved,historyStats});
   }
   return {before,frames};
+ },
+ async neuralReceiver(){
+  const layer=(i,o)=>({num_inputs:i,num_outputs:o,weights:Array(i*o).fill(0),biases:Array(o).fill(0)});
+  const last=layer(2,3);last.biases.fill(Math.log(.015));
+  const bundle=readNeuralAppearanceBundle({latents:{num_channels:8},decoder:{hidden_layers:[2],hidden_activations:'SmeLU',output_activation:{type:'ScaledSigmoid',scale:1e5},half_diff_parameterization:'StableRusinkiewicz',num_shading_frames:2,direction_inputs:'WhWdZiZo',_params:{rotation:{rotation_decoder:{mlp_layers:[layer(8,12)]}},network:{mlp_layers:[layer(24,2),last]}}},kaminos:{schema:'kaminos.neural-appearance.bundle.v1',response:'projected-bsdf',filtering:'nearest-authored-texel-mip',levels:[{width:2,height:2,url:'fixture.f32',sha256:'0'.repeat(64)}]}});
+  bundle.levels[0].data=new Float32Array(32);
+  const runtime=createNeuralAppearanceMaterial(bundle,{reflectionRoughness:.05,reflectionColor:'#ffffff'}),original=floor.material;
+  const oldIntensity=scene.environmentIntensity,oldEnvironment=scene.environment;
+  const hdrData=new Uint16Array(128*64*4);
+  for(let i=0;i<hdrData.length;i+=4){
+   hdrData[i]=hdrData[i+1]=hdrData[i+2]=THREE.DataUtils.toHalfFloat(.25);hdrData[i+3]=THREE.DataUtils.toHalfFloat(1);
+  }
+  const hdr=new THREE.DataTexture(hdrData,128,64,THREE.RGBAFormat,THREE.HalfFloatType);
+  hdr.mapping=THREE.EquirectangularReflectionMapping;hdr.needsUpdate=true;scene.environment=hdr;
+  floor.material=runtime.material;
+  const capture=async(enabled,intensity)=>{
+   scene.environmentIntensity=intensity;gi.reflections.reset('receiver-case');
+   const frame=await this.render(enabled);
+   return frame;
+  };
+  try{
+   const dark=await capture(false,0),sky=await capture(false,1),room=await capture(true,1);
+   let skyGain=0,redGain=0,roomPixels=0;
+   for(let y=110;y<185;y++)for(let x=20;x<236;x++){
+    const i=(y*W+x)*4,delta=room.pixels[i]-sky.pixels[i];
+    skyGain+=sky.pixels[i]-dark.pixels[i];
+    redGain+=delta;
+    if(delta>.02&&delta>2*(room.pixels[i+1]-sky.pixels[i+1]))roomPixels++;
+   }
+   const probe=new SourceNeuralFallbackProbe(gi.neuralShading);
+   const measurements={};
+   const directLight=new THREE.DirectionalLight(0xffffff,1);directLight.position.set(.2,1,.1);scene.add(directLight);
+   try{
+    for(const scale of [1,.5]){
+     gi.neuralShading.setScale(scale);
+     const frame=await capture(false,0);
+     const before=gi.neuralShading.state();
+     const counts=await probe.sample(renderer,{frame:frame.gi.frames}).catch(async error=>{
+      const attachment=gi.source.renderTarget.textures.indexOf(gi.transport.value);
+      const raw=await renderer.readRenderTargetPixelsAsync(gi.source.renderTarget,128,156,1,1,attachment);
+      throw Error('At scale '+scale+': '+error.message+' center transport '+Array.from(raw,THREE.DataUtils.fromHalfFloat));
+     });
+     measurements[scale]={counts,captureFrames:before.frames,center:frame.pixels.slice((156*W+128)*4,(156*W+128)*4+3)};
+    }
+   }finally{directLight.removeFromParent();directLight.dispose();probe.dispose();gi.neuralShading.setScale(1);}
+   floor.material=original;
+   const standard=await capture(false,1);
+   let standardSkyGain=0;for(let y=135;y<185;y++)for(let x=20;x<236;x++)standardSkyGain+=standard.pixels[(y*W+x)*4];
+   return {skyGain,redGain,roomPixels,dark,sky,room,standardSkyGain,measurements,material:runtime.material.userData.neuralAppearance};
+  }finally{floor.material=original;scene.environmentIntensity=oldIntensity;scene.environment=oldEnvironment;hdr.dispose();runtime.dispose();gi.reflections.reset('receiver-disposed');}
  },
  async transport(){
   const matte=new THREE.Mesh(new THREE.SphereGeometry(.35,16,12),new THREE.MeshStandardMaterial({color:0x00ff00,roughness:1}));matte.position.set(1.3,.4,0);

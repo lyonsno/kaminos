@@ -4,7 +4,7 @@ import { ssgi } from './lib/addons/tsl/display/SSGINode.js';
 import SceneGIHistory from './scene-gi-history.mjs';
 import SceneLightingFilter from './scene-lighting-filter.mjs';
 import SceneSurfaceLighting from './scene-surface-lighting.mjs';
-import SceneNeuralShading from './scene-neural-shading.mjs';
+import SceneNeuralShading, {isNeuralSourceMaterial} from './scene-neural-shading.mjs';
 import {createGISourceComparison} from './scene-gi-source-comparison.mjs';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { resolveSceneGISettings, resolveSceneGIEstimatorSettings, sceneGIReceives } from './scene-gi-settings.mjs';
@@ -19,7 +19,7 @@ export function createSceneGI(scene, camera, aoIntensity, {renderer=null,reflect
   source.transparent = false;
   const visibleNormal = normalView.dot(positionViewDirection).lessThan(0).select(normalView.negate(),normalView);
   const reflectionNormal=Fn(([],{material})=>vec4(visibleNormal,
-    material?.isMeshStandardMaterial||material?.isMeshStandardNodeMaterial?roughness:float(1)))();
+    material?.isMeshStandardMaterial||material?.isMeshStandardNodeMaterial||material?.isNeuralAppearanceMaterial?roughness:float(1)))();
   source.contextNode=context({sceneReflectionLighting:null});
   source.setMRT(mrt({output, normal:reflectionNormal,transport:output}));
   const surfaceLighting=new SceneSurfaceLighting(source,camera,{enabled:surfaceReuse});
@@ -36,9 +36,6 @@ export function createSceneGI(scene, camera, aoIntensity, {renderer=null,reflect
   const history=new SceneGIHistory(effect.getAONode(),effect.getGINode(),depth,normal,camera);
   const diffuseSource=Fn(([],builder)=>{
     const material=builder.material;
-    // Neural direct radiance is already the transport contribution. Reuse this
-    // pre-fog value in beauty without adding another full-size MRT attachment.
-    if(material?.isNeumipMaterial)return neuralShading.radianceNode;
     // Stock physical lighting exposes its diffuse sum before specular lobes
     // and emission are added. Preserve custom/unlit output as authored.
     if((material?.isMeshStandardMaterial||material?.isMeshStandardNodeMaterial)&&material.lights!==false&&material.fragmentNode==null&&material.outputNode==null){
@@ -57,6 +54,9 @@ export function createSceneGI(scene, camera, aoIntensity, {renderer=null,reflect
     return vec4(output.rgb.add(reflected).mul(output.a),1);
   })();
   const transportOutput=Fn(([],{material})=>{
+    // The signed key preserves direct response for beauty reuse. Never feed
+    // the NVIDIA receiver's separate environment/scene gloss back as diffuse.
+    if(isNeuralSourceMaterial(material))return neuralShading.radianceNode;
     if(!sceneGIReceives(material))return diffuseSource;
     const reflected=feedbackIncident.mul(diffuseColor.rgb.clamp(0,1))
       .mul(metalness.oneMinus().clamp(0,1)).mul(receiveWeight(material));

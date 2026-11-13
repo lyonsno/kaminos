@@ -4,12 +4,19 @@ import {checkedNeuralResolution} from './neural-resolution-settings.mjs';
 
 // This cache contains current-frame directional radiance. Learned appearance
 // mips retain the footprint of the full-resolution receiving surface.
+export const isNeuralSourceMaterial=m=>Boolean(m?.isNeumipMaterial||m?.isNeuralAppearanceMaterial);
+
 export default class SceneNeuralShading {
  constructor(source,scene,camera){
   this.source=source;this.camera=camera;this.scale=uniform(1);this.reuse=uniform(true,'bool');
   this.projectionInverse=uniform(camera.projectionMatrixInverse);
   this.footprint=uniform(new Vector2(1,1));this.frames=0;this.materials=new Map();this.keys=new Map();this.freeKeys=[];this.nextKey=0x8400;this.uncacheableMaterials=0;this.scheduled=new WeakSet();
-  this.radianceNode=Fn(([],builder)=>builder.material?.isNeumipMaterial?vec4((builder.material.lightsNode??builder.lightsNode).totalDiffuseNode.max(0),this.materialKey(builder.material)):vec4(0))();
+  this.radianceNode=Fn(([],builder)=>{
+   const material=builder.material;
+   if(!isNeuralSourceMaterial(material))return vec4(0);
+   const lights=material.lightsNode??builder.lightsNode;
+   return vec4(lights.totalDiffuseNode.max(0),this.materialKey(material));
+  })();
   const capture=pass(scene,camera,{samples:0});this.capture=capture;
   capture.name='Neural material shading';capture.transparent=false;
   capture.contextNode=context({sceneReflectionLighting:null,sceneNeuralShading:this,neuralShadingMode:'capture',neuralFootprintScale:this.footprint});
@@ -31,7 +38,7 @@ export default class SceneNeuralShading {
   const update=capture.updateBefore;
   capture.updateBefore=frame=>{
    if(this.scale.value===1)return;
-   let active=false;scene.traverseVisible(o=>{if(o.isMesh&&[].concat(o.material??[]).some(m=>m.isNeumipMaterial&&!m.transparent))active=true;});
+   let active=false;scene.traverseVisible(o=>{if(o.isMesh&&[].concat(o.material??[]).some(m=>isNeuralSourceMaterial(m)&&!m.transparent))active=true;});
    if(!active)return;
    const restore=this.borrowMaterials(frame.renderer);
    try{update.call(capture,frame);this.frames++;}finally{restore();}
@@ -44,7 +51,7 @@ export default class SceneNeuralShading {
   const release=()=>{this.keys.delete(material);material.removeEventListener('dispose',release);if(value)this.freeKeys.push(bits);else this.uncacheableMaterials--;};
   this.keys.set(material,{value,release});material.addEventListener('dispose',release);return value;
  }
- hasMaterials(){let found=false;this.capture.scene.traverse(o=>{if(o.isMesh&&[].concat(o.material??[]).some(m=>m.isNeumipMaterial&&!m.transparent))found=true;});return found;}
+ hasMaterials(){let found=false;this.capture.scene.traverse(o=>{if(o.isMesh&&[].concat(o.material??[]).some(m=>isNeuralSourceMaterial(m)&&!m.transparent))found=true;});return found;}
  prepareBefore(target){
   if(this.scheduled.has(target))return;this.scheduled.add(target);
   const update=target.updateBefore,cache=this;
@@ -54,7 +61,7 @@ export default class SceneNeuralShading {
   target.updateBefore=function(frame){frame.updateBeforeNode(cache.capture);return update.call(this,frame);};
  }
  occluder(material,renderer){
-  if(material.isNeumipMaterial||material.lights===false||material.fragmentNode!=null)return material;
+  if(isNeuralSourceMaterial(material)||material.lights===false||material.fragmentNode!=null)return material;
   let entry=this.materials.get(material);
   if(!entry||entry.version!==material.version){
    const node=material.isNodeMaterial?material:renderer.library.fromMaterial(material);if(!node)return material;
