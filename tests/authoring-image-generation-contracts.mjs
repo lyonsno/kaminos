@@ -435,3 +435,10 @@ test('the kiln gets the exact admitted prompt and model request before async loa
  const request=h.service.read().request;assert.equal(request.prompt,'engraved bronze lantern');assert.equal(request.width,256);assert.equal(request.seed,42);assert.match(request.id,/^kaminos-flux2-klein:/);
  gate.resolve();await run;assert.equal(h.generations[0].prompt,request.prompt);assert.equal(h.service.read().request.id,request.id);
 });
+
+test('text-only generation retains image-description lineage without using image conditioning',async()=>{
+ const h=harness(),description={schema:'kaminos.image-description.v1',source:{kind:'image',source:'/original.png'},result:{text:'A copper kettle',modelRevision:'observed-model'},adoptedPrompt:'A copper kettle'};
+ await h.service.run({prompt:'A blue kettle',seed:42,promptDescription:description});
+ const saved=module.readPngProvenance(new Uint8Array(await h.delivered[0].file.arrayBuffer()));
+ assert.deepEqual(saved.promptDescription,description);assert.equal(saved.reference,undefined);assert.equal(saved.prompt,'A blue kettle');
+});

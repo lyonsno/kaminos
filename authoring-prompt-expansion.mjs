@@ -73,15 +73,15 @@ export function installAuthoringPromptExpansion({document,controller,assets,imag
  try{const saved=document.defaultView.localStorage.getItem(preference);if(saved!==null){const value=JSON.parse(saved);if(typeof value.keepLoaded==='boolean'){explicitPreference=true;chooseResidency(value.keepLoaded);}}}catch(error){residencyError=`Preference unavailable: ${error.message}`;}
  byId('asset-prompt-keep-loaded').onchange=async()=>{explicitPreference=true;const keepLoaded=byId('asset-prompt-keep-loaded').checked;await chooseResidency(keepLoaded);try{document.defaultView.localStorage.setItem(preference,JSON.stringify({keepLoaded}));}catch(error){residencyError=`Preference not saved: ${error.message}`;render();}};
  byId('asset-prompt-unload').onclick=()=>controller.unload().catch(error=>{residencyError=error.message;render();});
- let applied=null,timer=null,painted=null,lastStatus=null;
+ let description=null,applied=null,timer=null,painted=null,lastStatus=null;
  const current=()=>({model:byId('asset-image-model').value,reference:byId('asset-use-reference').checked?reference():null});
  const descriptionSelection=()=>({model:byId('asset-image-model').value,reference:describeReference()});
  const matchingSelection=()=>controller.read().request?.task==='describe'?descriptionSelection():current();
  const use=()=>{
   const state=controller.read();if(!promptExpansionMatches(state.request,matchingSelection()))return false;
   const text=byId('asset-prompt-draft').value;if(!text.trim())return false;
-  applied={request:state.request,result:state.result,text,previousReferenceEnabled:byId('asset-use-reference').checked};
-  if(state.request.task==='describe'){byId('asset-use-reference').checked=false;byId('asset-use-reference').dispatchEvent(new Event('change',{bubbles:true}));}
+  applied={request:state.request,result:state.result,text,previousDescription:description,previousReferenceEnabled:byId('asset-use-reference').checked};
+  if(state.request.task==='describe'){description={schema:'kaminos.image-description.v1',source:structuredClone(state.request.reference),result:structuredClone(state.result),adoptedPrompt:text};byId('asset-use-reference').checked=false;byId('asset-use-reference').dispatchEvent(new Event('change',{bubbles:true}));}
   prompt.value=text;prompt.dispatchEvent(new Event('input',{bubbles:true}));render();return true;
  };
  function render(){
@@ -96,7 +96,7 @@ export function installAuthoringPromptExpansion({document,controller,assets,imag
   byId('asset-prompt-undo').textContent='Undo prompt change';
   byId('asset-prompt-cancel').hidden=!busy;byId('asset-prompt-cancel').disabled=state.status==='stopping';
   prompt.readOnly=busy;
-  const matches=promptExpansionMatches(state.request,matchingSelection()),wasApplied=applied?.request===state.request&&prompt.value===applied.text;
+  const matches=promptExpansionMatches(state.request,matchingSelection()),wasApplied=applied?.request===state.request&&(applied.request.task==='describe'||prompt.value===applied.text);
   const showDraft=!!state.draft&&!wasApplied;
   const draft=byId('asset-prompt-draft');draft.hidden=!showDraft;draft.readOnly=busy;
   if(state.draft!==painted){draft.value=state.draft;painted=state.draft;}
@@ -127,11 +127,11 @@ export function installAuthoringPromptExpansion({document,controller,assets,imag
  };
  byId('asset-image-describe').onclick=describe;
  byId('asset-prompt-expand').onclick=expand;byId('asset-prompt-cancel').onclick=()=>controller.stop();byId('asset-prompt-use').onclick=use;
- byId('asset-prompt-undo').onclick=()=>{if(applied&&prompt.value===applied.text){prompt.value=applied.request.prompt;
-   if(applied.request.task==='describe'){byId('asset-use-reference').checked=applied.previousReferenceEnabled;byId('asset-use-reference').dispatchEvent(new Event('change',{bubbles:true}));}
+ byId('asset-prompt-undo').onclick=()=>{if(applied&&(applied.request.task==='describe'||prompt.value===applied.text)){prompt.value=applied.request.prompt;
+   if(applied.request.task==='describe'){description=applied.previousDescription;byId('asset-use-reference').checked=applied.previousReferenceEnabled;byId('asset-use-reference').dispatchEvent(new Event('change',{bubbles:true}));}
    applied=null;prompt.dispatchEvent(new Event('input',{bubbles:true}));render();}};
  prompt.addEventListener('input',render);byId('asset-image-model').addEventListener('change',render);byId('asset-use-reference').addEventListener('change',render);
  document.defaultView.addEventListener('pagehide',()=>controller.dispose().catch(()=>{}));
  render();
- return {render,expand,describe,configureDefault:value=>{if(!explicitPreference)return chooseResidency(value===true);},reset(){applied=null;painted=null;controller.clear();},recall(provenance){applied=provenance?.promptExpansion?{request:provenance.promptExpansion.request,result:provenance.promptExpansion.result,text:provenance.promptExpansion.expandedPrompt}:null;painted=null;controller.clear();},provenance:()=>applied&&applied.request.task!=='describe'&&promptExpansionMatches(applied.request,current())?{schema:'kaminos.prompt-expansion.v1',request:applied.request,expandedPrompt:applied.text,result:applied.result}:null};
+ return {render,expand,describe,configureDefault:value=>{if(!explicitPreference)return chooseResidency(value===true);},descriptionProvenance:()=>description?structuredClone(description):null,reset(){description=null;applied=null;painted=null;controller.clear();},recall(provenance){description=provenance?.promptDescription?structuredClone(provenance.promptDescription):null;applied=provenance?.promptExpansion?{request:provenance.promptExpansion.request,result:provenance.promptExpansion.result,text:provenance.promptExpansion.expandedPrompt}:null;painted=null;controller.clear();},provenance:()=>applied&&applied.request.task!=='describe'&&promptExpansionMatches(applied.request,current())?{schema:'kaminos.prompt-expansion.v1',request:applied.request,expandedPrompt:applied.text,result:applied.result}:null};
 }

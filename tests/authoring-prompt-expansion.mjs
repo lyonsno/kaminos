@@ -99,5 +99,10 @@ test('describe uses the viewed image; adoption disables conditioning, supports u
  viewed={kind:'image',source:'/other.png'};ui.render();assert.equal(nodes.get('asset-prompt-use').disabled,true);assert.equal(nodes.get('asset-prompt-use').onclick(),false);
  viewed={kind:'image',source:'/viewed.png'};ui.render();nodes.get('asset-prompt-use').onclick();
  assert.equal(nodes.get('asset-use-reference').checked,false);assert.equal(nodes.get('asset-prompt').value,'Copper kettle on white');
+ nodes.get('asset-prompt').value='A blue kettle on white';nodes.get('asset-prompt').dispatchEvent(new Event('input'));
+ assert.equal(nodes.get('asset-prompt-draft').hidden,true,'editing adopted text must not resurrect the stale description');
+ assert.equal(nodes.get('asset-prompt-undo').hidden,false);
+ assert.equal(ui.descriptionProvenance().source.source,'/viewed.png');
+ assert.equal(ui.descriptionProvenance().result.text,'Copper kettle on white');
  nodes.get('asset-prompt-undo').onclick();assert.equal(nodes.get('asset-prompt').value,'old instruction');assert.equal(nodes.get('asset-use-reference').checked,true);
 });

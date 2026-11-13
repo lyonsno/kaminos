@@ -23,7 +23,7 @@ export function createImageIterationHistory({storage,key=IMAGE_HISTORY_KEY,chang
   read(){return copy({...state,viewed:find(state.viewedSource)});},
   reference(){const e=find(state.referenceSource);return e&&!assetWithheld(e)?copy(e):null;},
   comparison(){
-   const viewed=find(state.viewedSource),source=state.compareSource||viewed?.provenance?.reference?.source;
+   const viewed=find(state.viewedSource),source=state.compareSource||viewed?.provenance?.reference?.source||viewed?.provenance?.promptDescription?.source?.source;
    if(!source)return null;const known=find(source);if(known)return assetWithheld(known)?null:copy(known);
    return {kind:'image',source,name:'Input from saved image metadata',unverified:true};
   },
@@ -67,7 +67,7 @@ export function installImageIterationHistory({document,history,assets,layout,onE
   by('asset-history-compare').disabled=!viewed;by('asset-history-compare').setAttribute('aria-pressed',String(layout.comparing()));
   const p=viewed?.provenance,details=by('asset-history-instructions');details.hidden=!p;
   const nextDetail=JSON.stringify(p);if(nextDetail!==detailKey){detailKey=nextDetail;const values=p?[
-   ['Your request',p.promptExpansion?.request?.prompt||p.prompt],['Expanded prompt',p.promptExpansion?.expandedPrompt],['Submitted prompt',p.prompt],['Model / seed / size',[p.model,p.seed,`${p.width} × ${p.height}`].join(' · ')],['Input image',p.reference?.name||p.reference?.source],
+   ['Your request',p.promptExpansion?.request?.prompt||p.prompt],['Expanded prompt',p.promptExpansion?.expandedPrompt],['Submitted prompt',p.prompt],['Description source',p.promptDescription?.source?.name||p.promptDescription?.source?.source],['Image description',p.promptDescription?.result?.text],['Model / seed / size',[p.model,p.seed,`${p.width} × ${p.height}`].join(' · ')],['Input image',p.reference?.name||p.reference?.source],
   ]:[];by('asset-history-provenance').replaceChildren(...values.filter(([,v])=>v!==undefined&&v!==null).flatMap(([label,value])=>{const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=String(value);return[dt,dd];}));}
  }
  render();return{render,show};
