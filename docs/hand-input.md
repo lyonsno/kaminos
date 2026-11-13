@@ -47,7 +47,7 @@ environment by reference; no weights are copied or downloaded by this route.
 A package directory uses `package.json` by default. A `{root,manifest}` entry
 explicitly aliases another metadata filename. The browser loaders verify the
 model package and weight identity. The native worker requires existing WiLoR
-MLX, NumPy and Pillow in the named interpreter, and the WiLoR source's
+MLX, NumPy, safetensors and Pillow in the named interpreter, and the WiLoR source's
 `HandPosePipeline`, `WiLoR` and `HandDetector` APIs. The configured native source is
 WiLoR-MLX `30cd14e`; model code remains with that project.
 
