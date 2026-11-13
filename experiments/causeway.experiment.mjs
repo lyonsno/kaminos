@@ -1,25 +1,27 @@
 import * as THREE from '../lib/three.webgpu.js';
-import {createCausewaySource,causewayDefaults} from '../causeway-source.mjs';
+import {createCausewaySource,validateCausewayConfig} from '../causeway-source.mjs';
 import {stoneWindowDisplayPositions} from '../stone-material-window.mjs';
 import {loadNeumipModel} from '../neumip-model.mjs';
 import {createNeumipMaterial} from '../neumip-material.mjs';
 
 export default {id:'causeway',title:'Giant’s Cosplay — shallow columnar stone',
  async create({host,inputs={},record,updateInputs=()=>{}}){
-  let source=createCausewaySource(inputs.source),config={...source.config},displayed={...config},mode='source',lod=inputs.lod??0,pending=false,error=null,timer;
+  if(inputs.mode!==undefined&&!['source','learned'].includes(inputs.mode))throw Error('Invalid causeway representation');
+  let config=validateCausewayConfig(inputs.source),source,displayed={...config},mode='source',lod=inputs.lod??0,pending=false,error=null,timer;
   if(!Number.isFinite(lod)||lod<0)throw Error('Nonnegative footprint required');
   const model=inputs.modelURL?await loadNeumipModel(inputs.modelURL,{sha256:inputs.modelSHA}):null;
-  if(model&&(model.chart?.width!==config.width||model.chart?.depth!==config.depth||model.chart?.offsetMeters!==source.chart.offsetMeters||model.chart?.boundary!==source.chart.boundary))throw Error('Model/source chart mismatch');
-  const fittedConfig=JSON.stringify({...causewayDefaults,...(inputs.fitSource??inputs.source)});
+  if(model&&(model.chart?.width!==config.width||model.chart?.depth!==config.depth||model.chart?.offsetMeters!==.004||model.chart?.boundary!=='repeat'))throw Error('Model/source chart mismatch');
+  const fitSource=validateCausewayConfig(inputs.fitSource??inputs.source),fittedConfig=JSON.stringify(fitSource);
   const session=await host.scene.open(),root=new THREE.Group(),explicit=new THREE.Group(),drags=[],controls=new Map();
   root.name='Giant’s Cosplay — shallow basalt columns';root.add(explicit);
-  const palette=source.materials.map(s=>new THREE.MeshStandardMaterial({color:new THREE.Color(...s.color),roughness:s.roughness,metalness:s.metalness,side:THREE.DoubleSide}));
+  const palette=[];
   let bundle,learned,asset,status,selector,disposed=false,buildCount=0;
   const modelMatches=()=>model&&JSON.stringify(displayed)===fittedConfig;
   const rebuild=()=>{
    clearTimeout(timer);if(disposed)return;
    try{
     const next=createCausewaySource(config),positions=next.materials.map(()=>[]);
+    if(!palette.length)palette.push(...next.materials.map(s=>new THREE.MeshStandardMaterial({color:new THREE.Color(...s.color),roughness:s.roughness,metalness:s.metalness,side:THREE.DoubleSide})));
     for(const t of next.triangles)positions[t.materialIndex].push(t);
     const children=[];
     for(let i=0;i<positions.length;i++){const p=stoneWindowDisplayPositions(positions[i],next.captureDomain);if(!p.length)continue;const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.computeVertexNormals();const m=new THREE.Mesh(g,palette[i]);m.name=next.materials[i].name;children.push(m);}
@@ -30,7 +32,7 @@ export default {id:'causeway',title:'Giant’s Cosplay — shallow columnar ston
   };
   const view={position:[.115,.135,.155],target:[0,-.002,0],fov:42,zoom:2.2};
   const read=()=>({schema:'kaminos.causeway-study.v1',mode,config:{...config},displayedConfig:{...displayed},pending,error,buildCount,columns:source.columns.length,sourceTriangles:source.triangles.length,chart:source.chart,referenceHeight:source.referenceHeight,model: model?.source??null,modelMatches:!!modelMatches(),lod,objectId:asset?.id,view:session.readView(),claim:mode==='source'?'Authored column geometry in native scene raster lighting; this is not the ray-traced teacher integral.':'Learned directional response on a flat carrier; source geometry is hidden.',boundary:source.boundary});
-  const persist=()=>updateInputs({...inputs,source:{...config},mode,lod});
+  const persist=()=>updateInputs({...inputs,source:{...config},...(model?{fitSource}:{}),mode,lod});
   const apply=()=>{explicit.visible=mode==='source';if(learned)learned.visible=mode==='learned';if(bundle)bundle.settings.lodOverride.value=lod;if(selector){selector.value=mode;selector.options[1].disabled=!modelMatches();}if(status)status.textContent=error??(pending?'Updating geometry…':read().claim);session.redraw();};
   const event=kind=>{persist();record({kind:'causeway.'+kind,phase:'applied',effective:read()});return read();};
   try{
@@ -42,11 +44,11 @@ export default {id:'causeway',title:'Giant’s Cosplay — shallow columnar ston
   const operations={
    setShape({key,value}){
     if(!['relief','shoulder','dish','grain','sheetGap'].includes(key)||!Number.isFinite(value))throw Error('Invalid causeway setting');
-    const next={...config,[key]:Math.max(0,value)};createCausewaySource(next);config=next;pending=true;
+    config=validateCausewayConfig({...config,[key]:Math.max(0,value)});pending=true;
     if(controls.has(key))controls.get(key).input.value=String(config[key]*controls.get(key).scale);
     clearTimeout(timer);timer=setTimeout(()=>{try{rebuild();event('source');}catch{}},140);apply();persist();return read();
    },
-   flush(){rebuild();return event('source');},
+   flush(){if(!pending)return read();rebuild();return event('source');},
    setMode(value){if(!['source','learned'].includes(value)||value==='learned'&&!modelMatches())throw Error('Requested representation unavailable for displayed source');mode=value;apply();return event('mode');},
    setLOD(value){if(!Number.isFinite(value)||value<0)throw Error('Nonnegative footprint required');lod=value;apply();return event('footprint');},
    frame(){return session.setView(view);}

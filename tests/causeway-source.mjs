@@ -23,3 +23,8 @@ test('causeway retains fitted separate columns and repeatable shallow stone feat
  assert.ok(flat.triangles.every(t=>[t.a,t.b,t.c].every(p=>Math.abs(p[1]+causewayDefaults.sheetGap)<1e-12)));
  for(const field of ['relief','shoulder','dish','grain'])assert.throws(()=>createCausewaySource({[field]:-1}),/Invalid/);
 });
+test('accepted high grain and zero gap stay behind the capture sheet',()=>{
+ const source=createCausewaySource({sheetGap:0,dish:0,grain:.2,relief:.005});
+ const maxY=source.triangles.reduce((m,t)=>Math.max(m,t.a[1],t.b[1],t.c[1]),-Infinity);
+ assert.ok(maxY<=0,'all detailed geometry must remain below the carrier');
+});

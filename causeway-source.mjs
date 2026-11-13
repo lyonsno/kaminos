@@ -7,10 +7,14 @@ function clip(poly,nx,nz,b){const out=[];for(let i=0;i<poly.length;i++){const a=
 // A fixed local mineral field controls small facets and their material palette.
 // Smooth broad components plus small cells avoid a separate painted tracking grid.
 function mineral(x,z,id){const q=Math.sin(x*13931.37+z*7919.21+id*93.7)*43758.5453;return q-Math.floor(q);}
-export function createCausewaySource(options={}){
+export function validateCausewayConfig(options={}){
  const config={...causewayDefaults,...options};
  for(const [k,v]of Object.entries(config))if(!Number.isFinite(v)||v<0||(['width','depth'].includes(k)&&v===0))throw Error('Invalid causeway '+k);
  if(!Number.isSafeInteger(config.seed)||config.shoulder>.3||config.dish>.5||config.grain>.2)throw Error('Invalid causeway shape');
+ return config;
+}
+export function createCausewaySource(options={}){
+ const config=validateCausewayConfig(options);
  const rng=randomGenerator(config.seed),seeds=[];
  for(let row=0;row<4;row++)for(let col=0;col<4;col++)seeds.push({id:row*4+col,x:(col+.5+(row%2)*.5+(rng()-.5)*.65)*config.width/4-config.width/2,z:(row+.5+(rng()-.5)*.65)*config.depth/4-config.depth/2,phase:rng()*Math.PI*2,tone:rng(),level:rng()});
  const ghosts=[];for(let tz=-1;tz<=1;tz++)for(let tx=-1;tx<=1;tx++)for(const s of seeds)ghosts.push({...s,x:s.x+tx*config.width,z:s.z+tz*config.depth});
@@ -34,7 +38,7 @@ export function createCausewaySource(options={}){
    const topHeight=(x,z,radial)=>{
     const grain=config.relief*config.grain*(mineral(x,z,c.id)-.5)*clamp((1-radial)/.15);
     const dish=config.relief*config.dish*(1-radial*radial)*(.65+.35*Math.sin(c.phase));
-    return config.relief===0?-config.sheetGap:c.topHeight-dish+grain;
+    return Math.min(-config.sheetGap,c.topHeight-dish+grain);
    };
    const vertex=(radial,index,drop=0)=>{
     const a=c.boundary[index%count],dx=a[0]-c.x,dz=a[1]-c.z,angle=Math.atan2(dz,dx);
