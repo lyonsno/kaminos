@@ -401,15 +401,16 @@ test('birth-only source-focused updates clear renewal counters even with carrier
 
 test('emitter births use admitted supply without a ray batch, and light refresh preserves existing carriers',async()=>{
  await withKaminosGpu(async({device:d})=>{
-  const owner=createOpticalParticles(d),grid=actualGrid(d,{state:[.8,1,.3,.6]});
+  const owner=createOpticalParticles(d,{transparent:true}),grid=actualGrid(d,{state:[.8,1,.3,.6]});
   const identity=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
+  const emitterVP=[1,0,0,0,0,1,0,0,0,0,1,0,.5,.5,0,1];
   const buf=(size,usage)=>d.createBuffer({size,usage:usage|GPUBufferUsage.COPY_DST});
   const tex=(size,format,dimension='3d')=>d.createTexture({size,format,dimension,usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});
   const sourceUniform=buf(240,GPUBufferUsage.UNIFORM),dummy=buf(64,GPUBufferUsage.STORAGE);
   const sf=new Float32Array(60);sf.set(identity);sf.set([0,2,1,0],28);d.queue.writeBuffer(sourceUniform,0,sf);
   const aperture=tex([2,2,1],'r32float','2d'),noise=tex([2,2,1],'r32float','2d');
   const collection=tex([6,3,1],'rgba32float','2d'),solid=tex([2,2,2],'r8uint');
-  const target=d.createTexture({size:[4,4],format:'rgba8unorm',usage:GPUTextureUsage.RENDER_ATTACHMENT});
+  const target=d.createTexture({size:[32,32],format:'rgba8unorm',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC});
   const depth=d.createTexture({size:[1,1],format:'depth32float',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING});
   const mask=buf(4,GPUBufferUsage.STORAGE),planes=buf(16,GPUBufferUsage.STORAGE);
   d.queue.writeBuffer(mask,0,new Uint32Array([0x3fffffff]));
@@ -418,13 +419,17 @@ test('emitter births use admitted supply without a ray batch, and light refresh 
   const camera=new Float32Array(20);camera.set([1,0,0,0,0,1,0,0,0,0,1,0,0,1,1,0,0,0,1,0]);
   const uniformValues=[1,.5,.5,.5,0,1,0,.5,1,.1,1,1,1,.25,.25,0,1,0,0,0,0,1,0,0];
   const emitter={lo:[0,0,0],span:[1,1,1],uniformValues,aperture,noise,collection,solid,sourceStep:0};
-  const source={buffer:dummy,uniform:sourceUniform,width:1,height:1,pixels:0,samples:0,outputWidth:4,outputHeight:4,backtrace:1,viewProj:identity};
-  async function draw(step,settings={},appearanceEdit=null){
+  const source={buffer:dummy,uniform:sourceUniform,width:1,height:1,pixels:0,samples:0,outputWidth:32,outputHeight:32,backtrace:1,viewProj:emitterVP};
+  async function draw(step,settings={},appearanceEdit=null,material={},capture=false){
    const e=d.createCommandEncoder(),dp=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthClearValue:1,depthStoreOp:'store'}});dp.end();
    owner.encode(e,{view:target.createView(),format:'rgba8unorm',source:{...source,step},fine:grid.fine,reactants:grid.reactants,dims:[2,2,2],invViewProj:identity,
      settings:{enabled:true,acquisitionMode:2,capacity:4,emitterBirthsPerStep:4,lightRefreshEvery:3,acquisitionEnabled:false,exchangeEnabled:false,groupingEnabled:false,transportEnabled:false,reactionEnabled:false,stateLife:0,...settings},
-     emitter:{...emitter,sourceStep:step-1},incident:{texture:light,masks:mask,planes,generation:step,frame:step,appearanceEdit},cameraValues:camera,depth,identity:'emitter-fixture'});
-   d.queue.submit([e.finish()]);await d.queue.onSubmittedWorkDone();return owner.sample();
+     material,emitter:{...emitter,sourceStep:step-1},incident:{texture:light,masks:mask,planes,generation:step,frame:step,appearanceEdit},cameraValues:camera,depth,identity:'emitter-fixture'});
+   const read=capture?d.createBuffer({size:8192,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ}):null;
+   if(read)e.copyTextureToBuffer({texture:target},{buffer:read,bytesPerRow:256},[32,32]);
+   d.queue.submit([e.finish()]);
+   if(read){await read.mapAsync(GPUMapMode.READ);const pixels=new Uint8Array(read.getMappedRange().slice(0));read.destroy();return pixels;}
+   await d.queue.onSubmittedWorkDone();return owner.sample();
   }
   const cohort=(r)=>Array.from({length:4},(_,i)=>Array.from(r.records.slice(i*24,(i+1)*24)));
   try{
@@ -440,6 +445,26 @@ test('emitter births use admitted supply without a ray batch, and light refresh 
    assert.equal((await owner.statistics()).droppedBirths,4);
    assert.ok(cohort(held).every(p=>p[3]===2&&p[4]===2));
    const paused=await draw(2,{lightRefreshEvery:1,emitterBirthsPerStep:2});assert.deepEqual(paused.records,held.records);
+   // Hold the parcels and remove all light so readback isolates optical
+   // coverage. A ceiling may move extinction inward but must not erase the
+   // represented column weight. Use an unclipped emitter and low optical
+   // depth so the image sum approximates integrated tau.
+   const extinctionImage=(settings,extinction=1)=>draw(2,{gain:0,scatteredGain:0,radius:.15,stretch:1,pixelFloor:0,...settings},null,{extinction},true);
+   const measure=p=>{let tau=0,pixels=0;
+    for(let y=0;y<32;y++)for(let x=0;x<32;x++){const a=p[y*256+x*4+3]/255;if(a){tau-=Math.log1p(-a);pixels++;}}
+    return {tau,pixels};
+   };
+   for(const depthMode of [0,1,2]){
+    const options={depthMode,depthSlices:4,depthScale:1};
+    const wide=measure(await extinctionImage({...options,maxFootprint:0}));
+    const limited=measure(await extinctionImage({...options,maxFootprint:8}));
+    assert.ok(wide.tau>1&&limited.pixels<wide.pixels,'the ceiling actually narrows visible support');
+    assert.ok(Math.abs(limited.tau/wide.tau-1)<.1,`bounded emitter support must keep optical weight: ${JSON.stringify({depthMode,wide,limited})}`);
+    const stronger=measure(await extinctionImage({...options,maxFootprint:8},2));
+    assert.ok(Math.abs(stronger.tau/limited.tau-2)<.15,'the native material extinction knob increases held dark smoke optical depth');
+
+   }
+   assert.deepEqual((await draw(2)).records,held.records,'redistributing draw support leaves the original parcels and reaction state unchanged');
    const refreshed=await draw(3,{lightRefreshEvery:1,emitterBirthsPerStep:2});
    assert.ok(cohort(refreshed).every(p=>p[3]===3&&Math.abs(p[4]-7)<1e-5),JSON.stringify(cohort(refreshed).map(p=>p.slice(3,8))));
    assert.deepEqual(cohort(refreshed).map(p=>p.slice(8)),first.map(p=>p.slice(8)),'refresh cannot change material, support or survival');
