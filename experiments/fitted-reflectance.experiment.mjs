@@ -1,4 +1,5 @@
 import {Box3,CylinderGeometry,DirectionalLight,DoubleSide,Group,Mesh,MeshBasicMaterial,Vector3} from '../lib/three.webgpu.js';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {loadFittedReflectance,loadFittedReflectanceManifest} from '../fitted-reflectance.mjs';
 import {createFittedReflectanceMaterial,splitCarrierTangentFaces} from '../fitted-reflectance-material.mjs';
 import {loadNeuralAppearanceBundle} from '../neural-appearance-bundle.mjs';
@@ -107,7 +108,19 @@ export default {
   try{
    if(inputs.asset){
     if(typeof inputs.asset.url!=='string')throw Error('Carrier needs an asset URL');
-    asset=await session.loadAsset(inputs.asset);
+    const url=new URL(inputs.asset.url,location.href).href;
+    const {scene:root}=await new GLTFLoader().loadAsync(url);
+    // Keep one fixed presentation mesh. The authoring LOD controller can
+    // replace registered GLB geometry and its material between captures.
+    root.name=inputs.asset.label??'Stock reflectance carrier';
+    if(inputs.asset.normalize===true){
+     const bounds=new Box3().setFromObject(root),size=bounds.getSize(new Vector3()).length();
+     if(Number.isFinite(size)&&size>0){
+      const center=bounds.getCenter(new Vector3());root.scale.multiplyScalar(2/size);
+      root.position.addScaledVector(center,-2/size);
+     }
+    }
+    asset=await session.attach(root,{owned:true,presentation:true,metadata:{label:root.name,source:url}});
    }else{
     const geometry=new CylinderGeometry(.65,.65,1.6,96,4,true,0,Math.PI*2);
     geometry.computeTangents();
