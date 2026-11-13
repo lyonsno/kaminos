@@ -18466,6 +18466,8 @@ export function createKaminosVolumePrototype({
     },
     resetOpticalParticles(){particleCaptureClock.reset();opticalParticles?.reset();state.opticalParticles=opticalParticles?.read()??{effective:'off',reason:'reset'};},
     async sampleOpticalParticles(){return opticalParticles?.sample()??{available:false};},
+    async sampleOpticalParticlesForLighting(){return opticalParticles?.sample({allowAdvance:true})??{available:false};},
+    setParticleIncidentField(field){if(!opticalParticles){if(field===null)return;throw Error("Native particle population is unavailable");}opticalParticles.setIncidentField(field);},
     async sampleOpticalParticleStatistics(){return opticalParticles?.statistics()??{available:false,reason:"No current particle population"};},
     setSplitIntegral(next){assertIntegralSourceEditable('Split optical transport');const value=splitIntegralSettings({...splitSettings,...next});if(value.mode!==splitSettings.mode)splitIntegral?.reset();splitSettings=value;return {...splitSettings};},
     splitIntegralSettings(){return {...splitSettings};},

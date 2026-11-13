@@ -53,3 +53,25 @@ test('exchange-neighborhood heat is an actual field diagnostic and preserves hel
 test('tracking predicts residual transport even while carried reaction is disabled',async()=>withKaminosGpu(async({device:d})=>fixture(d,async({seed,draw,propose})=>{seed([1,1,0,3]);await draw(0);const q=await propose(1,{reactionEnabled:false,transportEnabled:true,rise:.1,drag:4});assert.equal(q[7],-1);assert.ok(q[5]>.05,'tracking must predict the transport clock independently from the reaction clock');})));
 
 test('paused population preserves records and encodes neither no-op update nor dropped births',async()=>withKaminosGpu(async({device:d})=>fixture(d,async({seed,draw})=>{seed([1,.8,.2,3]);const a=await draw(0);const b=await draw(0,{exchangeStrength:1});assert.deepEqual(b.records,a.records);assert.equal(b.passNames.includes('update'),false);assert.equal(b.passNames.includes('births'),false);assert.equal(b.state.work.updateSlots,0);assert.equal(b.state.work.birthCapacityPerFrame,0);})));
+
+test('live incoming light changes native scattering while preserving carried material and a dark-field image',async()=>withKaminosGpu(async({device:d})=>fixture(d,async({owner,seed,draw,pixels})=>{
+ seed([1,0,1,3],[0,0,0,1]);const settings={gain:0,scatteredGain:0,exchangeEnabled:false,followFraction:0};
+ const held=await draw(0,settings),before=await pixels();
+ assert.equal(typeof owner.setIncidentField,'function','native particles must accept a current incoming-light field');
+ const field=new Float32Array(2*2*2*4);for(let i=0;i<8;i++)field.set([4,0,0,0],i*4);
+ const metadata={dims:[2,2,2],origin:[-1,-1,-1],extent:[2,2,2],sourceStep:0,sourceIdentity:'actual-composition-fixture',albedo:1,gain:1};
+ owner.setIncidentField({...metadata,data:new Float32Array(field.length)});await draw(0,settings);assert.deepEqual(await pixels(),before,'zero current illumination preserves the native extinction image');
+ owner.setIncidentField({...metadata,sourceIdentity:'another-source',data:field});await draw(0,settings);assert.deepEqual(await pixels(),before,'a different source cannot leak its lighting into this population');assert.equal(owner.read().incident.effective,'source-mismatch');
+ owner.setIncidentField({...metadata,data:field});
+ const lit=await draw(0,settings),after=await pixels();assert.deepEqual(lit.records,held.records,'incoming light cannot change reaction or retained history');
+ let redBefore=0,redAfter=0;for(let y=0;y<8;y++)for(let x=0;x<8;x++){const i=y*256+x*4;redBefore+=before[i];redAfter+=after[i];}
+ assert.ok(redAfter>redBefore,'actual native pixels receive the current incident field');assert.equal(owner.read().incident.effective,'live-angular-field');
+ assert.throws(()=>owner.setIncidentField({dims:[2,2,2],origin:[-1,-1,-1],extent:[2,2,2],data:new Float32Array(4),sourceStep:0,sourceIdentity:'actual-composition-fixture',albedo:1,gain:1}),/field|complete/i);
+ owner.setIncidentField(null);await draw(0,settings);assert.deepEqual(await pixels(),before,'disabling live field restores the prior image');
+})));
+
+test('explicit live lighting snapshots retain the sampled step while native evolution continues',async()=>withKaminosGpu(async({device:d})=>fixture(d,async({owner,seed,draw})=>{
+ seed([1,.8,.2,3]);const held=await draw(0,{exchangeEnabled:false,followFraction:0});
+ const pending=owner.sample({allowAdvance:true});const advanced=await draw(1,{exchangeEnabled:false,followFraction:0});
+ const snapshot=await pending;assert.equal(snapshot.state.step,0);assert.deepEqual(snapshot.records,held.records,'snapshot is the queued copy, not a later state');assert.notDeepEqual(advanced.records,snapshot.records,'native material really advanced while the copy was pending');
+})));
