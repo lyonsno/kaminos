@@ -50,6 +50,10 @@ class Appearance(nn.Module):
         xy=mx.clip(mx.floor(uv*self.resolution).astype(mx.int32),0,self.resolution-1)
         z=self.latents[xy[:,1]*self.resolution+xy[:,0]]
         if self.normalized_latents:z=mx.tanh(z)
+        return self.decode(z,queries)
+
+    def decode(self,z,queries):
+        """Evaluate latents in the checkpoint's trained directional frame."""
         frames=self.rotation(z)
         n=normalize(frames[:,:6].reshape((-1,2,3))+mx.array([0.,0.,1.]))
         t=normalize(frames[:,6:].reshape((-1,2,3))+mx.array([1.,0.,0.]))
