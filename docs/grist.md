@@ -95,6 +95,19 @@ The proposed composition separates a continuum timestepper from representation m
 
 Keep two interfaces distinct: clay contacting a mineral grain joins different physical constituents and needs nonpenetration, friction, possible slip/separation and reciprocal torque. A coarse and fine description of the same clay joins two representations of the same material and needs consistent mass/history ownership. Hybrid Grains' overlap velocity agreement addresses the latter kind of reconciliation; imposing it indiscriminately on clay/grit would create an unintended sticking constraint.
 
+### Live control between representations
+
+Operator amendment, November13: preserve tunable places to shift control between bulk PB-MPM and local/discrete work, especially where the live core should constrain the finer solve. Proposed controls govern different mechanisms rather than a single global dominance blend:
+
+- **Following:** how strongly attached fine material follows its coarse support's affine motion while retaining local rearrangement. This is a representation relationship, not an adhesion rule for separate mineral grains.
+- **Feedback:** how much aggregated fine residual motion or stress changes coarse support. One-way fine detail is an explicit approximation; detached mass still requires an actual ownership change. Keep reciprocal mineral/matrix contact accounting distinct from this optional detail feedback.
+- **Contact compliance:** how firmly distinct constituents resolve relative penetration and slip within the coupled candidate-motion iteration. Apply the same contact correction consistently to both participants, including torque; do not tune two unrelated reaction gains.
+- **Solve effort:** bulk iterations, fine local updates and their schedule. These are numerical choices; their effect on apparent material behavior must remain legible rather than masquerading as a new physical material parameter.
+
+The PB-MPM paper describes displacement constraints reconciled by grid transfers, with motion committed after iteration, and identifies iteration/timestep-dependent softness. Its shape-preserving elastic constraint is not a clay plasticity law. Our proposed loop is bulk candidate motion, local/contact correction, coupled reconciliation, then commit, with additional iterations as needed. Adding those corrections does not inherit the original stability claim automatically.
+
+Live default proposal: strong regional following for attached fines, local freedom for rearrangement, modest aggregated detail feedback, and reciprocal contact for actual rigid grains. Persistent disagreement is evidence to change support/ownership or add local resolution, not to pull escaped material back forever. Increasing finish effort should retain the same intended material and history while making the effective numerical change explicit. These are proposed mechanism controls, not an implemented API, a frame-rate promise or a requirement to expose every numerical parameter in the initial human interface.
+
 Connect one cohesive matrix region, embedded two-sphere grit and the ordinary movable forming tool to one fine particulate level. The decisive interaction is to press and then drag material around a hard inclusion: inspect regional deformation, local fine rearrangement and, once the separation mechanism is present, a detached portion moving independently. Show the actual particulate material and preserve state through refinement. Start with the same material state when comparing coarse and refined evolution.
 
 This build must answer whether the hierarchy buys useful fine material motion without reintroducing the previous global pairwise expense. It need not begin with many material species, wet soil, all fracture modes or HOT's implicit multigrid. Those remain accessible branches if the first behavior or explicit-step cost identifies a concrete need.
