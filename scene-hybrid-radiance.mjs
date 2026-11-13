@@ -19,6 +19,8 @@ import {collectSceneSmokeLights} from './scene-smoke-lights.mjs';
 import {createExteriorSmokeLight} from './scene-exterior-light.mjs';
 import {createSceneLightingCadence} from './scene-lighting-cadence.mjs';
 
+let nextAppearanceEdit=0;
+
 // Opt-in prototype. Smoke retains distributed transport. Surfaces consume a
 // live GPU reduction of that same source, with independent raster visibility.
 export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16,smokeRefinement=4,pointCount=4,pointSampling='all',pointEvaluationBudget=0,surfaceEnabled=true,smokeShadowSteps=0,smokeShadowResolution=16,smokeShadowFilter=false,smokeShadowFilterAngle=null,smokeShadowFilterTaps=3,smokeShadowMediumResolution=0,shadowEdgeFilter=false,shadowComparison={},shadowResolution=256,shadowSoftness=0,shadowSampling='fixed',blockerSamples=9,filterSamples=16,getSourceGuide=null,getSourceRegions=null,smokeEnvironmentBlur=0,onStatus=()=>{},createShadow=createFireLightFieldShadow,rebuild=null,surfaceLighting=null}) {
@@ -100,7 +102,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   let gain=1,sourceSoftness=0,surfaceScattering=false,smokeMode='distributed',angularPattern='fixed',angularRotation=0,retainComparisons=false;
   const cadence=createSceneLightingCadence();
   let lightingRequested=null,lightingApplied=null,lightingError=null,completedSolves=0;
-  let frameDomain=null,frameSurface=false;
+  let frameDomain=null,frameSurface=false,appearanceEdit=0;
   function lightingSettings(patch){
     if(disposed)throw Error('hybrid lighting disposed');
     if(patch===null){
@@ -113,7 +115,10 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     const next={gain,environmentBlur:smokeEnvironmentBlur,lightSurfaces:surfaceEnabled,...cadence.read(),...patch};
     nonnegative(next.gain);validateSmokeEnvironmentBlur(next.environmentBlur);
     if(typeof next.lightSurfaces!=='boolean')throw Error('Lighting surfaces must be boolean');
-    const requested=cadence.configure(next);lightingRequested={previous,requested};lightingError=null;
+    const prior=lightingRequested?.requested??{enabled:true,gain,environmentBlur:smokeEnvironmentBlur};
+    const requested=cadence.configure(next);
+    if(['enabled','gain','environmentBlur'].some(key=>requested[key]!==prior[key])||!lightingRequested)appearanceEdit=++nextAppearanceEdit;
+    lightingRequested={previous,requested};lightingError=null;
     if(!requested.enabled){lightingApplied=null;valid=false;surfaceOn.value=false;prototype.setSceneDistributedLightFrame(null);}
     if(!requested.lightSurfaces)surfaceOn.value=false;
     return requested;
@@ -136,7 +141,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     }catch(error){lightingApplied=null;lightingError=String(error.message);surfaceOn.value=false;}
     finally{
       void device.queue.onSubmittedWorkDone().then(()=>{if(submitted)completedSolves++;},error=>{
-        lightingError=String(error.message);valid=false;surfaceOn.value=false;if(!disposed)prototype.setSceneDistributedLightFrame(null);
+        lightingError=String(error.message);lightingApplied=null;valid=false;surfaceOn.value=false;if(!disposed)prototype.setSceneDistributedLightFrame(null);
       }).finally(()=>cadence.complete());
     }
   }
@@ -262,7 +267,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       }
       frame={...frame,exterior,pointRegions:reduction,smokeShadow:medium,surfaceTransport:status.surfaceTransport,previewStale:false};
       frameDomain=field.domainIdentity??null;frameSurface=renderSurfaces;surfaceOn.value=renderSurfaces;
-      prototype.setSceneDistributedLightFrame(smokeMode==='distributed'?{texture:gather.smoke,...frame,...(lightingRequested?{heldPolicy:'paced-last-solve',domainIdentity:frameDomain}:null)}:null);
+      prototype.setSceneDistributedLightFrame(smokeMode==='distributed'?{texture:gather.smoke,...frame,...(lightingRequested?{heldPolicy:'paced-last-solve',domainIdentity:frameDomain,appearanceEdit}:null)}:null);
       valid=true;status.status='submitted-awaiting-presentation';delete status.error;onStatus({...status});
     } catch(error){status.status='preparation-failed';status.error=String(error.message);prototype.setSceneDistributedLightFrame(null);onStatus({...status});throw error;}
   }

@@ -65,7 +65,7 @@ export function createParticleDepthField(device,{optionsWgsl,options}){
  var<workgroup> lower:array<u32,64>;var<workgroup> upper:array<u32,64>;
  @compute @workgroup_size(64) fn build(@builtin(global_invocation_id) gid:vec3<u32>,@builtin(local_invocation_index) tid:u32){
   var lo=0x7f800000u;var hi=0u;
-  if(gid.x<u.size.z){let p=particles[gid.x];let depth=(u.vp*vec4<f32>(p.anchor.xyz,1)).w;let clip=u.vp*vec4<f32>(p.anchor.xyz,1);let z=select((clip.z+clip.w)*.5,clip.z,u.gain.w>.5);if(p.anchor.w>0&&depth>0&&z>=0&&z<=clip.w&&any(particleMaterial(p,u)>vec4<f32>(0))){lo=bitcast<u32>(depth);hi=lo;}}
+  if(gid.x<u.size.z){let p=particles[gid.x];let depth=(u.vp*vec4<f32>(p.anchor.xyz,1)).w;let clip=u.vp*vec4<f32>(p.anchor.xyz,1);let z=select((clip.z+clip.w)*.5,clip.z,u.gain.w>.5);if(p.anchor.w>0&&depth>0&&z>=0&&z<=clip.w){let style=coverageStyle(p,u);var optical=particleMaterial(p,u);optical.w*=style.y;if(style.x>0&&any(optical>vec4<f32>(0))){lo=bitcast<u32>(depth);hi=lo;}}}
   lower[tid]=lo;upper[tid]=hi;workgroupBarrier();
   for(var stride=32u;stride>0u;stride/=2u){if(tid<stride){lower[tid]=min(lower[tid],lower[tid+stride]);upper[tid]=max(upper[tid],upper[tid+stride]);}workgroupBarrier();}
   if(tid==0u){atomicMin(&bounds[0],lower[0]);atomicMax(&bounds[1],upper[0]);}
@@ -75,7 +75,7 @@ export function createParticleDepthField(device,{optionsWgsl,options}){
  let opticalDepth=null,prefix=null,layout=null;const retired=[];
  const drain=()=>{if(retired.length){const old=retired.splice(0);queueMicrotask(()=>device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>old.forEach(t=>t.destroy())));}};
  return {
-  prepare(encoder,s,input,particles,slots,profileWrites=()=>({})){
+  prepare(encoder,s,input,particles,slots,profileWrites,coverageBuffer){
    const plan=particleDepthLayout(s,input);
    // Fill adds its own textures. Particle atlas storage depends only on the
    // allocated extent; the current logical layout/receipt still updates.
@@ -84,7 +84,7 @@ export function createParticleDepthField(device,{optionsWgsl,options}){
     prefix=device.createTexture({label:'particle cumulative optical depth',size:[plan.atlasWidth,plan.atlasHeight],format:'r32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING});}
    layout=plan;
    device.queue.writeBuffer(params,0,new Uint32Array([plan.width,plan.height,plan.columns,plan.slices]));device.queue.writeBuffer(bounds,0,new Uint32Array([0x7f800000,0,0,0]));
-   const p=encoder.beginComputePass({label:'particle retained depth bounds',...profileWrites('depthBounds')});p.setPipeline(boundPipeline);p.setBindGroup(0,device.createBindGroup({layout:boundPipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:particles}},{binding:1,resource:{buffer:options}},{binding:2,resource:{buffer:bounds}}]}));p.dispatchWorkgroups(Math.ceil(slots/64));p.end();drain();return plan;
+   const p=encoder.beginComputePass({label:'particle retained depth bounds',...profileWrites('depthBounds')});p.setPipeline(boundPipeline);p.setBindGroup(0,device.createBindGroup({layout:boundPipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:particles}},{binding:1,resource:{buffer:options}},{binding:2,resource:{buffer:bounds}},{binding:10,resource:{buffer:coverageBuffer}}]}));p.dispatchWorkgroups(Math.ceil(slots/64));p.end();drain();return plan;
   },
   get target(){return opticalDepth;},
   get layout(){return layout;},

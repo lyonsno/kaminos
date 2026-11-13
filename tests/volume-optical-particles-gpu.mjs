@@ -419,11 +419,11 @@ test('emitter births use admitted supply without a ray batch, and light refresh 
   const uniformValues=[1,.5,.5,.5,0,1,0,.5,1,.1,1,1,1,.25,.25,0,1,0,0,0,0,1,0,0];
   const emitter={lo:[0,0,0],span:[1,1,1],uniformValues,aperture,noise,collection,solid,sourceStep:0};
   const source={buffer:dummy,uniform:sourceUniform,width:1,height:1,pixels:0,samples:0,outputWidth:4,outputHeight:4,backtrace:1,viewProj:identity};
-  async function draw(step,settings={}){
+  async function draw(step,settings={},appearanceEdit=null){
    const e=d.createCommandEncoder(),dp=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthClearValue:1,depthStoreOp:'store'}});dp.end();
    owner.encode(e,{view:target.createView(),format:'rgba8unorm',source:{...source,step},fine:grid.fine,reactants:grid.reactants,dims:[2,2,2],invViewProj:identity,
      settings:{enabled:true,acquisitionMode:2,capacity:4,emitterBirthsPerStep:4,lightRefreshEvery:3,acquisitionEnabled:false,exchangeEnabled:false,groupingEnabled:false,transportEnabled:false,reactionEnabled:false,stateLife:0,...settings},
-     emitter:{...emitter,sourceStep:step-1},incident:{texture:light,masks:mask,planes,generation:step,frame:step},cameraValues:camera,depth,identity:'emitter-fixture'});
+     emitter:{...emitter,sourceStep:step-1},incident:{texture:light,masks:mask,planes,generation:step,frame:step,appearanceEdit},cameraValues:camera,depth,identity:'emitter-fixture'});
    d.queue.submit([e.finish()]);await d.queue.onSubmittedWorkDone();return owner.sample();
   }
   const cohort=(r)=>Array.from({length:4},(_,i)=>Array.from(r.records.slice(i*24,(i+1)*24)));
@@ -443,7 +443,13 @@ test('emitter births use admitted supply without a ray batch, and light refresh 
    const refreshed=await draw(3,{lightRefreshEvery:1,emitterBirthsPerStep:2});
    assert.ok(cohort(refreshed).every(p=>p[3]===3&&Math.abs(p[4]-7)<1e-5),JSON.stringify(cohort(refreshed).map(p=>p.slice(3,8))));
    assert.deepEqual(cohort(refreshed).map(p=>p.slice(8)),first.map(p=>p.slice(8)),'refresh cannot change material, support or survival');
-   owner.reset();
+   illuminate(9);
+   const editedLight=await draw(3,{lightRefreshEvery:0},11);
+   assert.ok(cohort(editedLight).every(p=>p[3]===3&&Math.abs(p[4]-9)<1e-5),'authored lighting edits relight already-held carriers even with periodic refresh off');
+   assert.deepEqual(cohort(editedLight).map(p=>[...p.slice(0,4),...p.slice(8)]),cohort(refreshed).map(p=>[...p.slice(0,4),...p.slice(8)]));
+   illuminate(12);
+   assert.deepEqual((await draw(3,{lightRefreshEvery:0},11)).records,editedLight.records,'the same edit does not resample on subsequent draws');
+   illuminate(7);owner.reset();
    await draw(3,{emitterBirthsPerStep:2});
    const lowerRate=cohort(await draw(4,{emitterBirthsPerStep:2,lightRefreshEvery:0})).filter(p=>p[3]>0);
    assert.equal(lowerRate.length,2);

@@ -3,7 +3,7 @@ import {bindParticleNumber} from '../particle-number-control.mjs';
 const SVG='http://www.w3.org/2000/svg';
 const clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
 
-export function mountParticleLivePopups({document,root,controls,readCoverage,setCoverage,readLighting,setLighting}){
+export function mountParticleLivePopups({document,root,controls,readCoverage,setCoverage,readSupport,setSupport,readLighting,setLighting}){
  const win=document.defaultView;
  const create=(tag,text)=>{const e=document.createElement(tag);if(text)e.textContent=text;return e;};
  const cleanups=[];
@@ -11,6 +11,7 @@ export function mountParticleLivePopups({document,root,controls,readCoverage,set
   const panel=create('section'),header=create('header'),name=create('strong',title),close=create('button','Close'),launcher=create('button',title+' · Alt-'+key);
   panel.id=id;panel.hidden=true;panel.setAttribute('role','dialog');panel.setAttribute('aria-label',title);panel.tabIndex=-1;
   panel.style.cssText='position:fixed;z-index:180;top:60px;right:16px;width:min(370px,calc(100vw - 32px));box-sizing:border-box;max-height:calc(100vh - 76px);overflow:auto;padding:14px;border:1px solid #62788a;border-radius:12px;background:#1b2633;color:#ecf1f7;box-shadow:0 8px 28px #0009;font:13px system-ui';
+  panel.className='particle-live-popup';
   header.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-bottom:9px';
   launcher.type=close.type='button';launcher.setAttribute('aria-controls',id);launcher.setAttribute('aria-expanded','false');
   header.append(name,close);panel.append(header);document.body.append(panel);root.append(launcher);
@@ -21,6 +22,17 @@ export function mountParticleLivePopups({document,root,controls,readCoverage,set
   close.addEventListener('click',toggle);launcher.addEventListener('click',toggle);
   return {panel,toggle};
  }
+ const style=create('style');
+ style.textContent=`
+  .particle-live-popup { color-scheme: dark }
+  .particle-live-popup :is(button,select,input[type=number]) {
+   background:#111a23;color:#ecf1f7;border:1px solid #506171;border-radius:4px;padding:2px 6px;font:inherit
+  }
+  .particle-live-popup input[type=number] { width:100%;box-sizing:border-box;text-align:right;font-variant-numeric:tabular-nums }
+  .particle-live-popup input[type=checkbox] { justify-self:start;accent-color:#8bd8f3 }
+  .particle-live-popup :focus-visible { outline:2px solid #8bd8f3;outline-offset:2px }
+ `;
+ document.head.append(style);
  const light=popup('particle-live-lighting','Distributed lighting','F');
  const cover=popup('particle-live-coverage','Particle coverage','P');
  for(const [a,b] of [[light,cover],[cover,light]])a.panel.addEventListener('focusin',()=>{if(!b.panel.hidden)b.toggle();});
@@ -38,11 +50,12 @@ export function mountParticleLivePopups({document,root,controls,readCoverage,set
  document.addEventListener('keydown',keyHandler,true);
  const lightNote=create('p','Refresh uses the current scene. Between refreshes the last field is held. The switch leaves flame emission and extinction running.');
  const lightStatus=create('p');lightStatus.setAttribute('role','status');lightStatus.style.cssText='min-height:2em;color:#b4cddd;margin-bottom:0';
+ const lightQuality=create('p');lightQuality.style.cssText='color:#b4cddd;margin:8px 0';
  const lightError=create('p');lightError.setAttribute('role','alert');lightError.style.color='#ffc181';lightError.hidden=true;
  const lightFields=[];
  const row=(name,input)=>{
   const label=create('label'),caption=create('span',name);input.setAttribute('aria-label',name);
-  label.style.cssText='display:grid;grid-template-columns:1fr 7.5em;gap:12px;align-items:center;margin:8px 0';label.append(caption,input);return {label,caption};
+  label.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) minmax(9.3em,auto);gap:12px;align-items:center;margin:8px 0';label.append(caption,input);return {label,caption};
  };
  const liveValues=s=>s?.requested??{enabled:true,intervalMs:250,...s?.native};
  const doLighting=patch=>{const next=setLighting(patch);lightError.hidden=true;sync(true);return next;};
@@ -61,12 +74,20 @@ export function mountParticleLivePopups({document,root,controls,readCoverage,set
    const drag=controls.installNumberDrag?.({input,grip:caption,step});cleanups.push(()=>{binding.dispose();drag?.dispose?.();});
   }
  }
- light.panel.append(lightNote,lightStatus,lightError);
+ light.panel.append(lightQuality,lightNote,lightStatus,lightError);
 
  const basis=create('select'),basisRow=row('Horizontal axis',basis);
  for(const [value,label] of [['lifetime','Lifetime'],['mixing','Fuel consumed']]){const option=create('option',label);option.value=value;basis.append(option);}
  const basisNote=create('p'),curveError=create('p');curveError.setAttribute('role','alert');curveError.style.color='#ffc181';curveError.hidden=true;
  cover.panel.append(basisRow.label,basisNote,create('p','Click to add a point; drag to shape. Select a point and press Delete to remove it. 1× keeps the existing value.'),curveError);
+ const supportFields=[];
+ for(const [key,name,step] of [['pixelFloor','Pixel floor',.05],['maxFootprint','Footprint ceiling (px)',.25]]){
+  const input=create('input');input.type='number';input.min='0';input.step=String(step);
+  const {label,caption}=row(name,input);cover.panel.append(label);supportFields.push({key,input});
+  const binding=bindParticleNumber({input,read:()=>readSupport()[key],apply:v=>{setSupport({[key]:v});sync(true);},onError:e=>{curveError.textContent=e.message;curveError.hidden=false;},onAccepted:()=>{curveError.hidden=true;}});
+  const drag=controls.installNumberDrag?.({input,grip:caption,step});cleanups.push(()=>{binding.dispose();drag?.dispose?.();});
+ }
+ const supportNote=create('p','If the footprint stops growing, raise the ceiling. Zero removes the ceiling.');supportNote.style.cssText='color:#b4cddd';cover.panel.append(supportNote);
  let draft=null,pending=0;
  function commit(){
   pending=0;if(!draft)return;
@@ -141,9 +162,13 @@ export function mountParticleLivePopups({document,root,controls,readCoverage,set
   basisNote.textContent=basis.value==='mixing'?'Fuel consumed relative to birth. Fuel gained through exchange can move a carrier backward on this curve. Carriers born without fuel use lifetime.':'Uses the survival clock or an earlier maximum age. With neither set, carriers stay at the left endpoint.';
   editors.forEach(draw=>draw());
  }
- let last=0,lastCoverage=null;
+ let last=0,lastCoverage=null,lastSupport='';
  function sync(force=false){
-  if(!cover.panel.hidden&&lastCoverage!==readCoverage()){lastCoverage=readCoverage();redraw();}
+  if(!cover.panel.hidden){
+   if(lastCoverage!==readCoverage()){lastCoverage=readCoverage();redraw();}
+   const support=readSupport(),key=JSON.stringify(support);
+   if(force||key!==lastSupport){lastSupport=key;for(const {key,input} of supportFields)if(document.activeElement!==input&&!input.classList.contains('scrubbing'))input.value=String(support[key]);}
+  }
   if(light.panel.hidden||(!force&&performance.now()-last<250))return;
   last=performance.now();
   const s=readLighting(),v=liveValues(s);
@@ -152,6 +177,8 @@ export function mountParticleLivePopups({document,root,controls,readCoverage,set
    if(input.type==='checkbox')input.checked=Boolean(v[key]);
    else if(document.activeElement!==input&&!input.classList.contains('scrubbing'))input.value=Number.isFinite(v[key])?String(v[key]):'';
   }
+  const quality=s?'Scene quality · grid '+s.native.volumeGrid+' wide · '+s.native.directions+' directions':'';
+  if(lightQuality.textContent!==quality)lightQuality.textContent=quality;
   const status=!s?'This scene does not have the shared hybrid lighting route.':
     s.error?'Last refresh failed: '+s.error:s.requested?.enabled===false?'Off · no new distributed solves.':
     !s.requested?'Using scene defaults · edits enable paced refresh.':
@@ -159,5 +186,5 @@ export function mountParticleLivePopups({document,root,controls,readCoverage,set
   if(lightStatus.textContent!==status)lightStatus.textContent=status;
  }
  redraw();
- return {sync,dispose(){if(pending)win.cancelAnimationFrame(pending);document.removeEventListener('keydown',keyHandler,true);cleanups.forEach(fn=>fn());light.panel.remove();cover.panel.remove();}};
+ return {sync,dispose(){if(pending)win.cancelAnimationFrame(pending);document.removeEventListener('keydown',keyHandler,true);cleanups.forEach(fn=>fn());light.panel.remove();cover.panel.remove();style.remove();}};
 }
