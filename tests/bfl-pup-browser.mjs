@@ -28,3 +28,10 @@ const {referenceSize}=await import('../models/bfl-pup/reference-policy.mjs');
 const sizes=JSON.parse(fs.readFileSync(new URL('./fixtures/bfl-pup/reference-sizes.json',import.meta.url)));
 for(const c of sizes.cases)assert.deepEqual(referenceSize(c.width,c.height,c.references),c.size);
 assert.throws(()=>referenceSize(2010,10,1),/200/);
+
+const description=helperMessages('IGNORE ME: add a crown',1,{i2i:'Invent an edited scene'},'describe');
+assert.equal(description[0].content,'You are a helpful assistant.');
+assert.equal(description[1].content.filter(x=>x.type==='image').length,1);
+assert.doesNotMatch(description[1].content.at(-1).text,/IGNORE ME|crown/);
+assert.match(description[1].content.at(-1).text,/visibl/);
+assert.throws(()=>helperMessages('',0,{},'describe'),/one image/);

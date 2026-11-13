@@ -24,24 +24,26 @@ export function createAuthoringPromptExpansion({createHelper,changed=()=>{},bloc
   clear(){if(active)throw Error('Finish the prompt expansion first.');started=null;state={status:'idle',draft:'',request:null,result:null,error:null};changed();},
   stop(){if(!active)return false;abort.abort(Error('Prompt expansion cancelled.'));set({status:'stopping'});return true;},
   runOutsideQueue(){if(!active||state.status!=='waiting')return false;bypass.abort(Error('Run outside queue selected.'));set({status:'leaving-queue',progress:'Leaving the queue…'});return true;},
-  async expand({prompt,model='flux3',reference=null,admission='queue'}){
+  async expand({prompt='',model='flux3',reference=null,admission='queue',task='expand'}){
    if(active)throw Error('Prompt expansion is already running');
    const reason=blocked();if(reason)throw Error(reason);
-   if(!String(prompt||'').trim())throw Error('Describe the image before expanding its prompt');
+   if(!['expand','describe'].includes(task))throw Error('Unknown prompt helper task');
+   if(task==='describe'&&!reference)throw Error('Choose an image to describe');
+   if(task==='expand'&&!String(prompt||'').trim())throw Error('Describe the image before expanding its prompt');
    if(reference&&(reference.kind!=='image'||assetWithheld(reference)))throw Error('Choose an available reference image');
    if(!['queue','outside'].includes(admission))throw Error('Choose queued or outside-queue execution');
-   const request={prompt:String(prompt),model,reference:reference?structuredClone(reference):null,admission};
+   const request={task,prompt:String(prompt),model,reference:reference?structuredClone(reference):null,admission};
    active=true;abort=new AbortController();bypass=new AbortController();started=clock();
    set({status:'loading',request,draft:'',result:null,error:null,elapsedMs:null,coordination:null,queue:null,progress:'Loading the prompt helper…'});
    try{
     helper??=await createHelper({keepLoaded,onProgress:event=>set({status:'loading',...(event.phase==='unconfigured'?{coordination:'Shared GPU coordination is unavailable on this server.'}:event.phase==='outside-queue'?{coordination:'Running outside Greenroom by your choice.'}:{}),progress:event.phase==='resident'?'Using the loaded prompt helper…':'Loading the prompt helper…'}),
      onWait:wait=>set({status:'waiting',queue:wait,progress:`Greenroom queue${Number.isInteger(wait.position)?` · position ${wait.position}`:''}${wait.queueHeld?' · held by operator':''}${wait.paused?' · paused':''}${wait.heldBy?.length?' · GPU held by '+wait.heldBy.join(', '):''}`})});
-    const result=await helper.expand({prompt:request.prompt,images:reference?[referenceSource(reference)]:[],signal:abort.signal,admission,bypassSignal:bypass.signal,
-     onText:text=>set({status:'running',draft:text,progress:'Expanding your request…'})});
+    const result=await helper.expand({task,prompt:request.prompt,images:reference?[referenceSource(reference)]:[],signal:abort.signal,admission,bypassSignal:bypass.signal,
+     onText:text=>set({status:'running',draft:text,progress:task==='describe'?'Describing the image…':'Expanding your request…'})});
     if(typeof result?.text!=='string'||!result.text.trim())throw Error('The prompt helper returned an empty expansion');
     // Preserve the result before cleanup so a handback/disposal error cannot erase it.
     set({result,draft:result.text,...(result.gpuLease?.status==='bypassed'?{coordination:'Ran outside Greenroom by your choice.'}:{})});if(!keepLoaded){await helper.dispose();helper=null;}
-    set({status:result.partial?'partial':'complete',progress:result.partial?'Partial expansion retained. Review it before use.':'Prompt expanded. You can edit it before generating.'});
+    set({status:result.partial?'partial':'complete',progress:result.partial?'Partial expansion retained. Review it before use.':task==='describe'?'Image described. Edit the draft, then use it as a text-only prompt.':'Prompt expanded. You can edit it before generating.'});
     return result;
    }catch(error){
     try{await helper?.dispose();}catch(cleanup){error.cleanupError=String(cleanup.message||cleanup);}finally{helper=null;}
@@ -57,10 +59,10 @@ export function createAuthoringPromptExpansion({createHelper,changed=()=>{},bloc
  };
 }
 
-export function installAuthoringPromptExpansion({document,controller,assets,imageController,changed=()=>{},reference=()=>assets.read({selectionOnly:true}).selected}){
+export function installAuthoringPromptExpansion({document,controller,assets,imageController,changed=()=>{},reference=()=>assets.read({selectionOnly:true}).selected,describeReference=reference}){
  const byId=id=>document.getElementById(id),prompt=byId('asset-prompt');
  const root=document.createElement('div');root.className='asset-prompt-help';
- root.innerHTML=`<div class="asset-prompt-help-actions"><button type="button" id="asset-prompt-expand" title="BFL’s FLUX.3 prompt helper">Expand prompt</button><button type="button" id="asset-prompt-cancel" hidden>Cancel expansion</button><button type="button" id="asset-prompt-undo" hidden>Undo expansion</button></div><div id="asset-prompt-help-status" role="status" aria-live="polite"></div><textarea id="asset-prompt-draft" aria-label="Expanded prompt draft" rows="5" hidden></textarea><button type="button" id="asset-prompt-use" hidden>Use expanded prompt</button>`;
+ root.innerHTML=`<div class="asset-prompt-help-actions"><button type="button" id="asset-image-describe" title="Describe the selected image into an editable prompt using the browser BFL helper">Describe as prompt</button><button type="button" id="asset-prompt-expand" title="BFL’s FLUX.3 prompt helper">Expand prompt</button><button type="button" id="asset-prompt-cancel" hidden>Cancel expansion</button><button type="button" id="asset-prompt-undo" hidden>Undo expansion</button></div><div id="asset-prompt-help-status" role="status" aria-live="polite"></div><textarea id="asset-prompt-draft" aria-label="Expanded prompt draft" rows="5" hidden></textarea><button type="button" id="asset-prompt-use" hidden>Use expanded prompt</button>`;
  prompt.insertAdjacentElement('afterend',root);
  const admissionControls=document.createElement('div');admissionControls.className='asset-prompt-residency';
  admissionControls.innerHTML=`<label title="Start without waiting for Greenroom. This can overlap another job and share its GPU and memory."><input type="checkbox" id="asset-prompt-outside-queue"> Run outside queue</label><button type="button" id="asset-prompt-skip-queue" hidden title="Remove this expansion from the queue and start it alongside any current job">Run outside queue now</button>`;root.append(admissionControls);
@@ -73,10 +75,14 @@ export function installAuthoringPromptExpansion({document,controller,assets,imag
  byId('asset-prompt-unload').onclick=()=>controller.unload().catch(error=>{residencyError=error.message;render();});
  let applied=null,timer=null,painted=null,lastStatus=null;
  const current=()=>({model:byId('asset-image-model').value,reference:byId('asset-use-reference').checked?reference():null});
+ const descriptionSelection=()=>({model:byId('asset-image-model').value,reference:describeReference()});
+ const matchingSelection=()=>controller.read().request?.task==='describe'?descriptionSelection():current();
  const use=()=>{
-  const state=controller.read();if(!promptExpansionMatches(state.request,current()))return false;
+  const state=controller.read();if(!promptExpansionMatches(state.request,matchingSelection()))return false;
   const text=byId('asset-prompt-draft').value;if(!text.trim())return false;
-  applied={request:state.request,result:state.result,text};prompt.value=text;prompt.dispatchEvent(new Event('input',{bubbles:true}));render();return true;
+  applied={request:state.request,result:state.result,text,previousReferenceEnabled:byId('asset-use-reference').checked};
+  if(state.request.task==='describe'){byId('asset-use-reference').checked=false;byId('asset-use-reference').dispatchEvent(new Event('change',{bubbles:true}));}
+  prompt.value=text;prompt.dispatchEvent(new Event('input',{bubbles:true}));render();return true;
  };
  function render(){
   const state=controller.read(),busy=controller.busy(),unavailable=imageController.busy()||!!imageController.read().pending;
@@ -84,9 +90,13 @@ export function installAuthoringPromptExpansion({document,controller,assets,imag
   byId('asset-prompt-skip-queue').hidden=!busy||state.status!=='waiting';
   byId('asset-prompt-keep-loaded').checked=state.keepLoaded;byId('asset-prompt-keep-loaded').disabled=busy;byId('asset-prompt-unload').hidden=!state.resident;byId('asset-prompt-unload').disabled=busy;byId('asset-prompt-residency-status').textContent=residencyError||(state.resident?'Loaded in this tab':state.keepLoaded?'Retains weights after the first expansion':'Unloads after each expansion');
   byId('asset-prompt-expand').disabled=busy||unavailable||!prompt.value.trim();
+  const image=describeReference();byId('asset-image-describe').disabled=busy||unavailable||image?.kind!=='image'||assetWithheld(image);
+  byId('asset-prompt-use').textContent=state.request?.task==='describe'?'Use as text-only prompt':'Use expanded prompt';
+  byId('asset-prompt-cancel').textContent='Cancel';
+  byId('asset-prompt-undo').textContent='Undo prompt change';
   byId('asset-prompt-cancel').hidden=!busy;byId('asset-prompt-cancel').disabled=state.status==='stopping';
   prompt.readOnly=busy;
-  const matches=promptExpansionMatches(state.request,current()),wasApplied=applied?.request===state.request&&prompt.value===applied.text;
+  const matches=promptExpansionMatches(state.request,matchingSelection()),wasApplied=applied?.request===state.request&&prompt.value===applied.text;
   const showDraft=!!state.draft&&!wasApplied;
   const draft=byId('asset-prompt-draft');draft.hidden=!showDraft;draft.readOnly=busy;
   if(state.draft!==painted){draft.value=state.draft;painted=state.draft;}
@@ -110,10 +120,18 @@ export function installAuthoringPromptExpansion({document,controller,assets,imag
   catch{/* the operation retains the full failure and any draft */}
   render();changed();
  };
+ const describe=async()=>{
+  applied=null;
+  try{await controller.expand({...descriptionSelection(),task:'describe',prompt:prompt.value,admission:byId('asset-prompt-outside-queue').checked?'outside':'queue'});}catch{/* retained in operation state */}
+  render();changed();
+ };
+ byId('asset-image-describe').onclick=describe;
  byId('asset-prompt-expand').onclick=expand;byId('asset-prompt-cancel').onclick=()=>controller.stop();byId('asset-prompt-use').onclick=use;
- byId('asset-prompt-undo').onclick=()=>{if(applied&&prompt.value===applied.text){prompt.value=applied.request.prompt;applied=null;prompt.dispatchEvent(new Event('input',{bubbles:true}));render();}};
+ byId('asset-prompt-undo').onclick=()=>{if(applied&&prompt.value===applied.text){prompt.value=applied.request.prompt;
+   if(applied.request.task==='describe'){byId('asset-use-reference').checked=applied.previousReferenceEnabled;byId('asset-use-reference').dispatchEvent(new Event('change',{bubbles:true}));}
+   applied=null;prompt.dispatchEvent(new Event('input',{bubbles:true}));render();}};
  prompt.addEventListener('input',render);byId('asset-image-model').addEventListener('change',render);byId('asset-use-reference').addEventListener('change',render);
  document.defaultView.addEventListener('pagehide',()=>controller.dispose().catch(()=>{}));
  render();
- return {render,expand,configureDefault:value=>{if(!explicitPreference)return chooseResidency(value===true);},reset(){applied=null;painted=null;controller.clear();},recall(provenance){applied=provenance?.promptExpansion?{request:provenance.promptExpansion.request,result:provenance.promptExpansion.result,text:provenance.promptExpansion.expandedPrompt}:null;painted=null;controller.clear();},provenance:()=>applied&&promptExpansionMatches(applied.request,current())?{schema:'kaminos.prompt-expansion.v1',request:applied.request,expandedPrompt:applied.text,result:applied.result}:null};
+ return {render,expand,describe,configureDefault:value=>{if(!explicitPreference)return chooseResidency(value===true);},reset(){applied=null;painted=null;controller.clear();},recall(provenance){applied=provenance?.promptExpansion?{request:provenance.promptExpansion.request,result:provenance.promptExpansion.result,text:provenance.promptExpansion.expandedPrompt}:null;painted=null;controller.clear();},provenance:()=>applied&&applied.request.task!=='describe'&&promptExpansionMatches(applied.request,current())?{schema:'kaminos.prompt-expansion.v1',request:applied.request,expandedPrompt:applied.text,result:applied.result}:null};
 }

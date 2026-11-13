@@ -26,12 +26,17 @@ export function visionPositions(grid, side=48, merge=2) {
 export function penalizeGenerated(ids,promptLength,logits,penalty){
   for(const id of new Set(ids.slice(promptLength))) logits[Number(id)]-=penalty;
 }
-export function helperMessages(prompt,referenceCount,systems){
+export function helperMessages(prompt,referenceCount,systems,task='expand'){
+  if(task==='describe'){
+    if(referenceCount!==1)throw Error('Image description requires exactly one image.');
+    return [{role:'system',content:'You are a helpful assistant.'},{role:'user',content:[{type:'image'},{type:'text',text:'Describe what is visibly present in this image as a standalone image-generation prompt. Include the main subjects, their shape, color and material, their arrangement, the background, lighting, camera view and visual style. Describe only visible details; do not invent hidden features, actions, objects or a story. Return only the prompt, without an introduction or editing instructions.'}]}];
+  }
+  if(task!=='expand')throw Error('Unknown prompt helper task.');
   if(!Number.isInteger(referenceCount)||referenceCount<0||referenceCount>10) throw Error('BFL accepts up to 10 ordered reference images.');
   if(!prompt.trim()) throw Error('Enter an image request.');
-  const task=referenceCount?'i2i':'t2i';
+  const mode=referenceCount?'i2i':'t2i';
   const content=referenceCount?[...Array.from({length:referenceCount},()=>({type:'image'})),{type:'text',text:`Reference images follow in order (the first image, the second image, ...).\nUser request: ${prompt}\nOutput the caption.`}]:prompt;
-  return [{role:'system',content:systems[task]},{role:'user',content}];
+  return [{role:'system',content:systems[mode]},{role:'user',content}];
 }
 
 export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runtimeUrl=TRANSFORMERS_URL}={}){
@@ -104,11 +109,11 @@ export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runt
   }
   return {
     backend:'transformers.js/onnx-webgpu',modelRevision:BFL_SOURCE_REVISION,
-    async expand({prompt,images=[],signal,onText=()=>{}}){
+    async expand({prompt,images=[],task='expand',signal,onText=()=>{}}){
       if(busy)throw Error('The prompt helper is already generating.');
       busy=true;const started=performance.now();let output=null,inputs=null,stopping=null;
       try{
-        const messages=helperMessages(prompt,images.length,systems);
+        const messages=helperMessages(prompt,images.length,systems,task);
         if(signal?.aborted)throw signal.reason??Error('Prompt expansion cancelled.');
         const text=processor.apply_chat_template(messages,{add_generation_prompt:true,enable_thinking:false});
         const raw=await Promise.all(images.map(async image=>prepareReference(
@@ -143,7 +148,7 @@ export async function createBrowserPromptHelper({modelUrl,onProgress=()=>{},runt
         if(signal?.aborted)throw signal.reason??Error('Prompt expansion cancelled.');
         if(!expanded)throw Error('The prompt helper returned empty output.');
         const last=Number(ids.at(-1)),stopReason=[248046,248044].includes(last)?'eos':'output-limit';
-        return {modelReused,text:expanded,stopReason,partial:stopReason!=='eos',promptTokens:promptLength,generatedTokens:ids.length,
+        return {task,modelReused,text:expanded,stopReason,partial:stopReason!=='eos',promptTokens:promptLength,generatedTokens:ids.length,
           generationMs:performance.now()-generationStarted,totalMs:performance.now()-started,
           backend:'transformers.js/onnx-webgpu',modelRevision:BFL_SOURCE_REVISION,modelUrl:base,referenceCount:images.length,
           runtimeCompatibility:['Transformers.js4.2 text-only continuation delta'],

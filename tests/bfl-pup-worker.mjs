@@ -44,3 +44,6 @@ const two=isolatedResident.expand({prompt:'two'});let settled=false;two.then(()=
 kept.emit({type:'complete',value:{text:'two'}});assert.equal((await two).text,'two');
 kept.emit({type:'error',requestId:null,value:'idle device loss'});assert.equal(kept.terminated,true);assert.equal(isolatedResident.resident,false);
 await isolatedResident.dispose();
+const describeHelper=createWorkerPromptHelper({modelUrl:'/weights',WorkerClass:FakeWorker});
+const description=describeHelper.expand({task:'describe',prompt:'',images:['image']});const describeWorker=workers.at(-1);
+assert.equal(describeWorker.request.task,'describe');describeWorker.emit({type:'complete',value:{task:'describe',text:'A kettle'}});assert.equal((await description).task,'describe');await describeHelper.dispose();

@@ -73,3 +73,31 @@ test('waiting operation exposes queue position and skip choice to the retained p
 test('prompt availability reports the selected package diagnosis',()=>{
  assert.throws(()=>prompt.authoringPromptWeightRoot({modelAvailability:{pup:{status:'unavailable',reason:'Missing decoder payload on this installation'}}}),/Missing decoder payload/);
 });
+
+test('image description needs no existing prompt and keeps its source independent of conditioning',async()=>{
+ let input;const c=prompt.createAuthoringPromptExpansion({createHelper:()=>({expand:async x=>{input=x;return{text:'A copper kettle',task:'describe',partial:false};},dispose:async()=>{}})});
+ await assert.rejects(c.expand({task:'describe',prompt:''}),/image/i);
+ const image={kind:'image',source:'/copper.png'};
+ await c.expand({task:'describe',prompt:'',reference:image});
+ assert.equal(input.task,'describe');assert.deepEqual(input.images,['/copper.png']);
+ assert.equal(c.read().request.task,'describe');assert.equal(c.read().result.text,'A copper kettle');
+});
+
+test('describe uses the viewed image; adoption disables conditioning, supports undo and rejects changed selection',async()=>{
+ const nodes=new Map();class Element{
+  constructor(){this.value='';this.checked=false;this.classList={toggle(){}};this.events={};}
+  set innerHTML(text){for(const m of text.matchAll(/\bid="([^"]+)"/g))nodes.set(m[1],new Element());}
+  append(){} insertAdjacentElement(){} addEventListener(k,f){this.events[k]=f;} dispatchEvent(e){this.events[e.type]?.();}
+ }
+ for(const id of ['asset-prompt','asset-image-model','asset-use-reference'])nodes.set(id,new Element());
+ const document={createElement:()=>new Element(),getElementById:id=>nodes.get(id),defaultView:{localStorage:{getItem:()=>null},addEventListener(){}}};
+ let viewed={kind:'image',source:'/viewed.png'},input;
+ const controller=prompt.createAuthoringPromptExpansion({createHelper:()=>({expand:async x=>{input=x;return{text:'Copper kettle on white',task:x.task,partial:false};},dispose:async()=>{}})});
+ const ui=prompt.installAuthoringPromptExpansion({document,controller,assets:{},imageController:{busy:()=>false,read:()=>({})},reference:()=>({kind:'image',source:'/pinned.png'}),describeReference:()=>viewed});
+ nodes.get('asset-prompt').value='old instruction';nodes.get('asset-image-model').value='flux3';nodes.get('asset-use-reference').checked=true;
+ await ui.describe();assert.deepEqual(input.images,['/viewed.png']);assert.equal(nodes.get('asset-prompt').value,'old instruction','description waits for explicit adoption');
+ viewed={kind:'image',source:'/other.png'};ui.render();assert.equal(nodes.get('asset-prompt-use').disabled,true);assert.equal(nodes.get('asset-prompt-use').onclick(),false);
+ viewed={kind:'image',source:'/viewed.png'};ui.render();nodes.get('asset-prompt-use').onclick();
+ assert.equal(nodes.get('asset-use-reference').checked,false);assert.equal(nodes.get('asset-prompt').value,'Copper kettle on white');
+ nodes.get('asset-prompt-undo').onclick();assert.equal(nodes.get('asset-prompt').value,'old instruction');assert.equal(nodes.get('asset-use-reference').checked,true);
+});

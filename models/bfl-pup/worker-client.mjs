@@ -6,7 +6,7 @@ export function createWorkerPromptHelper({modelUrl,onProgress=()=>{},WorkerClass
  const retire=()=>{worker?.terminate();worker=null;resident=false;};
  return {
   get busy(){return active!==null;},get resident(){return resident;},
-  expand({prompt,images=[],signal,onText=()=>{},onProgress:requestProgress=onProgress}){
+  expand({prompt,images=[],task='expand',signal,onText=()=>{},onProgress:requestProgress=onProgress}){
    if(disposed)return Promise.reject(Error('Prompt helper is disposed.'));
    if(active)return Promise.reject(Error('Prompt helper is already generating.'));
    if(signal?.aborted)return Promise.reject(signal.reason??Error('Prompt expansion cancelled.'));
@@ -36,7 +36,7 @@ export function createWorkerPromptHelper({modelUrl,onProgress=()=>{},WorkerClass
      worker.onerror=event=>{if(worker===owned){if(active)active.reject(Error(event.message||'The prompt worker failed.'));else retire();}};
      worker.onmessageerror=()=>{if(worker===owned){if(active)active.reject(Error('The prompt worker returned an unreadable result.'));else retire();}};
      signal?.addEventListener('abort',abort,{once:true});
-     worker.postMessage({requestId,modelUrl,prompt,images,keepLoaded});
+     worker.postMessage({requestId,modelUrl,prompt,images,task,keepLoaded});
      if(signal?.aborted)abort();
     }catch(error){if(active?.requestId===requestId)finish(false,error);else{retire();reject(error);}}
    });
