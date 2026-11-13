@@ -15,3 +15,11 @@ console.log('hand witness rejects substituted, absent, incomplete and invisible 
 assert.throws(()=>checks.assertHandObservation(row,{frameId:3,captureId:'session_3'}),/earlier source/);
 assert.throws(()=>checks.assertHandObservation(row,{frameId:2,captureId:'session_3'}),/earlier source/);
 checks.assertHandObservation(row,{frameId:2,captureId:'session_2'});
+assert.equal(typeof checks.normalizeHandWitness,'function','CDP witnesses must preserve typed vertex arrays as actual arrays');
+const typed=structuredClone(row);typed.state.last.hands[0].verticesMeters=new Float32Array(778*3).fill(.1);
+const normalized=checks.normalizeHandWitness(typed);
+assert.ok(Array.isArray(normalized.state.last.hands[0].verticesMeters));
+checks.assertHandObservation(JSON.parse(JSON.stringify(normalized)));
+
+const wrongWire=structuredClone(row);wrongWire.state.last.hands[0].verticesMeters={0:.1,1:.1,2:.1};
+assert.throws(()=>checks.assertHandObservation(checks.normalizeHandWitness(wrongWire)),/complete geometry/);
