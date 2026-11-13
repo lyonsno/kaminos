@@ -1,10 +1,11 @@
 import {makeEarthState} from './material.mjs';
 // A packet represents a bound aggregate of fines, not an individual clay platelet.
 // Its fixed sphere volume and mass survive rearrangement. Bulk pore volume is free.
-export function makePacketState({count=32768,packetCount=count,packetRadius=.0000715,...options}={}){
+export function makePacketState({count=32768,packetCount=count*2,packetRadius=.00011,...options}={}){
  if(!Number.isSafeInteger(packetCount)||packetCount<1||!(packetRadius>0&&Number.isFinite(packetRadius)))throw Error('Positive packet count and radius required');
  const grit=makeEarthState({...options,count,clods:0,materialLevels:0}),floats=new Float32Array((count+packetCount)*24);floats.set(grit.floats);
- const {width,depth,massScale}=grit,cell=grit.radius*4.2,buckets=new Map(),key=(x,y,z)=>`${x},${y},${z}`;
+ let gritBound=0;for(let i=0;i<count;i++){const o=i*24;gritBound=Math.max(gritBound,Math.abs(floats[o+16])+floats[o+11],Math.abs(floats[o+17])+floats[o+15]);}
+ const {width,depth,massScale}=grit,cell=Math.max(grit.radius*4.2,gritBound+packetRadius),buckets=new Map(),key=(x,y,z)=>`${x},${y},${z}`;
  const rotate=(q,v)=>{const [x,y,z,w]=q,[a,b,c]=v;const t=[2*(y*c-z*b),2*(z*a-x*c),2*(x*b-y*a)];return [a+w*t[0]+y*t[2]-z*t[1],b+w*t[1]+z*t[0]-x*t[2],c+w*t[2]+x*t[1]-y*t[0]];};
  let top=0;
  for(let i=0;i<count;i++){const o=i*24,p=Array.from(floats.subarray(o,o+3)),c=p.map(v=>Math.floor(v/cell)),k=key(...c);if(!buckets.has(k))buckets.set(k,[]);buckets.get(k).push(i);top=Math.max(top,p[1]+Math.max(floats[o+11],floats[o+15]));}
@@ -25,5 +26,5 @@ export function makePacketState({count=32768,packetCount=count,packetRadius=.000
 export function packetGrid(state,reach=.35){
  const n=state.floats.length/24;if(n!==state.grainCount+state.packetCount)throw Error('Every body must have an explicit material phase');
  let gritBound=0,fineRadius=0;for(let i=0;i<n;i++){const o=i*24;if(i<state.grainCount)gritBound=Math.max(gritBound,Math.abs(state.floats[o+16])+state.floats[o+11],Math.abs(state.floats[o+17])+state.floats[o+15]);else fineRadius=Math.max(fineRadius,state.floats[o+11]);}
- const capacity=c=>2**Math.ceil(Math.log2(Math.max(1,c*2)));return {coarseCell:2*gritBound+fineRadius*reach,fineCell:fineRadius*(2+reach),coarseBuckets:capacity(state.grainCount),fineBuckets:capacity(state.packetCount),gritBound,fineRadius};
+ const capacity=c=>2**Math.ceil(Math.log2(Math.max(1,c*2)));return {coarseCell:Math.max(2*gritBound,gritBound+fineRadius)+fineRadius*reach,fineCell:fineRadius*(2+reach),coarseBuckets:capacity(state.grainCount),fineBuckets:capacity(state.packetCount),gritBound,fineRadius};
 }

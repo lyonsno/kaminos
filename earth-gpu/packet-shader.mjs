@@ -28,13 +28,15 @@ fn motion(i:u32,r:vec3f)->vec3f{let b=bodies[i];let old=before[i];return b.p.xyz
 fn solve(i:u32,j:u32,ai:vec3f,aj:vec3f,ri:f32,rj:f32,countOnly:bool,adhesion:bool){
  let a=bodies[i];let b=bodies[j];let d=a.p.xyz+ai-b.p.xyz-aj;let len=length(d);let gap=len-ri-rj;let reach=p.cohesion.y*min(ri,rj);
  if(gap>=select(0.0,reach,adhesion)){return;}
- if(countOnly){if(gap<0.0){atomicAdd(&degree[i],1u);atomicAdd(&degree[j],1u);}return;}
+ if(countOnly){if(gap<0.0||(adhesion&&p.cohesion.x>0.0&&(j>=p.counts.y||p.cohesion.z>0.0))){atomicAdd(&degree[i],1u);atomicAdd(&degree[j],1u);}return;}
  let n=select(vec3f(0,1,0),d/max(len,1e-30),len>1e-20);let point=(a.p.xyz+ai-n*ri+b.p.xyz+aj+n*rj)*.5;let ra=point-a.p.xyz;let rb=point-b.p.xyz;
  let ga=cross(ra,n);let gb=cross(rb,n);let effective=a.p.w+b.p.w+dot(ga,invI(a,ga))+dot(gb,invI(b,gb));let relax=.9/f32(max(1u,max(atomicLoad(&degree[i]),atomicLoad(&degree[j]))));
- var lambda=max(-gap,0.0)/max(effective,1e-30)*relax;var adhesive=0.0;
- if(adhesion&&gap>0.0&&reach>0.0){let force=p.cohesion.x*3.14159265*min(ri,rj)*min(ri,rj)*(1.0-gap/reach)*select(p.cohesion.z,1.0,i>=p.counts.y&&j>=p.counts.y);adhesive=min(gap/max(effective,1e-30),force*p.domain.w*p.domain.w/(p.cohesion.w*p.law.w));lambda-=adhesive;}
+ var lambda=max(-gap,0.0)/max(effective,1e-30)*relax;var preload=0.0;
+ // Cohesive preload survives touching/compressed contact for tangential yield.
+ // Only tensile closure is gap-limited; shared adhesive neighbors relax together.
+ if(adhesion&&reach>0.0){let force=p.cohesion.x*3.14159265*min(ri,rj)*min(ri,rj)*(1.0-max(gap,0.0)/reach)*select(p.cohesion.z,1.0,i>=p.counts.y&&j>=p.counts.y);preload=force*p.domain.w*p.domain.w/(p.cohesion.w*p.law.w);if(gap>0.0){lambda-=min(gap/max(effective,1e-30)*relax,preload);}}
  var impulse=n*lambda;let relative=motion(i,ra)-motion(j,rb);let tangent=relative-n*dot(relative,n);let speed=length(tangent);
- if(speed>1e-12){let t=tangent/speed;let gta=cross(ra,t);let gtb=cross(rb,t);let wt=a.p.w+b.p.w+dot(gta,invI(a,gta))+dot(gtb,invI(b,gtb));impulse-=t*min(p.law.y*(abs(lambda)+adhesive),speed/max(wt,1e-30)*relax);}
+ if(speed>1e-12){let t=tangent/speed;let gta=cross(ra,t);let gtb=cross(rb,t);let wt=a.p.w+b.p.w+dot(gta,invI(a,gta))+dot(gtb,invI(b,gtb));impulse-=t*min(p.law.y*(max(lambda,0.0)+preload),speed/max(wt,1e-30)*relax);}
  add(i,impulse,invI(a,cross(ra,impulse)));add(j,-impulse,-invI(b,cross(rb,impulse)));
 }
 fn bodyPair(i:u32,j:u32,countOnly:bool){let a=bodies[i];let b=bodies[j];
@@ -60,6 +62,7 @@ fn boundary(b0:Body,old:Body,n:vec3f,penetration:f32,point:vec3f,wallMotion:vec3
  }
  // Tool first; final tray projection cannot publish a packet beneath the floor.
  for(var l=0u;l<lobes;l++){let r=radius(b,l);for(var axis=0u;axis<3u;axis++){let center=b.p.xyz+arm(b,l);let low=select(select(-p.domain.x*.5,-p.domain.y*.5,axis==2u),0.0,axis==1u)+r;let high=select(p.domain.x*.5,p.domain.y*.5,axis==2u)-r;var n=vec3f(0);var penetration=0.0;if(center[axis]<low){n[axis]=1.0;penetration=low-center[axis];}else if(axis!=1u&&center[axis]>high){n[axis]=-1.0;penetration=center[axis]-high;}if(penetration>0.0){b=boundary(b,before[i],n,penetration,center-n*r,vec3f(0));}}}
+ var floorGap=0.0;for(var l=0u;l<lobes;l++){floorGap=min(floorGap,b.p.y+arm(b,l).y-radius(b,l));}b.p.y-=floorGap;
  for(var k=0u;k<3u;k++){if(!isFiniteValue(b.p[k])){atomicStore(&status[0],2u);}}bodies[i]=b;
 }
 @compute @workgroup_size(64) fn finish(@builtin(global_invocation_id) id:vec3u){let i=id.x;if(i>=p.counts.x){return;}var b=bodies[i];let damping=exp(-p.law.z*p.domain.w);b.v=vec4f((b.p.xyz-before[i].p.xyz)/p.domain.w*damping,b.v.w);let dq=qmul(b.q,qconj(before[i].q));b.w=vec4f(dq.xyz*select(-2.0,2.0,dq.w>=0.0)/p.domain.w*damping,b.w.w);bodies[i]=b;}
