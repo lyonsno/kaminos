@@ -564,6 +564,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 #grid-tuning-status[data-state="draft"] { color: #f0d486; }
 </style>
 <link rel="stylesheet" href="./authoring-workspace.css">
+<link rel="stylesheet" href="./hand-input.css">
 <link rel="stylesheet" href="./volume-grid-tuning.css">
 <link rel="stylesheet" href="./startup-veil.css">
 <!-- Begin the shared renderer dependencies before parsing the large page module. -->
@@ -3397,6 +3398,7 @@ import { installSceneControlHistory, installRelativeNumberDrag } from './scene-c
 import { installLegacyRangeFields } from './legacy-range-field.mjs';
 import { bindSceneHierarchyRows } from './scene-hierarchy-interaction.mjs';
 import { installAuthoringWorkspace } from './authoring-workspace.mjs';
+import {installHandInput} from './hand-input.mjs';
 import {installSceneVisibility,sceneItemVisible as itemVisible,withViewportVisibility,withViewportVisibilityAsync,borrowViewportVisibility} from './scene-visibility.mjs';
 import {checkedRepetition,repetitionDefaults,repetitionMatrices,repetitionCount,withoutRepetitionCopies,disposeRepetitionCopy} from './scene-repetition.mjs';
 import {createSceneRepetitionController,canRepeatSceneObject} from './scene-repetition-controller.mjs';
@@ -12194,6 +12196,7 @@ async function initScene() {
     };
   };
   installSharedWorkbench();
+  window.kaminosHands=installHandInput({document,scene,camera,onFrame:workbenchSceneFrames.onFrame,redraw:()=>window._kaminosDirty?.(),getGpu:()=>window.kaminosAppGpu()});
 
   let ordinaryDepthEnabled = fireLightFieldRouteParams().get('volume_light_field_scene_depth') === '1'
     || isAuthoredKilnCollisionRoute();

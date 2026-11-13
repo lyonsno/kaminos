@@ -83,10 +83,11 @@ export async function createBrowserHandMeshRoute({ session, routeId, mobreconPac
     // In detector mode a frame without a detection falls back to manualBox,
     // reported as such. handedness chooses the MobRecon input flip; the
     // detector's class is reported, not applied.
-    async infer({ source, width, height, handedness, acquisition, schedule = null }) {
+    async infer({ source, width, height, handedness, sides, acquisition, schedule = null }) {
       if (released) throw new Error('browser hand mesh route released');
       if (busy) throw new Error('browser hand mesh route already has an inference in flight');
       if (!['left', 'right'].includes(handedness)) throw new Error('handedness must be left or right');
+      if (sides !== undefined && (!Array.isArray(sides) || new Set(sides).size !== sides.length || sides.some(s => !['left','right'].includes(s)))) throw Error('invalid requested hand sides');
       const { mode, padding = 1.4, threshold = 0.18, manualBox, onMiss = 'manual' } = acquisition ?? {};
       if (!['detector', 'manual'].includes(mode)) throw new Error('acquisition mode must be detector or manual');
       if (!['skip', 'manual'].includes(onMiss)) throw new Error('detector miss policy must be skip or manual');
@@ -120,6 +121,28 @@ export async function createBrowserHandMeshRoute({ session, routeId, mobreconPac
           });
           result.acquisition.detections = detections;
           result.timings = { detectorMs: performance.now() - t0 };
+          if (sides !== undefined) {
+            const hands = [];
+            for (const side of sides) {
+              const selected = detections.findIndex(d => d.handSide === side);
+              if (selected < 0) continue;
+              const cropBox = squareCrop(detections[selected].bbox, padding);
+              const t1 = performance.now();
+              const [vertices, landmarks] = await runPhase('mobrecon', async () => {
+                const encoder = device.createCommandEncoder({label:'hand-mesh:mobrecon'});
+                crop.encode(encoder, {texture, box:cropBox, handedness:side});
+                mobrecon.network.encode(encoder);device.queue.submit([encoder.finish()]);
+                const {mesh,uv}=mobrecon.network.outputs;
+                return Promise.all([read(device,mesh.buffer,mesh.offset*4,778*12),read(device,uv.buffer,uv.offset*4,21*8)]);
+              });
+              if (!vertices.every(Number.isFinite) || !landmarks.every(Number.isFinite)) throw Error('non-finite MobRecon output');
+              hands.push({identity, handedness:side, hasHand:true, cropBox, detection:detections[selected],
+                ...prediction(vertices,landmarks,side),
+                acquisition:{...result.acquisition,selectedDetection:selected,source:'wilor_yolo_detector_bbox_only'},
+                timings:{mobreconMs:performance.now()-t1}});
+            }
+            return {...result, hands, hasHand:hands.length>0, timings:{...result.timings,totalMs:performance.now()-t0}};
+          }
           if (detections.length) {
             result.acquisition.selectedDetection = 0;  // highest confidence first
             result.acquisition.source = 'wilor_yolo_detector_bbox_only';
