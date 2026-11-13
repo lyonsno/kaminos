@@ -47,7 +47,7 @@ test('production velocity-only and empty-cell branches share the reactant bounda
  fn sampleFluidSlotInflow(p:vec3<f32>,slot:u32)->vec4<f32>{return vec4<f32>(1,1,1,0);}
  fn macCormackSlot(c:vec3<i32>,i:u32,b:vec3<f32>,f:vec3<f32>,slot:u32)->vec4<f32>{return vec4<f32>(1,1,1,0);}
  fn forceDeltaStore(c:vec3<i32>,v:vec3<f32>){}
- fn velocityProbe(){let p=probePosition;let cellI=vec3<i32>(0);let reactantOn=reactantLawOn();let immersedSlabWeight=0.0;var vel=vec3<f32>(1);let base=0u;${velocity}}
+ fn velocityProbe(){let p=probePosition;let cellI=vec3<i32>(0);let reactantOn=reactantLawOn();let immersedSlabWeight=0.0;let microLayer=vec4<f32>(0);var vel=vec3<f32>(1);let base=0u;${velocity}}
  fn emptyProbe()->vec3<f32>{let p=probePosition;let cellI=vec3<i32>(0);let cell=vec3<f32>(0);let backCell=cell;let advectVelocity=vec3<f32>(0);let backtraceScale=1.0;let idx=0u;let macCormack=false;var bypassVel=vec3<f32>(1);${empty}return bypassVel;}
  `;
  await withKaminosGpu(async ctx=>{
