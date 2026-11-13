@@ -1,5 +1,14 @@
 import {CARRIER_DEFORMATION_WGSL} from './volume-carrier-deformation.mjs';
 
+export function createOpticalCarrierSource(device){
+ const uniform=device.createBuffer({label:'optical carrier grid coordinates',size:240,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+ const buffer=device.createBuffer({label:'unused optical observation binding',size:64,usage:GPUBufferUsage.STORAGE});
+ return {prepare({viewProj,step,backtrace,pitch,staggered,outputWidth,outputHeight,displayWidth,displayHeight,emitterBounds,coarsePresent}){
+  const data=new ArrayBuffer(240),f=new Float32Array(data),u=new Uint32Array(data);f.set(viewProj);u.set([1,1,step,0],16);f.set([0,2,pitch,Number(staggered)],28);device.queue.writeBuffer(uniform,0,data);
+  return {buffer,uniform,width:1,height:1,pixels:1,samples:0,configuredSamples:0,step,backtrace,viewProj,outputWidth,outputHeight,displayWidth,displayHeight,emitterBounds,world:coarsePresent?{omitted:true}:null};
+ },dispose(){buffer.destroy();uniform.destroy();}};
+}
+
 export const CARRIER_DEFAULTS={carrierMode:0,carrierRate:128,carrierLifetime:60,carrierEaseIn:2,carrierEaseOut:10,carrierRotation:1,carrierStrain:1,carrierRelaxation:.02,carrierRefreshEvery:1,carrierPreserveAmount:true};
 export function validateCarrierSettings(s){
  if(![0,1].includes(s.carrierMode)||typeof s.carrierPreserveAmount!=='boolean')throw Error('Invalid optical carrier mode or amount policy');
@@ -38,6 +47,17 @@ fn carrierWindow(age:f32,lifetime:f32,easeIn:f32,easeOut:f32)->f32{
  var weight=1.0;if(easeIn>0){weight*=smoothstep(0.0,easeIn,age);}
  if(easeOut>0){weight*=smoothstep(0.0,easeOut,lifetime-age);}return weight;
 }
+struct CarrierMaterial {state:vec4<f32>,freshBurn:f32}
+fn carrierGridMaterial(p:vec3<f32>)->CarrierMaterial{
+ let dims=vec3<i32>(u.fine.xyz);let cell=clamp((p+vec3<f32>(1))/source.flow.z-vec3<f32>(.5),vec3<f32>(0),vec3<f32>(dims)-1.001);let base=vec3<i32>(floor(cell));let f=fract(cell);
+ var result=CarrierMaterial(vec4<f32>(0),0.0);
+ for(var z=0;z<2;z++){for(var y=0;y<2;y++){for(var x=0;x<2;x++){
+  let c=clamp(base+vec3<i32>(x,y,z),vec3<i32>(0),dims-1);let i=u32(c.x+dims.x*(c.y+dims.y*c.z));
+  let w=select(vec3<f32>(1)-f,f,vec3<bool>(x==1,y==1,z==1));let weight=w.x*w.y*w.z;
+  let m=fine[4u*i+1u];let reacting=textureLoad(reactants,c,0).xy;
+  result.state+=vec4<f32>(m.z,m.y,m.x,reacting.x)*weight;result.freshBurn+=reacting.y*weight;
+ }}}result.state=max(result.state,vec4<f32>(0));result.freshBurn=max(result.freshBurn,0.0);return result;
+}
 @compute @workgroup_size(64) fn carrierUpdate(@builtin(global_invocation_id) id:vec3<u32>){
  let i=id.x;if(i>=u.size.z){return;}let slots=u.size.z;
  let offset=(i+slots-carrier.births.x%slots)%slots;
@@ -62,9 +82,9 @@ fn carrierWindow(age:f32,lifetime:f32,easeIn:f32,easeOut:f32)->f32{
  p.anchor=vec4<f32>(p.anchor.xyz+jet.velocity*seconds*u.transport.x,age+1.0);
  if(!particleInsideFine(p.anchor.xyz)){p.anchor.w=0;particles[i]=p;return;}
  if(isBirth||carrier.births.z>0u){
-  p.state=particleGridState(p.anchor.xyz);
+  let sampled=carrierGridMaterial(p.anchor.xyz);p.state=sampled.state;
   // Grid state is authoritative. This is not a second reaction law.
-  p.emission=vec4<f32>(particleIntrinsic(p.state,0.0),p.state.x);
+  p.emission=vec4<f32>(particleIntrinsic(p.state,sampled.freshBurn),p.state.x);
   p.source=vec4<f32>(0);
  }
  let fade=carrierWindow(age,carrier.life.x,carrier.life.y,carrier.life.z);

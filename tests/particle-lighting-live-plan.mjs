@@ -18,3 +18,7 @@ test('display controls remain independent of transport discretization and valid 
  assert.equal(liveParticleLightingSettings({width:33,transportWidth:65,directions:96}).width,33);
  for(const patch of [{directions:3},{albedo:2},{width:1},{filterLength:-1},{gain:NaN}])assert.throws(()=>liveParticleLightingSettings(patch));
 });
+test('optical carrier lighting explicitly carries its independent ease window mode',()=>{
+ const input=source();input.state.settings.carrierMode=1;input.state.settings.stateLife=0;
+ assert.equal(particleLightingSourcePlan({...input,settings:liveParticleLightingSettings()}).sourceSettings.carrierMode,1);
+});

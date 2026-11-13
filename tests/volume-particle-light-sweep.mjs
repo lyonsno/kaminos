@@ -17,6 +17,11 @@ test('native shared opposite sweeps equal independent interior integrals, includ
 import {readLightCoefficients,readLightBuffer,referenceLightAt} from '../tools/particle-light-reference.mjs';
 const carrier=({position=[0,0,0],emission=[3,2,1],soot=.5,scattered=[0,0,0],active=1}={})=>[...position,active,...scattered,0,...emission,1,0,0,0,0,1,0,0,.2,1,1,soot,1];
 const simpson=(fn,a,b)=>{let sum=fn(a)+fn(b);for(let i=1;i<200;i++)sum+=(i%2?4:2)*fn(a+(b-a)*i/200);return sum*(b-a)/600;};
+test('fresh optical carrier lighting uses the same independent ease window as its camera support',async()=>withKaminosGpu(async ctx=>{
+ const d=ctx.device,owner=createParticleLightSweep(d,{dims:[2,2,2],origin:[-1,-1,-1],extent:[2,2,2],direction:[0,0,1],settings:{carrierMode:1,stateLife:0,filterWidth:0}}),particles=d.createBuffer({size:96,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
+ const measure=async fade=>{const row=carrier();row[15]=fade;d.queue.writeBuffer(particles,0,new Float32Array(row));const e=d.createCommandEncoder();owner.deposit(e,{particles,slots:1});d.queue.submit([e.finish()]);return (await readLightCoefficients(d,owner)).reduce((a,b)=>a+b,0);};
+ try{const full=await measure(0),quarter=await measure(.75);assert.ok(full>0);near(quarter/full,.25,1e-3);}finally{owner.dispose();particles.destroy();}
+}));
 test('native splats integrate full conditional depth support and exclude captured scattered light',async()=>{
  await withKaminosGpu(async ctx=>withGpuErrorScopes(ctx.device,'Gaussian slab deposition',async()=>{
   const d=ctx.device,owner=createParticleLightSweep(d,{dims:[3,3,6],origin:[-1,-1,-1],extent:[2,2,2],direction:[0,0,1],settings:{radius:.2,stretch:2,filterWidth:0,stateLife:0,gain:1,extinction:2}}),particles=d.createBuffer({size:96,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});

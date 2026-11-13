@@ -3,6 +3,7 @@ import {createGPUImmersedWorldSources} from './volume-immersed-world-source-gpu.
 import {createDeferredPipelines} from './deferred-pipelines.mjs';
 import {ambientBoundarySettings,resolveAmbientBoundary,ambientBoundaryControlPatch,AMBIENT_BOUNDARY_KEYS} from './volume-ambient-boundary.mjs';
 import {createOpticalParticles,opticalParticleSettings,particleReactionFromSimulation} from './volume-optical-particles.mjs';
+import {createOpticalCarrierSource} from './volume-optical-carrier-core.mjs';
 import {createSplitIntegral,splitIntegralSettings,SPLIT_OPTICAL_OFF_WGSL,splitOpticalShader} from './volume-split-integral.mjs';
 import {EMPTY_SPACE_WGSL} from './volume-empty-space.mjs';
 import {resolveWorldCalibration,calibrationSignature,calibrationWaveletLattice,WORLD_CALIBRATION_WGSL,resolveSimulationLevers} from './volume-world-calibration.mjs';
@@ -8382,7 +8383,7 @@ export function createKaminosVolumePrototype({
   let debugRaymarchShaderSpecialization = 'auto';
   let debugOpticalStepping = opticalSteppingConfig({mode:controlsSnapshot.raymarchMode??'numerical',tolerance:controlsSnapshot.opticalTolerance??0.001});
   let rayStepTelemetry = null;
-  let splitIntegral=null,splitIntegralShader=null,splitSettings=splitIntegralSettings();
+  let splitIntegral=null,splitIntegralShader=null,splitSettings=splitIntegralSettings(),opticalCarrierSource=null;
   let opticalParticles=null,particleSettings=opticalParticleSettings();
   let integralReconstruction=null, reconstructionSample=0;
   let integralGuideDisplay=integralGuideDisplaySettings();
@@ -10670,7 +10671,7 @@ export function createKaminosVolumePrototype({
     rayAllocationHistory = createRayAllocationHistory(device);
     integralReconstruction=createIntegralReconstruction(device,{transparent:transparentCanvas});
     splitIntegral=createSplitIntegral(device);splitIntegralShader=null;
-    opticalParticles?.dispose();opticalParticles=null;particleAcquisitionTarget?.destroy();particleAcquisitionTarget=null;
+    opticalParticles?.dispose();opticalParticles=null;opticalCarrierSource?.dispose();opticalCarrierSource=null;particleAcquisitionTarget?.destroy();particleAcquisitionTarget=null;
     integralReconstruction.setGuideDisplay(integralGuideDisplay);
     rayStepTelemetry.setCanvas(rayStepTelemetryCanvas);
     rayStartNoiseTexture = await createRayStartTexture(device);
@@ -13853,6 +13854,7 @@ export function createKaminosVolumePrototype({
       &&volumePresentationModeEffective==='beauty';
     const particleChemistry=particleReactionFromSimulation(state.reactantCombustion);
     const particleCaptureRequested=particleSettings.enabled&&!!particleChemistry&&reconstructionSupported&&!options.particleReference;
+    const carrierOnly=particleCaptureRequested&&particleSettings.carrierMode===1;
     // Particle births own their one-evaluation capture; loading an authored
     // basin must not silently switch it to that basin's ordinary marcher.
     const referenceConfig=options.particleReference&&debugOpticalStepping.value>=4
@@ -13868,11 +13870,11 @@ export function createKaminosVolumePrototype({
     let entryPoint=reconstruct?'fsIntegral':'fs';
     const colorTargets=reconstruct?[{format:'rgba32float'},{format:'r32float'}]:[{format:targetPipeline===readbackPipeline?'rgba8unorm':format}];
     const splitBufferBefore=splitIntegral.buffer;
-    const focusedAcquisition=particleCaptureRequested&&particleSettings.acquisitionMode===1;
+    const focusedAcquisition=particleCaptureRequested&&!carrierOnly&&particleSettings.acquisitionMode===1;
     const captureIdentity=JSON.stringify([state.particleSourceGeneration,particleSettings.acquisitionMode,particleSettings.acquisitionSamples,particleSettings.capacity,particleSettings.populationWidth,particleSettings.populationHeight,particleSettings.spacing]);
     let captureFresh=false;
     const effectiveSplitSettings=options.particleReference?splitIntegralSettings({mode:'off'}):particleCaptureRequested?splitIntegralSettings({mode:'transport',fresh:1,exploration:1,motion:0,depthSupport:particleSettings.depthSupport,fineAcquisition:focusedAcquisition?0:particleSettings.fineAcquisition}):splitSettings;
-    const splitActive=effectiveSplitSettings.mode!=='off'&&reconstructionSupported&&optical.value===4&&device.limits.maxStorageBuffersPerShaderStage>=10;
+    const splitActive=!carrierOnly&&effectiveSplitSettings.mode!=='off'&&reconstructionSupported&&optical.value===4&&device.limits.maxStorageBuffersPerShaderStage>=10;
     let splitGroup=null,particleSourceFrame=null,acquisitionPlan=null;
     if(splitActive){
       const field=owner=>owner?{...owner.remapResources(),map:worldSmokeMapping(owner.plan,owner.anchor,productTransform).fineToField}:null;
@@ -13904,6 +13906,11 @@ export function createKaminosVolumePrototype({
       }
     }else if(!options.particleReference){state.splitIntegral=splitIntegral.disable(effectiveSplitSettings.mode==='off'?'off':device.limits.maxStorageBuffersPerShaderStage<10?'requires-10-fragment-storage-buffers':'requires-Fixed-evaluations-ordinary-joined-emissive-beauty');state.splitIntegral.requested=effectiveSplitSettings.mode;}
     if(splitBufferBefore!==splitIntegral.buffer)rebuildFluidBindGroups();
+    if(carrierOnly){
+      opticalCarrierSource??=createOpticalCarrierSource(device);
+      particleSourceFrame=opticalCarrierSource.prepare({viewProj:new THREE.Matrix4().copy(invViewProj).invert().elements,step:state.simStepCount,backtrace:resolveTimeStepConfig(controlsSnapshot).effective.backtraceScale,pitch:2/gridSize,staggered:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode==='staggered',outputWidth:state.width,outputHeight:state.height,displayWidth:state.displayWidth,displayHeight:state.displayHeight,emitterBounds:particleSourceEnvelope({sources:state.immersedSources?.active?(state.immersedSources.sources??[]).map(s=>s.config):[state.immersedSource],fallback:analyticEmitterDispatch,pitch:2/gridSize,history:0,margin:0}),coarsePresent:state.worldSmoke?.effective==='one-way-world-field'});
+      state.splitIntegral={requested:'off',effective:'off',reason:'source-born-optical-carriers'};
+    }
     const particleSourceOnly=!!particleSourceFrame&&(focusedAcquisition||!particleSettings.sourceColorOutput);
     if(particleSourceOnly){entryPoint='fsParticleSource';colorTargets[0].writeMask=0;}
     const opticalConstants = {OPTICAL_STEP_MODE:optical.value,RAY_STEP_STATS:rayStepTelemetry.active,SPLIT_INTEGRAL:splitActive};
@@ -13922,7 +13929,7 @@ export function createKaminosVolumePrototype({
         reference:mode==='fallback-fixed'?'160-steps-adaptive-off-half-cell':null};
     }
     device.queue.writeBuffer(worldRenderUniform,80,new Float32Array([state.worldRenderField.effective==='inactive'?0:1,...(state.worldRenderField.materialDims??[0,0,0])]));
-    if(optical.value>=4){
+    if(optical.value>=4&&!carrierOnly){
       if(((!worldSmoke||state.worldSmoke?.effective!=='one-way-world-field')&&!splitActive)||options.bindGroup||sceneTransportConsumer){
         throw Error('fixed-count allocation requires ordinary joined emissive beauty');
       }
@@ -18849,7 +18856,7 @@ export function createKaminosVolumePrototype({
       worldOpticalFallback?.destroy();
       rayAllocationHistory?.dispose();
       integralReconstruction?.dispose();
-      particleTimings?.dispose();splitIntegral?.dispose();opticalParticles?.dispose();particleAcquisitionTarget?.destroy();particleAcquisitionTarget=null;
+      particleTimings?.dispose();splitIntegral?.dispose();opticalParticles?.dispose();opticalCarrierSource?.dispose();opticalCarrierSource=null;particleAcquisitionTarget?.destroy();particleAcquisitionTarget=null;
       ordinarySceneDepthFallback?.destroy();
 
       externalEmitterBuffer?.destroy();

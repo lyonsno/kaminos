@@ -11,7 +11,7 @@ export function particleLightPlan(input,limits){
  const raw=cross(seed,d),norm=Math.hypot(...raw),u=raw.map(v=>v/norm),v=cross(d,u);
  const cells=dims.reduce((a,b)=>a*b,1),atlas=[dims[0]*dims[2],dims[1]],bytes=cells*16;
  if(!Number.isSafeInteger(bytes)||cells>0xffffffff||atlas.some(v=>v>limits.maxTextureDimension2D)||bytes>Math.min(limits.maxBufferSize,limits.maxStorageBufferBindingSize))throw Error('Particle lighting field exceeds device limits');
- const settings={radius:.4,stretch:2,flowAlignment:0,expansion:0,supportFloor:0,supportSigmas:4,filterWidth:1,gain:1,extinction:2,stateLife:1,lifeFade:.2,...input.settings};
+ const settings={carrierMode:0,radius:.4,stretch:2,flowAlignment:0,expansion:0,supportFloor:0,supportSigmas:4,filterWidth:1,gain:1,extinction:2,stateLife:1,lifeFade:.2,...input.settings};
  for(const [k,v] of Object.entries(settings))if(!Number.isFinite(v)||v<0||!Number.isFinite(Math.fround(v)))throw Error('Invalid particle lighting '+k);
  if(settings.radius<=0||settings.stretch<=0||settings.supportSigmas<=0||settings.flowAlignment>1||settings.lifeFade>1)throw Error('Invalid particle lighting support');
  return {dims:[...dims],origin:[...origin],extent:[...extent],direction:d,u,v,cells,atlas,settings,bytes:cells*(8+4+32)+144,medium:'normalized 3D Gaussian; birth-pitch² × represented-length quadrature; intrinsic emission only',support:'projected ellipse cutoff in sigma units; full conditional depth integral within field'};
@@ -36,7 +36,7 @@ fn decode(v:vec2<f32>)->vec3<f32>{var n=vec3<f32>(v,1.0-abs(v.x)-abs(v.y));let t
  var out:Vertex;out.clip=vec4<f32>(2,2,2,1);
  let a=particles[instance/p.dims.z];let layer=instance%p.dims.z;
  if(a.anchor.w<=0||a.shape.x<=0||a.shape.w<=0){return out;}
- let fade=select(1.0,particleLifeFade(a.motion.w,p.optical.w),p.optical.z>0);
+ let fade=select(select(1.0,particleLifeFade(a.motion.w,p.optical.w),p.optical.z>0),1.0-clamp(a.motion.w,0.0,1.0),p.support.w>.5);
  let volume=a.shape.x*a.shape.x*a.shape.w;
  let optical=vec4<f32>(max(a.emission.xyz,vec3<f32>(0))*p.optical.x,max(a.state.z,0.0)*p.optical.y)*fade*volume;
  if(all(optical==vec4<f32>(0))){return out;}
@@ -105,7 +105,7 @@ export function createParticleLightSweep(device,input){
  const plan=particleLightPlan(input,device.limits),s=plan.settings;
  const params=device.createBuffer({label:'particle light sweep coordinates',size:144,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
  const data=new ArrayBuffer(144),u=new Uint32Array(data),f=new Float32Array(data);u.set([...plan.dims,0]);
- [plan.origin,plan.extent,plan.u,plan.v,plan.direction,[s.gain,s.extinction,s.stateLife,s.lifeFade],[s.radius,s.stretch,s.flowAlignment,s.expansion],[s.supportFloor,s.supportSigmas,s.filterWidth,0]].forEach((a,i)=>f.set(a,4*(i+1)));device.queue.writeBuffer(params,0,data);
+ [plan.origin,plan.extent,plan.u,plan.v,plan.direction,[s.gain,s.extinction,s.stateLife,s.lifeFade],[s.radius,s.stretch,s.flowAlignment,s.expansion],[s.supportFloor,s.supportSigmas,s.filterWidth,s.carrierMode]].forEach((a,i)=>f.set(a,4*(i+1)));device.queue.writeBuffer(params,0,data);
  const coefficients=device.createTexture({label:'particle Gaussian slab optical integrals',size:plan.atlas,format:'rgba16float',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.COPY_SRC|GPUTextureUsage.COPY_DST});
  const buffer=(label,stride)=>device.createBuffer({label,size:plan.cells*stride,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST});
  const solids=buffer('interior opaque-cell mask',4),positive=buffer('positive interior radiance and boundary transmission',16),negative=buffer('negative interior radiance and boundary transmission',16);

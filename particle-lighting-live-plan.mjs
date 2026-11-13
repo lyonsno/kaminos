@@ -16,9 +16,10 @@ export function particleLightingSourcePlan({records,state,settings:input}){
  const material=context.material,keys=['radius','stretch','flowAlignment','expansion','supportFloor','gain','opacity','stateLife','lifeFade'];
  if(keys.some(k=>!Number.isFinite(native[k])||native[k]<0)||!material||['density','extinction','smokeVisible'].some(k=>!Number.isFinite(material[k])||material[k]<0))throw Error('Effective native source optics are required');
  const sourceSettings=Object.fromEntries(keys.map(k=>[k,native[k]]));sourceSettings.extinction=material.density*material.extinction*material.smokeVisible*native.opacity;delete sourceSettings.opacity;sourceSettings.supportSigmas=settings.supportSigmas;
+ sourceSettings.carrierMode=native.carrierMode??0;
  const lo=[-1,-1,-1],hi=[1,-1+2*context.dims[1]/context.dims[0],1];let active=0;
  for(let i=0;i<state.slots;i++){
-  const p=i*24;if(records[p+3]<=0||records[p+16]<=0||records[p+19]<=0||(native.stateLife>0&&records[p+15]>=1)||!(records[p+8]>0||records[p+9]>0||records[p+10]>0||records[p+22]>0))continue;active++;
+  const p=i*24;if(records[p+3]<=0||records[p+16]<=0||records[p+19]<=0||((native.stateLife>0||native.carrierMode===1)&&records[p+15]>=1)||!(records[p+8]>0||records[p+9]>0||records[p+10]>0||records[p+22]>0))continue;active++;
   let axis=[0,1,0];if(native.flowAlignment>0){let x=records[p+17],y=records[p+18],z=1-Math.abs(x)-Math.abs(y);const t=Math.max(0,Math.min(1,-z));x+=x>=0?-t:t;y+=y>=0?-t:t;const len=Math.hypot(x,y,z);const mixed=[x/len*native.flowAlignment,1-native.flowAlignment+y/len*native.flowAlignment,z/len*native.flowAlignment],length=Math.hypot(...mixed);if(length>1e-10)axis=mixed.map(v=>v/length);}
   const remaining=records[p+11],growth=1+native.expansion*(remaining>0?Math.max(0,1-records[p+20]/remaining):0),radius=Math.max(records[p+16],native.supportFloor)*native.radius*growth;
   for(let k=0;k<3;k++){const support=settings.supportSigmas*Math.sqrt(radius*radius*(1+(native.stretch*native.stretch-1)*axis[k]*axis[k]))+settings.filterLength;lo[k]=Math.min(lo[k],records[p+k]-support);hi[k]=Math.max(hi[k],records[p+k]+support);}
