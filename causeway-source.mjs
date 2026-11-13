@@ -9,7 +9,7 @@ function clip(poly,nx,nz,b){const out=[];for(let i=0;i<poly.length;i++){const a=
 function mineral(x,z,id){const q=Math.sin(x*13931.37+z*7919.21+id*93.7)*43758.5453;return q-Math.floor(q);}
 export function validateCausewayConfig(options={}){
  const config={...causewayDefaults,...options};
- for(const [k,v]of Object.entries(config))if(!Number.isFinite(v)||v<0||(['width','depth'].includes(k)&&v===0))throw Error('Invalid causeway '+k);
+ for(const [k,v]of Object.entries(config))if(!(k in causewayDefaults)||!Number.isFinite(v)||v<0||(['width','depth'].includes(k)&&v===0))throw Error('Invalid causeway '+k);
  if(!Number.isSafeInteger(config.seed)||config.shoulder>.3||config.dish>.5||config.grain>1||!Number.isSafeInteger(config.contextRadius)||config.contextRadius<1)throw Error('Invalid causeway shape');
  return config;
 }

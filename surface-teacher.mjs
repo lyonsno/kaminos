@@ -57,7 +57,7 @@ export class SurfaceTeacher {
  async evaluate(queries,{sample=0}={}){
   if(this.disposed)throw Error('surface teacher is disposed');
   if(!Array.isArray(queries)||!queries.length||queries.some(q=>!finite3(q.origin)||!finite3(q.direction)||Math.hypot(...q.direction)===0))throw Error('nonempty finite ray queries required');
-  if(this.periodic&&queries.some(q=>q.direction[1]===0))throw Error('Infinite exactly horizontal periodic rays are unsupported');
+  if(this.periodic&&queries.some(q=>Math.fround(q.direction[1])===0))throw Error('Infinite exactly horizontal periodic rays are unsupported');
   const data=new Float32Array(queries.length*8);queries.forEach((q,i)=>data.set([...q.origin,0,...q.direction,0],i*8));
   const input=this.buffer('surface teacher ray queries',data);const output=this.buffer('surface teacher raw linear answers',new Float32Array(queries.length*4),GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC);
   const read=this.device.createBuffer({size:queries.length*16,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});

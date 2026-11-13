@@ -38,3 +38,10 @@ test('a clipped blade surface remains visible on both sides of the periodic seam
  const t=new SurfaceTeacher(ctx.device,{...base,triangles:periodicSurfaceTriangles([...ground,...card],2,2),materials:[...base.materials,{color:[.9,.05,.02],roughness:1,metalness:0}]});
  try{const rays=[.999,1,1.001,-1.001,-1,-.999].map(x=>({origin:[x,.8,0],direction:[0,-1,0]})),a=await t.evaluate(rays);assert.ok(a.every(v=>v[0]>.8&&v[1]<.1));for(const v of a)for(let c=0;c<3;c++)assert.ok(Math.abs(v[c]-a[0][c])<1e-6);}finally{t.dispose();}
 });});
+
+test('oblique cell seam preserves hits within five micrometres of the crossing',async()=>{await withKaminosGpu(async ctx=>{
+ const t=new SurfaceTeacher(ctx.device,base);try{
+  const a=await t.evaluate([{origin:[.9,.1,0],direction:[1,-.99995,0]}]);
+  assert.ok(a[0][0]>.4,'the next cell must not apply a second origin self-intersection exclusion');
+ }finally{t.dispose();}
+});});

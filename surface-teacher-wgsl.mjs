@@ -15,33 +15,36 @@ struct Hit {t:f32,id:u32,normal:vec3<f32>,uv:vec2<f32>}
 @group(0) @binding(4) var<uniform> params:Params;
 fn random(state:ptr<function,u32>)->f32{*state=*state*1664525u+1013904223u;var v=*state;v=(v^(v>>16u))*2246822519u;v=(v^(v>>13u))*3266489917u;// Uniform bin midpoints stay strictly inside the representable sample domain.
 return (f32((v^(v>>16u))>>9u)+.5)*(1.0/8388608.0);}
-fn rayBox(origin:vec3<f32>,direction:vec3<f32>,lo:vec3<f32>,hi:vec3<f32>,limit:f32)->bool{
- var near=0.00001;var far=limit;
+fn rayBoxRange(origin:vec3<f32>,direction:vec3<f32>,lo:vec3<f32>,hi:vec3<f32>,limit:f32,minimum:f32)->bool{
+ var near=minimum;var far=limit;
  for(var a=0u;a<3u;a++){
   if(abs(direction[a])<1e-12){if(origin[a]<lo[a]||origin[a]>hi[a]){return false;}}
   else{let first=(lo[a]-origin[a])/direction[a];let last=(hi[a]-origin[a])/direction[a];near=max(near,min(first,last));far=min(far,max(first,last));}
  }
  return far>=near;
 }
-fn rayTriangle(origin:vec3<f32>,direction:vec3<f32>,a:vec3<f32>,e1:vec3<f32>,e2:vec3<f32>)->vec3<f32>{
+fn rayTriangleRange(origin:vec3<f32>,direction:vec3<f32>,a:vec3<f32>,e1:vec3<f32>,e2:vec3<f32>,minimum:f32)->vec3<f32>{
  let p=cross(direction,e2);let determinant=dot(e1,p);
  if(abs(determinant)<1e-10){return vec3<f32>(-1.0);}
  let offset=origin-a;let u=dot(offset,p)/determinant;let q=cross(offset,e1);let v=dot(direction,q)/determinant;let t=dot(e2,q)/determinant;
- if(u<0.0||v<0.0||u+v>1.0||t<=0.00001){return vec3<f32>(-1.0);}
+ if(u<0.0||v<0.0||u+v>1.0||t<=minimum){return vec3<f32>(-1.0);}
  return vec3<f32>(t,u,v);
 }
-fn traceFinite(origin:vec3<f32>,direction:vec3<f32>,limit:f32)->Hit{
+fn traceFiniteRange(origin:vec3<f32>,direction:vec3<f32>,limit:f32,minimum:f32)->Hit{
  var hit=Hit(limit,0xffffffffu,vec3<f32>(0.0),vec2<f32>(0.0));var node=0u;
  loop{if(node>=arrayLength(&nodes)){break;}let item=nodes[node];
-  if(!rayBox(origin,direction,item.lo.xyz,item.hi.xyz,hit.t)){node=item.range.x;continue;}
+  if(!rayBoxRange(origin,direction,item.lo.xyz,item.hi.xyz,hit.t,minimum)){node=item.range.x;continue;}
   for(var i=0u;i<item.range.z;i++){
-   let id=item.range.y+i;let tri=triangles[id];let sample=rayTriangle(origin,direction,tri.a.xyz,tri.e1.xyz,tri.e2.xyz);
+   let id=item.range.y+i;let tri=triangles[id];let sample=rayTriangleRange(origin,direction,tri.a.xyz,tri.e1.xyz,tri.e2.xyz,minimum);
    if(sample.x>0.0&&sample.x<hit.t){var normal=normalize(cross(tri.e1.xyz,tri.e2.xyz));if(dot(normal,direction)>0.0){normal=-normal;}hit=Hit(sample.x,id,normal,sample.yz);}
   }
   node++;
  }
  return hit;
 }
+fn rayBox(origin:vec3<f32>,direction:vec3<f32>,lo:vec3<f32>,hi:vec3<f32>,limit:f32)->bool{return rayBoxRange(origin,direction,lo,hi,limit,.00001);}
+fn rayTriangle(origin:vec3<f32>,direction:vec3<f32>,a:vec3<f32>,e1:vec3<f32>,e2:vec3<f32>)->vec3<f32>{return rayTriangleRange(origin,direction,a,e1,e2,.00001);}
+fn traceFinite(origin:vec3<f32>,direction:vec3<f32>,limit:f32)->Hit{return traceFiniteRange(origin,direction,limit,.00001);}
 // A repeated canonical cell, traversed until the ray leaves its vertical
 // support. No fixed neighbor halo or cell-count cutoff changes the integral.
 var<private> periodicFailure:bool=false;
@@ -73,7 +76,7 @@ fn trace(origin:vec3<f32>,direction:vec3<f32>,limit:f32)->Hit{
   // backwards; the cell index still changes and bounds progress.
   crossing=max(crossing,vec2<f32>(travel));
   let end=min(exit,min(crossing.x,crossing.y));
-  let hit=traceFinite(p,direction,max(0.0,end-travel)+.000001);
+  let hit=traceFiniteRange(p,direction,max(0.0,end-travel)+.000001,max(0.0,.00001-travel));
   if(hit.id!=0xffffffffu){return Hit(hit.t+travel,hit.id,hit.normal,hit.uv);}
   if(end>=exit){return miss;}
   let old=cell;
@@ -126,12 +129,15 @@ fn pathTraceIncident(origin:vec3<f32>,direction:vec3<f32>,state:ptr<function,u32
    if(light.positionType.w>1.5){let angle=dot(-l,light.directionCone.xyz);var cone=select(0.0,1.0,angle>=light.directionCone.w);if(light.innerCone.x>light.directionCone.w+1e-7){cone=smoothstep(light.directionCone.w,light.innerCone.x,angle);}intensity*=cone;}
    if(dot(n,l)>0.0&&trace(offset,l,distance-.0002).id==0xffffffffu){radiance+=throughput*bsdf(n,v,l,m)*dot(n,l)*intensity;}
   }
+  if(params.knobs.z>0.0){
   let envDirection=cosineSample(n,state);let envPdf=max(dot(n,envDirection),0.0)/PI;let otherPdf=bsdfPdf(n,v,envDirection,m);
   if(trace(offset,envDirection,1e20).id==0xffffffffu){
    // At the terminal vertex only NEE samples this environment contribution.
    let weight=select(powerWeight(envPdf,otherPdf),1.0,bounce+1u==params.extent.w);
    radiance+=throughput*bsdf(n,v,envDirection,m)*max(dot(n,envDirection),0.0)*params.knobs.z*weight/max(envPdf,1e-8);
   }
+  }
+  if(bounce+1u==params.extent.w){break;}
   let next=bsdfSample(n,v,m,state);let pdf=bsdfPdf(n,v,next,m);if(pdf<=0.0||dot(n,next)<=0.0){break;}
   throughput*=bsdf(n,v,next,m)*max(dot(n,next),0.0)/pdf;previousPdf=pdf;previousNormal=n;o=offset;d=next;
   if(bounce>=2u){let survive=clamp(max(throughput.x,max(throughput.y,throughput.z)),.05,.95);if(random(state)>survive){break;}throughput/=survive;}

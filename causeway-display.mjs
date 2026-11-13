@@ -1,10 +1,12 @@
+import {periodicSurfaceTriangles} from './periodic-surface-source.mjs';
 import {stoneWindowDisplayPositions} from './stone-material-window.mjs';
 
 // Section faces are presentation geometry only. Teacher triangles stay intact.
 export function createCausewayDisplay(source,{cutaway=false}={}){
  const byMaterial=source.materials.map(()=>[]),sections=[],cuts=new Map(),domain=source.captureDomain;
  const faces=[[0,-domain.width/2],[0,domain.width/2],[2,-domain.depth/2],[2,domain.depth/2]];
- for(const t of source.triangles){
+ const canonical=source.periodic?source.triangles:periodicSurfaceTriangles(source.triangles.filter(t=>t.tile[0]===0&&t.tile[1]===0),domain.width,domain.depth);
+ for(const t of canonical){
   const p=stoneWindowDisplayPositions([t],domain);byMaterial[t.materialIndex].push(...p);
   if(!cutaway||t.column<0)continue;
   for(let i=0;i<faces.length;i++){const [axis,bound]=faces[i],key=[i,t.column,...t.tile].join(':');

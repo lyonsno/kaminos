@@ -18,3 +18,14 @@ class Sources(unittest.TestCase):
                 with self.assertRaises(ValueError): sources.register(root, invalid, {'sourceKind':'causeway','source':{}})
             with self.assertRaises(ValueError): sources.register(root, 'causeway/tuned.json', {'sourceKind':'wrong','source':{}})
             self.assertEqual(json.loads(Path(first['path']).read_text())['source']['relief'], .006)
+
+    def test_invalid_source_and_revision_pin_replacement(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            sources.register(root,'saved.json',{'sourceKind':'causeway','source':{'relief':.003},'sourceRevision':'old','provenance':{'revision':'old'}})
+            current=sources.register(root,'saved.json',{'sourceKind':'causeway','source':{'relief':.004},'provenance':{'revision':'new','dirty':False}})
+            self.assertEqual(current['sourceRevision'],'new')
+            for key,value in [('width',0),('grain',True),('seed',1.2),('shoulder',.4),('contextRadius',0),('unowned',1)]:
+                with self.subTest(key=key),self.assertRaises(ValueError):
+                    sources.register(root,'saved.json',{'sourceKind':'causeway','source':{key:value}})
+            self.assertEqual(json.loads((root/'saved.json').read_text())['source']['relief'],.004)

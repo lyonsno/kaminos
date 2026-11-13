@@ -24,3 +24,19 @@ test('persisted edits keep the original fitted source identity',async()=>{
  assert.deepEqual(persisted.fitSource,causewayDefaults);
  }finally{await e?.dispose();globalThis.fetch=fetchBefore;}
 });
+
+test('physical tile-size edit preserves independent relief and aspect ratio',async()=>{
+ const session={attach:async()=>({id:'scale-test'}),readView:()=>({}),setView(){},redraw(){},dispose:async()=>{}};let saved;
+ const e=await experiment.create({host:{scene:{open:async()=>session}},inputs:{source:{width:.12,depth:.06}},record(){},updateInputs:v=>saved=v});
+ try{e.operations.setTileSize(.24);const r=e.operations.flush();assert.equal(r.config.width,.24);assert.equal(r.config.depth,.12);assert.equal(r.config.relief,.003);assert.equal(saved.source.width,.24);assert.throws(()=>e.operations.setTileSize(0),/positive/);e.operations.setLOD(-1);assert.equal(e.read().lod,-1);}finally{await e.dispose();}
+ await assert.rejects(()=>experiment.create({inputs:{cutaway:'false'},host:{scene:{open:async()=>session}},record(){}}),/boolean/);
+});
+test('learned carrier matches tiled source support and follows cutaway changes',async()=>{
+ const previous=globalThis.fetch,model=createNeumipStudent({resolution:2,chart:{width:.12,depth:.12,offsetMeters:.004,boundary:'repeat'}}),bytes=writeNeumipModel(model);let root,e;
+ globalThis.fetch=async()=>({ok:true,url:'fixture',arrayBuffer:async()=>bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength)});
+ const session={attach:async r=>{root=r;return{id:'repeat-test'};},readView:()=>({}),setView(){},redraw(){},dispose:async()=>{}};
+ try{e=await experiment.create({host:{scene:{open:async()=>session}},inputs:{modelURL:'fixture',mode:'learned'},record(){}});
+  const carrier=root.children.find(c=>c.name==='Learned flat carrier');const width=()=>{carrier.geometry.computeBoundingBox();return carrier.geometry.boundingBox.max.x-carrier.geometry.boundingBox.min.x;};
+  assert.ok(Math.abs(width()-.36)<1e-7);e.operations.setCutaway(true);assert.ok(Math.abs(width()-.12)<1e-7);assert.equal(e.read().displayRepeats,1);e.operations.setCutaway(false);assert.ok(Math.abs(width()-.36)<1e-7);
+ }finally{await e?.dispose();globalThis.fetch=previous;}
+});

@@ -36,7 +36,10 @@ try{
  const options={resolution:64,steps:30000,batch:2048,queries:65536,heldout:2048,samples:8,heldoutSamples:32,bounces:3,seed:41,fresh:true,...config.fit};report.options=options;
  for(const [k,v]of Object.entries(options))if(k==='fresh'?typeof v!=='boolean':!Number.isSafeInteger(v)||v<1)throw Error(`Invalid fit option ${k}`);
  report.sourceRevision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();report.sourceStatus=execFileSync('git',['status','--porcelain'],{encoding:'utf8'});
- if(config.sourceRevision!==undefined&&(config.sourceRevision!==report.sourceRevision||report.sourceStatus))throw Error('Requested clean source revision is not effective');
+ const requestedRevision=config.sourceRevision??config.provenance?.revision;
+ if(config.sourceRevision&&config.provenance?.revision&&config.sourceRevision!==config.provenance.revision)throw Error('Conflicting source revisions');
+ if(config.provenance?.dirty===true)throw Error('Registered source has uncommitted changes');
+ if(requestedRevision!==undefined&&(requestedRevision!==report.sourceRevision||report.sourceStatus))throw Error('Requested clean source revision is not effective');
  report.sourceFiles={};for(const name of ['ground-teacher-source.mjs','material-query-pool.mjs','grass-material-source.mjs','stone-transition-source.mjs','stone-material-window.mjs','masonry-source.mjs','surface-teacher-source.mjs','surface-teacher-wgsl.mjs','surface-teacher.mjs','surface-material-teacher.mjs','neumip-training.mjs','neumip-spatial-training.mjs','neumip-model.mjs','tools/ground-material-fit.mjs','stone-handoff-model.mjs','shoulder-strip-source.mjs','neumip-chart.mjs','causeway-source.mjs','causeway-training-source.mjs','periodic-surface-source.mjs']){const b=await fs.readFile(name);report.sourceFiles[name]=digest(b);await fs.writeFile(path.join(out,path.basename(name)),b);}
  const causeway=config.sourceKind==='causeway';
  const strip=config.sourceKind==='shoulder-strip',grass=config.sourceKind==='grass',stone=config.sourceKind==='stone-transition',paired=config.handoff!==undefined;
