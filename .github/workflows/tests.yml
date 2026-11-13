@@ -68,7 +68,9 @@ jobs:
         if: steps.current.outputs.superseded == ''
         continue-on-error: true
         timeout-minutes: 10
-        run: npm ci
+        run: |
+          npm ci
+          npm ci --ignore-scripts --prefix webgpu-inference-kit/experiments/jax-gated-delta
       - name: serve.py answers within 10 s
         id: serve
         continue-on-error: true
