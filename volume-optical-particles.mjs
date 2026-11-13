@@ -305,21 +305,20 @@ const RESOLVE=/* wgsl */`${OPTICAL_TRANSFER}
 }
 `;
 
-const ASSIST_RESOLVE=/* wgsl */`${OPTIONS}
-struct AssistDepthParams {size:vec4<u32>}
-@group(0) @binding(0) var optics:texture_2d<f32>;
-@group(0) @binding(1) var gridBase:texture_2d<f32>;
-@group(0) @binding(2) var<uniform> u:Options;
-@group(0) @binding(3) var<uniform> depthParams:AssistDepthParams;
-@vertex fn vs(@builtin(vertex_index) i:u32)->@builtin(position)vec4<f32>{let p=array<vec2<f32>,3>(vec2<f32>(-1,-1),vec2<f32>(3,-1),vec2<f32>(-1,3));return vec4<f32>(p[i],0,1);}
-@fragment fn fs(@builtin(position) p:vec4<f32>)->@location(0)vec4<f32>{
- let v=textureLoad(optics,vec2<i32>(p.xy),0);let uv=p.xy/vec2<f32>(textureDimensions(optics));let at=clamp(vec2<i32>(uv*vec2<f32>(depthParams.size.xy)),vec2<i32>(0),vec2<i32>(depthParams.size.xy)-1);
- let total=textureLoad(gridBase,at,0).y;let gap=max(0.0,total-v.w-u.visibility.y);
- if(u.visibility.z>.5&&u.visibility.z<1.5){let heat=1.0-exp(-gap);return vec4<f32>(heat,heat*.25,heat*.02,0);}
- if(u.visibility.z>1.5){return vec4<f32>(v.xyz,0);}
- return vec4<f32>(v.xyz,exp(-v.w-u.visibility.x*gap));
+const ASSIST_TRANSFER=/* wgsl */`${OPTIONS}
+@group(0) @binding(2) var gridBase:texture_2d<f32>;
+@group(0) @binding(3) var<uniform> assist:Options;
+fn particleAssistTransfer(v:vec4<f32>,uv:vec2<f32>)->vec4<f32>{
+ if(assist.visibility.z>1.5){return vec4<f32>(v.xyz,0);}
+ let dims=vec2<i32>(textureDimensions(gridBase));
+ let at=clamp(vec2<i32>(uv*vec2<f32>(dims)),vec2<i32>(0),dims-1);
+ let total=textureLoad(gridBase,at,0).y;let gap=max(0.0,total-v.w-assist.visibility.y);
+ if(assist.visibility.z>.5){let heat=1.0-exp(-gap);return vec4<f32>(heat,heat*.25,heat*.02,0);}
+ return vec4<f32>(v.xyz,exp(-v.w-assist.visibility.x*gap));
 }
 `;
+const ASSIST_RESOLVE=ASSIST_TRANSFER+RESOLVE.replace(OPTICAL_TRANSFER,'')
+ .replace('return particleOpticalTransfer(v);','return particleAssistTransfer(v,p.xy/vec2<f32>(textureDimensions(optics)));');
 
 export function createOpticalParticles(device,{transparent=false,indexedQuads=true,fusedResolve=true}={}) {
  if(typeof indexedQuads!=='boolean'||typeof fusedResolve!=='boolean')throw Error('Particle geometry and transfer options must be boolean');
@@ -405,7 +404,7 @@ export function createOpticalParticles(device,{transparent=false,indexedQuads=tr
    refreshLayout=device.createPipelineLayout({bindGroupLayouts:[refreshParticleLayout,emptyLayout,refreshIncidentLayout]});
   }
   if(!particles||particles.size!==slots*96){retire(particles?[particles]:[]);particles=device.createBuffer({label:'shared world optical material carriers',size:slots*96,usage:storage});}
-  const directTransfer=!gridActive&&fusedResolve&&targetWidth===outputWidth&&targetHeight===outputHeight;
+  const directTransfer=fusedResolve&&targetWidth===outputWidth&&targetHeight===outputHeight;
   const formats=directTransfer?['rgba16float']:['rgba16float','rgba32float'],textureBytes=targetWidth*targetHeight*(directTransfer?8:24);
   if(textures.length!==formats.length||textures[0].width!==targetWidth||textures[0].height!==targetHeight){retire(textures);textures=formats.map(f=>device.createTexture({size:[targetWidth,targetHeight],format:f,usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING}));}
   if(resetNeeded){exchange.reset();encoder.clearBuffer(particles);encoder.clearBuffer(pool);frame=0;}frame++;lastStep=step;key=nextKey;
@@ -454,7 +453,8 @@ export function createOpticalParticles(device,{transparent=false,indexedQuads=tr
    if(refreshThisDraw){lastLightStep=step;lastLightGeneration=incident.generation;}
   }
   if(resetNeeded||requestedDt>0)exchange.invalidate();
-  if(!gridActive&&gridField){gridField.dispose();gridField=null;}
+  if(!gridActive)gridField?.dispose();
+  const assistEntries=()=>[{binding:2,resource:gridField.base.createView()},{binding:3,resource:{buffer:options}}];
   if(!s.depthMode&&depthField){depthField.dispose();depthField=null;}depthPlan=depthField?.layout??null;
   const emitterScratchBytes=(emitterOptions?.size??0)+(emitterCdf?.size??0)+(emitterFree?.size??0);
   const lightState={effective:!incident&&(emitterMode||s.lightRefreshEvery>0)?'unavailable':s.lightRefreshEvery===0?'frozen':'prepared-distributed-field',
@@ -477,10 +477,10 @@ export function createOpticalParticles(device,{transparent=false,indexedQuads=tr
    field:', @location(3) @interpolate(flat) depthInfo:vec2<f32>',
    vertex:`out.depthInfo=particleDepthCoordinate(center);${deposit?`let tile=particleDepthTile(u32(out.depthInfo.x));let size=vec2<f32>(particleDepth.size.xy);let dims=vec2<f32>(f32(particleDepth.size.z)*size.x,f32((particleDepth.size.w+particleDepth.size.z-1u)/particleDepth.size.z)*size.y);let at=(center.xy/center.w*vec2<f32>(.5,-.5)+.5)*size+vec2<f32>(tile)*size;center.xy=(at/dims*vec2<f32>(2,-2)+vec2<f32>(-1,1))*center.w;`:''}`,
    coords:deposit?'let local=v.clip.xy-vec2<f32>(particleDepthTile(u32(v.depthInfo.x))*particleDepth.size.xy);if(any(local<vec2<f32>(0))||any(local>=vec2<f32>(particleDepth.size.xy))){discard;}let sceneUv=local/vec2<f32>(particleDepth.size.xy);':'let sceneUv=v.clip.xy/u.raster.xy;',
-   output:deposit?'return vec4<f32>(min(v.tau*weight,65504.0),0,0,0);':gridActive?'let ordinary=particleDepthWeight(v.clip.xy,v.depthInfo,v.tau*weight);let assisted=particleAssistedWeight(v.clip.xy,v.depthInfo,v.tau*weight);let visibility=select(assisted,max(0.0,ordinary-assisted),u.visibility.z>1.5);return vec4<f32>(v.light*visibility*lightWeight,v.tau*weight);':'return vec4<f32>(v.light*lightWeight*particleDepthWeight(v.clip.xy,v.depthInfo,v.tau*weight),v.tau*weight);'}:
+   output:deposit?'return vec4<f32>(min(v.tau*weight,65504.0),0,0,0);':gridActive?'var visibility=particleAssistedWeight(v.clip.xy,v.depthInfo,v.tau*weight);if(u.visibility.z>1.5){visibility=max(0.0,particleDepthWeight(v.clip.xy,v.depthInfo,v.tau*weight)-visibility);}return vec4<f32>(v.light*visibility*lightWeight,v.tau*weight);':'return vec4<f32>(v.light*lightWeight*particleDepthWeight(v.clip.xy,v.depthInfo,v.tau*weight),v.tau*weight);'}:
    {declarations:'',filter:'',field:'',vertex:'',coords:'let sceneUv=v.clip.xy/u.raster.xy;',output:'return vec4<f32>(v.light*lightWeight,v.tau*weight);'};
   function raster(deposit=false){
-   const key=`${ms}:${s.depthMode}:${deposit}:${gridActive}:${s.debugView===8}`;let rp=render.get(key);
+   const key=`${ms}:${s.depthMode}:${deposit}:${gridActive&&!deposit}:${s.debugView===8}`;let rp=render.get(key);
    if(!rp){const dc=depthCode(deposit);const code=RENDER.replace('FIELD_DECLARATIONS',s.debugView===8?`struct ExchangeNode {state:vec4<f32>,mass:vec4<f32>}
 @group(0) @binding(9) var<storage,read> exchangeNodes:array<ExchangeNode>;
 fn exchangeNeighborhoodHeat(point:vec3<f32>)->f32{
@@ -495,13 +495,15 @@ fn exchangeNeighborhoodHeat(point:vec3<f32>)->f32{
   raster();
   if(!directTransfer){let resolvePipeline=resolvePipelines.get(gridActive?"assist":!!s.depthMode);if(!resolvePipeline){const module=device.createShaderModule({code:gridActive?ASSIST_RESOLVE:s.depthMode?RESOLVE.replace(OPTICAL_TRANSFER,DEPTH_TRANSFER):RESOLVE});
   resolvePipeline=device.createRenderPipeline({layout:'auto',vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',targets:[{format:'rgba32float'}]}});resolvePipelines.set(gridActive?"assist":!!s.depthMode,resolvePipeline);}
-  const resolve=encoder.beginRenderPass({label:'material optical moment transfer',...profileWrites('resolve'),colorAttachments:[{view:textures[1].createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:1}}]});resolve.setPipeline(resolvePipeline);resolve.setBindGroup(0,device.createBindGroup({layout:resolvePipeline.getBindGroupLayout(0),entries:[{binding:0,resource:textures[0].createView()},...(gridActive?[{binding:1,resource:gridField.base.createView()},{binding:2,resource:{buffer:options}},{binding:3,resource:depthField.entries()[0].resource}]:[])]}));resolve.draw(3);resolve.end();}
-  const presentKey=format+':overlay='+s.showRaymarch+':direct='+directTransfer+':depth='+!!s.depthMode;
+  const resolve=encoder.beginRenderPass({label:'material optical moment transfer',...profileWrites('resolve'),colorAttachments:[{view:textures[1].createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:1}}]});resolve.setPipeline(resolvePipeline);resolve.setBindGroup(0,device.createBindGroup({layout:resolvePipeline.getBindGroupLayout(0),entries:[{binding:0,resource:textures[0].createView()},...(gridActive?assistEntries():[])]}));resolve.draw(3);resolve.end();}
+  const presentKey=format+':overlay='+s.showRaymarch+':direct='+directTransfer+':depth='+!!s.depthMode+':assist='+(directTransfer&&gridActive);
   let pp=present.get(presentKey);if(!pp){let code=INTEGRAL_PRESENT_WGSL.replace('let v=textureLoad(image,vec2<i32>(p.xy),0);',`let dims=vec2<i32>(textureDimensions(image));let uv=p.xy/u.reserved_render_controls.xy;let q=uv*vec2<f32>(dims)-.5;let base=vec2<i32>(floor(q));let f=fract(q);let hi=dims-vec2<i32>(1);var v:vec4<f32>;if(all(vec2<f32>(dims)==u.reserved_render_controls.xy)){v=textureLoad(image,vec2<i32>(p.xy),0);}else{v=mix(mix(textureLoad(image,clamp(base,vec2<i32>(0),hi),0),textureLoad(image,clamp(base+vec2<i32>(1,0),vec2<i32>(0),hi),0),f.x),mix(textureLoad(image,clamp(base+vec2<i32>(0,1),vec2<i32>(0),hi),0),textureLoad(image,clamp(base+vec2<i32>(1,1),vec2<i32>(0),hi),0),f.x),f.y);}`);
-   if(directTransfer)code=(s.depthMode?DEPTH_TRANSFER:OPTICAL_TRANSFER)+INTEGRAL_PRESENT_WGSL.replace('let v=textureLoad(image,vec2<i32>(p.xy),0);','let v=particleOpticalTransfer(textureLoad(image,vec2<i32>(p.xy),0));');
+   if(directTransfer)code=(gridActive?ASSIST_TRANSFER:s.depthMode?DEPTH_TRANSFER:OPTICAL_TRANSFER)+INTEGRAL_PRESENT_WGSL.replace('let v=textureLoad(image,vec2<i32>(p.xy),0);',gridActive
+    ?'let v=particleAssistTransfer(textureLoad(image,vec2<i32>(p.xy),0),p.xy/u.reserved_render_controls.xy);'
+    :'let v=particleOpticalTransfer(textureLoad(image,vec2<i32>(p.xy),0));');
    const m=device.createShaderModule({code});pp=device.createRenderPipeline({layout:'auto',vertex:{module:m,entryPoint:'vs'},fragment:{module:m,entryPoint:'present',constants:{TRANSPARENT_CANVAS:transparent||s.showRaymarch},targets:[{format,...(s.showRaymarch?{blend:{color:{srcFactor:'one',dstFactor:'one-minus-src-alpha',operation:'add'},alpha:{srcFactor:'one',dstFactor:'one-minus-src-alpha',operation:'add'}}}:{})}]}});present.set(presentKey,pp);}
   const displayCamera=new Float32Array(cameraValues);displayCamera.set([outputWidth,outputHeight],16);device.queue.writeBuffer(camera,0,displayCamera);
-  const output=encoder.beginRenderPass({label:'native optical particle presentation',...profileWrites('present'),colorAttachments:[{view,loadOp:s.showRaymarch?'load':'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}]});output.setPipeline(pp);output.setBindGroup(0,device.createBindGroup({layout:pp.getBindGroupLayout(0),entries:[{binding:0,resource:textures[directTransfer?0:1].createView()},{binding:1,resource:{buffer:camera}}]}));output.draw(3);output.end();
+  const output=encoder.beginRenderPass({label:'native optical particle presentation',...profileWrites('present'),colorAttachments:[{view,loadOp:s.showRaymarch?'load':'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}]});output.setPipeline(pp);output.setBindGroup(0,device.createBindGroup({layout:pp.getBindGroupLayout(0),entries:[{binding:0,resource:textures[directTransfer?0:1].createView()},{binding:1,resource:{buffer:camera}},...(directTransfer&&gridActive?assistEntries():[])]}));output.draw(3);output.end();
   if(retired.length){const old=retired.splice(0);queueMicrotask(()=>device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>old.forEach(x=>x.destroy())));}
   info=readState();return info;
  }

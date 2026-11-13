@@ -71,7 +71,7 @@ async function opticalFixture(d,run,view={}){
  const target=d.createTexture({size:[4,4],format:'rgba8unorm',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC});const depth=d.createTexture({size:[1,1],format:'depth32float',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING});
  const camera=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,1,1,0,0,0,1,0]);const source={buffer:births,uniform,width:4,height:4,pixels:n,step:0,backtrace:view.backtrace??0,reactionStepScale:view.stepScale??1,viewProj:view.vp??identity};
  const seed=rows=>{d.queue.writeBuffer(births,0,rows);owner.reset();};
- const draw=async(step=0,settings={})=>{source.step=step;const e=d.createCommandEncoder();const dp=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthClearValue:view.depth??1,depthStoreOp:'store'}});dp.end();const measured=view.trace||view.passTrace?new Proxy(e,{get(target,key){if(key==='beginRenderPass')return desc=>{view.passTrace?.push(desc.label);const pass=target.beginRenderPass(desc);return desc.label==='spatial material support'?new Proxy(pass,{get(p,k){const value=p[k];return typeof value==='function'?function(...args){if(k==='draw'||k==='drawIndexed')view.trace?.push({method:k,args});return value.apply(p,args);}:value;}}):pass;};const value=target[key];return typeof value==='function'?value.bind(target):value;}}):e;owner.encode(measured,{view:target.createView(),format:'rgba8unorm',source,fine,reactants,dims:[2,2,2],invViewProj:view.inverse??identity,depthZeroToOne:view.depthZeroToOne??false,settings:{enabled:true,refresh:0,exchangeStrength:0,stateLife:0,...settings},cameraValues:camera,depth,identity:'fixture',gridExtinction:view.gridExtinction,allowUnavailableGridExtinction:view.allowUnavailableGridExtinction});const read=d.createBuffer({size:1024,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});e.copyTextureToBuffer({texture:target},{buffer:read,bytesPerRow:256},[4,4]);d.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);const pixels=new Uint8Array(read.getMappedRange().slice(0));read.unmap();read.destroy();return pixels;};
+ const draw=async(step=0,settings={})=>{source.step=step;const e=d.createCommandEncoder();const dp=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthClearValue:view.depth??1,depthStoreOp:'store'}});dp.end();const measured=view.trace||view.passTrace?new Proxy(e,{get(target,key){if(key==='beginRenderPass')return desc=>{view.passTrace?.push(desc.label);const pass=target.beginRenderPass(desc);return desc.label==='spatial material support'?new Proxy(pass,{get(p,k){const value=p[k];return typeof value==='function'?function(...args){if(k==='draw'||k==='drawIndexed')view.trace?.push({method:k,args});return value.apply(p,args);}:value;}}):pass;};const value=target[key];return typeof value==='function'?value.bind(target):value;}}):e;owner.encode(measured,{view:target.createView(),format:'rgba8unorm',source,fine,reactants,dims:[2,2,2],invViewProj:view.inverse??identity,depthZeroToOne:view.depthZeroToOne??false,settings:{enabled:true,refresh:0,exchangeStrength:0,stateLife:0,...settings},cameraValues:camera,depth,identity:'fixture',gridExtinction:view.gridExtinction,allowUnavailableGridExtinction:view.allowUnavailableGridExtinction,profileWrites:label=>{view.profiles?.push(label);return {};}});const read=d.createBuffer({size:1024,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});e.copyTextureToBuffer({texture:target},{buffer:read,bytesPerRow:256},[4,4]);d.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);const pixels=new Uint8Array(read.getMappedRange().slice(0));read.unmap();read.destroy();return pixels;};
  try{await run({owner,seed,draw,setMaterial:grid.upload,upload:rows=>d.queue.writeBuffer(births,0,rows)});}finally{owner.dispose();births.destroy();uniform.destroy();grid.dispose();target.destroy();depth.destroy();}
 }
 test('optically negligible carriers cannot dilute an overlapping live carrier',async()=>{
@@ -303,7 +303,7 @@ async function withExtinctionFixture(d,run,options={}){
  d.queue.writeTexture({texture:grid},voxels,{bytesPerRow:64,rowsPerImage:4},[4,4,4]);
  const field={status:'encoded',texture:grid,frame:0,expectedFrame:0,generation:1,coefficientLengthSpace:'volume-local',dimensions:[4,4,4],localMin:[-1,-1,-1],localMax:[1,1,1]};
  const camera=new PerspectiveCamera(45,1,.1,20);camera.coordinateSystem=WebGPUCoordinateSystem;camera.position.z=4;camera.updateProjectionMatrix();camera.updateMatrixWorld();const vp=new Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);
- try{await opticalFixture(d,x=>run({...x,field}),{vp:vp.toArray(),inverse:vp.clone().invert().toArray(),depthZeroToOne:true,transparent:options.transparent??false,gridExtinction:field,allowUnavailableGridExtinction:options.allowUnavailableGridExtinction});}finally{grid.destroy();}
+ try{await opticalFixture(d,x=>run({...x,field}),{vp:vp.toArray(),inverse:vp.clone().invert().toArray(),depthZeroToOne:true,transparent:options.transparent??false,gridExtinction:field,allowUnavailableGridExtinction:options.allowUnavailableGridExtinction,profiles:options.profiles});}finally{grid.destroy();}
 }
 const centerLight=image=>image[256+4]+image[256+8]+image[512+4]+image[512+8];
 test('independent grid extinction hides a rear particle without changing retained state and off remains exact',async()=>{
@@ -314,6 +314,22 @@ test('independent grid extinction hides a rear particle without changing retaine
   const suppressed=await draw(0,{...cfg,extinctionView:2});assert.ok(centerLight(suppressed)>0,'suppressed-light view exposes the consequential missing opacity');
   assert.deepEqual(await draw(0,{...cfg,fillExtinction:0}),plain,'turning assist off restores exact baseline pixels');
  }));
+});
+test('same-size assist uses one presentation pass and exact off restores the unassisted pass set',async()=>{
+ const profiles=[];
+ await withKaminosGpu(async({device:d})=>withExtinctionFixture(d,async({seed,draw,owner})=>{
+  const rows=new Float32Array(16*16);rows.set([1,.4,.1,.1,0,0,-.5,1,0,.25,1,.3,1,.4,.1,0]);seed(rows);
+  const cfg={depthMode:2,depthSlices:8,depthScale:1,radius:1};
+  const drawPasses=async patch=>{profiles.length=0;const pixels=await draw(0,{...cfg,...patch});return {pixels,passes:[...profiles],state:owner.read()};};
+  await draw(0,cfg);const initial=await drawPasses({}),on=await drawPasses({fillExtinction:1}),off=await drawPasses({fillExtinction:0});
+  assert.equal(on.state.gridAssist.effective,'current-single-grid-extinction');
+  assert.ok(on.passes.includes('gridExtinction'));
+  assert.ok(centerLight(on.pixels)<centerLight(initial.pixels)*.8);
+  assert.equal(off.state.gridAssist.effective,'off');
+  assert.deepEqual(off.passes,initial.passes);
+  assert.deepEqual(off.pixels,initial.pixels);
+  assert.ok(!on.passes.includes('resolve'),'the assist must apply transmission directly in same-size presentation');
+ },{profiles}));
 });
 test('zero independent extinction cannot add opacity already represented by particles',async()=>{
  await withKaminosGpu(async({device:d})=>withExtinctionFixture(d,async({seed,draw})=>{

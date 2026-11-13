@@ -98,3 +98,13 @@ test('untouched numeric controls preserve accepted precision and one edit publis
 test('connected-field and cost gates share the live authoring path and preserve the population',async()=>{const x=await mounted();try{for(const key of ['exchangeEnabled','groupingEnabled','acquisitionEnabled','birthsEnabled','updateEnabled','reactionEnabled','transportEnabled','liveTimings','hud']){const input=x.field(key);assert.ok(input,key);assert.equal(input.type,'checkbox');input.checked=false;input.fire('change');await Promise.resolve();assert.equal(x.accepted()[key],false,key);}for(const [key,v] of [['exchangeHeat',20],['exchangeRate',100],['exchangeEvery',4],['acquisitionEvery',3],['exchangeSpacing',.125],['maxFootprint',1],['opticalCutoff',.001]]){const input=x.field(key);assert.ok(input,key);input.classList.add('scrubbing');input.value=String(v);input.fire('input');await Promise.resolve();assert.equal(x.accepted()[key],v,key);}assert.equal(x.trace.reset.length,0,'live work controls cannot clear material');}finally{await x.dispose();}});
 
 test('HUD visibility responds immediately to explicit controls inside the frame throttle window',async t=>{let clock=1000;t.mock.method(Date,'now',()=>clock);const x=await mounted({viewport:true});try{const hud=x.document.body.children[0];assert.equal(hud.style.display,'block');clock++;x.owner.operations.setOptions({hud:false});assert.equal(hud.style.display,'none');clock++;x.owner.operations.setOptions({hud:true});assert.equal(hud.style.display,'block');}finally{await x.dispose();}});
+
+test('Fill exposes a small active strength and accepts an exact typed zero',async()=>{
+ const x=await mounted({inputs:{particles:{depthMode:1,fillExtinction:.0001}}});
+ try{
+  const fill=x.field('fillExtinction');assert.equal(Number(fill.value),.0001,'a positive strength must never display as off');
+  x.document.activeElement=fill;fill.value='0';fill.fire('input');fill.fire('keydown',{key:'Enter'});await Promise.resolve();
+  assert.equal(x.accepted().fillExtinction,0);
+  assert.equal(x.trace.reset.length,0);
+ }finally{await x.dispose();}
+});
