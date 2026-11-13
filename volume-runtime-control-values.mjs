@@ -5,6 +5,42 @@ import {applyPreviewQualityCaps} from './preview-quality.mjs';
 import {readAdaptiveMaterialControls} from './volume-adaptive-material-controls.mjs';
 import {normalizeVolumeScene,DEFAULT_VOLUME_SCENE} from './volume-scene-ontology.mjs';
 
+// Both page entries begin with the same route state. The selected worker
+// applies saved recipe overrides in its existing domain settings owner.
+export function createInitialVolumeRuntimeRoute(){return {
+  "activeVolumeRayBudgetPreset": "",
+  "routedVolumeRayBudgetPreset": "",
+  "activeCanonicalVolumeMacroPreset": "",
+  "routedCanonicalSourceMode": "current",
+  "routedCanonicalRenderMode": "default",
+  "routedCanonicalMotionMode": "animated",
+  "routedCanonicalContentMode": "smoke",
+  "routedCanonicalSourceY": -0.74,
+  "routedCanonicalInjection": 1,
+  "routedCanonicalBuoyancy": 1,
+  "routedVolumeReactionFuelScale": 1,
+  "routedVolumePressureIterations": undefined,
+  "routedVolumePressureStrategy": "global",
+  "routedVolumePressureMode": "auto",
+  "routedVolumeSimProfile": false,
+  "routedVolumeLifecycleEffect": "none",
+  "routedVolumeLifecycleT": 0,
+  "routedVolumeQuenchVapor": 0,
+  "routedVolumeRuntimeQuality": "live_high",
+  "routedVolumeGpuPressure": 0,
+  "routedVolumeQualityReason": "route-default",
+  "routedBonfireAblationControls": {
+    "bonfireRecenter": 1,
+    "bonfireLateralDamping": 1,
+    "bonfireShear": 1,
+    "bonfireDetailForces": 1,
+    "bonfireDepinch": 1,
+    "bonfireProjection": 1,
+    "bonfireTemporal": 1,
+    "bonfireInstabilityProbe": 0
+  }
+};}
+
 const CANONICAL_VOLUME_SOURCE_MODE_VALUES = {
   current: 0,
   passive_bottom: 1,

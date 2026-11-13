@@ -2861,6 +2861,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 }
 </script>
 
+<template id="kaminos-legacy-page-module">
 <script type="module">
 import {waterDomainPose,checkedWaterDomainPose,waterDomainSampling} from './authored-water-domain.mjs';
 import {authoredMlsCellSize,authoredMlsParticleVolume} from './authored-mls-water.mjs';
@@ -3357,7 +3358,7 @@ const {
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import {createSceneGltfLoaderClass} from './scene-gltf-loader.mjs';
-import {volumeAperturePatternValue as sharedVolumeAperturePatternValue,readVolumeRuntimeControlValues,REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS,normalizeReactionFrontLiveView,normalizeBoundarySidecarSource,normalizeBoundarySidecarView,normalizeBoundarySplatMode,normalizeVolumeRuntimeQuality,normalizeVolumeQualityReason,volumeRuntimeQualityFromPressure,applyVolumeRuntimeQualityLadder} from './volume-runtime-control-values.mjs';
+import {createInitialVolumeRuntimeRoute,volumeAperturePatternValue as sharedVolumeAperturePatternValue,readVolumeRuntimeControlValues,REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS,normalizeReactionFrontLiveView,normalizeBoundarySidecarSource,normalizeBoundarySidecarView,normalizeBoundarySplatMode,normalizeVolumeRuntimeQuality,normalizeVolumeQualityReason,volumeRuntimeQualityFromPressure,applyVolumeRuntimeQualityLadder} from './volume-runtime-control-values.mjs';
 import {sceneObjectTransformState as sharedSceneObjectTransformState, applySceneObjectTransformState as sharedApplySceneObjectTransformState, getMaterialStateForObject as sharedGetMaterialStateForObject, applyMaterialStateToObject as sharedApplyMaterialStateToObject} from './scene-object-state.mjs';
 import {loadBrazierRoom} from './brazier-room.mjs';
 import { configureSurfelRendering } from './trellis-surfels.mjs';
@@ -16828,38 +16829,31 @@ const DEFAULT_VOLUME_CAMERA_FRAME = {
   target: [0, 0.02, 0],
 };
 
-let activeVolumeRayBudgetPreset = '';
-let routedVolumeRayBudgetPreset = '';
-let activeCanonicalVolumeMacroPreset = '';
-let routedCanonicalSourceMode = 'current';
-let routedCanonicalRenderMode = 'default';
-let routedCanonicalMotionMode = 'animated';
-let routedCanonicalContentMode = 'smoke';
-let routedCanonicalSourceY = canonicalVolumeSourceDefaults('current').sourceY;
-let routedCanonicalInjection = canonicalVolumeSourceDefaults('current').injection;
-let routedCanonicalBuoyancy = canonicalVolumeSourceDefaults('current').buoyancy;
-let routedVolumeReactionFuelScale = 1;
-let routedVolumePressureIterations = undefined;
-let routedVolumePressureStrategy = 'global';
-let routedVolumePressureMode = 'auto';
-let routedVolumeSimProfile = false;
-let routedVolumeLifecycleEffect = 'none';
-let routedVolumeLifecycleT = 0;
-let routedVolumeQuenchVapor = 0;
-let routedVolumeRuntimeQuality = 'live_high';
-let routedVolumeGpuPressure = 0;
-let routedVolumeQualityReason = 'route-default';
-const DEFAULT_BONFIRE_ABLATION_CONTROLS = {
-  bonfireRecenter: 1,
-  bonfireLateralDamping: 1,
-  bonfireShear: 1,
-  bonfireDetailForces: 1,
-  bonfireDepinch: 1,
-  bonfireProjection: 1,
-  bonfireTemporal: 1,
-  bonfireInstabilityProbe: 0,
-};
-let routedBonfireAblationControls = { ...DEFAULT_BONFIRE_ABLATION_CONTROLS };
+let {
+  activeVolumeRayBudgetPreset,
+  routedVolumeRayBudgetPreset,
+  activeCanonicalVolumeMacroPreset,
+  routedCanonicalSourceMode,
+  routedCanonicalRenderMode,
+  routedCanonicalMotionMode,
+  routedCanonicalContentMode,
+  routedCanonicalSourceY,
+  routedCanonicalInjection,
+  routedCanonicalBuoyancy,
+  routedVolumeReactionFuelScale,
+  routedVolumePressureIterations,
+  routedVolumePressureStrategy,
+  routedVolumePressureMode,
+  routedVolumeSimProfile,
+  routedVolumeLifecycleEffect,
+  routedVolumeLifecycleT,
+  routedVolumeQuenchVapor,
+  routedVolumeRuntimeQuality,
+  routedVolumeGpuPressure,
+  routedVolumeQualityReason,
+  routedBonfireAblationControls
+}=createInitialVolumeRuntimeRoute();
+const DEFAULT_BONFIRE_ABLATION_CONTROLS={...routedBonfireAblationControls};
 
 function clampVolumeValue(value, min, max) {
   return Math.max(min, Math.min(max, Number(value)));
@@ -27208,6 +27202,15 @@ function setupAuthoringAssets(){
   window.kaminosAssets={...authoringAssets,open:mode=>authoringAssetsUI.open(mode),close:()=>authoringAssetsUI.close(),panel:()=>authoringAssetsUI.state(),imageHistory:authoringImageHistory,showHistoryImage:source=>authoringImageHistoryUI.show(source),compareImages:value=>authoringGenerateLayout.compare(value),images:authoringImageGenerator,promptExpansion:authoringPromptExpansion,expandPrompt:()=>authoringPromptUI.expand(),generationFlame:authoringGenerateLayout.ceremony};
 }
 
+</script>
+</template>
+<script type="module">
+import {startScenePage} from './scene-page-entry.mjs';
+void startScenePage().catch(error=>{
+ const info=document.getElementById('info-bar');if(info)info.textContent='Kaminos startup failed: '+error.message;
+ document.body.classList.add('kaminos-startup-failed');document.body.classList.remove('kaminos-starting');
+ window.kaminosStartup?.finish('failed');console.error(error);
+});
 </script>
 <script>
 // Help text lives behind a small info mark on each control row: the

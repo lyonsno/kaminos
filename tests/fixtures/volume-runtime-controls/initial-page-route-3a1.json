@@ -1,0 +1,40 @@
+{
+  "sourceRevision": "3a1cbc0c46abf5c759623e9b617d2357bf5bd87f",
+  "source": "index.html canonical route initialization before initSceneWorkerPage",
+  "sourceSha256": "c57a4e7a27395ab97297c50a06c6f5fb9a470d1b1f88c60e858e6e4056f48458",
+  "route": {
+    "activeVolumeRayBudgetPreset": "",
+    "routedVolumeRayBudgetPreset": "",
+    "activeCanonicalVolumeMacroPreset": "",
+    "routedCanonicalSourceMode": "current",
+    "routedCanonicalRenderMode": "default",
+    "routedCanonicalMotionMode": "animated",
+    "routedCanonicalContentMode": "smoke",
+    "routedCanonicalSourceY": -0.74,
+    "routedCanonicalInjection": 1,
+    "routedCanonicalBuoyancy": 1,
+    "routedVolumeReactionFuelScale": 1,
+    "routedVolumePressureStrategy": "global",
+    "routedVolumePressureMode": "auto",
+    "routedVolumeSimProfile": false,
+    "routedVolumeLifecycleEffect": "none",
+    "routedVolumeLifecycleT": 0,
+    "routedVolumeQuenchVapor": 0,
+    "routedVolumeRuntimeQuality": "live_high",
+    "routedVolumeGpuPressure": 0,
+    "routedVolumeQualityReason": "route-default",
+    "routedBonfireAblationControls": {
+      "bonfireRecenter": 1,
+      "bonfireLateralDamping": 1,
+      "bonfireShear": 1,
+      "bonfireDetailForces": 1,
+      "bonfireDepinch": 1,
+      "bonfireProjection": 1,
+      "bonfireTemporal": 1,
+      "bonfireInstabilityProbe": 0
+    }
+  },
+  "undefinedKeys": [
+    "routedVolumePressureIterations"
+  ]
+}
