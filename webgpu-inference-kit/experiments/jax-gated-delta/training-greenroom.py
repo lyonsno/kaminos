@@ -34,14 +34,18 @@ def write(path, value):
 
 def supervise(args):
     output = Path(args.out).resolve()
-    if output == Path(args.manifest).resolve() or (args.resume and output == Path(args.resume).resolve()):
-        raise ValueError('report output aliases training input')
+    child_report = output.with_name(output.stem + '-browser.json')
+    stderr_path = output.with_name(output.stem + '-browser.stderr.txt')
+    inputs = {Path(args.manifest).resolve()}
+    if args.resume:
+        inputs.add(Path(args.resume).resolve())
+    if any(file.resolve() in inputs for file in (output, child_report, stderr_path)):
+        raise ValueError('report/stderr output aliases training input')
     status = {'schema': 'kaminos.training-supervisor.v1', 'status': 'failed',
               'phase': 'preflight', 'source_root': str(Path(__file__).resolve().parents[3]),
               'manifest': str(Path(args.manifest).resolve()), 'memory_released': False}
     child = None
     invocation = uuid.uuid4().hex
-    child_report = output.with_name(output.stem + '-browser.json')
     def record(**changes):
         status.update(changes, updated_at=time.time())
         write(output, status)
@@ -106,7 +110,6 @@ def supervise(args):
                    '--invocation-id', invocation]
         if resume:
             command += ['--resume', str(Path(resume).resolve())]
-        stderr_path = output.with_name(output.stem + '-browser.stderr.txt')
         record(phase='browser-launch', command=command, managed=managed, manifest_sha256=manifest_hash,
                sdk=str(Path(sdk.__file__).resolve()), sdk_sha256=digest(sdk.__file__))
         with stderr_path.open('w') as stderr, cancellation() as stop:

@@ -33,3 +33,14 @@ test('report alias cannot overwrite the caller manifest',async()=>{
   const child=spawnSync(process.execPath,['training-runner.mjs','--manifest',file,'--out',file],{cwd:import.meta.dirname,encoding:'utf8'});
   assert.equal(child.status,1);assert.match(child.stderr,/output aliases/);assert.equal(await fs.readFile(file,'utf8'),bytes);
 });
+
+test('checkpoint symlink alias rejects before browser launch and preserves input',async()=>{
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'training-checkpoint-alias-'));
+  const file=path.join(dir,'run.json'),checkpoint=path.join(dir,'saved.json'),out=path.join(dir,'report.json');
+  const bytes=JSON.stringify(await makeTrainingRun({fixtures:[q4Fixture()],updates:1}));
+  await fs.writeFile(file,bytes);await fs.symlink(file,checkpoint);
+  const child=spawnSync(process.execPath,['training-runner.mjs','--manifest',file,'--out',out,'--checkpoint-out',checkpoint,'--chrome','/missing/browser'],{cwd:import.meta.dirname,encoding:'utf8'});
+  assert.equal(child.status,1);const report=JSON.parse(await fs.readFile(out));
+  assert.match(report.error.message,/checkpoint output aliases/);assert.equal(report.browserPid,undefined);
+  assert.equal(await fs.readFile(file,'utf8'),bytes);
+});

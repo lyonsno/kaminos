@@ -16,14 +16,9 @@ import threading
 import time
 import uuid
 
-from gpu_queue.queue import GPUQueue
-from gpu_queue.models import JobRequest
-from gpu_queue.job_controls import perform
-
-
 def atomic(file, value):
     file=Path(file);file.parent.mkdir(parents=True,exist_ok=True)
-    temp=file.with_name(file.name+'.tmp')
+    temp=file.with_name(file.name+'.'+uuid.uuid4().hex+'.tmp')
     temp.write_text(json.dumps(value,indent=2,allow_nan=False)+'\n');temp.replace(file)
 
 
@@ -40,8 +35,11 @@ def main():
     p.add_argument('--out',required=True);p.add_argument('--manifest',required=True)
     p.add_argument('--node',required=True);p.add_argument('--chrome',required=True)
     a=p.parse_args();out=Path(a.out).resolve();out.mkdir(parents=True,exist_ok=True)
-    report={'status':'failed','phase':'preflight','manifest':str(Path(a.manifest).resolve()),'manifest_sha256':sha(a.manifest),'cases':[]}
-    report_path=out/'report.json';atomic(report_path,report)
+    report={'status':'failed','phase':'preflight','manifest':str(Path(a.manifest).resolve()),'cases':[]}
+    report_path=out/'report.json'
+    if report_path.resolve()==Path(a.manifest).resolve():
+        raise ValueError('witness report output aliases manifest')
+    atomic(report_path,report)
     root=Path(__file__).resolve().parent
     def node_run(name,resume=None,pause_at=None):
         target=out/name;target.mkdir();output=target/'report.json'
@@ -66,6 +64,10 @@ def main():
         report['cases'].append({'name':name,'report':str(output),'sha256':sha(output)});atomic(report_path,report)
         return r
     try:
+        report['manifest_sha256']=sha(a.manifest)
+        from gpu_queue.queue import GPUQueue
+        from gpu_queue.models import JobRequest
+        from gpu_queue.job_controls import perform
         report['phase']='uninterrupted';atomic(report_path,report)
         whole=node_run('whole')
         report['phase']='split';atomic(report_path,report)
@@ -140,7 +142,7 @@ def main():
         report.update(status='succeeded',phase='finished',greenroom={'parent':request.job_id,'successor':next_id,
             'intervening_job':other.job_id,'queue':str(queue.queue_dir),'resume_equal':True,'handoff':handoff})
     except Exception as e:
-        report.update(error=repr(e));raise
+        report.update(error=str(e),error_type=type(e).__name__);raise
     finally:atomic(report_path,report)
 
 

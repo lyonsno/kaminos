@@ -100,6 +100,11 @@ line protocol on stdin/stdout: each `boundary` event waits for `next`, `pause`
 The report's `completed`/`checkpointed` status describes training progress and
 browser closure; it never asserts release of a Greenroom execution mutex.
 Caller report/checkpoint paths must be distinct from input paths.
+Checkpoint defaults to `<report-stem>-checkpoint.json` alongside the report;
+`--checkpoint-out` selects another path. Report, stderr and checkpoint input
+aliases are rejected before launch, including existing symlinks. If the report
+itself aliases an input, stderr carries the refusal because writing that report
+would overwrite the input.
 
 `training-greenroom.py` bridges that protocol to the **installed Greenroom SDK**.
 Invoke it with the installed Greenroom Python interpreter and submit its exact

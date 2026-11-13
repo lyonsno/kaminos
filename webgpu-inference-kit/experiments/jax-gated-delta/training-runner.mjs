@@ -21,7 +21,7 @@ for(const flag of ['--manifest','--resume']){
 }
 const root=path.resolve(fileURLToPath(new URL('.',import.meta.url)));
 const report={schema:'kaminos.training-report.v1',status:'failed',phase:'arguments',progress:null,cleanup:{browserClosed:false,serverClosed:false},events:[]};
-let args,browser,server,trainerPage,lines,input;
+let args,browser,server,trainerPage,lines,input,checkpointFile;
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 async function atomic(file,value){await fs.mkdir(path.dirname(file),{recursive:true});const temp=file+'.'+process.pid+'.tmp';await fs.writeFile(temp,JSON.stringify(value,null,2)+'\n');await fs.rename(temp,file);}
 const persist=()=>atomic(output,report);
@@ -30,6 +30,10 @@ try{
   await persist();
   ({values:args}=parseArgs({options:{manifest:{type:'string'},out:{type:'string'},chrome:{type:'string'},resume:{type:'string'},'checkpoint-out':{type:'string'},'invocation-id':{type:'string'},managed:{type:'boolean',default:false},'expected-vendor':{type:'string',default:'apple'}}}));
   report.invocation=args['invocation-id']??randomUUID();
+  checkpointFile=path.resolve(args['checkpoint-out']??path.join(path.dirname(output),path.parse(output).name+'-checkpoint.json'));
+  for(const file of [output,args.manifest,args.resume].filter(Boolean)){
+    if(await canonical(checkpointFile)===await canonical(file))throw new Error('checkpoint output aliases an input/report');
+  }
   report.phase='manifest';await persist();
   const manifestBytes=await fs.readFile(args.manifest),run=validateRun(JSON.parse(manifestBytes));
   report.manifest={path:path.resolve(args.manifest),sha256:hash(manifestBytes),runIdentity:await runIdentity(run)};
@@ -113,8 +117,10 @@ try{
       report.phase='checkpoint';await persist();
       const state=await trainerPage.evaluate(()=>window.training.snapshot());
       await validateCheckpoint(run,state);
-      const file=path.resolve(args['checkpoint-out']??path.join(path.dirname(output),'checkpoint.json'));
-      if(file===output||file===path.resolve(args.manifest)||file===path.resolve(args.resume??output))throw new Error('checkpoint output aliases an input/report');
+      const file=checkpointFile;
+      for(const input of [output,args.manifest,args.resume].filter(Boolean)){
+        if(await canonical(file)===await canonical(input))throw new Error('checkpoint output aliases an input/report');
+      }
       await atomic(file,{schema:'kaminos.training-checkpoint.v1',source:report.source,route:{backend:'webgpu',vendor:args['expected-vendor']},state});
       const bytes=await fs.readFile(file);await validateCheckpoint(run,JSON.parse(bytes).state);
       report.checkpoint={path:file,sha256:hash(bytes),update:state.update};report.progress={...report.progress,update:state.update};

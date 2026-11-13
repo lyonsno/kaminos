@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import subprocess
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -16,6 +17,33 @@ spec.loader.exec_module(module)
 
 
 class SupervisorTests(unittest.TestCase):
+    def test_witness_missing_manifest_has_phase_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            out = root / 'witness'
+            result = subprocess.run([sys.executable, str(Path(__file__).with_name('training-integration.py')),
+                '--out', str(out), '--manifest', str(root / 'missing.json'), '--node', 'unused', '--chrome', 'unused'],
+                capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            report = json.loads((out / 'report.json').read_text())
+            self.assertEqual(report['status'], 'failed')
+            self.assertEqual(report['phase'], 'preflight')
+            self.assertIn('missing.json', report['error'])
+
+    def test_derived_stderr_cannot_overwrite_manifest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest = root / 'report-browser.stderr.txt'
+            manifest.write_text('private source data')
+            args = SimpleNamespace(out=str(root / 'report.json'), manifest=str(manifest), resume=None,
+                node=sys.executable, chrome='unused', expected_vendor='apple', on_submitted=None)
+            fake_sdk = SimpleNamespace(cooperative=SimpleNamespace(__file__=__file__))
+            fake_cancel = SimpleNamespace(cancellation=lambda: nullcontext(SimpleNamespace(checkpoint=lambda: None)))
+            with patch.dict(sys.modules, {'gpu_queue': fake_sdk, 'gpu_queue.cancellation': fake_cancel}):
+                with self.assertRaisesRegex(ValueError, 'aliases'):
+                    module.supervise(args)
+            self.assertEqual(manifest.read_text(), 'private source data')
+
     def test_rejects_stale_or_unreleased_producer_output(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
