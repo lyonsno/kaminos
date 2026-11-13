@@ -3,6 +3,7 @@ const sourceKeys=['radius','stretch','flowAlignment','expansion','supportFloor',
 export function createLiveParticleLighting({runtime,settings:initial={},createWorker=()=>new Worker(new URL('./particle-lighting-live.worker.mjs',import.meta.url),{type:'module'}),onChange=()=>{},record=()=>{},clock=()=>performance.now()}){
  let settings=liveParticleLightingSettings(initial),worker=null,disposed=false,busy=false,revision=0,sequence=0,active=null,lastAttempt=null,lastResult=null,error=null,phase=settings.enabled?'waiting':'off',blocked=false;
  const emit=()=>onChange();
+ const continueLatest=()=>queueMicrotask(()=>{if(!disposed&&settings.enabled)void tick();});
  const current=()=>{try{return runtime()?.opticalParticleState();}catch{return null;}};
  function read(){const source=current()?.lightingSource;return {requested:{...settings},phase,busy,error,revision,effective:lastResult?{route:lastResult.route,adapter:lastResult.adapter,plan:lastResult.plan,sourceIdentity:lastResult.field.sourceIdentity,sourceStep:lastResult.field.sourceStep,sourceRevision:lastResult.field.sourceRevision,sourceUpdatesOld:source&&source.identity===lastResult.field.sourceIdentity?source.revision-lastResult.field.sourceRevision:null,transferBytes:lastResult.transferBytes,pipelineMilliseconds:lastResult.pipelineMilliseconds}:null};}
  function clear(){const target=lastResult?.runtime;try{target?.setParticleIncidentField(null);}catch{}lastResult=null;}
@@ -14,8 +15,8 @@ export function createLiveParticleLighting({runtime,settings:initial={},createWo
   own.onmessage=({data:message})=>{if(own!==worker||disposed)return;
    if(message.kind==='device-lost'){stopWorker();blocked=true;fail(Error(message.error),'device');return;}
    if(!active||message.id!==active.id)return;const job=active;busy=false;active=null;
-   if(job.revision!==revision||!settings.enabled){lastAttempt=null;emit();return;}
-   const now=current();if(runtime()!==job.runtime||now?.lightingSource?.identity!==job.sourceIdentity){lastAttempt=null;clear();phase='waiting';emit();return;}
+   if(job.revision!==revision||!settings.enabled){lastAttempt=null;emit();continueLatest();return;}
+   const now=current();if(runtime()!==job.runtime||now?.lightingSource?.identity!==job.sourceIdentity){lastAttempt=null;clear();phase='waiting';emit();continueLatest();return;}
    if(message.kind==='failed'){fail(Error(message.error??'Lighting worker rejected its source'),message.phase??'worker');return;}
    try{
     const f=message.field,count=Array.isArray(f?.dims)&&f.dims.length===3&&f.dims.every(v=>Number.isSafeInteger(v)&&v>0)?f.dims.reduce((a,b)=>a*b,1):NaN;
@@ -39,7 +40,7 @@ export function createLiveParticleLighting({runtime,settings:initial={},createWo
    if(!snapshot?.available||snapshot.state?.effective!=='world-optical-particles'||!(snapshot.records instanceof Float32Array)||snapshot.records.length!==snapshot.state.slots*24||snapshot.state.lightingSource?.identity!==job.sourceIdentity)throw Error('Complete current native particle snapshot unavailable');
    job.sourceStep=snapshot.state.lightingSource.step;job.sourceRevision=snapshot.state.lightingSource.revision;job.sourceBytes=snapshot.records.byteLength;job.slots=snapshot.state.slots;
    ensureWorker();phase='transport';worker.postMessage({kind:'solve',id:job.id,revision:job.revision,records:snapshot.records,state:snapshot.state,settings:{...settings}},[snapshot.records.buffer]);emit();
-  }catch(cause){if(active===job){active=null;if(cause?.code==='PARTICLE_SOURCE_CHANGED'){busy=false;lastAttempt=null;phase='waiting';emit();}else fail(cause,'snapshot');}}
+  }catch(cause){if(active===job){active=null;if(cause?.code==='PARTICLE_SOURCE_CHANGED'){busy=false;lastAttempt=null;phase='waiting';emit();continueLatest();}else fail(cause,'snapshot');}}
   return read();
  }
  function setOptions(patch){if(disposed)throw Error('Live lighting has been disposed');const next=liveParticleLightingSettings({...settings,...patch}),solveChanged=LIVE_LIGHT_SOLVE_KEYS.some(k=>next[k]!==settings[k]),enableChanged=next.enabled!==settings.enabled;settings=next;
