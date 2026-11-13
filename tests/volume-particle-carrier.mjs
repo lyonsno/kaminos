@@ -72,6 +72,8 @@ test('live incoming light changes native scattering while preserving carried mat
 
 test('explicit live lighting snapshots retain the sampled step while native evolution continues',async()=>withKaminosGpu(async({device:d})=>fixture(d,async({owner,seed,draw})=>{
  seed([1,.8,.2,3]);const held=await draw(0,{exchangeEnabled:false,followFraction:0});
+ assert.ok(Number.isSafeInteger(held.state.lightingSource.revision),'source revision identifies actual material updates');
+ const idle=await draw(0,{exchangeEnabled:false,followFraction:0});assert.equal(idle.state.lightingSource.revision,held.state.lightingSource.revision,'paused presentation does not invalidate illumination');
  const pending=owner.sample({allowAdvance:true});const advanced=await draw(1,{exchangeEnabled:false,followFraction:0});
- const snapshot=await pending;assert.equal(snapshot.state.step,0);assert.deepEqual(snapshot.records,held.records,'snapshot is the queued copy, not a later state');assert.notDeepEqual(advanced.records,snapshot.records,'native material really advanced while the copy was pending');
+ const snapshot=await pending;assert.equal(snapshot.state.step,0);assert.deepEqual(snapshot.records,held.records,'snapshot is the queued copy, not a later state');assert.notDeepEqual(advanced.records,snapshot.records,'native material really advanced while the copy was pending');assert.ok(advanced.state.lightingSource.revision>snapshot.state.lightingSource.revision);
 })));

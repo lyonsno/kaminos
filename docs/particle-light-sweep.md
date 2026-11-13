@@ -39,3 +39,38 @@ The reference camera in `volume-particle-light-view.mjs` traverses every interse
 Receiver width, directional transport width, direction count and physical smoothing length are independent controls. Changing receiver width holds the smoothing length fixed. Smoothing spreads optical support and can conceal finer particle structure; the wider baseline is provisional. Preparation preserves the prior view while a new field is built, coalesces newer requests and labels pending/error state. The experiment retains requested controls through its inputs. The underlying fixture stays fixed while the operator navigates and compares intrinsic, scattered and combined views.
 
 Focused checks: `npm test -- --only tests/volume-particle-light-sweep.mjs,tests/particle-light-field.mjs`. The native tests establish slab/angular units, homogeneous emission/extinction, repeated-build clearing, world-box coverage and the reference camera's source separation and interior/parallel-ray integration. Actual Workbench rendering and controls require the browser consumer witness.
+
+## Live native particle lighting
+
+The `optical-particles` Workbench experiment accepts `lighting` inputs and opens a
+nonmodal lighting cockpit with **Alt-L** (Alt-G retains simulation-grid tuning).
+`setLighting`, `retryLighting`, `openLighting`, and `sampleLighting` expose the
+same operations to attached agents. Lighting settings persist with experiment
+inputs. They are experiment settings, not an evolved-scene checkpoint.
+
+The live path copies a complete native 96-byte carrier population asynchronously,
+then transfers it to a dedicated WebGPU worker. The worker deposits current
+intrinsic emission and extinction once into a common optical medium and reuses
+that medium for all directional sweeps. It returns spherical-mean incident
+radiance. Native particle rasterization samples that field for scattering while
+retaining its own intrinsic emission and extinction. Captured scattered light is
+excluded from the source solve. Camera-only/paused redraws reuse the field;
+material changes request another solve. An in-flight solve never queues another
+snapshot. Source and settings identities reject superseded results.
+
+Receiver bounds contain the Fine box plus all current optical particle support;
+receiver width controls pitch across the resulting X extent, and the panel shows
+the effective three-dimensional grid. Directional grid width independently sets
+the oriented sweep lattice. Source smoothing, support, bounds margin, direction
+count, albedo, gain, and contribution mode are exposed. Gain/albedo/mode edits
+reuse the computed field. Other edits rebuild worker resources as needed while
+the previous image and normal playback controls remain available.
+
+This first live route uses separate native and worker GPU devices. The panel
+reports transferred source/field bytes, end-to-end update duration, and material
+updates of field age; it does not present those as GPU timings or a production
+performance verdict. `sampleLighting` retains the latest solved source records
+and field for diagnosis. Shared-device work reuse is a subsequent optimization.
+The transport currently describes the open particle volume; external solid
+geometry is not included in these angular sweeps. The native integrator's present
+Fine-only source contract also remains in force.

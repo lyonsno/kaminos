@@ -1,0 +1,25 @@
+// kaminos-test: node
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createLiveParticleLighting} from '../particle-lighting-live-client.mjs';
+function fixture(){
+ const records=new Float32Array(48),writes=[],workers=[];let samples=0;const state={effective:'world-optical-particles',slots:2,step:10,frames:12,settings:{radius:.4,stretch:2,flowAlignment:0,expansion:0,supportFloor:0,gain:1,opacity:1,stateLife:1,lifeFade:.2},lightingSource:{identity:'source-A',revision:3,dims:[6,8,6],step:10,frame:12,material:{density:1,extinction:2,smokeVisible:1}}};
+ const runtime={opticalParticleState:()=>structuredClone(state),async sampleOpticalParticlesForLighting(){samples++;return {available:true,state:structuredClone(state),records:new Float32Array(records)};},setParticleIncidentField:field=>writes.push(field)};
+ const createWorker=()=>{const w={posts:[],postMessage(job){this.posts.push(job);},terminate(){this.terminated=true;}};workers.push(w);return w;};
+ const owner=createLiveParticleLighting({runtime:()=>runtime,createWorker,settings:{enabled:false,width:8,directions:4,transportWidth:8}});
+ function respond(w=workers.at(-1),patch={}){const job=w.posts.at(-1);w.onmessage({data:{kind:'solved',id:job.id,revision:job.revision,route:'worker-webgpu-particle-sweeps',adapter:{vendor:'test-fixture',isFallbackAdapter:false},plan:{active:2},field:{dims:[2,2,2],origin:[-1,-1,-1],extent:[2,2,2],data:new Float32Array(32).fill(1),sourceIdentity:job.state.lightingSource.identity,sourceStep:job.state.lightingSource.step,sourceRevision:job.state.lightingSource.revision},sourceState:job.state,sourceRecords:job.records,transferBytes:{source:192,result:128},...patch}});}
+ return {owner,state,writes,workers,respond,samples:()=>samples};
+}
+test('complete snapshots feed one worker job and display-only edits reuse the applied transport',async()=>{
+ const x=fixture();try{await x.owner.tick();assert.equal(x.samples(),0);x.owner.setOptions({enabled:true});await x.owner.tick();assert.equal(x.samples(),1);assert.equal(x.workers[0].posts[0].records.length,48);x.respond();assert.equal(x.owner.read().phase,'live');assert.equal(x.writes.at(-1).sourceStep,10);x.owner.setOptions({gain:2,mode:1});await x.owner.tick();assert.equal(x.samples(),1,'display tuning cannot repeat the transport');assert.equal(x.writes.at(-1).gain,2);x.state.frames++;await x.owner.tick();assert.equal(x.samples(),1,'camera-only or paused presentation cannot spend another solve');x.state.step++;x.state.lightingSource.revision++;x.state.lightingSource.step++;await x.owner.tick();assert.equal(x.samples(),2);x.owner.setOptions({enabled:false});assert.equal(x.writes.at(-1),null,'disabling clears the field actually owned by this client');}finally{x.owner.dispose();}
+});
+test('superseded settings and mismatched native source cannot publish stale light',async()=>{
+ const x=fixture();try{x.owner.setOptions({enabled:true});await x.owner.tick();x.owner.setOptions({width:16});x.respond();assert.equal(x.writes.filter(Boolean).length,0);await x.owner.tick();assert.equal(x.workers[0].posts.at(-1).settings.width,16);x.state.lightingSource.identity='source-B';x.respond();assert.equal(x.writes.filter(Boolean).length,0);await x.owner.tick();x.respond();assert.equal(x.writes.at(-1).sourceIdentity,'source-B');}finally{x.owner.dispose();}
+});
+test('fallback worker, malformed result and disabled lifetime fail visibly without clearing valid native material',async()=>{
+ const x=fixture();try{x.owner.setOptions({enabled:true});await x.owner.tick();x.respond(undefined,{adapter:{isFallbackAdapter:true}});assert.ok(x.owner.read().error);assert.equal(x.writes.filter(Boolean).length,0);x.owner.setOptions({directions:8});await x.owner.tick();x.respond(undefined,{route:'fallback'});assert.ok(x.owner.read().error);assert.equal(x.writes.filter(Boolean).length,0);x.owner.setOptions({enabled:false});assert.equal(x.owner.read().phase,'off');assert.equal(x.workers[0].terminated,true);assert.equal(x.writes.filter(Boolean).length,0,'a failed unpublished field cannot replace native lighting');}finally{x.owner.dispose();}
+});
+
+test('a native epoch change during snapshot waits for the next complete source without wedging the live client',async()=>{
+ const records=new Float32Array(48);let attempts=0;const state={effective:'world-optical-particles',slots:2,settings:{},lightingSource:{identity:'A',revision:1,dims:[6,8,6],step:1}};const runtime={opticalParticleState:()=>state,setParticleIncidentField(){},async sampleOpticalParticlesForLighting(){attempts++;if(attempts===1)throw Object.assign(Error('Particle readback became stale'),{code:'PARTICLE_SOURCE_CHANGED'});return {available:true,state:structuredClone(state),records};}};const posts=[];const worker={postMessage:r=>posts.push(r),terminate(){}};const owner=createLiveParticleLighting({runtime:()=>runtime,createWorker:()=>worker,settings:{enabled:true}});try{await owner.tick();state.lightingSource.identity='B';await owner.tick();assert.equal(posts.length,1);assert.equal(posts[0].state.lightingSource.identity,'B');assert.equal(owner.read().error,null);}finally{owner.dispose();}
+});
