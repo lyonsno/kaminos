@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test test.mjs q4-test.mjs"
+    "test": "node --test test.mjs q4-test.mjs training-test.mjs training-runner-test.mjs"
   },
   "dependencies": {
     "@jax-js/jax": "0.1.27"

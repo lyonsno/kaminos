@@ -32,7 +32,7 @@ Checks cover nonzero initial state, unequal key/value dimensions, multiple batch
 
 The actual Kit consumer retains the jax array owner, exports a read-only GPU buffer, executes an affine WGSL kernel through `createWebGpuInferenceRuntime()`, drains the work, disposes Kit resources and verifies that the original array and later jax computation still work. This tests borrowing **jax's** device. It does not establish that jax can adopt a device already owned by an application, import arbitrary Kit buffers, or honor the Kit's foreground scheduling during a jax training step. Architectural adoption remains a separate decision.
 
-The recurrence is a reference for differentiating a bounded or fused implementation without expanding the compilation graph and saved activations with every timestep. The frozen-projection/LoRA baseline below checks the preceding learning seam. AdamW, efficient quantized execution, representative memory/throughput and model/task evaluation remain future slices.
+The recurrence is a reference for differentiating a bounded or fused implementation without expanding the compilation graph and saved activations with every timestep. The frozen-projection/LoRA baseline below checks the preceding learning seam. The interruptible AdamW harness below extends that reference. Efficient quantized execution, representative memory/throughput and model/task evaluation remain future slices.
 
 ## Frozen Q4 projection and LoRA
 
@@ -67,4 +67,65 @@ node browser-runner.mjs \
 
 Preparation validates the original array layouts and complete-file digests before selecting the first token and first complete row. The result retains the native source identity, original array metadata, selected values and exact generated Qwen affine shader. The browser report records the fixture digest and revalidates all returned numbers on the host. Missing fixtures and truncated source arrays produce explicit failure reports.
 
-The updated adapter factors and the frozen base used by the training step stay on the GPU while the Kit borrows their buffers. Loss re-evaluation and the consumer reuse that same retained base. Its consumer executes the existing Qwen affine shader, the Kit's two `split4` linear projections and a small scaled-add kernel. Kit disposal preserves the borrowed adapter/base buffers. This is projection-level composition; model adapter packaging, a whole-model training loop, AdamW, foreground cooperation and representative efficiency remain open. Raw allocation events and generated WGSL are retained as diagnostics; allocation events are not a peak-residency measurement because jax can reuse pooled storage.
+The updated adapter factors and the frozen base used by the training step stay on the GPU while the Kit borrows their buffers. Loss re-evaluation and the consumer reuse that same retained base. Its consumer executes the existing Qwen affine shader, the Kit's two `split4` linear projections and a small scaled-add kernel. Kit disposal preserves the borrowed adapter/base buffers. This is projection-level composition; model adapter packaging, a whole-model training loop, foreground cooperation and representative efficiency remain open. Raw allocation events and generated WGSL are retained as diagnostics; allocation events are not a peak-residency measurement because jax can reuse pooled storage.
+
+## Interruptible training harness (small projection reference)
+
+`training.mjs` adds repeated AdamW updates to the Q4 projection reference, with
+explicit sample order, RNG, adapter values and both Adam moments in its saved
+state. `training-runner.mjs` runs that same trainer on actual browser WebGPU,
+accepts pause through a DOM event at a completed update boundary, writes the
+checkpoint and closes its owned browser. These are small numerical/control
+fixtures, not a whole Qwen trainer or an efficient packed-weight backward pass.
+
+A JSON manifest has schema `kaminos.q4-training.v1`, backend `webgpu`, fixtures
+sharing one frozen base/initial adapter, positive `updates`, nonzero uint32 `seed`
+and an AdamW optimizer (`learningRate`, `beta1`, `beta2`, `epsilon`, `weightDecay`).
+`makeTrainingRun()` constructs and validates it. Source text/weights stay outside
+Git. Actual manifest bytes, complete numerical configuration, source hashes,
+jax version and effective GPU identity are retained in reports/checkpoints.
+Resume rejects incompatible source, run or route identity; no optimizer/data
+state is silently reinitialized. Each source sample's supplied input/target is
+used once per shuffled epoch. There is no hidden update cap or execution timeout.
+
+```sh
+node training-runner.mjs --manifest /durable/run.json \
+  --out /durable/attempt/report.json --chrome /absolute/Chrome-for-Testing
+```
+
+The standalone runner completes the configured fixture and saves its final
+checkpoint. `--resume` takes a saved checkpoint. `--managed` instead exposes a
+line protocol on stdin/stdout: each `boundary` event waits for `next`, `pause`
+(actual browser click plus checkpoint), or `checkpoint`. EOF fails with cleanup.
+The report's `completed`/`checkpointed` status describes training progress and
+browser closure; it never asserts release of a Greenroom execution mutex.
+Caller report/checkpoint paths must be distinct from input paths.
+
+`training-greenroom.py` bridges that protocol to the **installed Greenroom SDK**.
+Invoke it with the installed Greenroom Python interpreter and submit its exact
+argv as an attributed `--cooperative-checkpoint` structured command. It uses
+Greenroom's existing pause/hold/continuation policy, never changes that policy,
+and never resumes a queue-wide hold. At pause it fences, saves, verifies bytes,
+closes its browser, then stages a successor. The worker separately proves
+process-group exit. Each successor gets its own output/report directory.
+
+Managed invocation requires `--on-submitted '<JSON argv>'`. That absolute
+executable registers completion delivery for the future job before it is
+published; stdin supplies `job_id`, `queue_dir` and `report`, and stdout must
+return that exact `job_id` and `registered: true`. Registration failure prevents
+successor publication. The caller owns the receiver implementation. No remote
+or MLX migration is implemented. Time until a safe pause remains Unknown until
+representative update plus save/release evidence justifies an estimate.
+
+`training-integration.py --manifest ... --out ... --node ... --chrome ...` is a
+tiny functional witness, run using the installed Greenroom interpreter. It
+compares uninterrupted and fresh-process-resumed actual WebGPU state, exercises
+pause through the actual SDK in a caller-owned disposable queue, allows a small
+CPU job past the held continuation, then resumes and compares all state. The
+fixture receiver registers the exact future job into a retained test record.
+This is not agent completion delivery, canonical-queue admission, peak-memory
+measurement, model-scale pause latency, or a performance comparison. It records
+all browser/control/checkpoint paths and failures and closes its owned work.
+
+Run focused CPU/negative checks with `npm test` here, or from the repository root
+with `npm test -- --only tests/qwen-training-harness.mjs`.
