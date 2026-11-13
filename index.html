@@ -18386,6 +18386,7 @@ function readVolumeDomControlValue(el) {
   // it rather than migrating the basin to the shape it falls back to.
   if (el.id === 'volume-emitter-aperture-pattern') return volumeAperturePatternValue(el);
   if (el.type === 'checkbox') return Boolean(el.checked);
+  if (el.type === 'hidden' && el.value === '') return ''; // Optional automatic values differ from numeric zero.
   if (['color', 'text', 'url', 'search', 'password'].includes(el.type) || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') return el.value;
   const numericValue = Number(el.value);
   return Number.isFinite(numericValue) ? numericValue : el.value;
