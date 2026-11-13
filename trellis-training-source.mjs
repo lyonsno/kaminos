@@ -15,7 +15,7 @@ export function materialFrameVector(v,frame,{point=false}={}){
 }
 export async function createTrellisTrainingSource(device,bytes,{region,tileSize,rawSource,samplingPlane='center-hit'}){
  if(rawSource!==undefined)return createRawTrellisTrainingSource(device,rawSource,{region,tileSize,samplingPlane});
- if(samplingPlane!=='center-hit')throw Error('Explicit sampling-plane selection requires a raw-fields source');
+ if(!['center-hit','support-top'].includes(samplingPlane))throw Error('Unknown PBR sampling plane');
  const {json,bin}=parseGlb(bytes),primitives=readTrianglePrimitives(bytes);
  if(json.extensionsUsed?.length||primitives.length!==1||json.skins?.length||json.animations?.length)throw Error('First trainer source requires one static extension-free glTF primitive');
  const p=primitives[0],primitive=json.meshes[p.mesh].primitives[p.primitive];
@@ -51,10 +51,12 @@ export async function createTrellisTrainingSource(device,bytes,{region,tileSize,
   const referenceHeight=candidate.hi[2]*f.radius;
   const planeQuery={origin:worldPoint([0,0,candidate.hi[2]],f),direction:f.n.map(v=>-v)};
   const planeProbe=(await traceSupportRays(device,candidate,[planeQuery],{twoSided:mat.doubleSided===true})).samples[0];
-  if(!planeProbe.hit)throw Error('Panel control requires a visible center surface to define its material sampling plane');
-  const samplingPlaneHeight=rotate(planeProbe.position,true)[1];
+  if(samplingPlane==='center-hit'&&!planeProbe.hit)throw Error('Panel control requires a visible center surface to define its material sampling plane');
+  const samplingPlaneHeight=samplingPlane==='support-top'?referenceHeight:rotate(planeProbe.position,true)[1];
+  const sourceHeightRange=triangles.reduce((range,t)=>{for(const p of [t.a,t.b,t.c]){range[0]=Math.min(range[0],p[1]);range[1]=Math.max(range[1],p[1]);}return range;},[Infinity,-Infinity]);
+  if(!Number.isFinite(sourceHeightRange[0])||samplingPlane==='support-top'&&sourceHeightRange[1]>samplingPlaneHeight+1e-6*Math.max(1,f.radius))throw Error('PBR support-top carrier does not enclose its source');
   if(!Number.isFinite(samplingPlaneHeight)||samplingPlaneHeight>referenceHeight)throw Error('Material sampling plane is outside its source support');
-  return {teacher,binding,triangles,capture:{tileSize,referenceHeight,samplingPlaneHeight},source:{region,tileSize,sourceTriangles:p.indices.length/3,clippedTriangles:triangles.length,sourceMaterial:p.material,side:mat.doubleSided?2:0,coordinateFrame:f,canonicalBasis:['u','n','-v'],samplingPlaneHeight,referenceHeight,samplingPlaneSelection:{method:'first visible center hit; independent of underside tessellation',query:planeQuery,probe:planeProbe},scope:'clipped source only; no exterior geometry, fixed material state, RGB directional response, no coverage/exit continuation'},
+  return {teacher,binding,triangles,capture:{tileSize,referenceHeight,samplingPlaneHeight},source:{region,tileSize,sourceTriangles:p.indices.length/3,clippedTriangles:triangles.length,sourceMaterial:p.material,side:mat.doubleSided?2:0,coordinateFrame:f,canonicalBasis:['u','n','-v'],samplingPlaneHeight,referenceHeight,samplingPlaneSelection:{method:samplingPlane==='support-top'?'support top; all clipped source vertices inset or flush':'first visible center hit; independent of underside tessellation',query:planeQuery,probe:planeProbe,sourceHeightRange},scope:'clipped source only; no exterior geometry, fixed material state, RGB directional response, no coverage/exit continuation'},
    dispose(){teacher.dispose();surface.dispose();for(const t of textures)t.destroy();}};
  }catch(e){teacher?.dispose();surface?.dispose();for(const t of textures)t.destroy();throw e;}
 }
