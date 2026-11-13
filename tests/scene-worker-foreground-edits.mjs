@@ -140,3 +140,13 @@ test('the binding refuses a different foreground device before invoking an edit'
  await assert.rejects(requestMutation('move',1,{assertCurrent(){},signal:new AbortController().signal},()=>applied=true),/device\/queue mismatch/);
  assert.equal(applied,false);
 });
+
+test('actual worker geometry selection applies inside the existing Kit boundary while a model runs',async t=>{
+ const {createWorkingScene}=await import('../working-scene.mjs');const {createSceneWorkerAuthoring}=await import('../scene-worker-authoring.mjs');const {captureSceneWorkerCamera}=await import('../scene-worker-page.mjs');
+ const scene=createWorkingScene(),camera=new THREE.PerspectiveCamera(50,1,.1,100);camera.position.z=5;camera.lookAt(0,0,0);camera.updateMatrixWorld(true);const displayed=[];let authoring;
+ const f=await fixture(t,{edits:{'scene.pick':(input,ctx)=>authoring.commands['scene.pick'](input,ctx)},draw:()=>displayed.push(scene.selection.activeId)});
+ const mesh=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshBasicMaterial());f.object.add(mesh);f.object.updateMatrixWorld(true);scene.put({id:'mesh',type:'glb',object:f.object});
+ authoring=createSceneWorkerAuthoring({THREE,ordinary:{camera,workingScene:scene,visible:()=>true,readBounds:()=>null,authored:{snapshot:()=>({objects:[{id:'mesh'}],groups:[],selection:scene.selection})}}});
+ try{const request=f.client.request('scene.pick',{ndc:{x:0,y:0},viewport:{width:100,height:100},camera:captureSceneWorkerCamera(camera,new THREE.Vector3()),extend:false});await turns();assert.equal(scene.selection.activeId,null,'queued click is not applied');await f.boundary();const result=await request.completion;assert.equal(result.output.foregroundReceipt.status,'completed');assert.equal(result.output.value.pickedId,'mesh');assert.equal(scene.selection.activeId,'mesh');assert.deepEqual(displayed,['mesh']);}
+ finally{await f.close();mesh.geometry.dispose();mesh.material.dispose();}
+});

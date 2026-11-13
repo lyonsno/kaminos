@@ -4,6 +4,7 @@ import {createSceneWorkerImageController} from './scene-worker-image-controller.
 import {checkedCameraView} from './scene-camera-views.mjs';
 import {resolveSceneWorkerStartupInput} from './scene-worker-startup-input.mjs';
 import {mountSceneWorkerWaterControls} from './scene-worker-water-controls.mjs';
+import {installSceneWorkerPointerSelection} from './scene-worker-pointer-selection.mjs';
 
 export function assertSceneWorkerStartup(reply,{admission,preferences,ui=reply.output?.ui}){
  const applied=ui?.initialization;
@@ -18,7 +19,7 @@ export function mountSceneWorkerPage({document,window,THREE,createControls,insta
  admission,preferences,readFlameControls,entryUrl='/scene-worker.entry.bundle.mjs',createWorker,
  report=()=>{},onProgress=()=>{},createPage=createSceneWorkerPage}={}){
  const viewport=document.getElementById('viewport');
- const canvases={};let controls,navigation,editor,waterControls;
+ const canvases={};let controls,navigation,editor,waterControls,pointerSelection;
  try {
  for(const id of ['kaminos-host-renderer-canvas','kaminos-volume-canvas'])if(document.getElementById(id))throw Error(`Worker page canvas already mounted: ${id}`);
  for(const [name,id] of [['scene','kaminos-host-renderer-canvas'],['volume','kaminos-volume-canvas']]){
@@ -43,7 +44,7 @@ export function mountSceneWorkerPage({document,window,THREE,createControls,insta
  let savedInput;try{savedInput=window.localStorage.getItem('kaminos.navigationInput');}catch{}
  navigationInput.value=preferences?.navigationInput??(['trackpad','mouse'].includes(savedInput)?savedInput:/Mac/i.test(window.navigator.userAgentData?.platform||window.navigator.platform)?'trackpad':'mouse');
  const navigationHint=document.getElementById('navigation-hint');
- const hint=text=>{navigationHint.textContent=text||'Worker scene · navigation uses the current camera pivot; mesh-surface picking is not connected yet';navigationHint.dataset.active=String(!!text);};hint('');
+ const hint=text=>{navigationHint.textContent=text||'Click geometry to select · Shift-click extends selection · navigation uses the current camera pivot';navigationHint.dataset.active=String(!!text);};hint('');
  let ui=null,closed=false;
  function boundsFrame(value){
   if(!value){report('Scene bounds have not been reported by the worker');return false;}
@@ -77,13 +78,14 @@ export function mountSceneWorkerPage({document,window,THREE,createControls,insta
   onPhase(value){
    for(const canvas of Object.values(canvases))canvas.dataset.sceneWorkerState=value;
    if(value==='active')report(ui?.fireSettingsWarning??'Scene loaded');
-   if(['held','retiring','retired','closed'].includes(value)){ui=null;editor?.render(null);waterControls?.render(null);report(`Worker scene ${value}; previous scene metadata is unavailable`);}
+   if(['held','retiring','retired','closed'].includes(value)){ui=null;pointerSelection?.clear();editor?.render(null);waterControls?.render(null);report(`Worker scene ${value}; previous scene metadata is unavailable`);}
   },
   onProgress,onError:error=>report(`Worker scene: ${error.message}`)});
  if(document.getElementById('scene-object-list'))editor=mountSceneWorkerEditor({document,window,page,readCamera:()=>captureSceneWorkerCamera(camera,controls.target),readUi:()=>ui,report});
  waterControls=mountSceneWorkerWaterControls({document,page,readUi:()=>ui,report});
+ pointerSelection=installSceneWorkerPointerSelection({canvases,page,readCamera:()=>captureSceneWorkerCamera(camera,controls.target),report});
  const image=createSceneWorkerImageController({page});
- function detach(){if(closed)return;closed=true;waterControls?.dispose();editor?.dispose();navigation.dispose();controls.dispose();navigationInput.removeEventListener('change',navigationChanged);}
+ function detach(){if(closed)return;closed=true;pointerSelection?.dispose();waterControls?.dispose();editor?.dispose();navigation.dispose();controls.dispose();navigationInput.removeEventListener('change',navigationChanged);}
  const pagehide=()=>{page.holdFrames('Page leaving; resource retirement requested');void page.retire().then(detach,error=>report(`Worker cleanup held: ${error.message}`));};
  window.addEventListener('pagehide',pagehide,{once:true});
  return Object.freeze({page,image,editor,frameSelected:()=>boundsFrame(ui?.selectionBounds),camera,controls,navigation,canvases,
@@ -91,5 +93,5 @@ export function mountSceneWorkerPage({document,window,THREE,createControls,insta
   async retire(){const result=await page.retire();detach();window.removeEventListener('pagehide',pagehide);for(const canvas of Object.values(canvases))canvas.remove();return result;},
   read:()=>({worker:page.read(),ui,navigation:navigation.state()}),
  });
- }catch(error){waterControls?.dispose();editor?.dispose();navigation?.dispose();controls?.dispose();for(const canvas of Object.values(canvases))canvas.remove();throw error;}
+ }catch(error){pointerSelection?.dispose();waterControls?.dispose();editor?.dispose();navigation?.dispose();controls?.dispose();for(const canvas of Object.values(canvases))canvas.remove();throw error;}
 }

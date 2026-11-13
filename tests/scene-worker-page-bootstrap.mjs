@@ -14,19 +14,19 @@ test('a worker initialize acknowledgement cannot impersonate applied saved scene
 import * as THREE from '../lib/three.core.js';
 function fixture({retireFailure=false,sceneInput={data:{camera:{position:[1,2,3],target:[0,1,0]}}},preferences={schema:'kaminos.preferences.v1',navigationInput:'mouse'},href='http://localhost/?scene_worker=1'}={}){
  const elements=new Map(),listeners=new Map();
- const element=()=>({style:{},dataset:{},classList:{toggle(){}},addEventListener(){},removeEventListener(){},blur(){},remove(){elements.delete(this.id);}});
+ const element=()=>({style:{},dataset:{},events:new Map(),getBoundingClientRect:()=>({left:10,top:20,width:80,height:40}),classList:{toggle(){}},addEventListener(type,handler){this.events.set(type,handler);},removeEventListener(type){this.events.delete(type);},blur(){},remove(){elements.delete(this.id);}});
  const viewport={clientWidth:80,clientHeight:40,appendChild(node){elements.set(node.id,node);}};
  elements.set('viewport',viewport);elements.set('navigation-input-mode',element());elements.set('navigation-hint',element());
  const document={getElementById:id=>elements.get(id),createElement:element};
  const window={devicePixelRatio:2,location:{href,search:new URL(href).search,hash:new URL(href).hash},navigator:{platform:'MacIntel'},localStorage:{getItem(){return null;},setItem(){}},
   addEventListener:(key,fn)=>listeners.set(key,fn),removeEventListener:key=>listeners.delete(key)};
- let input,disposed=0,navDisposed=0,config;
+ let input,disposed=0,navDisposed=0,config;const requests=[];
  const instance=module.mountSceneWorkerPage({document,window,THREE,admission:sceneInput,preferences,readFlameControls:()=>({resolution:16}),
   createControls:camera=>({target:new THREE.Vector3(),update(){camera.lookAt(this.target);},dispose(){disposed++;}}),
   installNavigation:value=>{input=value;return {state:()=>({inputMode:value.inputMode()}),dispose(){navDisposed++;}};},frameBox:()=>true,
-  createPage:value=>{config=value;return {start:()=>Promise.resolve({output:{initialized:true}}),read:()=>({phase:'active'}),holdFrames(){},
+  createPage:value=>{config=value;return {request:(name,input)=>{requests.push({name,input});return {completion:Promise.resolve({output:{}})};},start:()=>Promise.resolve({output:{initialized:true}}),read:()=>({phase:'active'}),holdFrames(){},
    retire:async()=>{if(retireFailure){retireFailure=false;throw Error('GPU still held');}return {output:{retired:true}};}};}});
- return {instance,elements,listeners,input,config,disposed:()=>({controls:disposed,navigation:navDisposed})};
+ return {instance,elements,listeners,input,config,requests,disposed:()=>({controls:disposed,navigation:navDisposed})};
 }
 test('actual mount captures saved camera and clock inputs without creating a page renderer or scene copy',async()=>{
  const f=fixture();assert.equal(f.elements.size,5);assert.equal(f.config.entryUrl,'/scene-worker.entry.bundle.mjs');
@@ -80,4 +80,16 @@ test('document camera adoption reaches the next actual page snapshot without pin
  f.instance.camera.position.x+=1;const moved=f.instance.camera.position.toArray();
  f.config.applyUi({surfaces:{volume:{visible:false}}});f.config.beforeFrame();assert.deepEqual(f.config.readCamera().position,moved,'cached restored view cannot override subsequent navigation');
  const before=f.config.readCamera();assert.throws(()=>f.config.applyUi({camera:{...agentView,target:agentView.position}}),/view/);assert.deepEqual(f.config.readCamera(),before);await f.instance.retire();
+});
+
+test('actual page mount sends click geometry and its current camera, while drags and touch do not select',async()=>{
+ const f=fixture(),canvas=f.instance.canvases.scene;
+ try{
+  assert.equal(typeof canvas.events.get('pointerdown'),'function','worker page must capture click intent');assert.equal(typeof canvas.events.get('pointerup'),'function');
+  const down=canvas.events.get('pointerdown'),up=canvas.events.get('pointerup');down({button:0,pointerId:1,pointerType:'mouse',clientX:50,clientY:40});up({button:0,pointerId:1,pointerType:'mouse',clientX:50,clientY:40,shiftKey:true});await Promise.resolve();
+  assert.equal(f.requests.length,1);assert.equal(f.requests[0].name,'scene.pick');assert.deepEqual(f.requests[0].input.ndc,{x:0,y:0});assert.deepEqual(f.requests[0].input.viewport,{width:80,height:40});assert.equal(f.requests[0].input.extend,true);assert.deepEqual(f.requests[0].input.camera.position,[1,2,3]);
+  down({button:0,pointerId:2,pointerType:'mouse',clientX:50,clientY:40});up({button:0,pointerId:2,pointerType:'mouse',clientX:60,clientY:40});
+  down({button:0,pointerId:3,pointerType:'touch',clientX:50,clientY:40});up({button:0,pointerId:3,pointerType:'touch',clientX:50,clientY:40});assert.equal(f.requests.length,1);
+  down({button:0,pointerId:4,pointerType:'mouse',clientX:50,clientY:40});f.config.onPhase('held');f.config.onPhase('active');up({button:0,pointerId:4,pointerType:'mouse',clientX:50,clientY:40});assert.equal(f.requests.length,1,'a retired click cannot select in a later active scene');
+ }finally{await f.instance.retire();}assert.equal(canvas.events.size,0);
 });

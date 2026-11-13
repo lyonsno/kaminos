@@ -24,6 +24,13 @@ function checkedViewport(value){
  if(![width,height,pixelRatio].every(number=>Number.isFinite(number)&&number>0))throw Error('Scene worker viewport requires positive finite dimensions and pixel ratio');
  return {width,height,pixelRatio};
 }
+function applyCamera(camera,view){
+ camera.position.fromArray(view.position);camera.quaternion.fromArray(view.quaternion);camera.up.fromArray(view.up);
+ for(const key of ['fov','aspect','near','far','zoom','filmGauge','filmOffset'])camera[key]=view[key];
+ camera.projectionMatrix.copy(view.projection);camera.projectionMatrixInverse.copy(view.projection).invert();
+ camera.updateMatrixWorld(true);
+}
+export function applySceneWorkerCameraSnapshot(camera,snapshot){applyCamera(camera,checkedCamera(snapshot,camera));}
 export function createSceneWorkerView({camera,renderResources,readViewport,writeViewport}){
  if(!camera?.isPerspectiveCamera||typeof renderResources?.resize!=='function'||typeof readViewport!=='function'||typeof writeViewport!=='function')throw Error('Scene worker view requires its actual camera, retained renderer and viewport store');
  return Object.freeze({apply(input,ctx){
@@ -33,12 +40,7 @@ export function createSceneWorkerView({camera,renderResources,readViewport,write
   const view=input.camera?checkedCamera(input.camera,camera):null;
   const viewport=input.viewport?checkedViewport(input.viewport):null;
   const previous=readViewport();
-  if(view){
-   camera.position.fromArray(view.position);camera.quaternion.fromArray(view.quaternion);camera.up.fromArray(view.up);
-   for(const key of ['fov','aspect','near','far','zoom','filmGauge','filmOffset'])camera[key]=view[key];
-   camera.projectionMatrix.copy(view.projection);camera.projectionMatrixInverse.copy(view.projection).invert();
-   camera.updateMatrixWorld(true);
-  }
+  if(view)applyCamera(camera,view);
   if(viewport){
    writeViewport(viewport);
    if(['width','height','pixelRatio'].some(key=>viewport[key]!==previous[key]))renderResources.resize();
