@@ -36,6 +36,7 @@ test('fire resize follows an explicit presentation extent instead of CSS dimensi
  const source=readFileSync(new URL('../volume-core.js',import.meta.url),'utf8'),start=source.indexOf('  function resize() {'),end=source.indexOf('\n  function ensureFrameTexture()',start);
  const canvas={width:0,height:0,style:{}},state={};
  const scope={canvas,state,viewport:{getBoundingClientRect:()=>({width:900,height:500,left:0}),ownerDocument:{defaultView:{devicePixelRatio:2}}},getPresentationSize:()=>({width:600,height:400}),controlsSnapshot:{renderScale:1},normalizeRenderScale:x=>x,boundarySplatRequested:()=>false,browserResidualCanApply:()=>false,frameTextureSize:'',browserResidualFeatureTextureSize:''};
+ scope.surface={viewport:()=>({...scope.viewport.getBoundingClientRect(),pixelRatio:2}),resize(width,height){canvas.width=width;canvas.height=height;}};
  vm.createContext(scope);vm.runInContext(source.slice(start,end)+'\nresize();',scope);
  assert.deepEqual([canvas.width,canvas.height],[600,400]);
 });
