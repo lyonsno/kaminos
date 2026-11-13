@@ -1,6 +1,6 @@
 # Fire contribution to the shared scene worker
 
-`createSceneWorkerFireResources(context, {definitions, fetch?, settingsLoader?, mountRadiance?})`
+`createSceneWorkerFireResources(context, {definitions, fetch?, settingsLoader?, loadWaterHost?, mountRadiance?})`
 constructs the retained domain shell consumed by `createSceneWorkerSceneResources`.
 The ordinary constructor supplies its live resource readers. Production defaults
 use the canonical saved-settings validator, actual volume/source helpers, actual
@@ -37,15 +37,11 @@ explicit `visible` projection. Root domain ownership retains receiver cleanup
 before its allocations, and retires radiance/HDR/receivers before ordinary
 resources and the separately owned device. A failed cleanup remains retryable.
 
-This constructor mounts authored flame sources and their saved fire field, and
-restores finite initial water previews through the actual local-liquid record
-loader and `createAuthoredWaterFeature`. Preview particles are the owner's
-authored starting state; no water solver is allocated or stepped. `water.read`
-and current UI distinguish preview, pause and mounted-simulation state.
-Continuous water dynamics and water documents without an initial source preview,
-geometry collision, backdrop/DOF and output-camera presentation still require
-their actual joins. Requests for those paths refuse before scene replacement. This is an implementation boundary while assembly continues, not
-a complete worker migration or a permanent restriction of the editor.
+This constructor mounts authored flame sources and their saved fire field, plus authored MLS water. Finite volumes initially restore as editable particle previews; `water.release` constructs the actual shared-device MLS host from current sources. Continuous sources restore into that host. `water.pause` and `water.reset` use synchronous foreground mutation admission; asynchronous release remains serialized with the worker's ordinary command lifecycle. Reset retires the current runtime and returns to the authored starting state without rewriting its setup.
+
+The live host receives the ordinary scene's linear lighting output, final display policy, colliders, current camera and selection decoration. Water/fire transport follows the normal page: visible full water and fire, a compatible host, perspective depth and the explicit transport opt-out; bloom composition controls only standalone fire HDR. Source pose/visibility changes synchronize before drawing. The cached signature is reseeded for each replacement host, preserving Undo after Restart, and unchanged packets are not republished each frame. The coordinator receives water visibility, pending work and backlog. A failed water frame retires water and renders the ordinary fallback while publishing its failure. Cancelled release candidates cannot become current. `water.read` and UI distinguish preview, pause, mounted simulation and failure. The existing Water simulation property slot exposes Play/Pause, Restart and Reset in the worker route; source settings, insertion/removal and full material controls remain migration work.
+
+Water documents without authored sources, fire geometry collision, backdrop/DOF and output-camera presentation still require their actual joins. Requests for these paths refuse before scene replacement. This is an implementation boundary while assembly continues, not a complete worker migration or a permanent restriction of the editor.
 
 Focused checks: `tests/scene-worker-fire-settings.mjs`,
 `tests/scene-worker-fire-resources.mjs`, `tests/scene-worker-runtime.mjs`,

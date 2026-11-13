@@ -29,12 +29,12 @@ function routeValues(c){
 
 // The actual fire contribution to the ordinary scene owner. Return this shell
 // synchronously so every later allocation remains reachable on failed setup.
-export function createSceneWorkerFireResources(input,{definitions,fetch:request=globalThis.fetch,settingsLoader=null,mountRadiance=mountSceneRadianceResources}={}){
+export function createSceneWorkerFireResources(input,{definitions,fetch:request=globalThis.fetch,settingsLoader=null,loadWaterHost=()=>import('./authored-water-host.mjs'),mountRadiance=mountSceneRadianceResources}={}){
  const {THREE,scene,camera,sharedGpu,renderResources,payload,ordinary,readFlameControls,applyFlameControls}=input;
  const readGpu=()=>typeof input.readSharedGpu==='function'?input.readSharedGpu():sharedGpu;
  const url=new URL(payload.location?.href??payload.location??'http://localhost/');
  let volume=null,plan=null,prepared=null,radiance=null,hdr=null,retiring=false,transport=false,lightingStatus=null,configured=null,sourceSignature=null;
- let rendering=checkedFireRendering(),documentData=null,waterPreview=false;
+ let rendering=checkedFireRendering(),documentData=null,waterPreview=false,waterContext=null,waterSignature=null;
  const preparedDocuments=new WeakMap(),receiverOwners=new Set(),pendingHandles=new Set();
  const present=()=>Boolean(plan?.composition||plan?.hasVolumePrimitiveScene||url.searchParams.get('kaminos_volume_smoke')==='1');
  const route=(target=plan)=>{const result=new URLSearchParams(url.search);for(const [key,value]of new URLSearchParams(url.hash.slice(1)))if(!result.has(key))result.set(key,value);for(const [key,value]of Object.entries(target?.composition?.route??{}))if(!result.has(key))result.set(key,value);return result;};
@@ -42,14 +42,24 @@ export function createSceneWorkerFireResources(input,{definitions,fetch:request=
  const check=ctx=>{ctx.assertCurrent();if(retiring)throw Error('Fire resources are retiring');};
  const records=()=>ordinary.workingScene.objects.filter(row=>row.type===FLAME_EMITTER_TYPE).map(row=>ordinary.authored.records.serialize(row));
  const waterFeature=createAuthoredWaterFeature({services:()=>({renderer:renderResources.renderer,scene,camera,pipeline:ordinary.lighting.renderPipeline,device:readGpu().device,
-   readColliders:()=>ordinary.workingScene.objects,decorateOutput:node=>ordinary.decorateOutput(node)}),emitters:waterRecords,visible:()=>ordinary.visible('water-field'),preview:value=>{waterPreview=value;syncWaterPreview();}});
+   readColliders:()=>ordinary.workingScene.objects,decorateOutput:node=>ordinary.decorateOutput(node),
+   getDisplayPolicy:()=>({rawOutput:ordinary.output.rawSceneOutput,cameraState:ordinary.output.sceneEmissiveCamera&&(ordinary.readSettings().gi.mode==='gtao'||ordinary.readSettings().gi.view==='scene')?ordinary.output.sceneEmissiveCamera.debugState():{effective:false}})}),
+  loadHost:async()=>{const context=waterContext,{createAuthoredWaterHost}=await loadWaterHost();return {createAuthoredWaterHost:options=>createAuthoredWaterHost({...options,isCurrent:()=>{try{context?.assertCurrent();return options.isCurrent();}catch{return false;}}})};},
+  emitters:waterRecords,enabledEmitters:enabledWaterRecords,runtimeEmitters:enabledWaterRecords,
+  visible:()=>ordinary.visible('water-field'),preview:value=>{waterPreview=value;syncWaterPreview();}});
  function waterRecords(){return ordinary.workingScene.objects.filter(row=>row.type===LOCAL_LIQUID_EMITTER_TYPE).map(row=>ordinary.authored.records.serialize(row));}
+ function enabledWaterRecords(){return waterRecords().filter(row=>ordinary.visible(row.id));}
+ function syncWaterSources(){if(!waterFeature.host){waterSignature=null;return;}const signature=JSON.stringify([enabledWaterRecords(),waterFeature.setup]);if(signature!==waterSignature){waterFeature.sync();waterSignature=signature;}}
+ async function waterOperation(ctx,action){
+  check(ctx);if(!waterFeature.setup)throw Error('Add a water source');waterContext=ctx;
+  try{const mounted=await action();check(ctx);if(!mounted)throw Error(waterFeature.failure??'Water host was not mounted');waterSignature=waterFeature.host?JSON.stringify([enabledWaterRecords(),waterFeature.setup]):null;syncTransport();return {ui:{water:readWater()}};}
+  finally{waterContext=null;}
+ }
  function syncWaterPreview(){for(const row of ordinary.workingScene.objects)if(row.type===LOCAL_LIQUID_EMITTER_TYPE)row.object.traverse(node=>{if(node.userData.kaminosWaterPreview)node.visible=waterPreview&&ordinary.visible('water-field')&&ordinary.visible(row.id);});}
  function readWater(){return {present:waterFeature.setup!==null,preview:waterFeature.setup!==null&&waterPreview,paused:waterFeature.paused,simulationMounted:waterFeature.host!==null,failure:waterFeature.failure,host:waterFeature.host?.state()??null};}
  function assertWaterRecord(record){
   if(!isLocalLiquidEmitterSceneRecord(record))throw Error('Water emitter requires its stable source identity');
   normalizeLocalLiquidEmitter(record.localLiquidEmitter,record.transform);
-  if(record.localLiquidEmitter.mode!=='finite_drop')throw Error('Continuous water dynamics are not mounted in this worker yet');
  }
  function renderingFor(data,next){
   const params=route(next),shadow=params.get('volume_light_field_hybrid')==='1'?readFireShadowSceneSettings(params):{};
@@ -79,8 +89,12 @@ export function createSceneWorkerFireResources(input,{definitions,fetch:request=
  function syncTransport(){
   if(!volume)return;
   const settings=ordinary.readSettings(),p=route();
-  const wanted=Boolean(volume.isActive()&&ordinary.visible('flame-field')&&ordinary.bloom?.read().settings.composeFlame
-   &&!waterFeature.host&&p.get('volume_light_field_scene_depth')==='1'&&camera.isPerspectiveCamera&&(settings.gi.mode==='gtao'||settings.gi.view==='scene'));
+  const common=volume.isActive()&&ordinary.visible('flame-field')&&(settings.editorDisplay?.fire??'full')==='full'
+   &&p.get('volume_light_field_scene_depth')==='1'&&camera.isPerspectiveCamera;
+  const water=common&&ordinary.visible('water-field')&&p.get('volume_light_field_water_transport')!=='0'
+   &&waterFeature.host?.supportsVolumeTransport===true&&waterFeature.host.presentation==='full';
+  const standalone=common&&!waterFeature.host&&ordinary.bloom?.read().settings.composeFlame&&(settings.gi.mode==='gtao'||settings.gi.view==='scene');
+  const wanted=Boolean(water||standalone);
   if(wanted!==transport){volume.setSceneTransportConsumer(wanted?frame=>ordinary.frames.consumeTransport(frame):null);transport=wanted;}
  }
  async function releaseRadiance(){
@@ -130,9 +144,9 @@ export function createSceneWorkerFireResources(input,{definitions,fetch:request=
   async prepareVolume({volume:next,context}){check(context);if(volume!==next){configured=null;sourceSignature=null;}volume=next;configure();},
   async attachVolume({volume:next,context}){check(context);volume=next;if(!payload.admission?.data)await mount(context);},
   async reattachVolume({volume:next,context}){check(context);if(next!==volume)throw Error('Prepare the replacement volume before reattachment');configure();await mount(context);},
-  prepareFrame(){syncSources();syncTransport();syncWaterPreview();},
-  readFrameState(){syncTransport();const params=route();return {transportRequired:transport,radianceReady:!radiance||radiance.canRender(),fireLightFieldRoute:present()&&params.get('volume_light_field')==='1',distributed:present()&&params.get('volume_light_field_distributed')==='1',
-   simInputs:{flame:{active:Boolean(volume?.isActive()&&ordinary.visible('flame-field'))},water:{active:waterFeature.active},ash:{active:false,due:false}}};},
+  prepareFrame(){syncSources();syncWaterSources();syncTransport();syncWaterPreview();},
+  readFrameState(){syncTransport();const params=route(),waterState=waterFeature.host?.state();return {transportRequired:transport,radianceReady:!radiance||radiance.canRender(),fireLightFieldRoute:present()&&params.get('volume_light_field')==='1',distributed:present()&&params.get('volume_light_field_distributed')==='1',
+   simInputs:{flame:{active:Boolean(volume?.isActive()&&ordinary.visible('flame-field'))},water:{active:Boolean(waterFeature.active&&ordinary.visible('water-field')),pending:Boolean(waterState?.solver?.pending),backlogSeconds:waterState?.clock?.backlogSeconds},ash:{active:false,due:false}}};},
   readDrawSettings(){return {waterVisible:ordinary.visible('water-field'),flameHDRActive:transport,customToneMapping:readFlameControls().toneMapping==='custom',matchFlameCamera:present()&&rendering['rendering-match-flame-camera']};},
   readRouteParams:route,
   readDrawResources:()=>({waterFeature}),
@@ -143,6 +157,7 @@ export function createSceneWorkerFireResources(input,{definitions,fetch:request=
    hdr??=createSceneFlameHDR({renderer:renderResources.renderer,camera,device:readGpu().device,bloom:ordinary.bloom,decorate:node=>ordinary.decorateOutput(node)});
    return hdr.render({...frame,physical:volume.emissiveCameraState()});
   }},
+  onWaterError(error,fallback){waterSignature=null;waterFeature.fail(error);syncTransport();fallback();},
   applyFrameInputs(_input,ctx){check(ctx);},
   assertRecordSupported(record){if(record.type===LOCAL_LIQUID_EMITTER_TYPE){assertWaterRecord(record);return;}if(record.type!==FLAME_EMITTER_TYPE)throw Error('Unsupported worker domain not mounted: '+record.type);checkedFireSourceRecord(record);},
   loaders:{flame(record,options){options.context?.assertCurrent();const source=checkedFireSourceRecord(record),object=createFlameEmitterHandle(THREE);applySceneObjectTransformState(object,source.transform);
@@ -154,13 +169,13 @@ export function createSceneWorkerFireResources(input,{definitions,fetch:request=
    assertSupported(data,next){
     if(data.postprocessing?.dof?.enabled)throw Error('DOF presentation is not mounted in this worker constructor');
     if(data.backdrop===true)throw Error('Backdrop presentation is not mounted in this worker constructor');
-    if(next.localLiquid){const sources=(next.objects??[]).filter(row=>row.type===LOCAL_LIQUID_EMITTER_TYPE);if(!sources.length)throw Error('Water dynamics without initial source previews are not mounted yet');for(const source of sources)assertWaterRecord(source);}
+    if(next.localLiquid){const sources=(next.objects??[]).filter(row=>row.type===LOCAL_LIQUID_EMITTER_TYPE);if(!sources.length)throw Error('Water simulation requires an authored source');for(const source of sources)assertWaterRecord(source);}
     if(next.sceneCamera?.activeId)throw Error('Output-camera presentation is not mounted yet');
     if(next.fireDomain?.simulation.collision||next.composition?.route?.volume_collision==='kiln')throw Error('Fire geometry collision preparation is not mounted yet');
    },prepareDocument,
    async beforeReplace(data,next,meta){check(meta.context);const cached=preparedDocuments.get(next);if(!cached)throw Error('Scene fire settings were not prepared');if(volume)await volume.setActive(false);await releaseRadiance();check(meta.context);if(volume)volume.setSceneCompositionPresentation(Boolean(next.composition));
-    accept(data,next,cached.values,meta.context,cached.rendering);waterFeature.clear();waterFeature.setup=structuredClone(cached.waterSetup);waterPreview=false;documentData=null;configured=null;sourceSignature=null;return {};},
-   async afterReplace(data,next,meta){check(meta.context);documentData=data;plan=next;configure();if(volume){await volume.setActive(present()&&ordinary.visible('flame-field'));check(meta.context);await mount(meta.context);}if(waterFeature.setup){await waterFeature.restore();check(meta.context);}},
+    accept(data,next,cached.values,meta.context,cached.rendering);waterSignature=null;waterFeature.clear();waterFeature.setup=structuredClone(cached.waterSetup);waterPreview=false;documentData=null;configured=null;sourceSignature=null;return {};},
+   async afterReplace(data,next,meta){check(meta.context);documentData=data;plan=next;configure();if(volume){await volume.setActive(present()&&ordinary.visible('flame-field'));check(meta.context);await mount(meta.context);}if(waterFeature.setup)await waterOperation(meta.context,()=>waterFeature.restore());},
   },
   authoring:{
    fields:()=>[...(present()?[{id:'flame-field',label:'Fire & smoke'}]:[]),...(waterFeature.setup?[{id:'water-field',label:'Water simulation'}]:[])],
@@ -176,8 +191,12 @@ export function createSceneWorkerFireResources(input,{definitions,fetch:request=
      flameWorldFrame:volume?.worldFrame?.()??plan?.flameWorldFrame??null,localLiquid:waterFeature.setup,postprocessing:{fireLighting:structuredClone(rendering)}};
    },
   },
-  commands:{'water.read'(_input,ctx){check(ctx);return readWater();},'fire.read'(_input,ctx){check(ctx);return {active:Boolean(volume?.isActive()),present:present(),source:prepared?.source?{presetId:prepared.source.presetId}:null,lighting:structuredClone(lightingStatus)};}},
-  async retire(ctx){ctx.assertCurrent();retiring=true;if(volume)await volume.setActive(false);await releaseRadiance();for(const owner of receiverOwners){await owner.dispose();receiverOwners.delete(owner);}for(const object of pendingHandles){object.removeFromParent();object.traverse(node=>{node.geometry?.dispose();for(const material of [].concat(node.material??[]))material.dispose();});pendingHandles.delete(object);}waterFeature.clear();volume=null;},
+  foregroundCommands:{
+   'water.pause'({paused}={},ctx){check(ctx);if(typeof paused!=='boolean')throw Error('Water pause requires a Boolean');if(!waterFeature.host)throw Error('Release water before changing playback');waterFeature.setPaused(paused);return {ui:{water:readWater()}};},
+   'water.reset'(_input,ctx){check(ctx);if(!waterFeature.setup)throw Error('Add a water source');waterSignature=null;waterFeature.reset();syncTransport();return {ui:{water:readWater()}};},
+  },
+  commands:{'water.release'(_input,ctx){return waterOperation(ctx,()=>waterFeature.release());},'water.read'(_input,ctx){check(ctx);return readWater();},'fire.read'(_input,ctx){check(ctx);return {active:Boolean(volume?.isActive()),present:present(),source:prepared?.source?{presetId:prepared.source.presetId}:null,lighting:structuredClone(lightingStatus)};}},
+  async retire(ctx){ctx.assertCurrent();retiring=true;if(volume)await volume.setActive(false);await releaseRadiance();for(const owner of receiverOwners){await owner.dispose();receiverOwners.delete(owner);}for(const object of pendingHandles){object.removeFromParent();object.traverse(node=>{node.geometry?.dispose();for(const material of [].concat(node.material??[]))material.dispose();});pendingHandles.delete(object);}waterSignature=null;waterFeature.clear();volume=null;},
  };
  return shell;
 }
