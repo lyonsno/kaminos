@@ -21,8 +21,8 @@ const rows=[[.99,.03,.31,-.22,.3,.2,.4,0],[.31,.73,-.2,.3,-.1,.4,.75,0]],targets
 const response=m=>rows.flatMap(([u,v,vx,vy,lx,ly,lod])=>referenceNeumip(m,[u,v],[vx,vy],[lx,ly],lod));const loss=m=>response(m).reduce((s,v,i)=>s+.5*(v-targets[i])**2,0);
 try{
  report.source=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();report.sourceStatus=execFileSync('git',['status','--porcelain'],{encoding:'utf8'});report.sourceFiles={};
- for(const name of ['neumip-training.mjs','tools/neumip-spatial-training-check.mjs','tools/neumip-reference.mjs']){const data=await fs.readFile(name);report.sourceFiles[name]=createHash('sha256').update(data).digest('hex');await fs.writeFile(path.join(out,path.basename(name)),data);}
- const raw=createNeumipStudent({resolution:8,seed:37});for(const f of [raw.offset,...raw.mips]){f.height=Math.max(1,f.height/2);f.data=Float32Array.from({length:f.width*f.height*f.channels},(_,i)=>Math.sin(i*1.7)*.15+(i%7)*.04);}
+ for(const name of ['neumip-training.mjs','neumip-spatial-training.mjs','tools/neumip-spatial-training-check.mjs','tools/neumip-reference.mjs']){const data=await fs.readFile(name);report.sourceFiles[name]=createHash('sha256').update(data).digest('hex');await fs.writeFile(path.join(out,path.basename(name)),data);}
+ const raw=createNeumipStudent({resolution:32,seed:37});for(const f of [raw.offset,...raw.mips]){f.height=Math.max(1,f.height/2);f.data=Float32Array.from({length:f.width*f.height*f.channels},(_,i)=>Math.sin(Math.floor(i/f.channels)%f.width*2*Math.PI/f.width)*.15+Math.cos(Math.floor(i/f.channels/f.width)*2*Math.PI/f.height)*.08+(i%f.channels)*.01);}
  for(const l of raw.layers){l.weights.fill(l.name.startsWith('main.mpl3')?.025:.08);l.biases.fill(.02);}
  const reference=filtered(raw),layout=neumipTrainingLayout(raw);report.fixture={fields:[raw.offset,...raw.mips].map(({width,height,channels})=>({width,height,channels})),step:0,sigma:8};
  const access=index=>{for(const net of Object.values(layout.networks))for(const l of net.layers){if(index>=l.weightsOffset&&index<l.biasesOffset)return[l.weights,index-l.weightsOffset];if(index>=l.biasesOffset&&index<l.biasesOffset+l.output)return[l.biases,index-l.biasesOffset];}for(const f of layout.fields)if(index>=f.offset&&index<f.offset+f.data.length)return[f.data,index-f.offset];throw Error('bad parameter');};
@@ -33,7 +33,7 @@ try{
  try{
   gpu=await createNeumipTraining(ctx.device,raw,{batchSize:rows.length,trainingRecipe:report.recipe});gpu.setQueries(new Float32Array(rows.flat()));gpu.setTargets(targets);
   const exported=await gpu.exportModel();for(const [i,f]of [exported.offset,...exported.mips].entries())near([...f.data],[...[reference.offset,...reference.mips][i].data],'baked filtered field '+i,3e-6,1e-5);
-  const actual=await gpu.gradients();near([...actual.rgb],response(reference),'filtered forward',3e-5,.001);near(indices.map(i=>actual.values[i]),expected,'raw-field adjoint',2e-6,.025);report.gradients={indices,actual:indices.map(i=>actual.values[i]),expected};
+  const actual=await gpu.gradients();near([...actual.rgb],response(reference),'filtered forward',3e-5,.001);near(indices.map(i=>actual.values[i]),expected,'raw-field adjoint',2e-6,.025);report.gradients={indices,actual:indices.map(i=>actual.values[i]),expected};assert.ok(Math.abs(expected[3])>1e-7,'the offset prediction must receive a nonzero spatial gradient');
   assert.ok(expected.slice(8).some(v=>Math.abs(v)>2e-6),'field-gradient fixture must exercise the spatial support');
   assert.throws(()=>near(new Array(expected.length).fill(0),expected,'zero adjoint',2e-6,.025));report.zeroAdjointRejected=true;
   reloaded=await createNeumipTraining(ctx.device,readNeumipModel(writeNeumipModel(exported)),{batchSize:rows.length});reloaded.setQueries(new Float32Array(rows.flat()));near([...(await reloaded.evaluate()).rgb],[...actual.rgb],'export runtime parity',3e-5,.001);

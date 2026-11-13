@@ -60,13 +60,13 @@ async function withFakeDevice(fn) {
 }
 
 test('inference does not expose an unwritten or stale training loss',()=>withFakeDevice(async device=>{
-  const gpu=await createNeumipTraining(device,createNeumipStudent({resolution:2}),{batchSize:2});
+  const gpu=await createNeumipTraining(device,createNeumipStudent({resolution:2}),{batchSize:2,trainingRecipe:'legacy-unsmoothed-v1'});
   try{gpu.setQueries(new Float32Array(8));const result=await gpu.evaluate();assert.equal('loss' in result,false,'inference must return only freshly computed outputs');}
   finally{gpu.dispose();}
 }));
 
 test('new queries invalidate targets even when the batch shape is unchanged',()=>withFakeDevice(async device=>{
-  const gpu=await createNeumipTraining(device,createNeumipStudent({resolution:2}),{batchSize:2});
+  const gpu=await createNeumipTraining(device,createNeumipStudent({resolution:2}),{batchSize:2,trainingRecipe:'legacy-unsmoothed-v1'});
   try{
     gpu.setQueries(new Float32Array(8));gpu.setTargets(new Float32Array(3));
     gpu.setQueries(new Float32Array(8).fill(.2));
@@ -76,8 +76,8 @@ test('new queries invalidate targets even when the batch shape is unchanged',()=
 }));
 
 test('GPU target copies require a matching current source batch and encoder',()=>withFakeDevice(async device=>{
-  const source=await createNeumipTraining(device,createNeumipStudent({resolution:2}),{batchSize:2});
-  const learner=await createNeumipTraining(device,createNeumipStudent({resolution:2}),{batchSize:2});
+  const source=await createNeumipTraining(device,createNeumipStudent({resolution:2}),{batchSize:2,trainingRecipe:'legacy-unsmoothed-v1'});
+  const learner=await createNeumipTraining(device,createNeumipStudent({resolution:2}),{batchSize:2,trainingRecipe:'legacy-unsmoothed-v1'});
   try{
     source.setQueries(new Float32Array(8));source.setTargets(new Float32Array(3));learner.setQueries(new Float32Array(16));
     assert.throws(()=>learner.copyTargetsFrom(device.createCommandEncoder(),source),/target.*batch/i);
@@ -93,5 +93,11 @@ test('GPU target copies require a matching current source batch and encoder',()=
 
 test('insufficient storage binding limits fail before creating a fake GPU learner',()=>withFakeDevice(async device=>{
   device.limits={maxStorageBufferBindingSize:16,maxBufferSize:1024};
-  await assert.rejects(createNeumipTraining(device,createNeumipStudent({resolution:2}),{batchSize:2}),/storage binding.*requires/i);
+  await assert.rejects(createNeumipTraining(device,createNeumipStudent({resolution:2}),{batchSize:2,trainingRecipe:'legacy-unsmoothed-v1'}),/storage binding.*requires/i);
+}));
+
+test('optimizer updates require a named recipe instead of silently inheriting inference defaults',()=>withFakeDevice(async device=>{
+ const gpu=await createNeumipTraining(device,createNeumipStudent({resolution:2}),{batchSize:1});
+ try{gpu.setQueries(new Float32Array(8));gpu.setTargets(new Float32Array(3));assert.throws(()=>gpu.encodeUpdate(device.createCommandEncoder()),/select.*training recipe/i);}
+ finally{gpu.dispose();}
 }));

@@ -4,6 +4,8 @@ import * as training from '../neumip-training.mjs';
 test('author spatial recipe initializes a neutral offset while retaining deterministic independent appearance fields',()=>{
  const model=training.createNeumipStudent({resolution:4,seed:37,trainingRecipe:'author-web-spatial-v1'});
  assert.ok(model.offset.data.every(v=>v===0),'author offset initialization must be zero');
+ const legacy=training.createNeumipStudent({resolution:4,seed:37});
+ assert.deepEqual([...model.mips[0].data],[...legacy.mips[0].data].map(v=>v*2),'author appearance initialization uses .1 standard deviation');
  assert.ok(model.mips[0].data.some(v=>v!==0));assert.deepEqual(model,training.createNeumipStudent({resolution:4,seed:37,trainingRecipe:'author-web-spatial-v1'}));
  assert.throws(()=>training.createNeumipStudent({resolution:4,trainingRecipe:'misspelled'}),/recipe/i);
 });

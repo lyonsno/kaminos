@@ -5,17 +5,18 @@ import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {readNeumipModel,writeNeumipModel} from '../neumip-model.mjs';
 import {createNeumipStudent,createNeumipTraining,neumipTrainingLayout,neumipTrainingBufferSizes} from '../neumip-training.mjs';
+import {checkedNeumipTrainingRecipe} from '../neumip-spatial-training.mjs';
 import {withKaminosGpu,withGpuErrorScopes} from './shader-herder.mjs';
 
 const [file,out,...flags]=process.argv.slice(2);
-if(!file||!out)throw Error('Usage: node tools/neumip-fit.mjs AUTHOR_MODEL OUTPUT_DIR [--steps 2000 --batch 2048 --resolution 64 --seed 2718]');
-const options={steps:2000,batch:2048,resolution:64,seed:2718};
-for(let i=0;i<flags.length;i+=2){const name=flags[i]?.replace(/^--/,'');if(!(name in options))throw Error(`Unknown option ${flags[i]}`);options[name]=Number(flags[i+1]);}
-for(const [key,value] of Object.entries(options))if(!Number.isSafeInteger(value)||value<1)throw Error(`Invalid ${key}`);
+if(!file||!out)throw Error('Usage: node tools/neumip-fit.mjs AUTHOR_MODEL OUTPUT_DIR [--training-recipe author-web-spatial-v1 --steps 30000 --batch 2048 --resolution 64 --seed 2718]');
+const options={steps:30000,batch:2048,resolution:64,seed:2718,trainingRecipe:'author-web-spatial-v1'};
+for(let i=0;i<flags.length;i+=2){const flag=flags[i]?.replace(/^--/,''),name=flag==='training-recipe'?'trainingRecipe':flag;if(!(name in options))throw Error(`Unknown option ${flags[i]}`);options[name]=name==='trainingRecipe'?checkedNeumipTrainingRecipe(flags[i+1]):Number(flags[i+1]);}
+for(const [key,value] of Object.entries(options))if(key!=='trainingRecipe'&&(!Number.isSafeInteger(value)||value<1))throw Error(`Invalid ${key}`);
 await fs.mkdir(out,{recursive:true});
 const report={status:'running',phase:'input',repoRoot:process.cwd(),queueJob:process.env.GREENROOM_JOB_ID??null,teacher:file,options,progress:[],
   claim:'Randomly initialized directional student distilled from frozen author network; not an independent microgeometry reproduction',
-  training:'Unquantized RGB squared error, independent learned mips, no decaying Gaussian field blur in this first experiment',
+  training:{recipe:options.trainingRecipe,loss:'linear RGB half-squared difference',deviations:'Frozen model distillation; objective, optimizer rates and exposure differ from full author recipe'},
   scheduling:'One fenced optimizer update followed by a 16ms host yield; caller/Greenroom owns admission',
   source:null};
 const publish=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));await publish();
@@ -36,10 +37,10 @@ try{
   if(!report.queueJob)throw Error('Directional fitting requires Greenroom admission');
   report.source=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
   report.sourceStatus=execFileSync('git',['status','--porcelain'],{encoding:'utf8'});report.sourceDirty=!!report.sourceStatus.trim();
-  for(const relative of ['neumip-training.mjs','neumip-model.mjs','tools/neumip-fit.mjs']){
+  for(const relative of ['neumip-training.mjs','neumip-spatial-training.mjs','neumip-model.mjs','tools/neumip-fit.mjs']){
     const data=await fs.readFile(relative);(report.sourceFiles??={})[relative]=hash(data);await fs.writeFile(path.join(out,path.basename(relative)),data);
   }
-  const bytes=await fs.readFile(file),author=readNeumipModel(bytes),student=createNeumipStudent({resolution:options.resolution,seed:options.seed});
+  const bytes=await fs.readFile(file),author=readNeumipModel(bytes),student=createNeumipStudent({resolution:options.resolution,seed:options.seed,trainingRecipe:options.trainingRecipe});
   report.teacherSha256=hash(bytes);
   const bias=Math.log2(author.mips[0].width/options.resolution);
   if(!Number.isInteger(bias)||bias<0)throw Error('Student resolution must divide teacher resolution by a power of two');
@@ -48,19 +49,19 @@ try{
   const heldoutCount=Math.min(options.batch,512),trainingState=state;
   state=(options.seed^0x5a17bca9)>>>0;const heldout=queries(heldoutCount,student.mips.length-1);state=trainingState;
   const heldoutFinest=heldout.slice();for(let q=0;q<heldoutCount;q++)heldoutFinest[q*8+6]=0;
-  const largestBinding=Math.max(...[author,student].flatMap(model=>Object.values(neumipTrainingBufferSizes(neumipTrainingLayout(model),options.batch))));
+  const largestBinding=Math.max(...[author,student].flatMap(model=>Object.values(neumipTrainingBufferSizes(neumipTrainingLayout(model),options.batch,{trainingRecipe:model===student?options.trainingRecipe:'legacy-unsmoothed-v1'}))));
   report.requiredLimits={maxStorageBufferBindingSize:Math.max(128*1024**2,largestBinding)};
   report.phase='compile';await publish();
   await withKaminosGpu(async ctx=>{
     report.adapter=ctx.adapterInfo;report.effectiveLimits={maxStorageBufferBindingSize:ctx.device.limits.maxStorageBufferBindingSize,maxBufferSize:ctx.device.limits.maxBufferSize,maxComputeWorkgroupsPerDimension:ctx.device.limits.maxComputeWorkgroupsPerDimension};let teacher=null,learner=null;
     try{
       teacher=await createNeumipTraining(ctx.device,author,{batchSize:options.batch});
-      learner=await createNeumipTraining(ctx.device,student,{batchSize:options.batch});
+      learner=await createNeumipTraining(ctx.device,student,{batchSize:options.batch,trainingRecipe:options.trainingRecipe});
       report.parameters={count:learner.layout.count,weights:learner.layout.weightCount,fields:learner.layout.count-learner.layout.weightCount};
       teacher.setQueries(heldout);const labels=await teacher.teach({lodBias:bias});
       teacher.setQueries(heldoutFinest);const finest=await teacher.teach({lodBias:0});
       const checkpoint=async step=>{
-        learner.setQueries(heldout);const {rgb}=await learner.evaluate();const entry={step,heldoutLoss:meanLoss(rgb,labels),elapsedMs:performance.now()-started};
+        learner.setQueries(heldout);const {rgb}=await learner.evaluate();const entry={step,spatial:learner.spatialState(),heldoutLoss:meanLoss(rgb,labels),elapsedMs:performance.now()-started};
         report.progress.push(entry);console.log(JSON.stringify(entry));
         const fitted=await learner.exportModel(),archive=writeNeumipModel(fitted);
         const filename=`rocky-${options.resolution}-step-${step}.model`;await fs.writeFile(path.join(out,filename),archive);
