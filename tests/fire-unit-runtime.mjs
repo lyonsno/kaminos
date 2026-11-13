@@ -13,7 +13,7 @@ function fixture(fireUnit={}){
  return {owner,restore:()=>Object.assign(globalThis,original)};
 }
 test('a new unit shows its outer World grid and Fine grid before GPU initialization',()=>{
- const {owner,restore}=fixture();try{assert.deepEqual(owner.root.children[1].box.min.toArray(),[-3,-3,-3]);assert.deepEqual(owner.root.children[0].box.min.toArray(),[-1,-1,-1]);assert.equal(owner.runtime.canvasElement().style.background,'transparent');}finally{restore();}
+ const {owner,restore}=fixture();try{assert.equal(owner.runtime.canvasElement().id,'kaminos-fire-unit-fire-a');assert.deepEqual(owner.root.children[1].box.min.toArray(),[-3,-3,-3]);assert.deepEqual(owner.root.children[0].box.min.toArray(),[-1,-1,-1]);assert.equal(owner.runtime.canvasElement().style.background,'transparent');}finally{restore();}
 });
 test('a rigidly scaled unit represents the source once in world space',()=>{
  const {owner,restore}=fixture();try{owner.root.scale.setScalar(2);owner.syncPose();owner.root.updateMatrixWorld(true);assert.deepEqual(owner.emitter.getWorldScale(new THREE.Vector3()).toArray(),[2,2,2]);}finally{restore();}

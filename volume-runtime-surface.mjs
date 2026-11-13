@@ -1,9 +1,9 @@
 // Presentation belongs to the host. The volume runtime uses a real canvas and
 // plain viewport measurements; it does not own DOM mounting or CSS.
-export function createBrowserVolumeSurface({viewport,identity,routeIdentity,mount=true}) {
+export function createBrowserVolumeSurface({viewport,identity,routeIdentity,canvasId='kaminos-volume-canvas',mount=true}) {
   const document=viewport?.ownerDocument??globalThis.document;
   const canvas=document.createElement('canvas');
-  canvas.id='kaminos-volume-canvas';
+  canvas.id=canvasId;
   canvas.dataset.prototype=identity;
   canvas.dataset.routeIdentity=routeIdentity;
   if(mount)viewport.appendChild(canvas);

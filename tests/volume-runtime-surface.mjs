@@ -53,7 +53,7 @@ test('browser adapter preserves mounting, CSS size, visibility and viewport fall
  const document={defaultView:{innerWidth:1000,innerHeight:600,devicePixelRatio:2},createElement(tag){assert.equal(tag,'canvas');return canvas;}};
  const viewport={ownerDocument:document,getBoundingClientRect:()=>({left:100,top:0,width:0,height:0}),appendChild:node=>mounted.push(node)};
  const surface=createBrowserVolumeSurface({viewport,identity:'volume',routeIdentity:'route'});
- assert.equal(mounted[0],canvas);assert.equal(canvas.dataset.routeIdentity,'route');
+ assert.equal(mounted[0],canvas);assert.equal(canvas.id,'kaminos-volume-canvas');assert.equal(canvas.dataset.routeIdentity,'route');
  assert.equal(surface.viewport().fallbackWidth,900);assert.equal(surface.viewport().pixelRatio,2);
  surface.resize(50,40);assert.equal(canvas.style.width,'100%');assert.equal(canvas.width,50);
  surface.setActive(true);assert.equal(classes.has('active'),true);
@@ -81,4 +81,18 @@ test('production resize uses host viewport and capture extent without page globa
  assert.deepEqual([canvas.width,canvas.height],[60,30]);assert.equal(state.displayWidth,120);assert.equal(state.renderScale,.5);
  c.getPresentationSize=()=>({width:40,height:20});c.resize();assert.deepEqual([canvas.width,canvas.height],[20,10]);assert.equal(state.canvasDevicePixelRatio,1,'explicit capture extent is backing pixels');
  c.getPresentationSize=()=>null;viewport={width:0,height:0,fallbackWidth:80,fallbackHeight:50,pixelRatio:1};c.resize();assert.deepEqual([canvas.width,canvas.height],[40,25]);assert.equal(state.viewportSizeFallback,true);
+});
+
+test('complete browser runtimes retain independent fire-unit canvas identities',async()=>{
+ const mounted=[],runtimes=[];
+ const document={createElement(tag){assert.equal(tag,'canvas');const canvas={dataset:{},style:{},classList:{toggle(){}},getContext(){throw Error('unexpected GPU admission');},remove(){mounted.splice(mounted.indexOf(canvas),1);}};return canvas;}};
+ const viewport={ownerDocument:document,appendChild:canvas=>mounted.push(canvas)};
+ try{
+  for(const canvasId of ['kaminos-fire-unit-A','kaminos-fire-unit-B']){
+   const runtime=createKaminosVolumePrototype({THREE,viewport,canvasId,camera:new THREE.PerspectiveCamera(),getControls:()=>({resolution:16}),frameScheduleOwner:'host',frameScheduler:{requestAnimationFrame(){throw Error('unexpected frame admission');},cancelAnimationFrame(){}}});
+   runtimes.push(runtime);assert.equal(runtime.canvasElement().id,canvasId);
+  }
+  assert.equal(new Set(mounted.map(canvas=>canvas.id)).size,2);assert.equal(mounted.some(canvas=>canvas.id==='kaminos-volume-canvas'),false,'unit canvases must not impersonate the primary volume');
+ }finally{for(const runtime of runtimes)await runtime.dispose();}
+ assert.equal(mounted.length,0);
 });

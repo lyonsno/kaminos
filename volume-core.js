@@ -7872,7 +7872,7 @@ export function createKaminosVolumePrototype({
     return gridCellCount(size) * 4 * Float32Array.BYTES_PER_ELEMENT;
   }
   const surface = presentationSurface ?? createBrowserVolumeSurface({
-    viewport, identity:PROTOTYPE_IDENTITY, routeIdentity:ROUTE_IDENTITY, mount:true,
+    viewport, canvasId, identity:PROTOTYPE_IDENTITY, routeIdentity:ROUTE_IDENTITY, mount:true,
   });
   const canvas = surface.canvas;
   surface.setTransparent(Boolean(transparentCanvas));
