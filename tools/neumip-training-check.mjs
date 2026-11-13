@@ -24,7 +24,7 @@ const loss=model=>reference(model,rows).reduce((n,v,i)=>n+.5*(v-targets[i])**2,0
 try{
   report.source=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
   report.sourceStatus=execFileSync('git',['status','--porcelain'],{encoding:'utf8'});report.sourceDirty=!!report.sourceStatus.trim();
-  report.sourceFiles={};for(const file of ['neumip-training.mjs','neumip-model.mjs','tools/neumip-training-check.mjs','tools/neumip-reference.mjs']){
+  report.sourceFiles={};for(const file of ['neumip-training.mjs','neumip-spatial-training.mjs','neumip-model.mjs','tools/neumip-training-check.mjs','tools/neumip-reference.mjs']){
     const data=await fs.readFile(file);report.sourceFiles[file]=createHash('sha256').update(data).digest('hex');await fs.writeFile(path.join(out,path.basename(file)),data);
   }
   const bytes=await fs.readFile(authorPath);report.authorSha256=createHash('sha256').update(bytes).digest('hex');

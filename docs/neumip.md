@@ -95,6 +95,16 @@ raw-parameter gradient path. The initial sigma is eight base-level texels;
 `8 * 2 ** (-step / (10000 / 3))` reaches one at step10,000. Appearance sigma has
 floor .1 and scales by `2 ** mip`; offset sigma has floor one, and offset-field
 optimization stops after step10,000. The offset decoder remains trainable.
+Before the training forward at steps0,100,...,2900, raw appearance fields are
+also damped in place with `.9 * raw + .1 * periodicBlur(raw, 1.03)` at every
+mip, matching the released `fuse_blur`. This operation leaves raw offset
+features, decoder parameters and optimizer moments alone; it is distinct from
+the differentiable lookup filter and is not applied during evaluation/export.
+
+These widths are measured in each model's base-level texels. At64² the initial
+eight-texel sigma spans eight times the normalized UV extent it does at512².
+Checkpoint state includes sigma in both texels and normalized UV coordinates;
+small-resolution fits must be interpreted with this change of physical support.
 
 Export bakes the effective filtered fields into the ordinary model format;
 the renderer needs no additional smoothing operation. Frozen teacher models
@@ -122,6 +132,6 @@ and `utils/tensor.py`.
 CPU schedule/API checks run through `tests/neumip-training-curriculum.mjs` and
 `tests/neumip-training.mjs`. The native numerical witness is
 `tools/neumip-spatial-training-check.mjs OUTPUT_DIR`; run it through Greenroom.
-It executes the production filters, full material gradients, export/reload,
-explicit baseline and optimizer freeze behavior. A Dawn null-backend validation
+It executes the production filters, full material gradients, raw damping,
+export/reload, explicit baseline and optimizer freeze behavior. A Dawn null-backend validation
 only establishes shader/pipeline validity, not these numerical claims.

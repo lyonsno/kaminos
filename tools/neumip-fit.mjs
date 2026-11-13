@@ -11,7 +11,7 @@ import {withKaminosGpu,withGpuErrorScopes} from './shader-herder.mjs';
 const [file,out,...flags]=process.argv.slice(2);
 if(!file||!out)throw Error('Usage: node tools/neumip-fit.mjs AUTHOR_MODEL OUTPUT_DIR [--training-recipe author-web-spatial-v1 --steps 30000 --batch 2048 --resolution 64 --seed 2718]');
 const options={steps:30000,batch:2048,resolution:64,seed:2718,trainingRecipe:'author-web-spatial-v1'};
-for(let i=0;i<flags.length;i+=2){const flag=flags[i]?.replace(/^--/,''),name=flag==='training-recipe'?'trainingRecipe':flag;if(!(name in options))throw Error(`Unknown option ${flags[i]}`);options[name]=name==='trainingRecipe'?checkedNeumipTrainingRecipe(flags[i+1]):Number(flags[i+1]);}
+for(let i=0;i<flags.length;i+=2){const flag=flags[i]?.replace(/^--/,''),name=flag==='training-recipe'?'trainingRecipe':flag;if(!(name in options))throw Error(`Unknown option ${flags[i]}`);if(i+1>=flags.length)throw Error(`Missing value for ${flags[i]}`);options[name]=name==='trainingRecipe'?checkedNeumipTrainingRecipe(flags[i+1]):Number(flags[i+1]);}
 for(const [key,value] of Object.entries(options))if(key!=='trainingRecipe'&&(!Number.isSafeInteger(value)||value<1))throw Error(`Invalid ${key}`);
 await fs.mkdir(out,{recursive:true});
 const report={status:'running',phase:'input',repoRoot:process.cwd(),queueJob:process.env.GREENROOM_JOB_ID??null,teacher:file,options,progress:[],
