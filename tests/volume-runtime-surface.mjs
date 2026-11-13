@@ -55,6 +55,7 @@ test('browser adapter preserves mounting, CSS size, visibility and viewport fall
  const surface=createBrowserVolumeSurface({viewport,identity:'volume',routeIdentity:'route'});
  assert.equal(mounted[0],canvas);assert.equal(canvas.id,'kaminos-volume-canvas');assert.equal(canvas.dataset.routeIdentity,'route');
  assert.equal(surface.viewport().fallbackWidth,900);assert.equal(surface.viewport().pixelRatio,2);
+ document.defaultView.devicePixelRatio=.8;assert.equal(surface.viewport().pixelRatio,.8,'receipt reports the positive host pixel ratio without applying render policy');
  surface.resize(50,40);assert.equal(canvas.style.width,'100%');assert.equal(canvas.width,50);
  surface.setActive(true);assert.equal(classes.has('active'),true);
  surface.setActive(false);assert.equal(classes.size,0);surface.setTransparent(true);assert.equal(canvas.style.background,'transparent');surface.dispose();assert.equal(removed,1);
