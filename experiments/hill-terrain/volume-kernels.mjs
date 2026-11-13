@@ -202,7 +202,7 @@ fn contact_body(inputBody:Body,normal:vec3f,depth:f32,point:vec3f,supportVelocit
  }return b;
 }
 @compute @workgroup_size(1) fn kick(){
- if(cfg.impulse.w<1.){return;}let i=u32(cfg.impulse.w)-1u;if(i>=arrayLength(&bodies)||bodies[i].p.w==0.){return;}var b=bodies[i];b.v=vec4f(b.v.xyz+cfg.impulse.xyz,0.);if(cfg.action.w>0.){b.w=vec4f(b.w.xyz+inverse_inertia(b,cross(cfg.action.xyz-b.p.xyz,cfg.impulse.xyz/b.p.w)),0.);}bodies[i]=b;
+ if(cfg.impulse.w<1.){return;}let i=u32(cfg.impulse.w)-1u;if(i>=arrayLength(&bodies)||bodies[i].p.w==0.){return;}var b=bodies[i];b.v=vec4f(b.v.xyz+cfg.impulse.xyz,0.);if(cfg.action.w>0.){let arm=select(cfg.action.xyz-b.p.xyz,rot(b.q,cfg.action.xyz),cfg.action.w==2.);b.w=vec4f(b.w.xyz+inverse_inertia(b,cross(arm,cfg.impulse.xyz/b.p.w)),0.);}bodies[i]=b;
 }
 @compute @workgroup_size(64) fn integrate_rigid(@builtin(global_invocation_id) id:vec3u){
  let i=id.x;if(i>=arrayLength(&bodies)){return;}var b=bodies[i];
@@ -298,6 +298,6 @@ export const ROCK_PICK_KERNEL=VOLUME_KERNELS+`
   }
   let t=select(near,far,near<0.);if(!miss&&near<=far&&t>=0.&&t<best){best=t;index=f32(i+1u);}
  }
- hit[0]=vec4f(index,best,0.,0.);if(index>0.){hit[0].z=bodies[u32(index)-1u].p.w;}hit[1]=vec4f(ray[0].xyz+ray[1].xyz*select(0.,best,index>0.),0.);
+ hit[0]=vec4f(index,best,0.,0.);hit[1]=vec4f(ray[0].xyz+ray[1].xyz*select(0.,best,index>0.),0.);hit[2]=vec4f(0.);if(index>0.){let b=bodies[u32(index)-1u];hit[0].z=b.p.w;hit[2]=vec4f(invrot(b.q,hit[1].xyz-b.p.xyz),0.);}
 }
 `;

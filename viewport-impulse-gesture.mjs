@@ -15,7 +15,7 @@ export function mountViewportImpulseGesture({document,viewport,canvas,camera,con
  svg.hidden=true;viewport.append(svg);
  let disposed=false,hover=null,hoverPoint=null,querying=false,latest=null,sequence=0,drag=null,enabled=true,claimedPointer=null;
  const raycaster=new Raycaster();
- const rayAt=e=>{const r=canvas.getBoundingClientRect();camera.updateMatrixWorld(true);raycaster.setFromCamera(new Vector2((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1),camera);return{origin:raycaster.ray.origin.toArray(),direction:raycaster.ray.direction.toArray()};};
+ const rayAt=(e,view)=>{const r=view?.rect??canvas.getBoundingClientRect(),c=view?.camera??camera;c.updateMatrixWorld(true);raycaster.setFromCamera(new Vector2((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1),c);return{origin:raycaster.ray.origin.toArray(),direction:raycaster.ray.direction.toArray()};};
  const coords=e=>({clientX:e.clientX,clientY:e.clientY,t:e.timeStamp});
  const set=(n,a)=>{for(const [k,v] of Object.entries(a))n.setAttribute(k,v);};
  function hide(){svg.style.display='none';}
@@ -27,19 +27,19 @@ export function mountViewportImpulseGesture({document,viewport,canvas,camera,con
  const color=`rgb(255 ${Math.round(232-195*hot)} ${Math.round(180-138*hot)})`;
  set(dot,{stroke:color});set(line,{stroke:color,'stroke-width':2+2*hot});set(arrow,{stroke:color,'stroke-width':2.5+2*hot});
  label.textContent=`${fling?'Fling':'Shove'} ${speed.toFixed(1)} m/s · Esc cancels`;}
- function planePoint(e,plane){const ray=rayAt(e);raycaster.ray.set(new Vector3(...ray.origin),new Vector3(...ray.direction));return raycaster.ray.intersectPlane(plane,new Vector3());}
+ function planePoint(e,plane,view){const ray=rayAt(e,view);raycaster.ray.set(new Vector3(...ray.origin),new Vector3(...ray.direction));return raycaster.ray.intersectPlane(plane,new Vector3());}
  function sample(d,e){d.end=coords(e);d.samples.push(d.end);while(d.samples.length>2&&d.samples[1].t<d.end.t-85)d.samples.shift();d.dirty=true;}
  function velocity(d,previewTime=d.end.t){
   const endPoint=previewTime>d.end.t?{...d.end,t:previewTime}:d.end;
-  const p=planePoint(endPoint,d.plane);if(!p)return[0,0,0];
+  const p=planePoint(endPoint,d.plane,d.view);if(!p)return[0,0,0];
   if(!fling)return dragVelocity(d.hit.worldPoint,p.toArray(),gain());
   const end=endPoint,cut=end.t-85;const samples=end===d.end?d.samples:[...d.samples,end];let at=0;while(at+1<samples.length-1&&samples[at+1].t<=cut)at++;let first=samples[at],next=samples[at+1];
-  if(!next||end.t<=first.t||end.t-first.t<8)return[0,0,0];
+  if(!next||end.t<=first.t)return[0,0,0];
   if(first.t<cut&&next.t>first.t){
    const f=Math.min(1,(cut-first.t)/(next.t-first.t));
    first={clientX:first.clientX+(next.clientX-first.clientX)*f,clientY:first.clientY+(next.clientY-first.clientY)*f,t:cut};
   }
-  const start=planePoint(first,d.plane);if(!start)return[0,0,0];
+  const start=planePoint(first,d.plane,d.view);if(!start)return[0,0,0];
   const v=p.clone().sub(start).divideScalar(Math.max(.008,(end.t-first.t)/1000));
   const distance=p.distanceTo(new Vector3(...d.hit.worldPoint));
   // A quick flick sets the direction and basic speed; longer wind-ups raise
@@ -47,23 +47,34 @@ export function mountViewportImpulseGesture({document,viewport,canvas,camera,con
   return v.multiplyScalar(gain()*(1.8+7*(1-Math.exp(-distance*.65)))).toArray();
  }
  const swallow=e=>{e.preventDefault();e.stopImmediatePropagation();};
- async function finish(d,apply){if(d.finishing)return;d.finishing=true;
+ function finish(d,apply){if(!apply)d.cancelled=true;if(d.finishing)return d.completion;d.finishing=true;
   if(fling){controls.enabled=d.previousControls;try{canvas.releasePointerCapture(d.pointerId);}catch{}hide();}
-  try{await d.ready;if(drag!==d)return;if(apply&&Math.hypot(d.end.clientX-d.start.clientX,d.end.clientY-d.start.clientY)>=3)await commit({hit:d.hit,velocity:velocity(d)});else await cancel();}catch(e){if(!disposed)onError(e);await cancel().catch(onError);}finally{if(drag===d){drag=null;if(!fling){controls.enabled=d.previousControls;try{canvas.releasePointerCapture(d.pointerId);}catch{}}hide();hover=null;latest=null;sequence++;}}}
- function down(e){if(!drag)claimedPointer=null;if(e.button!==0||!enabled||!isActive()||!hover?.released||drag)return;
-  // A hover may race a rapid pointer jump; never claim an unrelated click.
-  if(Math.hypot(e.clientX-hoverPoint.clientX,e.clientY-hoverPoint.clientY)>12)return;
-  swallow(e);claimedPointer=e.pointerId;sequence++;latest=null;const d={pointerId:e.pointerId,start:coords(e),end:coords(e),previousControls:controls.enabled,samples:[coords(e)],dirty:true};drag=d;controls.enabled=false;canvas.setPointerCapture(e.pointerId);
-  if(fling){d.hit=hover;d.plane=new Plane().setFromNormalAndCoplanarPoint(camera.getWorldDirection(new Vector3()),new Vector3(...hover.worldPoint));renderDrag();}
-  d.ready=Promise.resolve().then(()=>begin(rayAt(d.start))).then(hit=>{if(!hit?.released)throw Error('No released rock at the grab point');d.hit=hit;d.plane=new Plane().setFromNormalAndCoplanarPoint(camera.getWorldDirection(new Vector3()),new Vector3(...hit.worldPoint));if(drag===d&&!disposed){d.dirty=true;if(!fling)renderDrag();}return hit;});d.ready.catch(e=>{if(drag===d&&!d.finishing)finish(d,false);});
+  d.completion=(async()=>{try{const hit=await d.ready;if(drag!==d)return;if(hit&&apply&&!d.cancelled&&Math.hypot(d.end.clientX-d.start.clientX,d.end.clientY-d.start.clientY)>=3)await commit({hit,velocity:velocity(d)});else await cancel();}catch(e){if(!disposed)onError(e);await cancel().catch(onError);}finally{if(drag===d){drag=null;if(!fling){controls.enabled=d.previousControls;try{canvas.releasePointerCapture(d.pointerId);}catch{}}hide();hover=null;latest=null;sequence++;}}})();
+  return d.completion;
+ }
+ function down(e){if(!drag)claimedPointer=null;if(e.button!==0||!enabled||!isActive()||drag||e.isPrimary===false)return;
+  const near=hoverPoint&&Math.hypot(e.clientX-hoverPoint.clientX,e.clientY-hoverPoint.clientY)<=12;
+  const hint=near&&hover?.released?hover:null;
+  // On the mouse/trackpad, a cold click can start the pick. Touch and the
+  // original shove still need a positive hint to claim a native gesture.
+  if(!hint&&(!fling||e.pointerType==='touch'))return;
+  swallow(e);claimedPointer=hint?e.pointerId:null;sequence++;latest=null;
+  if(fling)camera.updateMatrixWorld(true);
+  const view=fling?{camera:camera.clone(),rect:canvas.getBoundingClientRect()}:null;
+  const start=coords(e),d={pointerId:e.pointerId,start,end:start,view,previousControls:controls.enabled,samples:[start],dirty:true};drag=d;controls.enabled=false;canvas.setPointerCapture(e.pointerId);
+  const normal=(view?.camera??camera).getWorldDirection(new Vector3()),ray=rayAt(start,view);
+  const setHit=hit=>{d.hit=hit;d.plane=new Plane().setFromNormalAndCoplanarPoint(normal,new Vector3(...hit.worldPoint));};
+  if(fling&&hint){setHit(hint);renderDrag();}
+  d.ready=Promise.resolve().then(()=>begin(ray)).then(hit=>{if(!hit?.released){d.hit=null;if(drag===d)hide();return null;}setHit(hit);d.confirmed=true;if(drag===d&&!disposed){d.dirty=true;if(!fling)renderDrag();}return hit;});
+  d.ready.catch(()=>{if(drag===d&&!d.finishing)finish(d,false);});
  }
  function move(e){if(drag){if(drag.finishing||e.pointerId!==drag.pointerId)return;swallow(e);for(const p of e.getCoalescedEvents?.()??[])sample(drag,p);sample(drag,e);if(!fling)renderDrag();return;}if(!enabled||!isActive()||e.buttons){hover=null;hide();return;}latest=coords(e);queryHover();}
- function up(e){if(!drag){if(e.pointerId===claimedPointer)swallow(e);return;}if(e.pointerId!==drag.pointerId)return;swallow(e);sample(drag,e);renderDrag();finish(drag,true);}
+ function up(e){if(!drag){if(e.pointerId===claimedPointer)swallow(e);return;}if(e.pointerId!==drag.pointerId)return;swallow(e);sample(drag,e);if(Math.hypot(drag.end.clientX-drag.start.clientX,drag.end.clientY-drag.start.clientY)>=3)claimedPointer=e.pointerId;renderDrag();finish(drag,true);}
  const click=e=>{if(claimedPointer!==null){swallow(e);claimedPointer=null;}};
  const abort=e=>{if(e?.type==='pointercancel'||e?.type==='blur')claimedPointer=null;if(drag){if(e?.type==='keydown'&&e.key!=='Escape')return;swallow(e);finish(drag,false);}};
  const leave=()=>{if(!drag){sequence++;hover=null;latest=null;hide();}};
- const listeners=[];const listen=(t,k,f)=>{t.addEventListener(k,f,true);listeners.push(()=>t.removeEventListener(k,f,true));};
+ const listeners=[],capture={capture:true};const listen=(t,k,f)=>{t.addEventListener(k,f,capture);listeners.push(()=>t.removeEventListener(k,f,capture));};
  listen(canvas,'pointerdown',down);listen(canvas,'pointermove',move);listen(canvas,'pointerup',up);listen(canvas,'click',click);listen(canvas,'pointercancel',abort);listen(canvas,'pointerleave',leave);listen(document,'keydown',abort);listen(document.defaultView,'blur',abort);
  const stop=onFrame(({timestampMs}={})=>{if(!enabled||!isActive()){if(drag)finish(drag,false);else hide();}else if(fling&&drag&&(drag.dirty||timestampMs<=drag.end.t+100)){drag.dirty=false;renderDrag(timestampMs);}});hide();
- return{setEnabled(v){enabled=v;if(!v){if(drag)finish(drag,false);else leave();}},read:()=>({enabled,dragging:Boolean(drag),hover:hover?.rock??null}),async dispose(){disposed=true;sequence++;listeners.forEach(f=>f());stop();if(drag)await finish(drag,false);svg.remove();}};
+ return{setEnabled(v){enabled=v;if(!v){if(drag)finish(drag,false);else leave();}},read:()=>({enabled,dragging:Boolean(drag),target:drag?.confirmed?drag.hit.rock:null,hover:hover?.rock??null}),async dispose(){disposed=true;sequence++;listeners.forEach(f=>f());stop();if(drag)await finish(drag,false);svg.remove();}};
 }

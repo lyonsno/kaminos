@@ -33,8 +33,27 @@ async function stroke(duration,hold){
  fire('pointerup',300,1010+duration+hold);await flush();
  return Math.hypot(...commits.at(-1).velocity);
 }
-const quick=await stroke(80,1),slow=await stroke(600,1),held=await stroke(80,250);
+const quick=await stroke(80,1),slow=await stroke(600,1),held=await stroke(80,250),fast=await stroke(4,1);
+assert.ok(fast>quick,'A delivered motion sample under 8 ms must not become zero impulse');
 assert.ok(quick>slow*3,'Release speed drives the impulse at equal displacement');
 assert.ok(held<quick*.1,'Stopping before release sheds the flick momentum');
 assert.ok(quick>10*2*Math.log1p(1),'A committed flick is substantially stronger than the old drag');
 await flingTool.dispose();
+
+let resolveFresh;const fresh=new Promise(r=>resolveFresh=r);const target={...pickHit,rock:4};
+const freshTool=mountViewportImpulseGesture({document:doc,viewport,canvas,camera,controls,isActive:()=>active,onFrame:()=>()=>{},pick:async()=>null,begin:()=>fresh,commit:async v=>commits.push(v),cancel:async()=>{},onError:e=>{throw e;},fling:true});
+const count=commits.length;
+event(canvas,'pointerdown');await new Promise(r=>setTimeout(r,10));
+event(canvas,'pointermove',{clientX:255,buttons:1});event(canvas,'pointerup',{clientX:255});
+resolveFresh(target);await flush();
+assert.equal(commits.length,count+1,'A flick can finish before the first hit readback');
+assert.equal(commits.at(-1).hit.rock,4,'Pointerdown ray owns the target without a hover');
+assert.equal(controls.enabled,true);
+assert.equal(freshTool.read().target,null);
+await freshTool.dispose();
+let missCancels=0;
+const missTool=mountViewportImpulseGesture({document:doc,viewport,canvas,camera,controls,isActive:()=>active,onFrame:()=>()=>{},pick:async()=>null,begin:async()=>null,commit:async v=>commits.push(v),cancel:async()=>{missCancels++;},onError:e=>{throw e;},fling:true});
+event(canvas,'pointerdown');event(canvas,'pointerup');
+assert.equal(event(canvas,'click').defaultPrevented,false,'A cold click without a stroke remains a native click');
+await flush();assert.equal(commits.length,count+1,'Empty space cannot produce a fling');assert.equal(missCancels,1);assert.equal(controls.enabled,true);
+await missTool.dispose();
