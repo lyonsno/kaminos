@@ -331,6 +331,24 @@ test('same-size assist uses one presentation pass and exact off restores the una
   assert.ok(!on.passes.includes('resolve'),'the assist must apply transmission directly in same-size presentation');
  },{profiles}));
 });
+test('Fill toggles do not reallocate the ordinary particle depth textures',async()=>{
+ await withKaminosGpu(async({device:d})=>{
+  const allocations=[];const device=new Proxy(d,{get(target,key){
+   if(key==='createTexture')return desc=>{allocations.push(desc.label);return target.createTexture(desc);};
+   const value=target[key];return typeof value==='function'?value.bind(target):value;
+  }});
+  await withExtinctionFixture(device,async({seed,draw,owner})=>{
+   const rows=new Float32Array(16*16);rows.set([1,.4,.1,.1,0,0,-.5,1,0,.25,1,.3,1,.4,.1,0]);seed(rows);
+   const cfg={depthMode:1,depthSlices:8,depthScale:1,radius:1};
+   await draw(0,cfg);const off=owner.read().depthField;
+   await draw(0,{...cfg,fillExtinction:1});const on=owner.read().depthField;
+   await draw(0,cfg);assert.equal(owner.read().depthField.bytes,off.bytes);
+   assert.ok(on.bytes>off.bytes,'active grid memory still appears in the budget');
+   assert.equal(allocations.filter(label=>label==='particle per-slice optical depth').length,1);
+   assert.equal(allocations.filter(label=>label==='particle cumulative optical depth').length,1);
+  });
+ });
+});
 test('zero independent extinction cannot add opacity already represented by particles',async()=>{
  await withKaminosGpu(async({device:d})=>withExtinctionFixture(d,async({seed,draw})=>{
   const rows=new Float32Array(16*16);rows.set([.2,.1,.05,2,0,0,0,1,0,.25,1,.3,.2,.1,.05,0]);seed(rows);const cfg={depthMode:2,depthSlices:8,depthScale:1,radius:1};

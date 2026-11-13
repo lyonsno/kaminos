@@ -76,10 +76,13 @@ export function createParticleDepthField(device,{optionsWgsl,options}){
  const drain=()=>{if(retired.length){const old=retired.splice(0);queueMicrotask(()=>device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>old.forEach(t=>t.destroy())));}};
  return {
   prepare(encoder,s,input,particles,slots,profileWrites=()=>({})){
-   const plan=particleDepthLayout(s,input),key=JSON.stringify(plan);
-   if(JSON.stringify(layout)!==key){if(opticalDepth)retired.push(opticalDepth,prefix);layout=plan;
+   const plan=particleDepthLayout(s,input);
+   // Fill adds its own textures. Particle atlas storage depends only on the
+   // allocated extent; the current logical layout/receipt still updates.
+   if(!layout||layout.atlasWidth!==plan.atlasWidth||layout.atlasHeight!==plan.atlasHeight){if(opticalDepth)retired.push(opticalDepth,prefix);
     opticalDepth=device.createTexture({label:'particle per-slice optical depth',size:[plan.atlasWidth,plan.atlasHeight],format:'r16float',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING});
     prefix=device.createTexture({label:'particle cumulative optical depth',size:[plan.atlasWidth,plan.atlasHeight],format:'r32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING});}
+   layout=plan;
    device.queue.writeBuffer(params,0,new Uint32Array([plan.width,plan.height,plan.columns,plan.slices]));device.queue.writeBuffer(bounds,0,new Uint32Array([0x7f800000,0,0,0]));
    const p=encoder.beginComputePass({label:'particle retained depth bounds',...profileWrites('depthBounds')});p.setPipeline(boundPipeline);p.setBindGroup(0,device.createBindGroup({layout:boundPipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:particles}},{binding:1,resource:{buffer:options}},{binding:2,resource:{buffer:bounds}}]}));p.dispatchWorkgroups(Math.ceil(slots/64));p.end();drain();return plan;
   },
