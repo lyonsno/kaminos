@@ -1,0 +1,17 @@
+# Cohesive fines among rigid grit
+
+`?workspace=workbench&experiment=earth-packets` opens the distributed-packet experiment. The previous `earth-gpu` tetrahedral-block experiment is preserved. The native translucent forming tool acts on both phases. Pause holds the physical clock; the phase selector changes visibility without changing physics. Rendered spheres read exactly the solver's resident GPU body buffer.
+
+This is a provisional cohesive aggregate surrogate. Each fine packet has fixed mass and sphere volume, representing an aggregate of smaller bound fines. Local nonpenetration, finite-range adhesion and Coulomb friction let the mixture yield by rearranging neighbors. Bulk pore volume can change, individual packets do not deform, and a surface coating or tear law has not been established. No opaque continuum skin is rendered over the packets.
+
+Defaults: 32,768 rigid two-sphere grains and 32,768 fine packets of radius 0.0715 mm. Packet density is 1,600 kg/m³. Adhesion uses 35 Pa times the smaller sphere cross-sectional area, falling linearly to zero at a gap of 0.35 of its radius; packet-to-grit adhesion is 0.35 of packet-to-packet adhesion. These are exploratory parameters, not measured soil properties. The positional adhesive impulse includes dt², normalized mass and solver iteration count. This does not establish continuum clay behavior or scale-independent refinement.
+
+Separate hashed linked lists keep fine/fine and grit/grit neighborhoods local at their respective sizes. Fine packets also query the grit index. Hash collisions are filtered by actual cell coordinates; lists have no neighbor cap. An overlapping rigid pair receives one packet contact from its nearest lobe. Normal corrections use symmetric contact-degree relaxation, reciprocal translation and contact-point torque. Floor/tool friction includes rotation. Ordered dispatches share one compute pass per physical batch; the new path has no all-boundary-triangle or tetrahedron-color scans.
+
+The GPU status readback is 16 bytes per batch, with no serving-path pose readback. An accumulator exceeding its representable range fails visibly instead of wrapping silently. An explicit snapshot retains every body. Placement runs in a disposable worker, excludes the actual grit lobes, and distributes packets throughout the volume. It extends preparation height if the count does not fit; counts are not truncated.
+
+The live clock offers two 1/480 s steps per display frame when GPU work is available. This is a lagging physical preview, not calibrated wall time. No frame-rate improvement or maximum population has been measured.
+
+Focused checks: `npm test -- --only tests/earth-packets.mjs,tests/earth-packets-native.mjs`.
+
+`createPacketSolver` and `makePacketState` are the same interfaces consumed by Workbench. Inputs set count, packetCount, radius, packetRadius, width, depth, iterations, dt, cohesion and pause. Geometry/parameter changes require reopening a reproducible setup; evolved state is available through `snapshot`.
