@@ -11,3 +11,7 @@ const native=structuredClone(row);native.model='wilor';native.state.effectiveMod
 checks.assertHandObservation(native);
 native.state.identity.backend='cpu';assert.throws(()=>checks.assertHandObservation(native));
 console.log('hand witness rejects substituted, absent, incomplete and invisible observations');
+
+assert.throws(()=>checks.assertHandObservation(row,{frameId:3,captureId:'session_3'}),/earlier source/);
+assert.throws(()=>checks.assertHandObservation(row,{frameId:2,captureId:'session_3'}),/earlier source/);
+checks.assertHandObservation(row,{frameId:2,captureId:'session_2'});

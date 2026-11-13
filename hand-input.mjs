@@ -12,12 +12,6 @@ async function api(action,body,signal) {
   if(!response.ok)throw Error(value.error??`Hand input HTTP ${response.status}`);
   return value;
 }
-async function png(source) {
-  const canvas=new OffscreenCanvas(source.width,source.height);canvas.getContext('2d').drawImage(source,0,0);
-  const blob=await canvas.convertToBlob({type:'image/png'});
-  return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result.split(',')[1]);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(blob);});
-}
-
 export function installHandInput({document,scene,camera,onFrame,redraw,getGpu}) {
   const view=createHandInputView({scene,camera,onFrame,redraw});
   let backend=null,retention=null,sessionId=null,config=null;
@@ -26,8 +20,9 @@ export function installHandInput({document,scene,camera,onFrame,redraw,getGpu}) 
       retention.check();
       const captureId=sessionId+'_'+frame.frameId;
       frame.captureId=captureId;
-      retention.begin({captureId,epochMs:Date.now(),identity:state.identity,configuration:state,
+      frame.retention=retention.begin({captureId,epochMs:Date.now(),identity:state.identity,configuration:state,
         request:{sessionId,width:frame.width,height:frame.height,frameId:frame.frameId,capturedAt:frame.capturedAt,mediaTime:frame.mediaTime}},await createImageBitmap(frame.source));
+      frame.retention.catch(()=>{});
     },
     async finish(frame,outcome){if(frame?.captureId)retention.finish(frame.captureId,outcome);},
     async close(){const old=retention;retention=null;await old?.close();},
@@ -60,8 +55,8 @@ export function installHandInput({document,scene,camera,onFrame,redraw,getGpu}) 
           if(signal.aborted)throw new DOMException('Hand loading stopped','AbortError');
           const route={model,identity:loaded.identity,faces:loaded.faces,
             async infer({getFrame,sides}){
-              const frame=await getFrame();
-              const result=await api('infer',{sessionId:nativeId,sides,threshold:.3,frameId:frame.frameId,width:frame.width,height:frame.height,image:await png(frame.source)});
+              const frame=await getFrame();await frame.retention;
+              const result=await api('infer',{sessionId:nativeId,captureSessionId:sessionId,captureId:frame.captureId,sides,threshold:.3,frameId:frame.frameId,width:frame.width,height:frame.height});
               if(result.frameId!==frame.frameId||result.identity?.weightsSha256!==loaded.identity.weightsSha256)throw Error('Native hand response identity differs from the current frame/model');
               return result;
             },stop(){},async destroy(){signal.removeEventListener('abort',cancel);await close();}};

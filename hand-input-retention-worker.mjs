@@ -15,7 +15,8 @@ export function createCaptureWriter({store,encode,writeEvent}) {
       } finally {bitmap.close?.();}
       const value={...capture,request:{...capture.request,imageMime:'image/png',image},outcome:{state:'submitted'}};
       captures.set(capture.captureId,value);
-      await store.put(value);
+      const stored=await store.put(value);
+      captures.set(capture.captureId,stored??value);
     } else if(message.type==='outcome') {
       const capture=captures.get(message.captureId);
       if(!capture)throw Error(`Unknown capture outcome: ${message.captureId}`);
@@ -48,6 +49,7 @@ if(typeof WorkerGlobalScope!=='undefined'&&globalThis instanceof WorkerGlobalSco
     const body=kind==='capture'?{...payload,sessionId:payload.request.sessionId}:payload;
     const response=await fetch('/api/hand-input/record',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     if(!response.ok)throw Error(`Hand evidence retention failed: HTTP ${response.status}`);
+    return response.json();
   };
   openCaptureStore(capture=>retain('capture',capture)).then(store=>{
     const writer=createCaptureWriter({store,encode,writeEvent:value=>retain('event',value)});

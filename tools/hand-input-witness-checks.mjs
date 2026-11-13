@@ -1,4 +1,4 @@
-export function assertHandObservation(row) {
+export function assertHandObservation(row,previous=null) {
   const fail=message=>{throw Error(message);};
   const {state,view,model,side}=row;
   if(!state?.enabled||state.effectiveModel!==model||state.phase!=='tracking')fail('Requested model is not effectively tracking');
@@ -8,5 +8,6 @@ export function assertHandObservation(row) {
   const hand=state.last?.hands?.find(h=>h.handedness===side&&h.hasHand);
   if(!hand||hand.verticesMeters?.length!==778*3||!Array.from(hand.verticesMeters).every(Number.isFinite))fail('Expected hand has no complete geometry');
   if(!state.last.captureId||!(state.last.frameId>0))fail('Source capture is unbound');
+  if(previous&&(state.last.frameId<=previous.frameId||state.last.captureId===previous.captureId))fail('Hand stage reused an earlier source observation');
   if(!view?.visible||!view.sides.includes(side))fail('Expected tracked hand is not presented');
 }

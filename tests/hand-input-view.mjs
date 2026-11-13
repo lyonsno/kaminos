@@ -1,0 +1,25 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import {Scene,PerspectiveCamera,Vector3,Raycaster} from '../lib/three.core.js';
+import {createHandInputView} from '../hand-input-view.mjs';
+const scene=new Scene(),camera=new PerspectiveCamera(50,1.5,.1,100);
+const view=createHandInputView({scene,camera,onFrame:()=>()=>{},redraw(){}});
+const vertices=new Float32Array(778*3);
+vertices.set([0,0,0,.01,0,0,0,.01,0]);vertices.set([-.03,-.08,0],62*3);vertices.set([.03,-.08,0],595*3);
+const hand={handedness:'right',hasHand:true,verticesMeters:vertices,detection:{bbox:[200,100,400,300]}};
+view.present({hands:[hand],imageSize:[640,480]},[0,1,2]);
+const root=scene.children.find(o=>o.userData.handInputOverlay),mesh=root.children[0];
+const before=mesh.geometry.attributes.position.array.slice(62*3,62*3+3),scale=mesh.scale.x;
+vertices[700*3+1]=-.3;hand.detection.bbox=[250,150,350,250];
+view.present({hands:[hand],imageSize:[640,480]},[0,1,2]);
+assert.deepEqual(mesh.geometry.attributes.position.array.slice(62*3,62*3+3),before,'moving finger vertices must not move the palm anchor');
+assert.equal(mesh.scale.x,scale,'changing detector-box extent must not rescale the metric hand');
+const across=new Vector3().fromBufferAttribute(mesh.geometry.attributes.position,62).distanceTo(new Vector3().fromBufferAttribute(mesh.geometry.attributes.position,595));
+assert.ok(Math.abs(across-.06)<1e-6,'display preserves native metric proportions before its fixed magnification');
+assert.equal(root.userData.kaminosEditorOnly,true,'input visualization must use the host editor-capture exclusion');
+root.updateMatrixWorld(true);
+const centroid=new Vector3();for(let i=0;i<3;i++)centroid.add(new Vector3().fromBufferAttribute(mesh.geometry.attributes.position,i));centroid.multiplyScalar(1/3);mesh.localToWorld(centroid);
+const ray=new Raycaster(centroid.clone().add(new Vector3(0,0,1)),new Vector3(0,0,-1));
+assert.equal(ray.intersectObject(root,true).length,0,'transient hands must not intercept scene picking or receiver raycasts');
+view.clear();assert.equal(view.read().visible,false);view.dispose();assert.equal(scene.children.length,0);
+console.log('hand presentation preserves palm anchoring, native scale and editor exclusion');

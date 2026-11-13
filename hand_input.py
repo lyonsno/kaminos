@@ -6,6 +6,7 @@ native weights are referenced in place; capture output belongs to evidenceRoot.
 import atexit
 import base64
 import json
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -101,15 +102,21 @@ class HandInputService:
         if not isinstance(raw,str) or not raw:raise ValueError('Hand evidenceRoot must be configured')
         root=Path(raw).expanduser()/session;root.mkdir(parents=True,exist_ok=True);return root
     def retain(self, payload):
+        if not isinstance(payload,dict) or not isinstance(payload.get('request',{}),dict):raise ValueError('Hand capture requires an object request')
         root=self.evidence(payload.get('sessionId'));capture=identifier(payload.get('captureId'),'capture')
         target=root/'captures';target.mkdir(exist_ok=True)
-        image=payload.get('request',{}).get('image')
+        metadata=target/(capture+'.json');previous=json.loads(metadata.read_text()) if metadata.is_file() else {}
+        request=dict(payload.get('request',{}));image=request.pop('image',None)
+        source=previous.get('source')
         if image:
             data=base64.b64decode(image,validate=True)
             if not data.startswith(b'\x89PNG\r\n\x1a\n'):raise ValueError('Expected original hand sample PNG')
             (target/(capture+'.png')).write_bytes(data)
-        (target/(capture+'.json')).write_text(json.dumps(payload,allow_nan=False)+'\n')
-        return {'retained':True,'sessionId':payload['sessionId'],'captureId':capture}
+            source={'path':str(target/(capture+'.png')),'sha256':hashlib.sha256(data).hexdigest(),'mime':'image/png'}
+        if source is None and not payload.get('sourceFailure'):raise ValueError('Capture has no retained original source')
+        value={**previous,**payload,'request':request,'source':source}
+        metadata.write_text(json.dumps(value,allow_nan=False)+'\n')
+        return {'retained':True,'sessionId':payload['sessionId'],'captureId':capture,'source':source}
     def open(self, session):
         identifier(session)
         if not self.status()['wilor']['available']:raise ValueError('WiLoR installation is unavailable')
@@ -132,7 +139,14 @@ class HandInputService:
         session=identifier(payload.get('sessionId'))
         with self.lock:worker=self.workers.get(session)
         if worker is None:raise ValueError('WiLoR session is not open')
-        try:return worker.request({'action':'infer',**payload})
+        try:
+            capture_session=identifier(payload.get('captureSessionId'))
+            capture=identifier(payload.get('captureId'),'capture')
+            target=self.evidence(capture_session)/'captures'
+            metadata=json.loads((target/(capture+'.json')).read_text())
+            data=(target/(capture+'.png')).read_bytes()
+            if hashlib.sha256(data).hexdigest()!=metadata.get('source',{}).get('sha256'):raise ValueError('Retained hand source changed')
+            return worker.request({**payload,'action':'infer','image':base64.b64encode(data).decode()})
         except Exception as error:
             worker.report(status='failed',phase='inference',error=str(error));raise
     def close(self,session):
@@ -154,6 +168,7 @@ def service():
 def handle(handler, action):
     try:
         payload=json.loads(handler.rfile.read(int(handler.headers.get('Content-Length','0'))))
+        if not isinstance(payload,dict):raise ValueError('Hand input requires a JSON object')
         owner=service()
         if action=='record':result=owner.retain(payload)
         elif action=='open':result=owner.open(payload.get('sessionId'))

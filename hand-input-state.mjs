@@ -13,7 +13,7 @@ export function createHandInput({openCamera,loadModel,present,clear,record,now=(
   const hide=()=>{last=null;clear();};
   const invalidate=()=>{generation++;abort?.abort();backend?.stop?.();hide();};
   function schedule() {
-    if(enabled&&camera&&backend&&!disposed)camera.schedule(sample);
+    if(enabled&&camera&&backend&&!disposed&&Object.values(auto).some(Boolean))camera.schedule(sample);
   }
   async function sample() {
     if(!enabled||!backend||flight||disposed)return;
@@ -39,7 +39,7 @@ export function createHandInput({openCamera,loadModel,present,clear,record,now=(
       } catch(cause) {
         if(capture)await record?.finish?.(capture,{state:'failed',error:String(cause),result:modelResult}).catch(()=>{});
         if(ticket!==generation||disposed)return;
-        error=String(cause?.message??cause);phase='error';hide();
+        error=String(cause?.message??cause);enabled=false;phase='error';hide();
         camera?.stop();camera=null;
       } finally {capture?.close?.();}
     })();
@@ -77,8 +77,8 @@ export function createHandInput({openCamera,loadModel,present,clear,record,now=(
         phase='waiting';notify();schedule();return read();
       }catch(cause){
         if(ticket!==generation||disposed)return read();
-        camera?.stop();camera=null;await releaseBackend();
-        error=String(cause?.message??cause);phase='error';hide();notify();throw cause;
+        camera?.stop();camera=null;await releaseBackend();await record?.close?.().catch(()=>{});
+        enabled=false;error=String(cause?.message??cause);phase='error';hide();notify();throw cause;
       }
     });
     tail=task;return task;

@@ -39,7 +39,7 @@ export async function openBrowserCaptureStore({onFailure,Worker=globalThis.Worke
     });
   };
   return {
-    begin(capture,bitmap){check();send({type:'capture',capture,bitmap},[bitmap]);},
+    begin(capture,bitmap){check();return new Promise((resolve,reject)=>{try{const id=send({type:'capture',capture,bitmap},[bitmap]);flushes.set(id,{resolve,reject});}catch(error){reject(error);}});},
     // Already sampled inputs still need terminal outcomes after a retention error.
     finish(captureId,outcome){send({type:'outcome',captureId,outcome});},
     event(value){send({type:'event',value});},

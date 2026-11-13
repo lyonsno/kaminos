@@ -8,8 +8,11 @@ starts only after explicit activation; opening a scene does not start a camera.
 
 The virtual hand is transient input visualization, excluded from the Outliner,
 object transforms and scene documents. Its solid material and opposite-camera
-view follow the existing Iron Gland display. Placement follows source-image
-boxes in the current view; it is an uncalibrated camera-plane presentation,
+view follow the existing Iron Gland display. Palm placement follows source-image
+boxes in the current view with fixed display magnification and native metric
+proportions; finger articulation does not rescale the whole hand. It uses Iron
+Gland’s wrist/knuckle anchors rather than the all-vertex centroid. It is an
+uncalibrated camera-plane presentation,
 not physical world registration. Contextual authoring gestures remain with the
 consuming tool.
 
@@ -45,7 +48,7 @@ A package directory uses `package.json` by default. A `{root,manifest}` entry
 explicitly aliases another metadata filename. The browser loaders verify the
 model package and weight identity. The native worker requires existing WiLoR
 MLX, NumPy and Pillow in the named interpreter, and the WiLoR source's
-`HandPosePipeline`, `WiLoR` and `HandDetector` APIs. The exercised source is
+`HandPosePipeline`, `WiLoR` and `HandDetector` APIs. The configured native source is
 WiLoR-MLX `30cd14e`; model code remains with that project.
 
 `GET /api/hand-input` reports configuration and file availability, without
@@ -65,8 +68,12 @@ Each presented observation names its source capture. Disabled sides never
 receive another side's reflected observation. Detector misses clear the hand;
 there is no manual-crop fallback in this input path.
 
-Every sampled source frame and inference outcome is retained via the existing
-worker/IndexedDB capture pattern and the installation's `evidenceRoot`.
+Every sampled source frame and inference outcome is retained by a worker at
+the installation's `evidenceRoot`. The server acknowledges the original PNG
+and its SHA256 before native WiLoR consumes that exact source. Outcomes reuse
+the source reference; the PNG is neither uploaded twice nor embedded in JSON.
+Browser IndexedDB preserves the complete source only if server retention fails;
+there are no routine duplicate recordings on the internal disk.
 `captures/<capture-id>.png` preserves the source image and its JSON preserves
 requested configuration, effective route and output. No automatic pruning is
 installed. Native workers also retain load/failure reports and stderr under
