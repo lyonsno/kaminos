@@ -5,7 +5,7 @@ function tuple(value,length,label){
  return [...value];
 }
 function checkedCamera(value,camera){
- if(value.type!=='PerspectiveCamera'||!camera.isPerspectiveCamera)throw Error('Scene worker requires its perspective camera snapshot');
+ if(value?.type!=='PerspectiveCamera'||!camera?.isPerspectiveCamera)throw Error('Scene worker requires its perspective camera snapshot');
  const result={type:value.type};
  for(const [key,length] of [['position',3],['quaternion',4],['up',3],['target',3],['projectionMatrix',16]])result[key]=tuple(value[key],length,key);
  for(const key of ['fov','aspect','near','far','zoom','filmGauge','filmOffset']){

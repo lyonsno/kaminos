@@ -1,3 +1,4 @@
+import {prepareNavigationGeometry} from './scene-navigation.mjs';
 import {visibleSceneIntersections} from './scene-visible-picking.mjs';
 import {presentedSurface} from './scene-presented-surface.mjs';
 import {applySceneWorkerCameraSnapshot} from './scene-worker-view.mjs';
@@ -20,6 +21,9 @@ export function pickSceneWorkerObject({THREE,ordinary,input}){
   for(const child of root.children)check(child);
  }
  for(const root of [...roots,...queryRoots]){root.updateWorldMatrix(true,true);check(root);}
+ // Saved roots are indexed before document admission; prepare newly displayed
+ // LODs and invalidate changed geometry through the same off-thread owner.
+ for(const root of queryRoots)if(!(lods?.interactiveOwner(root)??root).userData?.kaminosVertexWarp)void prepareNavigationGeometry(root);
  const raycaster=new THREE.Raycaster();raycaster.setFromCamera(new THREE.Vector2(ndc.x,ndc.y),camera);
  const hits=visibleSceneIntersections({raycaster,roots:queryRoots,camera,viewport});
  const recordFor=hit=>{const object=lods?.interactiveOwner(hit.object)??hit.object;return rows.find(row=>{for(let node=object;node;node=node.parent)if(node===row.object)return true;return false;});};

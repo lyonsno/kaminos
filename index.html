@@ -123,6 +123,7 @@ body[data-scene-gi-diagnostic="true"] #kaminos-volume-canvas { opacity:0 !import
 .navigation-input select { border:0; background:transparent; color:#bbb; font:inherit; }
 #navigation-hint { position:absolute; bottom:10px; left:280px; max-width:calc(100% - 420px); z-index:10; color:#888; text-shadow:0 1px 3px #000; pointer-events:none; font:10px 'SF Mono',monospace; }
 #navigation-hint[data-active="true"] { color:#f4c176; }
+body.scene-worker-page #navigation-hint { left:12px; bottom:64px; max-width:calc(100% - 24px); }
 @media (max-width: 760px) { #navigation-hint { left:12px; bottom:70px; max-width:calc(100% - 24px); } }
 canvas { display: block; }
 #volume-authored-mix-panel { position: relative; flex: 0 0 min(388px, 30vw); width: min(388px, 30vw); min-width: 320px; height: 100vh; display: flex; background: rgba(13,15,16,0.96); border-left: 1px solid #2c3437; overflow: hidden; }

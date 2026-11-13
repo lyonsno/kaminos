@@ -33,3 +33,17 @@ test('unsupported presented-surface picking refuses before submitting or changin
 test('invalid click geometry or stale admission cannot alter selection',()=>{
  const f=fixture();try{assert.equal(typeof f.authoring.commands['scene.pick'],'function');for(const patch of [{ndc:{x:NaN,y:0}},{ndc:{x:2,y:0}},{viewport:{width:0,height:100}}])assert.throws(()=>pick(f,patch));assert.throws(()=>f.authoring.commands['scene.pick'](f.input,{assertCurrent(){throw Error('stale click');}}),/stale click/);assert.deepEqual(f.scene.selection.ids,[]);}finally{f.dispose();}
 });
+
+
+test('missing camera is rejected explicitly before changing selection',()=>{
+ const f=fixture();try{pick(f);for(const camera of [null,undefined])assert.throws(()=>pick(f,{camera}),/^Error: Scene worker requires its perspective camera snapshot$/);assert.deepEqual(f.scene.selection.ids,['front']);}finally{f.dispose();}
+});
+test('viewport and ordinary selection preserve authored assembly boundaries and Shift toggling',()=>{
+ const f=fixture();try{
+  f.scene.setGroups([{id:'burner',objectIds:['front'],assembly:{kind:'burner',roles:{front:'body'}}}]);
+  assert.deepEqual(pick(f).ui.selection,{ids:['@group:burner'],activeId:'@group:burner'});
+  assert.deepEqual(pick(f,{extend:true}).ui.selection.ids,[]);
+  assert.deepEqual(f.authoring.commands['scene.select']({ids:['front'],activeId:'front'},ctx).ui.selection.ids,['@group:burner']);
+  f.hidden.add('front');assert.deepEqual(pick(f,{extend:true}).ui.selection.ids,['@group:burner','back']);
+ }finally{f.dispose();}
+});

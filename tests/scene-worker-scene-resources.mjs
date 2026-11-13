@@ -53,6 +53,7 @@ test('saved GLB reaches actual parser, registry, transform/material restore and 
  entry.object.traverse(n=>{if(n.isMesh){assert.equal(n.material.opacity,.6);assert.equal(n.material.side,THREE.DoubleSide);}});
  assert.equal(f.shell.ordinary.appearance.ground.position.y,-2);assert.equal(f.shell.ordinary.readSettings().gi.gain,3);assert.equal(f.renderer.toneMappingExposure,2);
  assert(f.ctx.reports.some(r=>r.ui?.initialization?.sceneApplied===true));
+ entry.object.traverse(node=>{if(node.isMesh)assert.equal(typeof node.geometry.boundsTree?.raycast,'function','saved geometry must be indexed before publishing applied-scene metadata');});
  const old=entry.object;await f.shell.commands['scene.applyDocument']({document:saved('replacement')},f.ctx);assert.equal(old.parent,null);
  assert.deepEqual(f.shell.ordinary.workingScene.objects.map(o=>o.id),['replacement']);
  await f.shell.retire(f.ctx);
