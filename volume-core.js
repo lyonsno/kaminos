@@ -13881,7 +13881,7 @@ export function createKaminosVolumePrototype({
       const batch=focusedAcquisition?particleBudget().batch:{width:state.width,height:state.height,pixels:state.width*state.height,samples:state.width*state.height};
       const poolIdentity=JSON.stringify([worldSmokeKey,intermediateKey,productTransform,state.particleSourceGeneration]);
       const bootstrap=!opticalParticles||opticalParticles.needsReset({width:batch.width,height:batch.height,step:state.simStepCount,settings:particleSettings,identity:poolIdentity});
-      captureFresh=particleCaptureRequested&&particleCaptureClock.due({enabled:particleSettings.acquisitionEnabled,step:state.simStepCount,interval:particleSettings.acquisitionEvery,identity:captureIdentity,advancing:state.simStepCount>(opticalParticles?.read().step??state.simStepCount),bootstrap});
+      captureFresh=particleCaptureRequested&&!particleSettings.carrierMode&&particleCaptureClock.due({enabled:particleSettings.acquisitionEnabled,step:state.simStepCount,interval:particleSettings.acquisitionEvery,identity:captureIdentity,advancing:state.simStepCount>(opticalParticles?.read().step??state.simStepCount),bootstrap});
       let acquisition=null;
       if(focusedAcquisition){
         const fine={lo:[-1,-1,-1],hi:[1,2*gridHeight/gridSize-1,1]};
@@ -13899,6 +13899,7 @@ export function createKaminosVolumePrototype({
         staggered:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode==='staggered',sourcesOnly:particleCaptureRequested,capture:!particleCaptureRequested||captureFresh});
       splitGroup=prepared.group;state.splitIntegral=prepared.state;particleSourceFrame=prepared.sourceFrame;
       if(particleSourceFrame){Object.assign(particleSourceFrame,{samples:captureFresh?batch.samples:0,configuredSamples:batch.samples,outputWidth:state.width,outputHeight:state.height,displayWidth:state.displayWidth,displayHeight:state.displayHeight,reactionStepScale:resolveTimeStepConfig(controlsSnapshot).effective.dtScale});
+        if(particleSettings.carrierMode)particleSourceFrame.emitterBounds=particleSourceEnvelope({sources:state.immersedSources?.active?(state.immersedSources.sources??[]).map(s=>s.config):[state.immersedSource],fallback:analyticEmitterDispatch,pitch:2/gridSize,history:0,margin:0});
         if(focusedAcquisition&&captureFresh)opticalParticles?.prepareAcquisition(encoder,{source:particleSourceFrame,fine:fluidBuffers[currentFluid],dims:[gridSize,gridHeight,gridSize],settings:{...particleSettings,...particleReactionFromSimulation(state.reactantCombustion)},model:state.reactantCombustion.effective.model,staggered:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode==='staggered',profileWrites:activeParticleProfileWrites??(()=>({})),identity:JSON.stringify([worldSmokeKey,intermediateKey,productTransform,state.particleSourceGeneration])});
       }
     }else if(!options.particleReference){state.splitIntegral=splitIntegral.disable(effectiveSplitSettings.mode==='off'?'off':device.limits.maxStorageBuffersPerShaderStage<10?'requires-10-fragment-storage-buffers':'requires-Fixed-evaluations-ordinary-joined-emissive-beauty');state.splitIntegral.requested=effectiveSplitSettings.mode;}
