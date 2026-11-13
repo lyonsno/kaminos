@@ -2459,6 +2459,7 @@ SCENE_LIBRARY_DEFAULT_GLOBS = (
     "~/.local/state/kaminos/*/scenes",
     "~/.local/state/kaminos/*/consumer/scenes",
     "~/.local/state/kaminos/*/state/scenes",
+    "~/.local/state/kaminos/*/live/scenes",
     "~/.local/state/kaminos/*/human-authoring-look-*/state/scenes",
     "~/.local/state/kaminos/*/native-consumer/scenes",
     "~/.local/share/kaminos/*/scenes",

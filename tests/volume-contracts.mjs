@@ -59,6 +59,8 @@ assert.equal(
   '',
   'empty text controls remain empty strings instead of silently becoming numeric zero',
 );
+assert.equal(readVolumeDomControlValue({id:'volume-ambient-boundary-width',type:'hidden',tagName:'INPUT',value:''}), '', 'automatic ambient contact survives preset readback');
+assert.equal(readVolumeDomControlValue({id:'volume-ambient-boundary-width',type:'hidden',tagName:'INPUT',value:'0'}), 0, 'explicit zero contact remains distinct from automatic');
 assert.match(
   index,
   /function readVolumeSettingsControls\(role = 'basin'\)[\s\S]*controls\[el\.id\]\s*=\s*\{[\s\S]*function readVolumeDomControls\(\)/,

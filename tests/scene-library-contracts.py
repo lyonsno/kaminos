@@ -99,9 +99,10 @@ with TemporaryDirectory() as directory:
 # Actual newer Modal host layout: saves succeed here, but old discovery skipped it.
 with TemporaryDirectory() as directory:
     root = Path(directory)
+    live_store = root / '.local/state/kaminos/beaming-lagrangian-transport-1111/live/scenes'
     state_store = root / '.local/state/kaminos/modal-show-hide-1016/state/scenes'
     host_store = root / '.local/state/kaminos/modal-emitters-main-composition-1013/human-authoring-look-1015/state/scenes'
-    for folder in (state_store, host_store):
+    for folder in (live_store, state_store, host_store):
         folder.mkdir(parents=True)
         (folder / 'my-tuned-scene.kaminos.json').write_text('{"label":"My tuned scene"}')
     prior_home = os.environ.get('HOME')
@@ -110,12 +111,13 @@ with TemporaryDirectory() as directory:
     serve.SCENES_DIR = root / 'current/scenes'
     try:
         discovered = serve.scene_library_stores()
+        assert live_store.resolve() in discovered.values(), 'the Beaming live scene store must appear in the ordinary library'
         assert state_store.resolve() in discovered.values(), 'default discovery must include the effective state/scenes save directory'
         assert host_store.resolve() in discovered.values(), 'retained human authoring host saves must remain discoverable'
         listing, status = call('handle_scene_library', {})
         assert status == 200
-        listing['stores'] = [store for store in listing['stores'] if Path(store['path']) in (state_store.resolve(), host_store.resolve())]
-        assert len(listing['stores']) == 2
+        listing['stores'] = [store for store in listing['stores'] if Path(store['path']) in (live_store.resolve(), state_store.resolve(), host_store.resolve())]
+        assert len(listing['stores']) == 3
         for store in listing['stores']:
             saved, status = call('handle_scene_library_read', {'store':[store['id']], 'name':['my-tuned-scene.kaminos.json']})
             assert status == 200 and saved['label'] == 'My tuned scene'

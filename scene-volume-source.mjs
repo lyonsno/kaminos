@@ -9,6 +9,11 @@ export function sceneSourceDomain(dimensions=[1,2,1]) {
   const lo=[-1,-1,-1],hi=dimensions.map(n=>-1+2*n/dimensions[0]);
   return {dimensions:[...dimensions],lo,hi,volume:hi.reduce((v,x,a)=>v*(x-lo[a]),1)};
 }
+export function sceneLightGridWidthStep(width,height) {
+  let a=width,b=height;
+  while(b){const rest=a%b;a=b;b=rest;}
+  return width/a;
+}
 export function sceneLightGridDimensions(width, fluidWidth, fluidHeight, limits={}) {
   if(!Number.isSafeInteger(width)||width<1)throw Error('Lighting transport grid width must be a positive integer');
   const height=width*fluidHeight/fluidWidth;

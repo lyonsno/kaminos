@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import definition from '../experiments/optical-particles.experiment.mjs';
+import {bindParticleNumber} from "../particle-number-control.mjs";
 import {opticalParticleSettings} from '../volume-optical-particles.mjs';
 
 async function mounted({shared=false,inputs={},viewport=false}={}){
@@ -131,4 +132,34 @@ test('the transport toggle is unavailable when the entire retained update is hel
   x.owner.operations.setOptions({updateEnabled:true});
   assert.equal(x.field('transportEnabled').disabled,false);
  }finally{await x.dispose();}
+});
+
+test('keeps Beaming lighting settings opaque across shared lighting edits and scene restoration',async()=>{
+ const foreign={enabled:false,width:20,transportWidth:32,directions:12,gain:2};
+ const x=await mounted({inputs:{lighting:foreign}});
+ const win=x.document.defaultView, calls=[];
+ const makeOwner=()=>({configureLiveLighting(patch){calls.push(patch);if(patch&&('width' in patch||'transportWidth' in patch))throw Error('foreign lighting options');return patch&&{enabled:true,intervalMs:250,...patch};},liveLightingState:()=>({})});
+ try{
+  win.__kaminosSceneRadiance=makeOwner();
+  x.owner.operations.setLighting({gain:3});
+  assert.deepEqual(calls,[{gain:3}]);
+  assert.deepEqual(x.writes.at(-1).lighting,foreign);
+  assert.equal(x.writes.at(-1).sharedLighting.gain,3);
+  x.owner.operations.setLighting(null);
+  assert.deepEqual(x.writes.at(-1).lighting,foreign);
+  assert.equal(Object.hasOwn(x.writes.at(-1),'sharedLighting'),false);
+ }finally{await x.dispose();}
+});
+
+test('keeps the rejection visible after committing an invalid lighting edit',async()=>{
+ const input=new EventTarget();input.value='3';input.classList={contains:()=>false};
+ let failure;
+ const binding=bindParticleNumber({input,read:()=>4,apply:()=>{throw Error('even widths only');},onError:e=>{failure=e.message;},onAccepted:()=>{failure=null;}});
+ try{
+  input.dispatchEvent(new Event('input'));
+  input.dispatchEvent(new Event('change'));
+  await Promise.resolve();
+  assert.equal(input.value,'4');
+  assert.equal(failure,'even widths only');
+ }finally{binding.dispose();}
 });

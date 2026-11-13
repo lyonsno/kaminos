@@ -9,7 +9,7 @@ export function bindParticleNumber({input,read,apply,onError,onAccepted,delay=15
   if(!input.value.trim()){if(leaving||left)discard();return;}
   const value=Number(input.value);dirty=false;
   try{await apply(value);if(!disposed&&revision===version)onAccepted();}
-  catch(error){if(!disposed&&revision===version){dirty=true;onError(error);if(leaving||left)discard();}}
+  catch(error){if(!disposed&&revision===version){dirty=true;onError(error);if(leaving||left){dirty=false;restore();}}}
  }
  const edit=()=>{cancel();version++;dirty=true;left=false;if(input.classList.contains('scrubbing')){if(scrubCommit==='live')void flush();}else timer=setTimeout(()=>void flush(),delay);};
  const leave=()=>{left=true;void flush({leaving:true});};

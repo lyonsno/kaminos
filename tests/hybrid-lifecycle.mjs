@@ -367,4 +367,14 @@ try{
  consume({...field,domainIdentity:'b',source:{...field.source,dimensions:[8,16,8]}});
  assert.equal(paced.liveLightingState().applied.volumeGrid,6,'valid edit recovers from a failed replacement');
  finish();await new Promise(resolve=>setImmediate(resolve));
+ const priorEdit=hostFrame.appearanceEdit;
+ paced.configureLiveLighting(null);
+ consume({...field,domainIdentity:'b'});
+ assert.equal(paced.liveLightingState().requested,null);
+ assert.equal(hostFrame.directions,24,'the restored solve uses Scene quality');
+ assert.ok(hostFrame.appearanceEdit>priorEdit,'restoring Scene defaults must refresh held camera-carrier illumination once');
+ const restoredEdit=hostFrame.appearanceEdit;
+ consume({...field,domainIdentity:'b'});
+ assert.equal(hostFrame.appearanceEdit,restoredEdit,'ordinary strict solves do not force refresh on every draw');
+
 }finally{failPass=null;delete device.queue.onSubmittedWorkDone;paced.dispose();}

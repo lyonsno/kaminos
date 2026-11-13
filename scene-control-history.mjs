@@ -90,7 +90,7 @@ function installNumberPresentation(input) {
 }
 
 /** One field: relative dragging while idle, ordinary text editing after a click. */
-export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=()=>{}}) {
+export function installRelativeNumberDrag({grip,input,step,snap=null,onStart=()=>{},onEnd=()=>{}}) {
   let gesture=null, suppressClick=false, disposed=false;
   const doc=input.ownerDocument || document;
   const targets=[...new Set([grip,input].filter(Boolean))];
@@ -129,7 +129,7 @@ export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=
     if(gesture.min!==null)gesture.value=Math.max(gesture.min,gesture.value);
     if(gesture.max!==null)gesture.value=Math.min(gesture.max,gesture.value);
     const atLimit=gesture.value===gesture.min||gesture.value===gesture.max;
-    let value=step>=1&&!atLimit?Math.round(gesture.value):gesture.value;
+    let value=snap?snap(gesture.value):step>=1&&!atLimit?Math.round(gesture.value):gesture.value;
     if(gesture.min!==null)value=Math.max(gesture.min,value);
     if(gesture.max!==null)value=Math.min(gesture.max,value);
     input.classList?.add('scrubbing');input.value=String(value);

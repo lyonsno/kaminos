@@ -3,17 +3,25 @@ import {particleProposalShares} from '../volume-particle-acquisition.mjs';
 import {PARTICLE_WORK_FLAGS} from '../volume-particle-work.mjs';
 import {bindParticleNumber} from '../particle-number-control.mjs';
 import {mountParticleLivePopups} from './particle-live-popups.mjs';
+const BOUNDARY_FIELDS={ambientWidthWorld:'widthWorld',ambientExchangeTime:'exchangeTime',ambientVelocityDamping:'velocityDamping'};
 const REACTION_KEYS=['burnTime','cooling','heatRelease','sootYield','smokeLife'];
 export default {
  id:'optical-particles',title:'A Reactive Lagrangian Optical Integrator for Subgrid Flame Super-Resolution',
  async create({host,inputs={},record,updateInputs}){
   let settings=opticalParticleSettings({enabled:true,...inputs.particles});
-  let sourceSettings={...inputs.source},lightingSettings=inputs.lighting??null,lightingOwner=null,popups=null;
+  // Beaming's worker settings travel with its scene address, but are not a
+  // recipe for the shared field. Preserve them for a round trip to that branch.
+  const {particles:_particles,simulationReaction:_reaction,source:_source,ambientBoundary,sharedLighting,lighting,...forwarded}=inputs;
+  const legacyShared=lighting&&['intervalMs','environmentBlur','lightSurfaces','volumeGrid','sourceGrid'].some(key=>Object.hasOwn(lighting,key))
+   &&!['width','transportWidth','filterLength','padding','supportSigmas','albedo','mode'].some(key=>Object.hasOwn(lighting,key));
+  if(lighting&&!legacyShared)forwarded.lighting=lighting;
+  let boundaryOverrides={...ambientBoundary};
+  let sourceSettings={...inputs.source},lightingSettings=sharedLighting??(legacyShared?lighting:null),lightingOwner=null,lightingRestoreError=null,popups=null;
   let reactionOverrides={...Object.fromEntries(Object.entries(inputs.particles??{}).filter(([key])=>(inputs.particles?.materialStateVersion===1?REACTION_KEYS:["burnTime","cooling","heatRelease"]).includes(key))),...inputs.simulationReaction};
   await host.volume?.ready;const session=await host.scene.open(),win=host.controls.document.defaultView;
   let current=null,previous=null,panel,notice,error=null,measurement=null,proposalLabel,renewalLabel,population=null,reading=false,lastPopulationRead=0,disposed=false,workPopulation=null,workReading=false,lastWorkRead=0,hud=null,hudTop=null,hudBottom=null,lastHud=0,frameMs=null,hadTiming=false;const drags=[],fields=new Map(),stats=new Map();
   function source(){const next=win.__kaminosVolumePrototype;if(!next?.opticalParticleState)throw Error('This revision does not supply the particle controls');
-   if(next!==current){if(current)try{current.setOpticalParticles(previous.particles);current.setSplitIntegral(previous.split);}catch{}current=next;previous={particles:next.opticalParticleSettings(),split:next.splitIntegralSettings()};next.setOpticalParticles(settings);if(Object.keys(sourceSettings).length)applySource(next,sourceSettings);if(Object.keys(reactionOverrides).length&&next.opticalParticleState().simulationReaction)next.setParticleSimulationReaction(reactionOverrides);const shared=next.opticalParticleState().simulationReaction;if(shared){settings=opticalParticleSettings({...settings,...shared});next.setOpticalParticles(settings);}projectReaction(shared);}return current;
+   if(next!==current){if(current)try{current.setOpticalParticles(previous.particles);current.setSplitIntegral(previous.split);}catch{}current=next;previous={particles:next.opticalParticleSettings(),split:next.splitIntegralSettings()};next.setOpticalParticles(settings);if(Object.keys(sourceSettings).length)applySource(next,sourceSettings);if(Object.keys(reactionOverrides).length&&next.opticalParticleState().simulationReaction)next.setParticleSimulationReaction(reactionOverrides);const shared=next.opticalParticleState().simulationReaction;if(shared){settings=opticalParticleSettings({...settings,...shared});next.setOpticalParticles(settings);}projectReaction(shared);if(Object.keys(boundaryOverrides).length)applyBoundary(next,boundaryOverrides);}return current;
   }
   function projectReaction(reaction){
    if(!reaction)return;const document=host.controls.document;
@@ -22,6 +30,14 @@ export default {
     if(input&&document.activeElement!==input&&!input.classList?.contains('scrubbing')){if(input.min!==''&&v<Number(input.min))input.min=String(v);if(input.max!==''&&v>Number(input.max))input.max=String(v);input.value=String(v);}
     if(label)label.textContent=v.toFixed(digits);
    }
+  }
+  function applyBoundary(runtime,patch){
+   const boundary=runtime.setAmbientBoundary(patch);
+   for(const [key,id] of [['widthWorld','volume-ambient-boundary-width'],['exchangeTime','volume-ambient-exchange-time'],['velocityDamping','volume-boundary-velocity-damping']]){
+    const input=host.controls.document.getElementById(id);
+    if(input)input.value=boundary.settings[key]===null?'':String(boundary.settings[key]);
+   }
+   return boundary;
   }
   function applySource(runtime,patch){
    runtime.validateOpticalParticleBudget?.(settings,patch);
@@ -32,8 +48,8 @@ export default {
    runtime.setControls(patch);
   }
   try{source();}catch(error){await session.dispose();throw error;}
-  const read=()=>({settings,effective:source().opticalParticleState(),proposal:{...particleProposalShares(settings),conditionalOn:settings.acquisitionMode===2?null:'no-accepted-tracking',trackingAttemptFraction:settings.acquisitionMode===2?null:settings.followFraction,acceptedTrackingFraction:null},population,workPopulation,error,measurement});
-  const value=(key,e)=>key==='sourceRenderScale'?e.sourceRenderScale:key==='sourceRaySteps'?e.sourceRaySteps:key==='verticalRadius'?settings.radius*settings.stretch:key==='radius'?settings.radius:e.simulationReaction&&REACTION_KEYS.includes(key)?e.simulationReaction[key]:settings[key];
+  const read=()=>({settings,ambientBoundary:source().ambientBoundaryState?.()??null,effective:source().opticalParticleState(),proposal:{...particleProposalShares(settings),conditionalOn:settings.acquisitionMode===2?null:'no-accepted-tracking',trackingAttemptFraction:settings.acquisitionMode===2?null:settings.followFraction,acceptedTrackingFraction:null},population,workPopulation,error,measurement});
+  const value=(key,e,boundary)=>key in BOUNDARY_FIELDS?(key==='ambientWidthWorld'?boundary?.effective.widthWorld:boundary?.settings[BOUNDARY_FIELDS[key]]):key==='sourceRenderScale'?e.sourceRenderScale:key==='sourceRaySteps'?e.sourceRaySteps:key==='verticalRadius'?settings.radius*settings.stretch:key==='radius'?settings.radius:e.simulationReaction&&REACTION_KEYS.includes(key)?e.simulationReaction[key]:settings[key];
   const text=(el,next)=>{if(el.textContent!==next)el.textContent=next;};
   function sync(force=false){if(!panel)return;let e;try{e=read().effective;}catch(err){error=err.message;e={};}
    projectReaction(e.simulationReaction);
@@ -45,21 +61,25 @@ export default {
     const m=e.emitter,l=m?.light;
     text(proposalLabel,m?.effective==='admitted-immersed-source'? `From current emitter supply · ${m.birthsRequested} births requested on this draw · Incident light: ${l?.effective??'unavailable'}${l?.lastStep==null?'':' (last sampled at step '+l.lastStep+')'}`:
      'Advance one Fine grid with one admitted immersed emitter to emit carriers. Existing carriers can continue when the source is off.');
-   }else{const p=particleProposalShares(settings),follow=`Tracking attempts ${(100*settings.followFraction).toFixed(1)}% of fresh rays; accepted tracking depends on material activity, camera view and scene depth. `;text(proposalLabel,follow+(p.source===null?'Otherwise use camera-stratified placement.':`When tracking is not accepted, camera proposals: Source ${(100*p.source).toFixed(1)}% · Fine ${(100*p.fine).toFixed(1)}% · Broad ${(100*p.broad).toFixed(1)}% · Unassigned ${(100*p.unassigned).toFixed(1)}%. Domains overlap; these are conditional proposal shares, not birth counts.`));}}
+   }else{if(!settings.acquisitionEnabled){text(proposalLabel,'Fresh ray evaluations are off. Enable Evaluate fresh observations to resume new ray births.');}else{const p=particleProposalShares(settings),follow=`Tracking attempts ${(100*settings.followFraction).toFixed(1)}% of fresh rays; accepted tracking depends on material activity, camera view and scene depth. `;text(proposalLabel,follow+(p.source===null?'Otherwise use camera-stratified placement.':`When tracking is not accepted, camera proposals: Source ${(100*p.source).toFixed(1)}% · Fine ${(100*p.fine).toFixed(1)}% · Broad ${(100*p.broad).toFixed(1)}% · Unassigned ${(100*p.unassigned).toFixed(1)}%. Domains overlap; these are conditional proposal shares, not birth counts.`));}}}
    if(renewalLabel){const r=population;const count=v=>Number.isFinite(v)?v.toLocaleString():'—';text(renewalLabel,r?.available?`Read at step ${r.state.step}; renewal at step ${r.renewal?.step??"—"}: ${count(r.active)} active / ${count(r.state.slots)} slots · ${count(r.evaluated)} current anchored evaluations · ${count(r.valid)} valid · ${count(r.placed)} placed · ${r.droppedBirths==null?count(r.overwritten)+' overwritten':count(r.droppedBirths)+' dropped at capacity'} · ${count(r.expired)} expired · ${count(r.escaped)} outside. Age ${r.age.min.toFixed(2)}–${r.age.max.toFixed(2)}, mean ${r.age.mean.toFixed(2)} reaction steps. Last population update Δsim ${r.renewal?.stepDelta??"—"}, Δreaction ${r.reactionDelta.toFixed(3)}. ${r.renewal?.tracked?"":"Renewal detail was not tracked at that update."} Pool turnover ${r.overwriteUpdates===null?'—':r.overwriteUpdates.toFixed(1)+' updates at this placed-birth rate'}.`:r?.reason??'Population has not been read. Read once or enable live renewal readouts.');}
 
-   for(const [key,{input,digits}] of fields){const focused=!!settings.acquisitionMode,emitter=settings.acquisitionMode===2;input.disabled=(key==='referenceEmission'&&(!settings.showRaymarch||!settings.showParticles))||(!settings.updateEnabled&&['transportEnabled','reactionEnabled'].includes(key))||(emitter&&['acquisitionEnabled','acquisitionEvery','refresh','followFraction','followJitter','followFuel','followHeat','followSmoke','scatteredLife'].includes(key))||(!emitter&&key==='emitterBirthsPerStep')||(!settings.profileMode&&['emissionFalloff','extinctionFalloff'].includes(key))||(settings.exchangeSpacing>0&&key==='exchangeCellSize')||(focused&&['populationWidth','populationHeight','spacing','fineAcquisition'].includes(key))||(settings.acquisitionMode!==1&&['acquisitionSamples','filmJitter','fineCoverage','coarseCoverage','sourceBias','sourceHistory','sourceMargin'].includes(key));input.style.opacity=input.disabled?'.4':'1';if(key==='targetScale'&&e.budgets)input.max=String(e.budgets.maxTargetScale);if(key==='capacity'&&e.budgets)input.max=String(e.budgets.maxCapacity);if(host.controls.document.activeElement===input||input.classList.contains('scrubbing'))continue;const v=value(key,e);if(input.type==='checkbox'){input.checked=!!v;continue;}const next=Number.isFinite(v)?(key==='fillExtinction'&&v>0&&v<10**-digits?String(v):v.toFixed(digits)):'';if(input.value!==next)input.value=next;}
+   const boundary=current?.ambientBoundaryState?.();
+   for(const [key,{input,digits}] of fields){const focused=!!settings.acquisitionMode,emitter=settings.acquisitionMode===2;input.disabled=(key in BOUNDARY_FIELDS&&!boundary)||(key==='referenceEmission'&&(!settings.showRaymarch||!settings.showParticles))||(!settings.updateEnabled&&['transportEnabled','reactionEnabled'].includes(key))||(emitter&&['acquisitionEnabled','acquisitionEvery','refresh','followFraction','followJitter','followFuel','followHeat','followSmoke','scatteredLife'].includes(key))||(!emitter&&key==='emitterBirthsPerStep')||(!settings.profileMode&&['emissionFalloff','extinctionFalloff'].includes(key))||(settings.exchangeSpacing>0&&key==='exchangeCellSize')||(focused&&['populationWidth','populationHeight','spacing','fineAcquisition'].includes(key))||(settings.acquisitionMode!==1&&['acquisitionSamples','filmJitter','fineCoverage','coarseCoverage','sourceBias','sourceHistory','sourceMargin'].includes(key));input.style.opacity=input.disabled?'.4':'1';if(key==='targetScale'&&e.budgets)input.max=String(e.budgets.maxTargetScale);if(key==='capacity'&&e.budgets)input.max=String(e.budgets.maxCapacity);if(host.controls.document.activeElement===input||input.classList.contains('scrubbing'))continue;const v=value(key,e,boundary);if(input.type==='checkbox'){input.checked=!!v;continue;}const next=Number.isFinite(v)?(key==='fillExtinction'&&v>0&&v<10**-digits?String(v):v.toFixed(digits)):'';if(input.value!==next)input.value=next;}
   }
-  const persist=()=>updateInputs({particles:settings,simulationReaction:reactionOverrides,source:sourceSettings,...(lightingSettings?{lighting:lightingSettings}:{})});
+  const persist=()=>updateInputs({...forwarded,particles:settings,simulationReaction:reactionOverrides,source:sourceSettings,...(Object.keys(boundaryOverrides).length?{ambientBoundary:boundaryOverrides}:{}),...(lightingSettings?{sharedLighting:lightingSettings}:{})});
   function lightingRoute(){
    const owner=win.__kaminosSceneRadiance;
    if(!owner?.configureLiveLighting)return null;
-   if(lightingSettings&&owner!==lightingOwner){owner.configureLiveLighting(lightingSettings);lightingOwner=owner;}
+   if(owner!==lightingOwner){
+    lightingOwner=owner;lightingRestoreError=null;
+    if(lightingSettings)try{owner.configureLiveLighting(lightingSettings);}catch(error){lightingRestoreError=error.message;}
+   }
    return owner;
   }
   function setLighting(patch){
    const owner=lightingRoute();if(!owner)throw Error('No active shared hybrid lighting route');
-   lightingSettings=owner.configureLiveLighting(patch);lightingOwner=owner;
+   lightingSettings=owner.configureLiveLighting(patch);lightingRestoreError=null;
    persist();record({kind:'particle.distributed-lighting',settings:lightingSettings});session.redraw();
    return owner.liveLightingState();
   }
@@ -87,7 +107,11 @@ export default {
    applySource(runtime,patch);sourceSettings={...sourceSettings,...patch};persist();record({kind:'particle.source-controls',values:patch});session.redraw();sync(true);return read();
   }
   async function samplePopulation(){if(reading)return population;reading=true;lastPopulationRead=Date.now();try{const next=await source().sampleOpticalParticleStatistics();if(!disposed){population=next;sync();}return next;}finally{reading=false;}}
-  const operations={setOptions,setReaction,setSource,setCoverage,setLighting,samplePopulation,async measure(options={}){measurement=await source().measureOpticalParticleFrame(options);sync();return measurement;},reset(){source().resetOpticalParticles();session.redraw();sync(true);return read();},
+  function setAmbientBoundary(patch){
+   applyBoundary(source(),patch);boundaryOverrides={...boundaryOverrides,...patch};
+   persist();record({kind:'simulation.ambient-boundary',values:patch});session.redraw();sync(true);return read();
+  }
+  const operations={setAmbientBoundary,setOptions,setReaction,setSource,setCoverage,setLighting,samplePopulation,async measure(options={}){measurement=await source().measureOpticalParticleFrame(options);sync();return measurement;},reset(){source().resetOpticalParticles();session.redraw();sync(true);return read();},
    setRadius({axis,value:v}){if(!['horizontal','vertical'].includes(axis))throw Error('Unknown radius axis');if(!Number.isFinite(v)||v<=0)throw Error('Radius must be positive');const vertical=settings.radius*settings.stretch;return axis==='vertical'?setOptions({stretch:v/settings.radius}):setOptions({radius:v,stretch:vertical/v});}
   };
   function syncHud(e,force=false){if(!hud)return;hud.style.display=settings.hud?'block':'none';if(!settings.hud)return;const firstTiming=e.timings?.ok&&!hadTiming;hadTiming=!!e.timings?.ok;if(!force&&!firstTiming&&Date.now()-lastHud<250)return;lastHud=Date.now();const rect=current?.opticalParticleViewport?.()?.getBoundingClientRect?.();if(rect){hud.style.left=rect.left+'px';hud.style.top=rect.top+'px';hud.style.width=rect.width+'px';hud.style.height=rect.height+'px';const bars=['authoring-viewport-tools','experiment-toolbar','transform-bar','info-bar'].map(id=>host.controls.document.getElementById(id)).map(el=>el?.getBoundingClientRect?.()).filter(b=>b&&b.width>0&&b.height>0&&b.left<rect.right&&b.right>rect.left);const top=bars.filter(b=>b.top<rect.top+rect.height/2).reduce((v,b)=>Math.max(v,b.bottom),rect.top),bottom=bars.filter(b=>b.top>=rect.top+rect.height/2).reduce((v,b)=>Math.min(v,b.top),rect.bottom);hudTop.style.top=Math.max(2,top-rect.top+4)+'px';hudBottom.style.bottom=Math.max(2,rect.bottom-bottom+4)+'px';}
@@ -103,7 +127,7 @@ export default {
    function section(label){const fieldset=document.createElement('fieldset'),legend=document.createElement('legend');legend.textContent=label;fieldset.style.cssText='min-width:0;border:1px solid #555;border-radius:6px;padding:8px;margin:12px 0';fieldset.append(legend);root.append(fieldset);controlRoot=fieldset;}
 
    if(document.body&&current?.opticalParticleViewport){hud=document.createElement('div');hud.setAttribute('aria-label','Live particle work');hud.style.cssText='position:fixed;pointer-events:none;z-index:90;color:#fff;font:11px ui-monospace,monospace;text-shadow:0 1px 2px #000;overflow:hidden';hudTop=document.createElement('div');hudBottom=document.createElement('div');hudTop.style.cssText='position:absolute;top:2px;left:6px;right:6px;background:#101820aa;padding:3px 5px';hudBottom.style.cssText='position:absolute;bottom:2px;left:6px;right:6px;background:#101820aa;padding:3px 5px;white-space:pre-wrap';hud.append(hudTop,hudBottom);document.body.append(hud);}
-   if(document.body&&document.createElementNS)popups=mountParticleLivePopups({document,root,controls:host.controls,readCoverage:()=>settings.coverage,setCoverage,readSupport:()=>({pixelFloor:settings.pixelFloor,maxFootprint:settings.maxFootprint}),setSupport:setOptions,readLighting:()=>lightingRoute()?.liveLightingState(),setLighting});
+   if(document.body&&document.createElementNS)popups=mountParticleLivePopups({document,root,controls:host.controls,readCoverage:()=>settings.coverage,setCoverage,readSupport:()=>({pixelFloor:settings.pixelFloor,maxFootprint:settings.maxFootprint}),setSupport:setOptions,readLighting:()=>{const state=lightingRoute()?.liveLightingState();return state&&{...state,restoreError:lightingRestoreError};},setLighting});
    const intro=document.createElement('p');intro.textContent='Particles carry fuel, heat, soot and oxygen from the grid. They travel with the flow, exchange composition with nearby carriers, burn available reactants and fade according to their remaining material. Tune that journey below.';root.append(intro);
    const status=document.createElement('div');status.setAttribute('aria-label','Particle allocation');status.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:4px 12px;font-variant-numeric:tabular-nums;margin:12px 0';
    for(const [key,label] of [['target','Acquisition batch (px)'],['fresh','Fresh sample budget'],['output','Fire output (px)'],['particleTarget','Particle target (px)'],['depth','Depth field (px × slices)'],['population','Population grid'],['slots','Particle slots'],['memory','Optical buffers'],['step','Simulation step']]){const name=document.createElement('span'),v=document.createElement('span');name.textContent=label;v.dataset.particleStat=key;v.style.cssText='white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;font-family:monospace;min-width:0';status.append(name,v);stats.set(key,v);}root.append(status);
@@ -113,7 +137,7 @@ export default {
     const fractions=['refresh','filmJitter','fineCoverage','coarseCoverage','sourceBias','fineAcquisition','flowAlignment','referenceEmission','fillExtinction','exchangeStrength','stateLife','lifeFade','followFraction','emissionEdgeSoftness','extinctionEdgeSoftness','largeSupportFade'];
     if(input.type==='number'){input.step='any';input.min=String(min);if(max!==undefined||fractions.includes(key))input.max=String(max??1);drags.push(host.controls.installNumberDrag({input,grip,step}));}input.title=tooltip+' · Drag to adjust; click to type; Shift for fine; Esc to cancel.';grip.title=tooltip;row.title=tooltip;
     fields.set(key,{input,digits});
-    const apply=v=>invoke(operation,operation==='setSource'?{[key==='sourceRenderScale'?'renderScale':'raySteps']:v}:operation==='setRadius'?{axis:key==='verticalRadius'?'vertical':'horizontal',value:v}:{[key]:v});
+    const apply=v=>invoke(operation,operation==='setAmbientBoundary'?{[BOUNDARY_FIELDS[key]]:v}:operation==='setSource'?{[key==='sourceRenderScale'?'renderScale':'raySteps']:v}:operation==='setRadius'?{axis:key==='verticalRadius'?'vertical':'horizontal',value:v}:{[key]:v});
     const accepted=()=>{error=null;sync();},failed=e=>{error=e.message;sync();};
     if(input.type==='number')drags.push(bindParticleNumber({input,read:()=>value(key,read().effective),apply,onAccepted:accepted,onError:failed}));
     else input.addEventListener('change',()=>apply(input.checked).then(accepted).catch(e=>{input.checked=!!value(key,read().effective);failed(e);}));
@@ -137,9 +161,16 @@ export default {
    control('Viewport telemetry','hud','Thin top and bottom viewport readouts. Live count comes from compact grouping counters and names its sample step; turning grouping off leaves that count visibly aged.');
    control('Passive GPU intervals','liveTimings','Sample timestamps on ordinary presented frames without requesting another simulation update. Includes particle passes only; shared lighting, simulation and preparation are outside this timing scope.');
    control('Time every N presented frames','timingEvery','Cadence of passive GPU timestamp readback. Only one readback is in flight. Timing does not cause another frame or advance simulation.',{step:1,digits:0,min:1});
+   section('Ambient boundary');
+   control('Contact width (world units)','ambientWidthWorld','Side and floor air contact distance. Zero removes it; the top remains passive outflow.',{step:.01,digits:4,operation:'setAmbientBoundary'});
+   control('Air exchange time','ambientExchangeTime','E-folding time in reference steps at full air contact. Zero exchanges immediately.',{step:.05,digits:4,operation:'setAmbientBoundary'});
+   control('Boundary velocity damping','ambientVelocityDamping','Multiplier on side and floor braking. Zero removes braking without disabling ambient exchange.',{step:.05,digits:3,operation:'setAmbientBoundary'});
    section('Acquisition and coverage');
    proposalLabel=document.createElement('p');proposalLabel.dataset.particleStat='proposal';controlRoot.append(proposalLabel);
-   const modeRow=document.createElement('label'),mode=document.createElement('select'),modeLabel=document.createElement('span');modeLabel.textContent='Particle births';mode.dataset.particle='acquisitionMode';mode.setAttribute('aria-label','Particle births');mode.title='Legacy image preserves the earlier camera-stratified collector. Source-focused uses an independent fresh sample batch, moving film-plane samples and a rotating world-space pool. From emitter uses the simulator’s admitted supply and refreshes incident light separately. Changing mode clears retained observations.';modeLabel.title=mode.title;for(const [v,label] of [[0,'Legacy image'],[1,'Source-focused rays'],[2,'From emitter']]){const o=document.createElement('option');o.value=String(v);o.textContent=label;mode.append(o);}fields.set('acquisitionMode',{input:mode,digits:0});mode.addEventListener('change',()=>invoke('setOptions',{acquisitionMode:Number(mode.value),...(Number(mode.value)&&!settings.capacity?{capacity:100000}:{})}).catch(e=>{error=e.message;mode.value=String(settings.acquisitionMode);sync();}));modeRow.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) 9rem;gap:10px;align-items:center;margin:8px 0';modeRow.append(modeLabel,mode);controlRoot.append(modeRow);
+   const modeRow=document.createElement('label'),mode=document.createElement('select'),modeLabel=document.createElement('span');modeLabel.textContent='Particle births';mode.dataset.particle='acquisitionMode';mode.setAttribute('aria-label','Particle births');mode.title='Legacy image preserves the earlier camera-stratified collector. Source-focused uses an independent fresh sample batch, moving film-plane samples and a rotating world-space pool. From emitter uses the simulator’s admitted supply and refreshes incident light separately. Changing mode clears retained observations.';modeLabel.title=mode.title;for(const [v,label] of [[0,'Legacy image'],[1,'Source-focused rays'],[2,'From emitter']]){const o=document.createElement('option');o.value=String(v);o.textContent=label;mode.append(o);}fields.set('acquisitionMode',{input:mode,digits:0});mode.addEventListener('change',()=>{
+    const next=Number(mode.value);
+    return invoke('setOptions',{acquisitionMode:next,...(settings.acquisitionMode===2&&next!==2?{acquisitionEnabled:true}:{}),...(next&&!settings.capacity?{capacity:100000}:{})}).then(()=>{error=null;sync();}).catch(e=>{error=e.message;mode.value=String(settings.acquisitionMode);sync();});
+   });modeRow.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) 9rem;gap:10px;align-items:center;margin:8px 0';modeRow.append(modeLabel,mode);controlRoot.append(modeRow);
    control('Emitter births / step','emitterBirthsPerStep','New carriers from the current admitted emitter supply. A larger count divides the same supply more finely. 0 stops births; a full pool drops births rather than replacing live carriers.',{step:16,digits:0});
    control('Refresh light every N steps','lightRefreshEvery','Look up the shared incident light at existing carrier positions. 0 holds existing cached light. New emitter births still get initial illumination. Does not change carrier age, motion, reaction, or births.',{step:1,digits:0});
    control('Fresh samples / update','acquisitionSamples','Maximum new material evaluations in a source-focused acquisition update, independent from retained capacity and fire output resolution. Padding pixels issue no observations; rays missing the selected region or scene-depth interval issue none. All source observations remain available in the batch.',{step:256,digits:0,min:1});

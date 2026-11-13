@@ -59,6 +59,8 @@ export function mountParticleLivePopups({document,root,controls,readCoverage,set
   const label=create('label'),caption=create('span',name);input.setAttribute('aria-label',name);
   label.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) minmax(9.3em,auto);gap:12px;align-items:center;margin:8px 0';label.append(caption,input);return {label,caption};
  };
+ const gridWidth=key=>key==='volumeGrid'||key==='sourceGrid';
+ const qualityStep=(key,s)=>key==='directions'?2:gridWidth(key)?(s?.widthStep??1):null;
  const liveValues=s=>s?.requested??{enabled:true,intervalMs:250,...s?.native};
  const doLighting=patch=>{const next=setLighting(patch);lightError.hidden=true;sync(true);return next;};
  const lightFailed=e=>{lightError.hidden=false;lightError.textContent=e.message;};
@@ -75,9 +77,9 @@ export function mountParticleLivePopups({document,root,controls,readCoverage,set
   if(type==='checkbox')input.addEventListener('change',()=>{try{doLighting({[key]:input.checked});}catch(e){lightFailed(e);sync(true);}});
   else{
    input.min=String(min);input.step=String(step);if(max!==undefined)input.max=String(max);
-   const quality=['directions','volumeGrid','sourceGrid'].includes(key);
+   const quality=qualityStep(key,null)!==null;
    const binding=bindParticleNumber({input,read:()=>liveValues(readLighting())[key],apply:v=>doLighting({[key]:v}),onError:lightFailed,onAccepted:()=>{lightError.hidden=true;},scrubCommit:quality?'release':'live'});
-   const drag=controls.installNumberDrag?.({input,grip:caption,step});cleanups.push(()=>{binding.dispose();drag?.dispose?.();});
+   const drag=controls.installNumberDrag?.({input,grip:caption,step,...(quality?{snap:value=>{const width=qualityStep(key,readLighting());return Math.max(width,Math.round(value/width)*width);}}:{})});cleanups.push(()=>{binding.dispose();drag?.dispose?.();});
   }
  }
  light.panel.append(lightQuality,lightNote,lightStatus,lightError,useScene);
@@ -178,9 +180,10 @@ export function mountParticleLivePopups({document,root,controls,readCoverage,set
   if(light.panel.hidden||(!force&&performance.now()-last<250))return;
   last=performance.now();
   const s=readLighting(),v=liveValues(s);
-  useScene.hidden=!s?.requested;
+  useScene.hidden=!s?.requested&&!s?.restoreError;
   for(const {key,input} of lightFields){
    input.disabled=!s;
+   if(gridWidth(key)){const step=String(qualityStep(key,s));if(input.step!==step)input.min=input.step=step;}
    if(input.type==='checkbox')input.checked=Boolean(v[key]);
    else if(document.activeElement!==input&&!input.classList.contains('scrubbing'))input.value=Number.isFinite(v[key])?String(v[key]):'';
   }
@@ -189,7 +192,7 @@ export function mountParticleLivePopups({document,root,controls,readCoverage,set
   lightQuality.hidden=!quality;
   if(lightQuality.textContent!==quality)lightQuality.textContent=quality;
   const status=!s?'This scene does not have the shared hybrid lighting route.':
-    s.error?'Lighting edit unavailable: '+s.error+(s.applied?' · holding the previous field.':''):s.requested?.enabled===false?'Off · no new distributed solves.':
+    s.restoreError?'Saved lighting settings were not applied to this scene: '+s.restoreError:s.error?'Lighting edit unavailable: '+s.error+(s.applied?' · holding the previous field.':''):s.requested?.enabled===false?'Off · no new distributed solves.':
     !s.requested?'Using scene defaults · edits enable paced refresh.':
     s.applied?(Object.entries(s.requested).every(([k,value])=>s.applied[k]===value)?'Holding the field':'Settings queued · holding the previous field')+' from source frame '+s.applied.frame+'.':'Waiting for the next lighting refresh.';
   if(lightStatus.textContent!==status)lightStatus.textContent=status;

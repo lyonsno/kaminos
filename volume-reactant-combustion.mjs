@@ -1,3 +1,4 @@
+import {AMBIENT_BOUNDARY_WGSL} from './volume-ambient-boundary.mjs';
 import {resolveWorldCalibration} from './volume-world-calibration.mjs';
 // Reactant-driven combustion.
 //
@@ -352,6 +353,7 @@ export function reactantCombustionUniformValues(config) {
 // quench-spread flag (a lane borrowed by the host: 1 while a liquid is bound with
 // transfer enabled; not this law's), -.
 export const REACTANT_COMBUSTION_WGSL = `// Reactant combustion (kaminos.volume.reactant-combustion.v0; see volume-reactant-combustion.mjs).
+${AMBIENT_BOUNDARY_WGSL}
 fn reactantLawOn() -> bool {
   return u.reactant_combustion_a.x > 0.5;
 }

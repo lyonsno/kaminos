@@ -5,7 +5,7 @@ import {createFireLightFieldShadow,renderFireShadowBatch} from './fire-light-fie
 import {createLocalSceneVisibility} from './scene-local-visibility.mjs';
 import {createVolumeGather,volumeGatherPlan,lightingDirections} from './scene-volume-gather.mjs';
 import {createPointRegions} from './scene-point-regions.mjs';
-import {validateSceneSourceTransform,sceneSourceDomain,sceneLightingDomain,sceneLightGridDimensions} from './scene-volume-source.mjs';
+import {validateSceneSourceTransform,sceneSourceDomain,sceneLightingDomain,sceneLightGridDimensions,sceneLightGridWidthStep} from './scene-volume-source.mjs';
 import {deriveSourceGuide} from './scene-source-guide.mjs';
 import {validateSourceSoftness} from './scene-source-softening.mjs';
 import {validateShadowSampling,validateShadowComparison,shadowGrainNode} from './fire-shadow-sampling.mjs';
@@ -117,6 +117,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   function lightingSettings(patch){
     if(disposed)throw Error('hybrid lighting disposed');
     if(patch===null){
+      if(lightingRequested)appearanceEdit=++nextAppearanceEdit;
       cadence.clear();lightingRequested=null;lightingApplied=null;lightingError=null;rejectedPlan=null;
       smokeEnvironment.setBlur(smokeEnvironmentBlur);casterScene.setEnabled(surfaceEnabled);surfaceOn.value=surfaceEnabled&&frameSurface;
       return null;
@@ -140,10 +141,10 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   function lightingState(){
     return {requested:cadence.read(),applied:lightingApplied,completedSolves,error:lightingError,
       source:frame?{frame:frame.frame,generation:frame.generation}:null,
-      native:sceneValues()};
+      native:sceneValues(),widthStep:prototype.sceneLightGridWidthStep?.()??sceneLightGridWidthStep(...sourceDomain.dimensions)};
   }
   function prepareLive(field){
-    if(!lightingRequested)return prepare(field,sceneValues(),null);
+    if(!lightingRequested)return prepare(field,sceneValues(),appearanceEdit||null);
     const edit=cadence.begin(performance.now());
     if(!edit)return;
     let submitted=false;
@@ -328,7 +329,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       if(!Number.isSafeInteger(value)||value<1)throw Error('positive integer light grid required');
       volumeGatherPlan({volumeGrid:value,sourceDimensions:sourceDomain.dimensions,directions,smokeRefinement,
         sceneLightCount:collectSceneSmokeLights(scene,sourceTransform).lights.length},device.limits);
-      if(value!==volumeGrid){volumeGrid=value;status.volumeGrid=value;if(!lightingRequested)valid=false;}
+      if(value!==volumeGrid){volumeGrid=value;status.volumeGrid=value;if(!lightingRequested){valid=false;appearanceEdit=++nextAppearanceEdit;}}
     },
     setShadowEdgeFilter(value){if(typeof value!=='boolean')throw Error('shadow edge filter must be boolean');shadowEdgeFilter=value;for(const light of lights)light.shadow.setEdgeFilter(value);},
     setSmokeShadowQuality(value){
@@ -352,11 +353,11 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       comparison=next;worldCellSize.value=next.worldCellSize;
       if(rebuild)requestRebuild();
     },
-    setSmokeEnvironmentBlur(value){smokeEnvironmentBlur=validateSmokeEnvironmentBlur(value);if(!lightingRequested)smokeEnvironment.setBlur(smokeEnvironmentBlur);},
-    setGain(value){gain=nonnegative(value);},setSurfaceGain(value){surfaceGain.value=nonnegative(value);},
+    setSmokeEnvironmentBlur(value){const next=validateSmokeEnvironmentBlur(value);if(!lightingRequested&&next!==smokeEnvironmentBlur)appearanceEdit=++nextAppearanceEdit;smokeEnvironmentBlur=next;if(!lightingRequested)smokeEnvironment.setBlur(smokeEnvironmentBlur);},
+    setGain(value){const next=nonnegative(value);if(!lightingRequested&&next!==gain)appearanceEdit=++nextAppearanceEdit;gain=next;},setSurfaceGain(value){surfaceGain.value=nonnegative(value);},
     setSurfaceScattering(value){surfaceScattering=!!value;},setSourceSoftness(value){sourceSoftness=validateSourceSoftness(value);},
     setSmokeMode(value){if(!['distributed','legacy'].includes(value))throw new Error('unknown smoke mode');smokeMode=value;},
-    setDirections(value){volumeGatherPlan({volumeGrid,sourceDimensions:sourceDomain.dimensions,directions:value,smokeRefinement,angularPattern,sceneLightCount:collectSceneSmokeLights(scene,sourceTransform).lights.length},device.limits);directions=value;status.directions=value;},
+    setDirections(value){volumeGatherPlan({volumeGrid,sourceDimensions:sourceDomain.dimensions,directions:value,smokeRefinement,angularPattern,sceneLightCount:collectSceneSmokeLights(scene,sourceTransform).lights.length},device.limits);if(!lightingRequested&&value!==directions)appearanceEdit=++nextAppearanceEdit;directions=value;status.directions=value;},
     setAngularPattern(pattern,rotation=0){if(!['fixed','spatial','blue','source','guided','regions','importance'].includes(pattern)||!Number.isFinite(rotation))throw new Error('valid angular pattern required');volumeGatherPlan({volumeGrid,sourceDimensions:sourceDomain.dimensions,directions,smokeRefinement,angularPattern:pattern},device.limits);if(!lightingRequested)gather?.setAngularPattern(pattern,rotation);angularPattern=pattern;angularRotation=rotation;},
     setRetainComparisons(value){retainComparisons=!!value;},
     setShadowSoftness(value){if(!Number.isFinite(value)||value<0)throw Error('shadow softness must be finite and nonnegative');for(const light of lights)light.shadow.setSoftness(value);shadowSoftness=value;status.shadowSoftness=value;},
