@@ -20,7 +20,11 @@ function fixture(indexed){
 async function exercise(indexed){
  const f=fixture(indexed);try{
   const positions=Array.from(f.front.geometry.attributes.position.array),indices=f.front.geometry.index?Array.from(f.front.geometry.index.array):null;
-  const expected=f.hits();assert.equal(f.pick(),'back');await prepareNavigationGeometry(f.front);await prepareNavigationGeometry(f.back);
+  const expected=f.hits();assert.equal(f.pick(),'back');for(const mesh of [f.front,f.back]){
+   assert.deepEqual(await prepareNavigationGeometry(mesh),[true],'navigation index preparation must succeed');
+   assert.equal(typeof mesh.geometry.boundsTree?.raycast,'function','successful preparation installs a usable bounds tree');
+   assert.notEqual(mesh.raycast,THREE.Mesh.prototype.raycast,'successful preparation installs accelerated raycasting');
+  }
   assert.equal(f.pick(),'back','material-group side culling must survive index installation');assert.deepEqual(f.hits(),expected,'face/material identity must agree with the original raycast');
   assert.deepEqual(Array.from(f.front.geometry.attributes.position.array),positions);
   if(indices)assert.deepEqual(Array.from(f.front.geometry.index.array),indices,'render triangle order stays unchanged');
@@ -33,17 +37,17 @@ async function exercise(indexed){
 test('fallback index preserves grouped-material picking for indexed and nonindexed source triangles',async()=>{await exercise(true);await exercise(false);});
 
 test('actual committed navigation worker serialization preserves material groups and triangle identity',async()=>{
- const owned=new Set(),previous=globalThis.Worker;
+ const owned=new Set(),previous=globalThis.Worker;let rejectBuild=false;
  class BrowserWorker{
   constructor(url){
-   const code=`import {parentPort,workerData} from 'node:worker_threads';globalThis.self={postMessage:(data,transfer)=>parentPort.postMessage(data,transfer)};Object.defineProperty(self,'onmessage',{set(fn){parentPort.on('message',data=>fn({data}));parentPort.postMessage({adapterReady:true});}});await import(workerData.url);`;
+   const code=`import {parentPort,workerData} from 'node:worker_threads';globalThis.self={postMessage:(data,transfer)=>parentPort.postMessage(data,transfer)};Object.defineProperty(self,'onmessage',{set(fn){parentPort.on('message',data=>data.rejectBuild?parentPort.postMessage({id:data.id,error:'test-injected index-build failure'}):fn({data}));parentPort.postMessage({adapterReady:true});}});await import(workerData.url);`;
    this.worker=new NodeWorker(new URL('data:text/javascript,'+encodeURIComponent(code)),{type:'module',workerData:{url:String(url)}});owned.add(this.worker);
    this.ready=new Promise((resolve,reject)=>{this.worker.on('message',data=>data.adapterReady?resolve():this.onmessage?.({data}));this.worker.on('error',e=>{reject(e);this.onerror?.(e);});});
   }
-  postMessage(data,transfer){void this.ready.then(()=>this.worker.postMessage(data,transfer));}
+  postMessage(data,transfer){void this.ready.then(()=>this.worker.postMessage({...data,rejectBuild},transfer));}
   terminate(){return this.worker.terminate();}
  }
  globalThis.Worker=BrowserWorker;
- try{await exercise(true);await exercise(false);}
+ try{await exercise(true);await exercise(false);rejectBuild=true;await assert.rejects(()=>exercise(true),/navigation index preparation must succeed/);}
  finally{globalThis.Worker=previous;await Promise.all([...owned].map(w=>w.terminate()));}
 });
