@@ -43,10 +43,10 @@ export function createLiveParticleLighting({runtime,settings:initial={},createWo
   return read();
  }
  function setOptions(patch){if(disposed)throw Error('Live lighting has been disposed');const next=liveParticleLightingSettings({...settings,...patch}),solveChanged=LIVE_LIGHT_SOLVE_KEYS.some(k=>next[k]!==settings[k]),enableChanged=next.enabled!==settings.enabled;settings=next;
-  if(solveChanged||enableChanged){revision++;lastAttempt=null;blocked=false;error=null;}
+  if(solveChanged||enableChanged){if(blocked)stopWorker();revision++;lastAttempt=null;blocked=false;error=null;}
   if(!settings.enabled){clear();stopWorker();error=null;phase='off';}
   else{if(!busy&&!error)phase=lastResult?'live':'waiting';apply();}
   record({kind:'particle-lighting.settings',settings:{...settings}});emit();return read();
  }
- return {read,tick,setOptions,retry(){blocked=false;error=null;lastAttempt=null;revision++;phase=settings.enabled?'waiting':'off';emit();return read();},evidence(){return lastResult?{...read(),sourceState:structuredClone(lastResult.sourceState),sourceRecords:new Float32Array(lastResult.sourceRecords),field:{...lastResult.field,data:new Float32Array(lastResult.field.data)}}:null;},dispose(){if(disposed)return;disposed=true;clear();stopWorker();}};
+ return {read,tick,setOptions,retry(){stopWorker();blocked=false;error=null;lastAttempt=null;revision++;phase=settings.enabled?'waiting':'off';emit();return read();},evidence(){return lastResult?{...read(),sourceState:structuredClone(lastResult.sourceState),sourceRecords:new Float32Array(lastResult.sourceRecords),field:{...lastResult.field,data:new Float32Array(lastResult.field.data)}}:null;},dispose(){if(disposed)return;disposed=true;clear();stopWorker();}};
 }

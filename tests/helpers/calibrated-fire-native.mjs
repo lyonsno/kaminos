@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {AMBIENT_BOUNDARY_WGSL} from '../../volume-ambient-boundary.mjs';
 import {readFileSync} from 'node:fs';
 import {evalWgslBatch,extractWgslFunction,withKaminosGpu} from '../../tools/shader-herder.mjs';
 const core=readFileSync(new URL('../../volume-core.js',import.meta.url),'utf8');
@@ -24,7 +25,7 @@ add('calibrated confinement increment',{preamble:'struct P{reserved_source_exten
 for(const [field,start,end,a,b,expected]of[
  ['heat','  heat = min(heat * stepRate','  fuel = fuel * stepRate','materialWallFade','materialHeatTopFade',[2,.096,.28]],
  ['fuel','  fuel = fuel * stepRate','  reactantFreshBurnRate =','materialWallFade','materialHeatTopFade',[2,.232,0]],
-])add('production '+field+' sponge and containment',{preamble:'fn stepRate(v:f32)->f32{return v;}',argTypes:['f32','f32','f32'],returnType:'f32',body:`var ${field}=2.0;let ${a}=arg0;let ${b}=arg1;let worldSmokeOnlyFlameEnvelope=arg2;${between(start,end)}return ${field};`,inputs:[[1,1,1],[0,0,1],[1,1,0]]},expected);
+])add('production '+field+' sponge and containment',{preamble:`${AMBIENT_BOUNDARY_WGSL} struct P{ambient_boundary:vec4<f32>};var<private>u:P;var<private>reactantOn:bool;fn stepRate(v:f32)->f32{return v;}`,argTypes:['f32','f32','f32'],returnType:'f32',body:`var ${field}=2.0;let ${a}=arg0;let ${b}=arg1;let worldSmokeOnlyFlameEnvelope=arg2;${between(start,end)}return ${field};`,inputs:[[1,1,1],[0,0,1],[1,1,0]]},expected);
 const velocityLine=between('  let advectVelocity = select(materialTransportVelocity','  let backtraceScale =');
 add('material-only characteristic uses predicted momentum only for MacCormack',{preamble:'struct P{transport_controls:vec4<f32>};var<private> u:P;var<private> fluidPredict:array<vec4<f32>,1>;fn materialTransportVelocity(c:vec3<f32>,v:vec3<f32>)->vec3<f32>{return v;}',argTypes:['f32','f32'],returnType:'vec3<f32>',body:`let MATERIAL_ONLY=arg0>0.0;u.transport_controls=vec4<f32>(arg1,0,0,0);fluidPredict[0]=vec4<f32>(.8,.7,.6,0);let base=0u;let cell=vec3<f32>(0);let centreVelocity=vec3<f32>(.1,.2,.3);${velocityLine}return advectVelocity;`,inputs:[[0,0],[0,2],[1,0],[1,2]]},[[.1,.2,.3],[.1,.2,.3],[.1,.2,.3],[.8,.7,.6]]);
 let result;

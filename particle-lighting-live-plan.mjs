@@ -21,7 +21,7 @@ export function particleLightingSourcePlan({records,state,settings:input}){
   const p=i*24;if(records[p+3]<=0||records[p+16]<=0||records[p+19]<=0||(native.stateLife>0&&records[p+15]>=1)||!(records[p+8]>0||records[p+9]>0||records[p+10]>0||records[p+22]>0))continue;active++;
   let axis=[0,1,0];if(native.flowAlignment>0){let x=records[p+17],y=records[p+18],z=1-Math.abs(x)-Math.abs(y);const t=Math.max(0,Math.min(1,-z));x+=x>=0?-t:t;y+=y>=0?-t:t;const len=Math.hypot(x,y,z);const mixed=[x/len*native.flowAlignment,1-native.flowAlignment+y/len*native.flowAlignment,z/len*native.flowAlignment],length=Math.hypot(...mixed);if(length>1e-10)axis=mixed.map(v=>v/length);}
   const remaining=records[p+11],growth=1+native.expansion*(remaining>0?Math.max(0,1-records[p+20]/remaining):0),radius=Math.max(records[p+16],native.supportFloor)*native.radius*growth;
-  for(let k=0;k<3;k++){const support=settings.supportSigmas*Math.sqrt(radius*radius*(1+(native.stretch*native.stretch-1)*axis[k]*axis[k]))+settings.filterLength;lo[k]=Math.min(lo[k],records[p+k]-support);hi[k]=Math.max(hi[k],records[p+k]+support);}
+  for(let k=0;k<3;k++){const support=settings.supportSigmas*Math.sqrt(radius*radius*(1+(native.stretch*native.stretch-1)*axis[k]*axis[k])+settings.filterLength**2/12);lo[k]=Math.min(lo[k],records[p+k]-support);hi[k]=Math.max(hi[k],records[p+k]+support);}
  }
  const margin=settings.padding*(hi[0]-lo[0])/settings.width;for(let k=0;k<3;k++){lo[k]-=margin;hi[k]+=margin;}
  const pitch=(hi[0]-lo[0])/settings.width,dims=[settings.width,Math.ceil((hi[1]-lo[1])/pitch),Math.ceil((hi[2]-lo[2])/pitch)],extent=dims.map(v=>v*pitch);
