@@ -35,7 +35,7 @@ export function rawBundleSiblingUrl(manifest,name){
 const digest=async b=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',b)),x=>x.toString(16).padStart(2,'0')).join('');
 export async function createTrellisPatchComparison({device,source,sourceMesh,entry,contextSourceUrl,contextHash}){
  if(entry.contextSource!==contextSourceUrl||entry.contextSha256!==contextHash)throw Error('Checkpoint context source does not match this mesh');
- const waiting=entry.trainingPending===true&&entry.model==null&&entry.teacher?.kind==='raw-fields';
+ const waiting=entry.trainingPending===true&&entry.model==null&&['raw-fields','glb'].includes(entry.teacher?.kind);
  if((!waiting&&!entry.model?.sha256)||!entry.region||!Number.isFinite(entry.samplingPlaneHeight)||!(entry.tileSize>0&&entry.tileSize<=2*entry.region.radius)||entry.lod!==0)throw Error('Checkpoint requires exact source, region, reference plane and trained LOD0');
  const owned=[];let root,model,sourcePatch,studentPatch,disposed=false;
  try{
