@@ -57,7 +57,12 @@ model reports an error instead of selecting a different model. MobRecon uses
 the shared page WebGPU application host. Full WiLoR runs in a per-client MLX
 Metal process, starts on demand and closes when tracking stops or the model
 changes. Cross-backend cooperative scheduling and performance are not
-established by this integration.
+established by this integration. Native WiLoR currently waits for lossless PNG
+encoding and canonical source retention, then sends a native inference request
+that rereads and verifies that source. MobRecon consumes the browser bitmap
+while retention runs alongside inference. A live responsiveness comparison
+therefore compares the complete integrated routes, including WiLoR transport
+and recording latency; it does not isolate model or kernel execution time.
 
 ## Observation and ownership
 
