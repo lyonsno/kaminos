@@ -9,7 +9,7 @@ test('source-born optical route has explicit births, grid refresh, held state an
  const buffer=(size,usage)=>{const b=d.createBuffer({size,usage});resources.push(b);return b;};
  const texture=descriptor=>{const t=d.createTexture(descriptor);resources.push(t);return t;};
  const storage=GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC,identity=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
- const source={buffer:buffer(64,storage),uniform:buffer(240,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),width:1,height:1,pixels:1,samples:0,step:0,backtrace:1,viewProj:identity,emitterBounds:{lo:[-.1,-.1,-.1],hi:[.1,.1,.1]}};
+ const source={buffer:buffer(64,storage),uniform:buffer(240,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),width:1,height:1,pixels:1,samples:0,step:0,backtrace:1,viewProj:identity,world:{present:true},emitterBounds:{lo:[-.1,-.1,-.1],hi:[.1,.1,.1]}};
  const uniforms=new Float32Array(60);uniforms.set(identity);uniforms.set([0,2,1,0],28);d.queue.writeBuffer(source.uniform,0,uniforms);
  const fine=buffer(8*64,storage),reactants=texture({size:[2,2,2],dimension:'3d',format:'rg32float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});
  const target=texture({size:[8,8],format:'rgba8unorm',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC}),depth=texture({size:[1,1],format:'depth32float',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING});

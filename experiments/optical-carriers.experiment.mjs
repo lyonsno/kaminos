@@ -13,7 +13,7 @@ export default {
   function sync(){
    const state=owner.read();lighting?.sync();
    for(const [key,input]of fields){if(host.controls.document.activeElement===input||input.classList.contains('scrubbing'))continue;const value=state.settings[key];if(input.type==='checkbox')input.checked=value;else input.value=String(value);}
-   if(status){const c=state.effective.carrier;status.textContent=error??state.lighting.error??(c?`${state.effective.slots.toLocaleString()} slots · ${c.totalBirths.toLocaleString()} births · step ${state.effective.step}`:state.effective.reason??'Waiting for the first simulation step.');}
+   if(status){const c=state.effective.carrier;status.textContent=error??state.lighting.error??(c?`Fine only · ${state.effective.slots.toLocaleString()} slots · ${c.totalBirths.toLocaleString()} births · step ${state.effective.step}${c.coarseOptics==='not represented'?' · World optics not represented':''}`:state.effective.reason??'Waiting for the first simulation step.');}
   }
   const stop=session.onFrame(sync);
   const operations={...owner.operations,setOptions(patch){const next=owner.operations.setOptions(patch);error=null;sync();return next;}};

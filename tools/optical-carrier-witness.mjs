@@ -16,13 +16,14 @@ export function verifyOpticalCarrierSnapshot(snapshot){
 
 export async function run({origin,out,expected,repoRoot,playwrightModule,executable}){
  await fs.mkdir(out,{recursive:true});let browser,page,writing=Promise.resolve();
- const report={status:'failed',phase:'runtime',origin,expected,repoRoot,executable,errors:[]};
+ const report={status:'failed',phase:'runtime',origin,expected,repoRoot,executable,errors:[],failedResponses:[]};
  const save=()=>{const json=JSON.stringify(report,null,2);writing=writing.then(()=>fs.writeFile(path.join(out,'report.json'),json));return writing;};await save();
  try{
   report.runtime=await fetch(origin+'/api/runtime-config').then(r=>{assert.ok(r.ok);return r.json();});assert.equal(report.runtime.source.commit,expected);assert.equal(report.runtime.source.dirty,false);
   const {chromium}=await import(playwrightModule);report.phase='browser';await save();
   browser=await chromium.launchPersistentContext(path.join(out,'profile'),{executablePath:executable,headless:true,viewport:{width:1200,height:900},args:['--enable-unsafe-webgpu','--use-angle=metal','--use-mock-keychain','--password-store=basic']});page=browser.pages()[0]??await browser.newPage();page.setDefaultTimeout(0);page.setDefaultNavigationTimeout(0);
   page.on('pageerror',error=>{report.errors.push(error.stack??String(error));void save();});page.on('console',m=>{if(m.type()==='error'){report.errors.push(m.text());void save();}});await page.route('**/favicon.ico',r=>r.fulfill({status:204,body:''}));
+  page.on('response',response=>{if(response.status()>=400){report.failedResponses.push({url:response.url(),status:response.status()});void save();}});
   report.url=origin+'/index.html?workspace=workbench#scene=Raystep-retained-optical-1107.kaminos.json&experiment=optical-carriers';report.phase='load';await save();await page.goto(report.url,{waitUntil:'domcontentloaded'});
   await page.waitForFunction(()=>window.kaminosWorkbenchExperiments?.state()?.id==='optical-carriers'||window.kaminosWorkbenchExperiments?.state()?.error);
   report.entry=await page.evaluate(()=>window.kaminosWorkbenchExperiments.state());assert.equal(report.entry.id,'optical-carriers');assert.deepEqual(report.errors,[]);

@@ -341,7 +341,7 @@ export function createOpticalParticles(device,{transparent=false,indexedQuads=tr
  }
  function encode(encoder,{view,format,source,fine,reactants,model=REACTANT_MODEL,material={},dims,invViewProj,settings,cameraValues,depth,identity,depthZeroToOne=false,profileWrites=()=>({}),gridExtinction=null,allowUnavailableGridExtinction=false}){
   if(!reactants)throw Error('Actual particle composition requires the current grid oxidizer texture');
-  if(source.world||source.middle)throw Error('Carried-composition candidate currently requires a single Fine grid');
+  if((source.world||source.middle)&&!settings.carrierMode)throw Error('Carried-composition candidate currently requires a single Fine grid');
   const requested=opticalParticleSettings(settings),{width,height,pixels,step}=source;let s=requested;
   if(s.carrierMode&&!source.emitterBounds)throw Error('Optical carriers require an admitted emitter support box');
   // Material diagnostics show every live carrier, including clear fuel/air,
@@ -432,7 +432,7 @@ fn exchangeNeighborhoodHeat(point:vec3<f32>)->f32{
   const output=encoder.beginRenderPass({label:'native optical particle presentation',...profileWrites('present'),colorAttachments:[{view,loadOp:s.showRaymarch?'load':'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}]});output.setPipeline(pp);output.setBindGroup(0,device.createBindGroup({layout:pp.getBindGroupLayout(0),entries:[{binding:0,resource:textures[directTransfer?0:1].createView()},{binding:1,resource:{buffer:camera}}]}));output.draw(3);output.end();
   if(retired.length){const old=retired.splice(0);queueMicrotask(()=>device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>old.forEach(x=>x.destroy())));}
   info=readState();
-  if(s.carrierMode){info.carrier=carrierCore.read();info.bytes+=info.carrier.bytes;info.totalBytes+=info.carrier.bytes;info.reaction='grid-authoritative material refresh; no carried chemistry';info.flow='grid translation and accumulated local affine optical deformation';info.collection='emitter support box; camera-independent rate';info.lifetime='explicit reference-step lifetime with ease-in/out';info.work.reactionEnabled=false;info.work.birthCapacityPerFrame=info.carrier.retainedBirths;}
+  if(s.carrierMode){info.carrier={...carrierCore.read(),region:'Fine only',coarseOptics:source.world||source.middle?'not represented':'not present'};info.bytes+=info.carrier.bytes;info.totalBytes+=info.carrier.bytes;info.reaction='grid-authoritative material refresh; no carried chemistry';info.flow='grid translation and accumulated local affine optical deformation';info.collection='emitter support box; camera-independent rate';info.lifetime='explicit reference-step lifetime with ease-in/out';info.work.reactionEnabled=false;info.work.birthCapacityPerFrame=info.carrier.retainedBirths;}
   return info;
  }
  async function sample({allowAdvance=false}={}){
