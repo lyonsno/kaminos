@@ -3,7 +3,7 @@ import path from 'node:path';
 import {parseArgs} from 'node:util';
 import {createHash} from 'node:crypto';
 import {launchChrome} from '../models/supermat/chrome-cdp.mjs';
-import {assertHandObservation} from './hand-input-witness-checks.mjs';
+import {assertHandObservation,normalizeHandWitness} from './hand-input-witness-checks.mjs';
 const {values:args}=parseArgs({options:{out:{type:'string'},base:{type:'string'},chrome:{type:'string'},root:{type:'string'},fixture:{type:'string'},infer:{type:'boolean'},page:{type:'string'}}});
 if(!args.out)throw Error('--out required');
 await fs.mkdir(args.out,{recursive:true});
@@ -41,6 +41,7 @@ try {
       for(const track of stream.getTracks()){__handsWitness.tracks.push(track);const stop=track.stop.bind(track);track.stop=()=>{clearInterval(timer);stop();};}return stream;
     };`});
   evaluate=async expression=>{const r=await call('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw Error(r.exceptionDetails.exception?.description??r.exceptionDetails.text);return r.result.value;};
+  const observation=()=>evaluate(`(${normalizeHandWitness.toString()})({state:kaminosHands.read(),view:kaminosHands.visualization()})`);
   const wait=async expression=>{while(!await evaluate(expression)){const errors=await evaluate('__handsWitness.errors');if(errors.length)throw Error(errors.join('\n'));await sleep(100);}};
   const shot=async name=>{const {data}=await call('Page.captureScreenshot',{format:'png'});await fs.writeFile(path.join(args.out,name+'.png'),Buffer.from(data,'base64'));};
   report.phase='page';await save();
@@ -58,16 +59,16 @@ try {
       await evaluate(`kaminosHands.setModel(${JSON.stringify(model)})`);
       if(!await evaluate('kaminosHands.read().enabled'))await evaluate('kaminosHands.setEnabled(true)');
       await wait(`kaminosHands.read().phase==='error'||kaminosHands.read().last?.hands.some(h=>h.handedness==='right')`);
-      const row=await evaluate(`({state:kaminosHands.read(),view:kaminosHands.visualization()})`);Object.assign(row,{model,side:'right'});assertHandObservation(row,previous);previous=row.state.last;
-      report.steps.push(row);await shot(model+'-right');await save();
+      const row=await observation();Object.assign(row,{model,side:'right'});report.steps.push(row);await save();assertHandObservation(row,previous);previous=row.state.last;
+      await shot(model+'-right');await save();
     }
     report.phase='left-auto';await save();
     await evaluate('__handsWitness.mirror=true;__handsWitness.draw()');await evaluate(`kaminosHands.setAuto('right',false)`);
     await wait(`kaminosHands.read().phase==='error'||kaminosHands.read().last?.hands.some(h=>h.handedness==='left')`);
-    const left=await evaluate('({state:kaminosHands.read(),view:kaminosHands.visualization()})');Object.assign(left,{model:'wilor',side:'left'});assertHandObservation(left,previous);report.steps.push(left);await shot('left');
+    const left=await observation();Object.assign(left,{model:'wilor',side:'left'});report.steps.push(left);await save();assertHandObservation(left,previous);await shot('left');
     report.phase='absence';await evaluate('__handsWitness.blank=true');
     await wait(`kaminosHands.read().last?.hands.length===0||kaminosHands.read().phase==='error'`);
-    const absent=await evaluate('({state:kaminosHands.read(),view:kaminosHands.visualization()})');
+    const absent=await observation();
     if(absent.state.phase==='error'||absent.view.visible)throw Error('Detector miss failed to clear the virtual hand');
     report.steps.push({absence:absent});
     await evaluate('kaminosHands.setEnabled(false)');

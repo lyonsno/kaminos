@@ -11,3 +11,12 @@ export function assertHandObservation(row,previous=null) {
   if(previous&&(state.last.frameId<=previous.frameId||state.last.captureId===previous.captureId))fail('Hand stage reused an earlier source observation');
   if(!view?.visible||!view.sides.includes(side))fail('Expected tracked hand is not presented');
 }
+
+// CDP returnByValue otherwise serializes TypedArrays as numeric-key objects.
+// Normalize before leaving the page; do not reinterpret arbitrary wire objects.
+export function normalizeHandWitness(value) {
+  if(ArrayBuffer.isView(value))return Array.from(value);
+  if(Array.isArray(value))return value.map(normalizeHandWitness);
+  if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).map(([key,entry])=>[key,normalizeHandWitness(entry)]));
+  return value;
+}
