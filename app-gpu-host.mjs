@@ -13,27 +13,36 @@ export function createAppGpuHost({sharedGpu,host,kit,frameOwner,install=null,ses
   const foreground=kit.createWebGpuForegroundService({routeId:APP_FOREGROUND_ROUTE_ID,device,queue});
   // The frame owner's frames are requested through the app service; inside a model run
   // they wait for the run's duty boundaries, outside one they are served at once.
-  const requester=request=>foreground.request({...request,run:service=>host.runForegroundFrame(()=>request.run(service))});
-  let session=null,installedOn=null;const unsettled=new Set();
+  const requester=request=>{requireOpen();return foreground.request({...request,run:service=>host.runForegroundFrame(()=>request.run(service))});};
+  let session=null,installedOn=null,retiring=false,retirement=null,starting=0;const unsettled=new Set();
+  function requireOpen(){if(retiring)throw Error('app GPU host is retiring');}
   async function ensureFrames(){
+    requireOpen();
     const owner=frameOwner();
     if(!owner)throw Error('no frame owner for the app GPU host');
     // With an install hook (the authoring foreground handoff) the hook re-activates the
     // app requester each run, since another producer may have taken the frames meanwhile.
-    if(install){await install(requester,owner);host.setForegroundServiceActive(true);installedOn=owner;return;}
+    if(install){await install(requester,owner);requireOpen();host.setForegroundServiceActive(true);installedOn=owner;return;}
     if(installedOn===owner)return;
     owner.setForegroundOpportunityRequester(requester);
     host.setForegroundServiceActive(true);installedOn=owner;
   }
   return {
     adapter:sharedGpu.adapter,device,queue,foreground,requester,frameOwner,
+    // Worker-owned ordinary frames use this host before any model beginRun.
+    // Reuse the same owner installation and scene activation as model runs.
+    activateFrames:ensureFrames,
     session(){
+      requireOpen();
       return session||=kit.createWebGpuInferenceSession({sessionId,adapter:sharedGpu.adapter,device,queue,
         adapterName:sharedGpu.adapter?.info?.description||sharedGpu.adapter?.info?.device||'kaminos-shared-device',deviceOwnership:'borrowed'});
     },
     async beginRun(runId,{routeId}={}){
+      requireOpen();starting++;
+      try{
       if(typeof routeId!=='string'||!routeId)throw Error('a model run needs its route id');
       await ensureFrames();
+      requireOpen();
       const run=await foreground.beginRun(runId,{routeId});
       // A run is unsettled from its start until its finish resolves. A rejected finish leaves it latched with no
       // certified settlement, so it stays in the ledger: the GPU is not known free, and whoever holds it on the
@@ -43,6 +52,20 @@ export function createAppGpuHost({sharedGpu,host,kit,frameOwner,install=null,ses
       const finish=(...args)=>run.finish(...args).then(receipt=>{unsettled.delete(runId);return receipt;},
         error=>{throw Object.assign(error instanceof Error?error:Error(String(error)),{gpuRouteHeld:true});});
       return Object.freeze(Object.create(run,{finish:{value:finish,enumerable:true}}));
+      }finally{starting--;}
+    },
+    async retire(){
+      if(starting||unsettled.size)throw Object.assign(Error('app GPU host has unsettled model admission'),{gpuRouteHeld:true});
+      if(retirement)return retirement;
+      retiring=true;
+      retirement=(async()=>{
+        await foreground.dispose();
+        // Do not create a session during cleanup. Keep a failed close reachable
+        // for explicit retry; borrowed sessions never destroy the shared device.
+        if(session){await (await session).close();session=null;}
+        installedOn=null;
+      })();
+      try{await retirement;}catch(error){retirement=null;throw error;}
     },
     // Model runs whose settlement is unresolved (active, or a finish that rejected).
     unsettledRuns:()=>[...unsettled],

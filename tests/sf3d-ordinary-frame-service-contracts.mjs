@@ -13,6 +13,7 @@ let foregroundRequester = null, foregroundPending = null, foregroundSequence = 0
 let sceneLightingRebuildPending = false, stillPresentationHeld = false, foregroundDrain = Promise.resolve();
 let capturePaused = false;
 const productFrameOwner = 'prototype';
+const frameScheduleOwner = 'runtime';
 const boundarySplatRequested = () => false, browserResidualCanApply = () => false;
 ${wrapper}
 return {render, setForegroundOpportunityRequester, setSceneLightingRebuildPending};`);

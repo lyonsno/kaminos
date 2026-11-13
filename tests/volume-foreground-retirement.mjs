@@ -18,12 +18,12 @@ const activation=source.slice(source.indexOf('    async setActive(active) {'),so
 const disposal=source.slice(source.lastIndexOf('\n    async dispose() {')>=0 ? source.lastIndexOf('\n    async dispose() {') : source.lastIndexOf('\n    dispose() {'),source.lastIndexOf('\n  };'));
 const turn=()=>new Promise(resolve=>setImmediate(resolve));
 function deferred(){let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};}
-async function fixture({gate=null,failure=null}={}){
+async function fixture({gate=null,failure=null,frameScheduleOwner='runtime'}={}){
  const submissions=[],scheduled=new Map(),events=[],destroyed=[];let nextRaf=0;
  const device={queue:{submit:commands=>submissions.push(...commands)}};
  const service=createWebGpuForegroundService({routeId:'retirement-test',device,queue:device.queue});
  const run=await service.beginRun('image-generation');
- const scope={state:{active:true,frameCount:0,simStepCount:0,error:null},device,raf:0,
+ const scope={state:{active:true,frameCount:0,simStepCount:0,error:null},device,raf:0,gpuInitialized:true,frameScheduleOwner,
   controlsSnapshot:{worldSmoke:'off'},productFrameOwner:'prototype',capturePaused:false,
   boundarySplatRequested:()=>false,browserResidualCanApply:()=>false,
   ensureGpu:async()=>{},ensureBrowserResidualModel:async()=>{},invalidateRaymarchReadouts:()=>{},
@@ -41,17 +41,31 @@ async function fixture({gate=null,failure=null}={}){
   return {status:'submitted'};
  };
  vm.createContext(scope);
- vm.runInContext(scheduling+'\nglobalThis.api={'+activation+disposal+'isActive:()=>state.active,setForegroundOpportunityRequester,render,drain:()=>foregroundDrain};',scope);
- scope.api.setForegroundOpportunityRequester(request=>service.request({...request,async run(ctx){
+ vm.runInContext(scheduling+'\nglobalThis.api={'+activation+disposal+'isActive:()=>state.active,setForegroundOpportunityRequester,setSceneLightingRebuildPending,render,drain:()=>foregroundDrain};',scope);
+ if(frameScheduleOwner==='runtime')scope.api.setForegroundOpportunityRequester(request=>service.request({...request,async run(ctx){
   if(gate){gate.entered.resolve();await gate.release.promise;}
   return request.run(ctx);
  }}));
  let boundary=0;
- return {scope,api:scope.api,submissions,scheduled,events,destroyed,
+ return {scope,api:scope.api,submissions,scheduled,events,destroyed,request:options=>service.request(options),
   boundary:()=>run.foregroundOpportunities.serviceAtBoundary({invocationId:'image-generation',boundaryId:'boundary-'+(++boundary),dutyId:'denoise-'+boundary,phase:'denoise',position:'before-encode'}),
   async close(){await run.finish().catch(()=>{});try{await service.dispose();}catch{}}
  };
 }
+
+test('host-scheduled ordinary flame draws inside the actual shared foreground service',async()=>{
+ const f=await fixture({frameScheduleOwner:'host'});try{
+  assert.throws(()=>f.api.setForegroundOpportunityRequester(()=>{}),/host-scheduled-volume/);
+  const frame=f.request({requestId:'host-frame',run:service=>f.api.renderSharedFrame({now:17,service})});
+  assert.deepEqual((await f.boundary()).failures,[]);
+  assert.equal((await frame.completion).result.status,'submitted');
+  assert.deepEqual(f.submissions,['frame']);assert.equal(f.scope.state.frameCount,1);assert.equal(f.scheduled.size,0);
+  assert.throws(()=>f.api.renderSharedFrame({now:18,service:{device:{},queue:f.scope.device.queue,submit(){}}}),/shared-frame-device-queue/);
+  await f.api.setSceneLightingRebuildPending(true);
+  assert.equal(f.api.renderSharedFrame({now:19}).reason,'lighting-rebuild');
+  assert.equal(f.scope.state.frameCount,1);
+ }finally{await f.close();}
+});
 
 for(const when of ['before-admission','queued'])test('retire '+when+' without aborting the model boundary',async()=>{
  const f=await fixture();try{

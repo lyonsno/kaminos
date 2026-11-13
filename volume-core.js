@@ -7825,6 +7825,7 @@ export function createKaminosVolumePrototype({
   onStatus,
   presentationSurface = null,
   frameScheduler = globalThis,
+  frameScheduleOwner = 'runtime',
   rayStepTelemetryDisplay = null,
   sharedGpuContext = null,
   getSceneDepth = null,
@@ -7843,6 +7844,7 @@ export function createKaminosVolumePrototype({
   if (productFrameOwner !== 'prototype') {
     throw new Error(`retired-caller-splat-frame-owner:${productFrameOwner}`);
   }
+  if(!['runtime','host'].includes(frameScheduleOwner))throw Error('unsupported-volume-frame-schedule-owner');
   const initialControlRetirement = stripRetiredRaymarchControls(getControls());
   const initialReconstruction=integralReconstructionSettings(initialControlRetirement.controls);
   const initialHistory=rayHistorySettings({influence:initialControlRetirement.controls.historyInfluence,window:initialControlRetirement.controls.historyWindow});
@@ -7875,7 +7877,7 @@ export function createKaminosVolumePrototype({
   });
   const canvas = surface.canvas;
   surface.setTransparent(Boolean(transparentCanvas));
-  const requestAnimationFrame = callback => frameScheduler.requestAnimationFrame(callback);
+  const requestAnimationFrame = callback => frameScheduleOwner==='host'?0:frameScheduler.requestAnimationFrame(callback);
   const cancelAnimationFrame = handle => frameScheduler.cancelAnimationFrame(handle);
   const productTransform = {
     translate: Array.isArray(externalProductTransform?.translate)
@@ -7925,6 +7927,7 @@ export function createKaminosVolumePrototype({
     effectiveRoute: ROUTE_IDENTITY,
     sceneCollision: { requested: false, effective: 'off', sourceId: null, reason: null, grid: null, solidCellCount: 0 },
     productFrameOwner,
+    frameScheduleOwner,
     productFrameIdentity: (null),
     productFrameDepthFormat: (null),
     productFrameReceipt: null,
@@ -14243,6 +14246,7 @@ export function createKaminosVolumePrototype({
   function setForegroundOpportunityRequester(requester) {
     if(deviceRetired&&requester)throw Error('Volume GPU device retired');
     if (requester !== null && typeof requester !== 'function') throw new Error('foreground requester must be a function or null');
+    if(requester&&frameScheduleOwner==='host')throw Error('host-scheduled-volume-uses-renderSharedFrame');
     if (foregroundPending) throw new Error('foreground frame is still pending');
 
     foregroundRequester = requester;
@@ -14488,6 +14492,7 @@ export function createKaminosVolumePrototype({
   }
 
   function pumpLookLabFrozenFrame() {
+    if(frameScheduleOwner==='host')return;
     if (!state.active || !device) return;
     if (!(normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state))) return;
     cancelAnimationFrame(raf);
@@ -18247,6 +18252,17 @@ export function createKaminosVolumePrototype({
       deviceRetired=true;activitySequence++;state.active=false;
       foregroundRequester=null;cancelAnimationFrame(raf);raf=0;
       surface.setActive(false);
+    },
+    renderSharedFrame({now=performance.now(),service}={}) {
+      if(frameScheduleOwner!=='host'||productFrameOwner!=='prototype')throw Error('shared-frame-requires-host-scheduled-ordinary-volume');
+      const reason=deviceRetired?'device-retired':!state.active?'inactive':sceneLightingRebuildPending?'lighting-rebuild':stillPresentationHeld?'still-presentation':capturePaused?'capture-paused':null;
+      if(reason)return {status:'held',reason,frameCount:state.frameCount,simStepCount:state.simStepCount};
+      if(!device||!gpuInitialized)throw Error('shared-frame-gpu-not-initialized');
+      if(foregroundRequester||foregroundPending)throw Error('shared-frame-conflicts-with-private-foreground-owner');
+      if(service?.device!==device||service?.queue!==device.queue||typeof service?.submit!=='function')throw Error('shared-frame-device-queue-mismatch');
+      if(service.signal?.aborted)throw service.signal.reason??Error('shared-frame-aborted');
+      if(!Number.isFinite(now))throw Error('shared-frame-time-must-be-finite');
+      return renderOrdinaryFrame(now,service);
     },
     setForegroundOpportunityRequester,
     foregroundGpuContext() {

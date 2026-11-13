@@ -82,3 +82,11 @@ test('foreground scope excludes ordinary draw, counts its own depth draw, and re
  f.owner.setForegroundServiceActive(false);assert.equal(f.owner.renderOrdinary(),false,'prior service depth cannot satisfy a later RAF');
  f.input.radianceReady=true;assert.equal(f.owner.renderOrdinary(),true);assert.equal(f.count(),9);
 });
+
+test('foreground admission rejects an asynchronous result before fallback drawing and releases its scope',()=>{
+ const f=fixture();f.owner.setForegroundServiceActive(true);
+ assert.throws(()=>f.owner.runForegroundFrame(()=>Promise.resolve({submitted:true})),/synchronous/);
+ assert.equal(f.count(),7,'an unfinished transaction cannot claim an ordinary draw');
+ assert.equal(f.prepares(),0);assert.equal(f.owner.state().insideService,false);
+ const next=f.owner.runForegroundFrame(()=>({submitted:true}));assert.equal(next.sceneDrawn,true);assert.equal(f.count(),8);
+});

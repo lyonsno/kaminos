@@ -5,8 +5,7 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import * as THREE from 'three';
 import {createKaminosVolumePrototype} from '../volume-core.js';
-const surfaceUrl=new URL('../volume-runtime-surface.mjs',import.meta.url);
-const {createBrowserVolumeSurface,createOffscreenVolumeSurface}=await import(surfaceUrl).catch(error=>{if(error.code!=='ERR_MODULE_NOT_FOUND'||error.url!==surfaceUrl.href)throw error;return {};});
+import {createBrowserVolumeSurface,createOffscreenVolumeSurface} from '../volume-runtime-surface.mjs';
 
 // Import the complete production constructor. Scheduling and resize also have
 // isolated CPU checks below; no test here establishes native GPU compatibility.
@@ -15,17 +14,18 @@ test('complete production runtime constructs and disposes without page globals o
  assert.equal(typeof document,'undefined');assert.equal(typeof window,'undefined');
  const canvas={width:16,height:16,getContext(){throw Error('unexpected GPU admission');}};
  const transparency=[];let disposed=0;
- const presentationSurface={canvas,viewport:()=>({width:32,height:32}),bounds:()=>({left:0,top:0,width:32,height:32}),resize(width,height){canvas.width=width;canvas.height=height;},setActive(){},setTransparent:value=>transparency.push(value),dispose:()=>disposed++};
+ const presentationSurface=createOffscreenVolumeSurface({canvas,readViewport:()=>({width:32,height:32}),onTransparent:value=>transparency.push(value),onDispose:()=>disposed++});
  const runtime=createKaminosVolumePrototype({THREE,camera:new THREE.PerspectiveCamera(),getControls:()=>({resolution:16}),presentationSurface,
-   transparentCanvas:true,frameScheduler:{requestAnimationFrame(){throw Error('unexpected frame admission');},cancelAnimationFrame(){}}});
+   transparentCanvas:true,frameScheduleOwner:'host',frameScheduler:{requestAnimationFrame(){throw Error('unexpected frame admission');},cancelAnimationFrame(){}}});
  assert.equal(runtime.canvasElement(),canvas);assert.equal(runtime.isActive(),false);
  assert.deepEqual(transparency,[true]);runtime.setSceneCompositionPresentation(false);assert.deepEqual(transparency,[true,false]);
  assert.equal(runtime.debugState().active,false);
+ assert.equal(runtime.debugState().frameScheduleOwner,'host');assert.equal(runtime.renderSharedFrame().reason,'inactive');
+ assert.throws(()=>createKaminosVolumePrototype({frameScheduleOwner:'unknown'}),/unsupported-volume-frame-schedule-owner/);
  await runtime.dispose();assert.equal(disposed,1);
 });
 
 test('offscreen viewport rejects missing or nonfinite host measurements explicitly',()=>{
- assert.equal(typeof createOffscreenVolumeSurface,'function','offscreen presentation adapter must be available');
  const canvas={width:1,height:1,getContext(){}};let viewport=null;
  const surface=createOffscreenVolumeSurface({canvas,readViewport:()=>viewport});
  for(const value of [null,{}, {width:NaN,height:8},{width:8,height:-1},{width:8,height:8,pixelRatio:0}]){
@@ -67,7 +67,8 @@ test('injected scheduler preserves its owning context and cancellation handle',(
  const c={PROTOTYPE_IDENTITY:'v',ROUTE_IDENTITY:'r',getControls:()=>({}),stripRetiredRaymarchControls:controls=>({controls}),integralReconstructionSettings:()=>({}),rayHistorySettings:()=>({})};vm.createContext(c);vm.runInContext(body,c);
  const runtime=c.createKaminosVolumePrototype({getControls:()=>({}),presentationSurface:{canvas:{},setTransparent(){}},frameScheduler:scheduler});
  const callback=()=>{};assert.equal(runtime.requestAnimationFrame(callback),73);runtime.cancelAnimationFrame(73);assert.deepEqual(calls,[callback,73]);
-
+ const host=c.createKaminosVolumePrototype({getControls:()=>({}),presentationSurface:{canvas:{},setTransparent(){}},frameScheduler:scheduler,frameScheduleOwner:'host'});
+ assert.equal(host.requestAnimationFrame(callback),0,'the scene host owns frame cadence');assert.deepEqual(calls,[callback,73]);
 });
 
 test('production resize uses host viewport and capture extent without page globals',()=>{
@@ -88,7 +89,7 @@ test('complete browser runtimes retain independent fire-unit canvas identities',
  const viewport={ownerDocument:document,appendChild:canvas=>mounted.push(canvas)};
  try{
   for(const canvasId of ['kaminos-fire-unit-A','kaminos-fire-unit-B']){
-   const runtime=createKaminosVolumePrototype({THREE,viewport,canvasId,camera:new THREE.PerspectiveCamera(),getControls:()=>({resolution:16}),frameScheduler:{requestAnimationFrame(){throw Error('unexpected frame admission');},cancelAnimationFrame(){}}});
+   const runtime=createKaminosVolumePrototype({THREE,viewport,canvasId,camera:new THREE.PerspectiveCamera(),getControls:()=>({resolution:16}),frameScheduleOwner:'host',frameScheduler:{requestAnimationFrame(){throw Error('unexpected frame admission');},cancelAnimationFrame(){}}});
    runtimes.push(runtime);assert.equal(runtime.canvasElement().id,canvasId);
   }
   assert.equal(new Set(mounted.map(canvas=>canvas.id)).size,2);assert.equal(mounted.some(canvas=>canvas.id==='kaminos-volume-canvas'),false,'unit canvases must not impersonate the primary volume');

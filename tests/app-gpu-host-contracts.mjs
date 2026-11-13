@@ -59,3 +59,23 @@ test('the host keeps a ledger of runs whose settlement is unresolved: a settled 
  const b=await app.beginRun('klein:1',{routeId:'flux2-klein'});await b.finish();
  assert.deepEqual(app.unsettledRuns(),['u2net:1'],'a settled run leaves the ledger');
 });
+
+
+test('retirement closes only an existing borrowed session and rejects later admission',async()=>{
+ const f=fixture();let closed=0;f.kit.createWebGpuInferenceSession=async options=>{f.sessions.push(options);return {close(){closed++;}};};
+ const app=createAppGpuHost({sharedGpu:{adapter:f.adapter,device:f.device,queue:f.device.queue},host:f.host,kit:f.kit,frameOwner:()=>f.owner});
+ assert.equal(typeof app.retire,'function','the owner must retire an existing session without creating one');
+ await app.retire();assert.equal(f.sessions.length,0);assert.equal(closed,0);
+ await assert.rejects(app.activateFrames(),/retir/);await assert.rejects(app.beginRun('late',{routeId:'model'}),/retir/);
+ assert.throws(()=>app.session(),/retir/);assert.throws(()=>app.requester({}),/retir/);
+ const other=createAppGpuHost({sharedGpu:{adapter:f.adapter,device:f.device,queue:f.device.queue},host:f.host,kit:f.kit,frameOwner:()=>f.owner});
+ await other.session();await other.retire();await other.retire();assert.equal(f.sessions.length,1);assert.equal(closed,1);
+});
+test('unsettled admission blocks retirement; failed session close retains it for retry',async()=>{
+ const f=fixture();let closes=0;f.kit.createWebGpuInferenceSession=async()=>({close(){if(++closes===1)throw Error('leases still retained');}});
+ const app=createAppGpuHost({sharedGpu:{adapter:f.adapter,device:f.device,queue:f.device.queue},host:f.host,kit:f.kit,frameOwner:()=>f.owner});
+ assert.equal(typeof app.retire,'function');await app.session();
+ const run=await app.beginRun('active',{routeId:'model'});await assert.rejects(app.retire(),/unsettled/);assert.equal(closes,0);
+ await run.finish();await assert.rejects(app.retire(),/leases still retained/);
+ await assert.rejects(app.activateFrames(),/retir/);await app.retire();assert.equal(closes,2);
+});
