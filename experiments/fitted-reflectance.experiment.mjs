@@ -39,7 +39,8 @@ export default {
     authoredTangents:meshes.filter(m=>!generatedTangents.has(m.geometry)).length,derivedTangentGeometries:generatedTangents.size,
     activeMaterial:material?.material.name??null,lightId,lightAngle,uvScale,error:issue,
     source:inputs.source??null,fitted:inputs.fitted??null,neural:inputs.neural??null,
-    fittedLevels:materials.get('fitted')?.levels??null,view:session.readView()};
+    fittedLevels:materials.get('fitted')?.levels??null,
+    neuralLevels:materials.get('neural')?.levels??null,activeSourceSha256:material?.sourceSha256??null,view:session.readView()};
   }
   async function select(next){
    const input=inputs[next];
@@ -48,15 +49,28 @@ export default {
    let material=materials.get(next);
    try{
     if(!material){
-     if(next==='source')material=await loadPatternedMetalMaterial(input.url,input.sha256,options);
+     if(next==='source'){
+      material=await loadPatternedMetalMaterial(input.url,input.sha256,options);
+      material.sourceSha256=input.sha256;
+     }
      if(next==='fitted'){
       const bundle=await loadFittedReflectance(input.url,{sha256:input.sha256});
       if(inputs.source&&bundle.sourceSha256!==inputs.source.sha256)throw Error('Fitted material was baked from a different source');
       material=createFittedReflectanceMaterial(bundle,options);material.levels=bundle.levels.map(l=>l.size);
+      material.sourceSha256=bundle.sourceSha256;
      }
      if(next==='neural'){
       const bundle=await loadNeuralAppearanceBundle(input.url,{sha256:input.sha256});
+      const sourceSha256=bundle.provenance?.sourceHash;
+      const comparisonSource=inputs.source?.sha256??materials.get('fitted')?.sourceSha256
+       ??(valid(inputs.fitted)?(await loadFittedReflectance(inputs.fitted.url,{sha256:inputs.fitted.sha256})).sourceSha256:null);
+      if(!comparisonSource||sourceSha256!==comparisonSource||
+       (bundle.provenance?.teacher?.sourceHash!=null&&bundle.provenance.teacher.sourceHash!==comparisonSource)){
+       throw Error('Neural material has no matching source provenance');
+      }
       material=createNeuralAppearanceMaterial(bundle,options);
+      material.sourceSha256=sourceSha256;
+      material.levels=bundle.levels.map(l=>l.width);
       // Same direct-only illumination as the source and analytical fit.
       const setup=material.material.setupLightingModel;
       material.material.setupLightingModel=function(builder){const model=setup.call(this,builder);model.indirect=()=>{};return model;};
