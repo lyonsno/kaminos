@@ -82,3 +82,28 @@ test('explicit dormant volume can draw an empty ordinary scene and validates its
   gpu=f.device;assert.equal((await binding.requestFrame({},f.ctx,draw)).result.status,'submitted');
  }finally{await f.close();}
 });
+
+
+test('binding accepts the actual current dormant volume constructor without a retired renderer marker',async()=>{
+ const THREE=await import('three');
+ const {createKaminosVolumePrototype}=await import('../volume-core.js');
+ const {createOffscreenVolumeSurface}=await import('../volume-runtime-surface.mjs');
+ const f=fixture();let runtime;
+ try{
+  const canvas={width:16,height:16,getContext(){throw Error('GPU admission is outside this constructor test');}};
+  const surface=createOffscreenVolumeSurface({canvas,readViewport:()=>({width:32,height:32})});
+  runtime=createKaminosVolumePrototype({THREE,camera:new THREE.PerspectiveCamera(),getControls:()=>({resolution:16}),presentationSurface:surface,frameScheduleOwner:'host',frameScheduler:{cancelAnimationFrame(){},requestAnimationFrame(){throw Error('private RAF');}}});
+  const binding=factory()({appHost:f.appHost,volume:runtime,allowDormant:true});
+  const result=await binding.requestFrame({now:10},f.ctx,()=>binding.frame({now:10},f.ctx));
+  assert.equal(result.status,'completed');assert.equal(result.result.reason,'inactive');assert.equal(result.result.sceneDrawn,true);assert.deepEqual(f.submissions,[]);
+ }finally{await runtime?.dispose();await f.close();}
+});
+test('current active context still rejects a foreign frame owner or a different renderer marker',()=>{
+ const f=fixture();try{
+  const current={device:f.device,queue:f.device.queue,active:true,productFrameOwner:'prototype'};
+  const volume={...f.volume,foregroundGpuContext:()=>current};
+  assert.doesNotThrow(()=>factory()({appHost:f.appHost,volume}));
+  current.productFrameOwner='caller';assert.throws(()=>factory()({appHost:f.appHost,volume}),/ordinary volume renderer/);
+  current.productFrameOwner='prototype';current.renderer='other';assert.throws(()=>factory()({appHost:f.appHost,volume}),/ordinary volume renderer/);
+ }finally{void f.close();}
+});
