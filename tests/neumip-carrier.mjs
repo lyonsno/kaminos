@@ -31,5 +31,19 @@ for(const kind of ['folded','sphere','sculpted','looped']){
  }
  g.dispose();
 }
+// Physical path lengths provide an independent check of average UV density.
+{
+ const g=createNeumipCarrier('looped'),p=g.attributes.position,uv=g.attributes.uv;
+ const n=g.parameters.tubularSegments,m=g.parameters.radialSegments;
+ const distance=(a,b)=>Math.hypot(p.getX(a)-p.getX(b),p.getY(a)-p.getY(b),p.getZ(a)-p.getZ(b));
+ let along=0,around=0;
+ for(let i=0;i<n;i++)for(let j=0;j<=m;j++)along+=distance(i*(m+1)+j,(i+1)*(m+1)+j)/(m+1);
+ for(let i=0;i<=n;i++)for(let j=0;j<m;j++)around+=distance(i*(m+1)+j,i*(m+1)+j+1)/(n+1);
+ const uSpan=uv.getX(n*(m+1))-uv.getX(0),vSpan=uv.getY(m)-uv.getY(0);
+ const ratio=along/uSpan/(around/vSpan);
+ assert.ok(ratio>.9&&ratio<1.1,'Average longitudinal/circumferential UV density balanced within10%');
+ assert.equal(uSpan,Math.round(uSpan),'Closed longitudinal seam keeps integer repeats');
+ g.dispose();
+}
 assert.throws(()=>createNeumipCarrier('missing'),/Unknown neural material carrier/);
 console.log('Neural carrier geometry, UV and tangent invariants pass');

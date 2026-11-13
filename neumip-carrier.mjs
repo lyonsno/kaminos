@@ -11,7 +11,18 @@ export function createNeumipCarrier(kind){
  let g;
  if(kind==='flat')g=new PlaneGeometry(2.6,2.6);
  else if(kind==='sphere')g=new SphereGeometry(1,64,48);
- else if(kind==='looped')g=new TorusKnotGeometry(.72,.23,192,32);
+ else if(kind==='looped'){
+  g=new TorusKnotGeometry(.72,.23,192,32);
+  const p=g.attributes.position,uv=g.attributes.uv,n=g.parameters.tubularSegments,m=g.parameters.radialSegments;
+  const distance=(a,b)=>Math.hypot(p.getX(a)-p.getX(b),p.getY(a)-p.getY(b),p.getZ(a)-p.getZ(b));
+  let along=0,around=0;
+  for(let i=0;i<n;i++)for(let j=0;j<=m;j++)along+=distance(i*(m+1)+j,(i+1)*(m+1)+j)/(m+1);
+  for(let i=0;i<=n;i++)for(let j=0;j<m;j++)around+=distance(i*(m+1)+j,i*(m+1)+j+1)/(n+1);
+  // Match average texel density and keep integer repeats at the closed seam.
+  // Local curvature still changes the metric; this is not an isometric chart.
+  const repeats=Math.max(1,Math.round(along/around));
+  for(let i=0;i<uv.count;i++)uv.setX(i,uv.getX(i)*repeats);
+ }
  else if(kind==='folded'||kind==='sculpted'){
   g=new PlaneGeometry(2.6,2.6,96,96);
   const p=g.attributes.position;
