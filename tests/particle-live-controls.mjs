@@ -28,7 +28,8 @@ async function mounted({shared=false,inputs={},viewport=false,boundary=false}={}
  const all=el=>[el,...el.children.flatMap(all)];const field=key=>all(root).find(el=>el.dataset.particle===key);
  Object.values(trace).forEach(rows=>{rows.length=0;});
  const lightField=key=>[...all(root),...(document.body?all(document.body):[])].find(el=>el.dataset.particleLighting===key);
- return {owner,document,field,lightField,writes,trace,native,accepted:()=>accepted,dispose:()=>owner.dispose()};
+ const lightSlider=key=>[...all(root),...(document.body?all(document.body):[])].find(el=>el.dataset.particleLightingSlider===key);const panel=[...all(root),...(document.body?all(document.body):[])].find(el=>el.tagName==='DIALOG');
+ return {owner,document,field,lightField,lightSlider,panel,writes,trace,native,accepted:()=>accepted,dispose:()=>owner.dispose()};
 }
 const settle=()=>new Promise(resolve=>setTimeout(resolve,220));
 test('legacy proxy soot settings cannot silently rewrite the shared simulation on reopening',async()=>{
@@ -115,4 +116,16 @@ test('lighting drafts recover through the same asynchronous operations and persi
   mode.value='1';mode.fire('change');await new Promise(r=>setTimeout(r,0));assert.equal(x.owner.read().lighting.requested.mode,1);saved=x.writes.at(-1);
  }finally{await x.dispose();}
  const y=await mounted({inputs:saved});try{assert.equal(y.owner.read().lighting.requested.width,9);assert.equal(y.owner.read().lighting.requested.mode,1);}finally{await y.dispose();}
+});
+
+
+test('lighting uses ordinary sliders, combines a rapid scrub and keeps typed travel uncapped',async()=>{
+ const x=await mounted({viewport:true});try{
+  for(const key of ['width','transportWidth','directions','filterLength','supportSigmas','padding','albedo','gain']){assert.equal(x.lightSlider(key)?.type,'range',key);assert.equal(x.lightField(key).type,'number');assert.notEqual(x.lightField(key).readOnly,true);}
+  const before=x.writes.length,slider=x.lightSlider('width');for(const n of [10,12,14,18]){slider.value=String(n);slider.fire('input');}await new Promise(r=>setTimeout(r,35));assert.equal(x.owner.read().lighting.requested.width,18);assert.equal(x.writes.length,before+1,'slider positions in one frame publish only the latest edit');
+  const input=x.lightField('width');x.document.activeElement=input;input.value='70';input.fire('input');input.fire('change');await new Promise(r=>setTimeout(r,0));assert.equal(x.owner.read().lighting.requested.width,70);assert.ok(Number(slider.max)>=70,'slider travel cannot become a runtime size cap');
+ }finally{await x.dispose();}
+});
+test('lighting window moves by its header and keeps its position when reopened',async()=>{
+ const x=await mounted({viewport:true});try{x.owner.operations.openLighting();const header=x.panel.children.find(el=>el.dataset.particleLightingDrag==='true');assert.ok(header,'movable title bar');header.fire('pointerdown',{button:0,pointerId:1,clientX:500,clientY:100});const move=new Event('pointermove');Object.assign(move,{pointerId:1,clientX:380,clientY:160});x.document.dispatchEvent(move);const up=new Event('pointerup');Object.assign(up,{pointerId:1});x.document.dispatchEvent(up);assert.equal(x.panel.style.top,'132px');const left=x.panel.style.left;assert.ok(left.endsWith('px'));x.document.dispatchEvent(Object.assign(new Event('keydown'),{key:'Escape'}));x.owner.operations.openLighting();assert.equal(x.panel.style.left,left);assert.equal(x.panel.style.top,'132px');}finally{await x.dispose();}
 });

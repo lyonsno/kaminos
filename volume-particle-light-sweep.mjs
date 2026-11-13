@@ -101,17 +101,24 @@ fn halfEmission(c:vec4<f32>)->vec3<f32>{
 }
 `;
 
-export function createParticleLightSweep(device,input){
+// Geometry and optical settings are uniforms; only a new device needs new kernels.
+const sweepKernels=new WeakMap();
+function kernels(device,onProgress){
+ let value=sweepKernels.get(device);onProgress({phase:value?'prepare':'compile',detail:'deposition and sweep kernels'});if(value)return value;
+ const dm=device.createShaderModule({code:PARTICLE_LIGHT_DEPOSIT_WGSL}),sm=device.createShaderModule({code:PARTICLE_LIGHT_SWEEP_WGSL});
+ const depositPipeline=device.createRenderPipeline({label:'particle intrinsic optical deposition',layout:'auto',vertex:{module:dm,entryPoint:'vs'},fragment:{module:dm,entryPoint:'fs',targets:[{format:'rgba16float',blend:{color:{srcFactor:'one',dstFactor:'one',operation:'add'},alpha:{srcFactor:'one',dstFactor:'one',operation:'add'}}}]}});
+ const sweepPipeline=device.createComputePipeline({label:'shared opposite particle light sweeps',layout:'auto',compute:{module:sm,entryPoint:'sweep'}});
+ value={depositPipeline,sweepPipeline};sweepKernels.set(device,value);return value;
+}
+export function createParticleLightSweep(device,input,onProgress=()=>{}){
  const plan=particleLightPlan(input,device.limits),s=plan.settings;
+ const {depositPipeline,sweepPipeline}=kernels(device,onProgress);
  const params=device.createBuffer({label:'particle light sweep coordinates',size:144,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
  const data=new ArrayBuffer(144),u=new Uint32Array(data),f=new Float32Array(data);u.set([...plan.dims,0]);
  [plan.origin,plan.extent,plan.u,plan.v,plan.direction,[s.gain,s.extinction,s.stateLife,s.lifeFade],[s.radius,s.stretch,s.flowAlignment,s.expansion],[s.supportFloor,s.supportSigmas,s.filterWidth,0]].forEach((a,i)=>f.set(a,4*(i+1)));device.queue.writeBuffer(params,0,data);
  const coefficients=device.createTexture({label:'particle Gaussian slab optical integrals',size:plan.atlas,format:'rgba16float',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.COPY_SRC|GPUTextureUsage.COPY_DST});
  const buffer=(label,stride)=>device.createBuffer({label,size:plan.cells*stride,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST});
  const solids=buffer('interior opaque-cell mask',4),positive=buffer('positive interior radiance and boundary transmission',16),negative=buffer('negative interior radiance and boundary transmission',16);
- const dm=device.createShaderModule({code:PARTICLE_LIGHT_DEPOSIT_WGSL}),sm=device.createShaderModule({code:PARTICLE_LIGHT_SWEEP_WGSL});
- const depositPipeline=device.createRenderPipeline({label:'particle intrinsic optical deposition',layout:'auto',vertex:{module:dm,entryPoint:'vs'},fragment:{module:dm,entryPoint:'fs',targets:[{format:'rgba16float',blend:{color:{srcFactor:'one',dstFactor:'one',operation:'add'},alpha:{srcFactor:'one',dstFactor:'one',operation:'add'}}}]}});
- const sweepPipeline=device.createComputePipeline({label:'shared opposite particle light sweeps',layout:'auto',compute:{module:sm,entryPoint:'sweep'}});
  const sweepGroup=device.createBindGroup({layout:sweepPipeline.getBindGroupLayout(0),entries:[{binding:0,resource:coefficients.createView()},{binding:1,resource:{buffer:solids}},{binding:2,resource:{buffer:positive}},{binding:3,resource:{buffer:negative}},{binding:4,resource:{buffer:params}}]});
  let disposed=false;
  return {plan,coefficients,solids,positive,negative,coordinates:params,

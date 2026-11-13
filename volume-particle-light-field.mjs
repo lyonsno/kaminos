@@ -52,8 +52,20 @@ export function directionalLightFrame({dims,origin,extent,direction}){
 const uniform=(device,data,label)=>{const b=device.createBuffer({label,size:data.byteLength,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC});device.queue.writeBuffer(b,0,data);return b;};
 function worldUniform(device,{dims,origin,extent}){const a=new ArrayBuffer(48);new Uint32Array(a).set(dims);const f=new Float32Array(a);f.set(origin,4);f.set(extent,8);return uniform(device,a,'common particle optical grid');}
 function frameUniform(device,frame,weight){const a=new ArrayBuffer(144);new Uint32Array(a).set(frame.dims);const f=new Float32Array(a);[frame.origin,frame.extent,frame.u,frame.v,frame.direction].forEach((v,i)=>f.set(v,4*(i+1)));f[35]=weight;return uniform(device,a,'weighted light direction pair');}
-export async function createParticleIncidentField(device,{dims,origin,extent,transportWidth=dims[0],directionCount=24,pairs=particleDirectionPairs(directionCount),medium,particles,slots,settings={},filterLength=.125}){
+const fieldKernels=new WeakMap();
+function kernel(device,code,entryPoint,onProgress){
+ let cache=fieldKernels.get(device);if(!cache){cache=new Map();fieldKernels.set(device,cache);}
+ let value=cache.get(entryPoint);onProgress({phase:value?'prepare':'compile',detail:entryPoint});
+ if(!value){value=(async()=>{const module=device.createShaderModule({code});const info=await module.getCompilationInfo();const errors=info.messages.filter(m=>m.type==='error');if(errors.length)throw Error(entryPoint+': '+errors.map(m=>m.lineNum+': '+m.message).join('\n'));return device.createComputePipelineAsync({layout:'auto',compute:{module,entryPoint}});})();cache.set(entryPoint,value);value.catch(()=>{if(cache.get(entryPoint)===value)cache.delete(entryPoint);});}
+ return value;
+}
+function abortable(promise,signal){
+ if(!signal)return promise;signal.throwIfAborted();
+ return new Promise((resolve,reject)=>{const abort=()=>reject(signal.reason);signal.addEventListener('abort',abort,{once:true});promise.then(resolve,reject).finally(()=>signal.removeEventListener('abort',abort));});
+}
+export async function createParticleIncidentField(device,{dims,origin,extent,transportWidth=dims[0],directionCount=24,pairs=particleDirectionPairs(directionCount),medium,particles,slots,settings={},filterLength=.125,signal,onProgress=()=>{}}){
  const resources=[];let scratch,deposit;
+ signal?.throwIfAborted();
  try{
   const base=particleLightPlan({dims,origin,extent,direction:[0,0,1],settings},device.limits);
   if(!Number.isSafeInteger(transportWidth)||transportWidth<1||!pairs.length||!Number.isFinite(filterLength)||filterLength<0)throw Error('Invalid angular field plan');
@@ -61,9 +73,10 @@ export async function createParticleIncidentField(device,{dims,origin,extent,tra
   const n=base.cells,buffer=(label)=>{const b=device.createBuffer({label,size:n*16,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST});resources.push(b);return b;},source=buffer('particle optical coefficients per world length'),incident=buffer('current angular mean incident radiance');
   const w=worldUniform(device,base);resources.push(w);
   const constants=frames.map(f=>frameUniform(device,f,1/(pairs.length*2)));resources.push(...constants);
-  scratch=createParticleLightSweep(device,frames[0]);
-  const pipeline=async(code,entryPoint)=>{const module=device.createShaderModule({code});const info=await module.getCompilationInfo();const errors=info.messages.filter(m=>m.type==='error');if(errors.length)throw Error(entryPoint+': '+errors.map(m=>m.lineNum+': '+m.message).join('\n'));return device.createComputePipelineAsync({layout:'auto',compute:{module,entryPoint}});};
-  const [resample,accumulate]=await Promise.all([pipeline(RESAMPLE,'resample'),pipeline(ACCUMULATE,'accumulate')]);
+  scratch=createParticleLightSweep(device,frames[0],onProgress);
+  const pipeline=(code,entryPoint)=>kernel(device,code,entryPoint,onProgress);
+  const [resample,accumulate]=await abortable(Promise.all([pipeline(RESAMPLE,'resample'),pipeline(ACCUMULATE,'accumulate')]),signal);
+  signal?.throwIfAborted();
   const group=(p,entries)=>device.createBindGroup({layout:p.getBindGroupLayout(0),entries:entries.map((resource,binding)=>({binding,resource:typeof resource.mapAsync==='function'?{buffer:resource}:resource}))});
   const resampleGroups=constants.map(f=>group(resample,[source,scratch.coefficients.createView(),w,f])),accumulateGroups=constants.map(f=>group(accumulate,[scratch.positive,scratch.negative,incident,w,f]));
   let convert,convertGroup;
@@ -72,7 +85,7 @@ export async function createParticleIncidentField(device,{dims,origin,extent,tra
    if(!particles||!Number.isSafeInteger(slots)||slots<1)throw Error('Particle source or explicit complete medium required');
    const pitch=extent[0]/dims[0];if(Math.abs(extent[1]/dims[1]-pitch)>1e-8)throw Error('Particle source deposition requires equal transverse pitches');
    deposit=createParticleLightSweep(device,{dims,origin,extent,direction:[0,0,1],settings:{...settings,filterWidth:filterLength/pitch}});
-   convert=await pipeline(SOURCE,'convert');convertGroup=group(convert,[deposit.coefficients.createView(),source,w]);
+   convert=await abortable(pipeline(SOURCE,'convert'),signal);signal?.throwIfAborted();convertGroup=group(convert,[deposit.coefficients.createView(),source,w]);
   }
   let disposed=false;
   const plan={dims,origin,extent,transportWidth,directionCount:pairs.length*2,weightSum:1,frames,settings:deposit?.plan.settings??base.settings,filterLength,source:'held intrinsic emission and current extinction; captured scattered light excluded',medium:'common piecewise-constant particle-deposited optical coefficients',angular:'equal-area antipodal hemisphere quadrature; incident stores spherical mean, normalized by4pi',spatial:'midpoint oriented cell sampling; trilinear incident reconstruction at world receivers',geometry:'open volume, no external solid geometry'};
