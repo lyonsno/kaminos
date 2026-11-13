@@ -44,7 +44,7 @@ export default {
   function read(){
    const material=materials.get(mode);
    return {mode,carrier:asset?.id,carrierSource:inputs.asset?.url??'fixture:uv-cylinder',meshes:meshes.length,
-    authoredTangents:meshes.filter(m=>!generatedTangents.has(m.geometry)).length,derivedTangentGeometries:generatedTangents.size,
+    authoredTangents:meshes.filter(m=>!generatedTangents.has(originals.get(m).geometry)).length,derivedTangentGeometries:generatedTangents.size,
     unresolvedFaces:[...partitions.values()].reduce((n,p)=>n+p.unresolvedFaces,0),
     activeMaterial:material?.material.name??null,lightId,lightAngle,uvScale,error:issue,
     source:inputs.source??null,fitted:inputs.fitted??null,neural:inputs.neural??null,
