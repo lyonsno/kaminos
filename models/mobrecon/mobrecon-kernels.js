@@ -1,4 +1,4 @@
-// Model-owned WGSL for the MobRecon (DenseStack + SpiralConv) port. Arithmetic
+// Model-owned WGSL for the MobRecon (DenseStack + SpiralConv or DSConv) port. Arithmetic
 // and storage are F32. Activations are [C, H, W] or [N, C] tensors addressed by
 // element offsets into their buffer (`*_off` uniforms), so dense-block concats
 // are channel slices of one buffer rather than copies. Weights are bound as
@@ -26,6 +26,7 @@ export const KERNEL_PARAMS = Object.freeze({
   copy: ['count', 'src_off', 'dst_off', 'z0'],
   gridSample: ['points', 'c', 'h', 'w', 'x_off', 'uv_off', 'y_off', 'z0'],
   meshPool: ['n', 'c', 'x_off', 'y_off'],
+  spiralDepthwise: ['n', 'c', 'seq', 'x_off', 'y_off', 'z0', 'z1', 'z2'],
   spiralConv: ['n', 'cin', 'cout', 'seq', 'x_off', 'y_off', 'relu', 'z0'],
 });
 
@@ -142,8 +143,19 @@ ${entry(`if(i>=p.n*p.cout){return;}
   var v=acc+bias[o];if(p.relu==1u){v=max(v,0.0);}
   y[p.y_off+i]=v;`)}`;
 
+// DSConv spatial stage: the ordered spiral is a 3x3 depthwise kernel per
+// input channel. No bias or activation between this and channel_layer.
+export const SPIRAL_DEPTHWISE = `${params(KERNEL_PARAMS.spiralDepthwise)}
+${ro(1, 'x')}${roI(2, 'spiral')}${ro(3, 'wt')}${rw(4, 'y')}
+${entry(`if(i>=p.n*p.c){return;}
+  let n=i/p.c;let c=i%p.c;var acc=0.0;
+  for(var s=0u;s<p.seq;s++){
+    acc+=x[p.x_off+u32(spiral[n*p.seq+s])*p.c+c]*wt[c*p.seq+s];
+  }
+  y[p.y_off+i]=acc;`)}`;
+
 export const SHADERS = Object.freeze({
   depthwise: DEPTHWISE, reorg: REORG, avgpool: AVGPOOL, seSqueeze: SE_SQUEEZE, channelScale: CHANNEL_SCALE,
   upNearestAdd: UP_NEAREST_ADD, upBilinear: UP_BILINEAR, copy: COPY, gridSample: GRID_SAMPLE,
-  meshPool: MESH_POOL, spiralConv: SPIRAL_CONV,
+  meshPool: MESH_POOL, spiralConv: SPIRAL_CONV, spiralDepthwise: SPIRAL_DEPTHWISE,
 });

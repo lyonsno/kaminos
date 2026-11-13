@@ -4568,6 +4568,12 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def translate_path(self, path):
         parsed = urlparse(path)
+        if parsed.path.startswith('/hand-models/'):
+            from hand_input import service
+            from urllib.parse import unquote
+            parts=unquote(parsed.path[len('/hand-models/'):]).split('/',1)
+            target=service().package_file(*parts) if len(parts)==2 else None
+            return str(target or ROOT/'.hand-model-path-rejected')
         packet_root = MODEL_INSTALLATIONS.root('sam3')
         if parsed.path.startswith('/sam3-packet/') and packet_root:
             from urllib.parse import unquote
@@ -4644,6 +4650,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
+        if parsed.path == '/api/hand-input':
+            from hand_input import service
+            return self.send_json(service().status())
         if self.mounted_package(parsed.path):
             return self.send_klein_weight(parsed.path)
         if parsed.path == "/api/workbench-experiments":
@@ -4777,6 +4786,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
+        if parsed.path.startswith('/api/hand-input/'):
+            from hand_input import handle
+            return handle(self,parsed.path[len('/api/hand-input/'):])
         if parsed.path == '/api/preferences':
             self.handle_preferences(write=True)
         elif parsed.path == '/api/prepare-image':

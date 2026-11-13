@@ -1,4 +1,4 @@
-// MobRecon DenseStack + SpiralConv network on WebGPU: one normalized 128x128
+// MobRecon DenseStack + SpiralConv or DSConv network on WebGPU: one normalized 128x128
 // crop in, 778 mesh vertices and 21 crop-space landmarks out. The graph mirrors
 // the pinned source module tree (cmr.models.mobrecon_densestack.MobRecon), with
 // weights named by source module path and BatchNorm folded at packing time.
@@ -17,7 +17,8 @@ const RELU = Object.freeze({ expression: 'max(value,0.0)' });
 const HARDTANH_0_4 = Object.freeze({ expression: 'clamp(value,0.0,4.0)' });
 
 // tensors: model-resource lease tensors by name ({ buffer, bufferOffset, byteLength, shape, dtype }).
-export function createMobReconNetwork({ device, tensors, label = 'mobrecon' }) {
+export function createMobReconNetwork({ device, tensors, label = 'mobrecon', decoder = 'spiralconv' }) {
+  if (!['spiralconv', 'dsconv'].includes(decoder)) throw new Error(`unsupported MobRecon decoder ${decoder}`);
   const graph = createStaticGraph({ device, tensors, label, missing: key => `missing MobRecon tensor ${key}` });
   const { weight, weightResource, alloc, slice, name, whole, dummy, uniform, record, grid1, named, steps } = graph;
   const kernel = (kind, values, resources, threads, tag) => {
@@ -178,6 +179,22 @@ export function createMobReconNetwork({ device, tensors, label = 'mobrecon' }) {
     return y;
   }
 
+  function meshConv(x, level, prefix, relu) {
+    if (decoder === 'spiralconv') return spiralConv(x, level, prefix, relu);
+    const [n, cin] = x.shape;
+    const spatial = weight(`${prefix}.spatial_layer.weight`);
+    const channel = weight(`${prefix}.channel_layer.weight`);
+    if (n !== LEVEL_VERTICES[level] || spatial.shape.length !== 4 ||
+        spatial.shape.some((v, i) => v !== [cin, 1, 3, 3][i])) {
+      throw new Error(`${prefix}: DSConv spatial shape mismatch`);
+    }
+    if (channel.shape.length !== 2 || channel.shape[1] !== cin) throw new Error(`${prefix}: DSConv channel shape mismatch`);
+    const filtered = alloc([n, cin], `${prefix}:spatial`);
+    kernel('spiralDepthwise', { n, c: cin, seq: SPIRAL_LENGTH, x_off: x.offset, y_off: filtered.offset },
+      [whole(x), weightResource(weight(`topology.spiral.${level}`)), weightResource(spatial), whole(filtered)], n * cin, `${prefix}:spatial`);
+    return linear(filtered, `${prefix}.channel_layer`, { activation: relu ? RELU : null });
+  }
+
   // ---- Graph ----
   const input = alloc([3, MOBRECON_INPUT_SIZE, MOBRECON_INPUT_SIZE], 'input');
   const stem = name('backbone.pre_layer.0', stemConv(input, 'backbone.pre_layer.0'));
@@ -210,9 +227,9 @@ export function createMobReconNetwork({ device, tensors, label = 'mobrecon' }) {
   let features = lifted;
   for (let i = 0; i < 4; i++) {
     const level = 3 - i;
-    features = name(`decoder3d.de_layer.${i}`, spiralConv(meshPool(features, level, `decoder3d.de_layer.${i}:pool`), level, `decoder3d.de_layer.${i}.conv`, true));
+    features = name(`decoder3d.de_layer.${i}`, meshConv(meshPool(features, level, `decoder3d.de_layer.${i}:pool`), level, `decoder3d.de_layer.${i}.conv`, true));
   }
-  const mesh = name('mesh_pred', spiralConv(features, 0, 'decoder3d.head', false));
+  const mesh = name('mesh_pred', meshConv(features, 0, 'decoder3d.head', false));
   name('uv_pred', uv);
 
   let disposed = false;
