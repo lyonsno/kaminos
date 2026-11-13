@@ -36,7 +36,7 @@ export function createLiveParticleLighting({runtime,settings:initial={},createWo
   try{
    const snapshot=await target.sampleOpticalParticlesForLighting();
    if(disposed||active!==job)return read();
-   if(job.revision!==revision||!settings.enabled){busy=false;active=null;lastAttempt=null;emit();return read();}
+   if(job.revision!==revision||!settings.enabled){busy=false;active=null;lastAttempt=null;emit();continueLatest();return read();}
    if(!snapshot?.available||snapshot.state?.effective!=='world-optical-particles'||!(snapshot.records instanceof Float32Array)||snapshot.records.length!==snapshot.state.slots*24||snapshot.state.lightingSource?.identity!==job.sourceIdentity)throw Error('Complete current native particle snapshot unavailable');
    job.sourceStep=snapshot.state.lightingSource.step;job.sourceRevision=snapshot.state.lightingSource.revision;job.sourceBytes=snapshot.records.byteLength;job.slots=snapshot.state.slots;
    ensureWorker();phase='transport';worker.postMessage({kind:'solve',id:job.id,revision:job.revision,records:snapshot.records,state:snapshot.state,settings:{...settings}},[snapshot.records.buffer]);emit();
