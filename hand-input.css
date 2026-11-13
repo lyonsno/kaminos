@@ -1,0 +1,17 @@
+.hand-input{position:relative;display:flex;align-items:center;margin-right:8px;flex-shrink:0;border:1px solid #383b3e;border-radius:6px}
+#authoring-header .hand-input button{margin:0;border:0;background:transparent;color:#b9bdc1;font:inherit;cursor:pointer}
+#authoring-header .hand-input-power{padding:5px 7px;display:flex;align-items:center;border-right:1px solid #383b3e}
+.hand-input-power svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linejoin:round}
+#authoring-header .hand-input-menu{display:flex;align-items:center;gap:7px;padding:5px 8px}
+.hand-input-model{font-size:10px;color:#8faaa8}.hand-input-model:empty{display:none}
+#authoring-header .hand-input-power[aria-pressed=true]{color:#99d7c1;background:#20352e}
+.hand-input-popover{position:absolute;top:calc(100% + 8px);right:0;width:260px;padding:15px;background:#232629;border:1px solid #42464b;border-radius:8px;box-shadow:0 10px 30px #0006;z-index:200;white-space:normal}
+.hand-input-popover[hidden]{display:none}.hand-input-heading{font-size:12px;font-weight:600;margin-bottom:12px;color:#e1e4e7}
+.hand-input-models{display:flex;border:1px solid #44494d;border-radius:5px;overflow:hidden;margin-bottom:13px}
+#authoring-header .hand-input-models button{flex:1;padding:7px 4px;border-radius:0;font-size:11px}
+#authoring-header .hand-input-models button[aria-pressed=true]{background:#4b595e;color:#fff}
+.hand-input-side{display:flex;align-items:center;gap:10px;min-height:34px;font-size:12px;color:#d0d3d6;cursor:pointer}
+.hand-input-side small{margin-left:auto;font-size:10px;color:#97a7a4}.hand-input-side input{accent-color:#a7cfc1;cursor:pointer}
+.hand-input-hint{font-size:10px;color:#90969d;margin:3px 0 14px}.hand-input-status{font-size:11px;color:#aab5b2;line-height:1.5;overflow-wrap:anywhere}
+.hand-input-status[data-error=true]{color:#ecb59e}
+@media(max-width:600px){.hand-input-popover{position:fixed;top:44px;left:8px;right:8px;width:auto}.hand-input{order:-1;margin-right:4px}.hand-input-model{max-width:65px;overflow:hidden}}

@@ -1,0 +1,12 @@
+export function assertHandObservation(row) {
+  const fail=message=>{throw Error(message);};
+  const {state,view,model,side}=row;
+  if(!state?.enabled||state.effectiveModel!==model||state.phase!=='tracking')fail('Requested model is not effectively tracking');
+  if(model==='wilor'){
+    if(state.identity?.model!=='wilor'||state.identity.backend!=='mlx-metal'||!/^\w{64}$/.test(state.identity.weightsSha256??''))fail('Full WiLoR Metal route is unverified');
+  }else if(state.identity?.backend!=='webgpu-local'||state.identity?.mobrecon?.decoder!==model)fail('MobRecon decoder route differs');
+  const hand=state.last?.hands?.find(h=>h.handedness===side&&h.hasHand);
+  if(!hand||hand.verticesMeters?.length!==778*3||!Array.from(hand.verticesMeters).every(Number.isFinite))fail('Expected hand has no complete geometry');
+  if(!state.last.captureId||!(state.last.frameId>0))fail('Source capture is unbound');
+  if(!view?.visible||!view.sides.includes(side))fail('Expected tracked hand is not presented');
+}

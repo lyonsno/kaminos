@@ -5,6 +5,7 @@ import fs from 'node:fs/promises';
 // Execute the production route with deterministic model/device dependencies.
 // No neural-network or crop math is replaced in the browser witness.
 const calls = { mesh: 0, detector: 0 };
+let detected = [];
 const device = {
   createTexture: ({ size }) => ({ width: size[0], height: size[1], destroy() {} }),
   createBuffer: ({ size }) => ({ async mapAsync() {}, getMappedRange: () => new ArrayBuffer(size), unmap() {}, destroy() {} }),
@@ -17,7 +18,7 @@ globalThis.GPUMapMode = { READ: 1 };
 const dependencies = {
   MOBRECON_ROUTE_ID: 'mesh', HAND_DETECTOR_ROUTE_ID: 'detector',
   loadMobRecon: async () => ({ identity: {}, faces: [], release() {}, network: { input: {}, outputs: { mesh: { buffer: {}, offset: 0 }, uv: { buffer: {}, offset: 0 } }, encode() { calls.mesh++; } } }),
-  loadHandDetector: async () => ({ identity: {}, release() {}, async detect() { calls.detector++; return []; } }),
+  loadHandDetector: async () => ({ identity: {}, release() {}, async detect() { calls.detector++; return detected; } }),
   createMobReconCrop: () => ({ dispose() {}, encode() {} }), squareCrop: () => [],
 };
 globalThis.__handMeshMissTest = dependencies;
@@ -39,6 +40,19 @@ assert.equal(fallback.acquisition.source, 'manual_crop_fallback_no_detection');
 await route.infer({ ...input, acquisition: { mode: 'manual', manualBox: [0, 0, 128, 128] } });
 assert.equal(calls.detector, 2, 'manual mode does not invoke the detector');
 await assert.rejects(route.infer({ ...input, acquisition: { ...input.acquisition, onMiss: 'invented' } }), /miss policy/i);
+detected = [{handSide:'right',confidence:.99,bbox:[1,2,3,4]}, {handSide:'left',confidence:.9,bbox:[10,20,30,40]}];
+const beforeMany = {...calls};
+const leftOnly = await route.infer({...input,sides:['left']});
+assert.deepEqual(leftOnly.hands?.map(h=>h.handedness), ['left'], 'independent left acquisition must choose the left detection, not reflect the strongest right hand');
+assert.equal(leftOnly.hands[0].acquisition.selectedDetection,1);
+const both = await route.infer({...input,sides:['left','right']});
+assert.deepEqual(both.hands.map(h=>h.handedness),['left','right']);
+assert.equal(calls.detector-beforeMany.detector,2,'both hands must share one detector execution per frame');
+assert.equal(calls.mesh-beforeMany.mesh,3);
+detected=[];
+const absent=await route.infer({...input,sides:['left','right']});
+assert.deepEqual(absent.hands,[],'an absent hand has no invented crop reconstruction');
+assert.equal(calls.mesh-beforeMany.mesh,3);
 route.release();
 // Distinct application instances use separate resource routes in one session.
 const registered = new Set();
