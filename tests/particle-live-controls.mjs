@@ -2,14 +2,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import definition from '../experiments/optical-particles.experiment.mjs';
+import {installRelativeNumberDrag} from '../scene-control-history.mjs';
 import {opticalParticleSettings} from '../volume-optical-particles.mjs';
 import {ambientBoundarySettings,resolveAmbientBoundary,ambientBoundaryControlPatch} from '../volume-ambient-boundary.mjs';
 
-async function mounted({shared=false,inputs={},viewport=false,boundary=false}={}){
+async function mounted({shared=false,inputs={},viewport=false,boundary=false,realScrub=false}={}){
  const document=new EventTarget();document.activeElement=null;
  class Element extends EventTarget{
-  constructor(tag){super();this.tagName=tag.toUpperCase();this.children=[];this.dataset={};this.style={};this.value='';this.min='';this.max='';const classes=new Set();this.classList={add:v=>classes.add(v),remove:v=>classes.delete(v),contains:v=>classes.has(v)};}
+  constructor(tag){super();this.tagName=tag.toUpperCase();this.ownerDocument=document;this.children=[];this.dataset={};this.style={};this.value='';this.min='';this.max='';const classes=new Set();this.classList={add:v=>classes.add(v),remove:v=>classes.delete(v),contains:v=>classes.has(v)};}
   append(...els){for(let el of els){if(typeof el==='string'){const node=new Element('span');node.textContent=el;el=node;}el.parentNode=this;this.children.push(el);}}
+  focus(){document.activeElement=this;this.fire('focus');}
+  blur(){document.activeElement=null;this.fire('blur');}
+  select(){}
+  setPointerCapture(){}
+  hasPointerCapture(){return false;}
   setAttribute(){}
   remove(){if(this.parentNode)this.parentNode.children=this.parentNode.children.filter(x=>x!==this);}
   fire(type,init={}){const event=new Event(type,{bubbles:true,cancelable:true});Object.assign(event,init);this.dispatchEvent(event);}
@@ -22,8 +28,8 @@ async function mounted({shared=false,inputs={},viewport=false,boundary=false}={}
   const input=new Element('input'),label=new Element('span');input.value=String(reaction?.[key]??accepted[key]);input.addEventListener('input',()=>{trace.nativeEvents.push(key);runtime.setParticleSimulationReaction({[key]:Number(input.value)});});native.set(id,input);native.set(id+'-val',label);
  }
  if(boundary){let b=ambientBoundarySettings();runtime.ambientBoundaryState=()=>resolveAmbientBoundary(ambientBoundaryControlPatch(b),{scale:4,dims:[6,12,6],reactant:true});runtime.setAmbientBoundary=patch=>{const next=ambientBoundarySettings({...b,...patch});trace.boundary.push(patch);b=next;return runtime.ambientBoundaryState();};for(const [key,id] of [['widthWorld','volume-ambient-boundary-width'],['exchangeTime','volume-ambient-exchange-time'],['velocityDamping','volume-boundary-velocity-damping']]){const input=new Element('input');input.type='hidden';input.value=b[key]===null?'':String(b[key]);input.addEventListener('input',()=>trace.nativeEvents.push(key));native.set(id,input);}}
- document.defaultView={__kaminosVolumePrototype:runtime,Event};
- const owner=await definition.create({host:{controls:{document,installNumberDrag:({input,step,onStart,onEnd})=>{input.sharedScrub={step,onStart,onEnd};return {dispose(){input.sharedScrubDisposed=true;}};}},scene:{open:async()=>({onFrame:()=>()=>{},redraw(){trace.redraw.push(true);},dispose(){}})}},inputs:{...inputs,particles:{acquisitionMode:1,...inputs.particles}},record:r=>trace.records.push(r),updateInputs:s=>writes.push(s)});
+ document.defaultView=Object.assign(new EventTarget(),{__kaminosVolumePrototype:runtime,Event});
+ const owner=await definition.create({host:{controls:{document,installNumberDrag:options=>{if(realScrub)return installRelativeNumberDrag(options);const {input,step,onStart,onEnd}=options;input.sharedScrub={step,onStart,onEnd};return {dispose(){input.sharedScrubDisposed=true;}};}},scene:{open:async()=>({onFrame:()=>()=>{},redraw(){trace.redraw.push(true);},dispose(){}})}},inputs:{...inputs,particles:{acquisitionMode:1,...inputs.particles}},record:r=>trace.records.push(r),updateInputs:s=>writes.push(s)});
  const root=new Element('div');owner.mount({root,document,invoke:async(op,v)=>owner.operations[op](v)});
  const all=el=>[el,...el.children.flatMap(all)];const field=key=>all(root).find(el=>el.dataset.particle===key);
  Object.values(trace).forEach(rows=>{rows.length=0;});
@@ -132,4 +138,8 @@ test('captured-light controls share particle authoring, persist and remain avail
 });
 test('lighting window moves by its header and keeps its position when reopened',async()=>{
  const x=await mounted({viewport:true});try{x.owner.operations.openLighting();const header=x.panel.children.find(el=>el.dataset.particleLightingDrag==='true');assert.ok(header,'movable title bar');header.fire('pointerdown',{button:0,pointerId:1,clientX:500,clientY:100});const move=new Event('pointermove');Object.assign(move,{pointerId:1,clientX:380,clientY:160});x.document.dispatchEvent(move);const up=new Event('pointerup');Object.assign(up,{pointerId:1});x.document.dispatchEvent(up);assert.equal(x.panel.style.top,'132px');const left=x.panel.style.left;assert.ok(left.endsWith('px'));x.document.dispatchEvent(Object.assign(new Event('keydown'),{key:'Escape'}));x.owner.operations.openLighting();assert.equal(x.panel.style.left,left);assert.equal(x.panel.style.top,'132px');}finally{await x.dispose();}
+});
+
+test('real shared widget discards a typed lighting draft before Escape blur can commit it',async()=>{
+ const x=await mounted({viewport:true,realScrub:true,inputs:{lighting:{enabled:true}}});try{x.owner.operations.openLighting();const input=x.lightField('gain');input.focus();input.value='2';input.fire('input');x.document.dispatchEvent(Object.assign(new Event('keydown',{cancelable:true}),{key:'Escape'}));await settle();assert.equal(x.owner.read().lighting.requested.gain,1,'Escape is cancellation, not a blur commit');assert.equal(Number(input.value),1);}finally{await x.dispose();}
 });

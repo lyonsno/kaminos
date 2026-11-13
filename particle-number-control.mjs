@@ -12,8 +12,11 @@ export function bindParticleNumber({input,read,apply,onError,onAccepted,delay=15
   catch(error){if(!disposed&&revision===version){dirty=true;onError(error);if(leaving||left)discard();}}
  }
  const edit=()=>{cancel();version++;dirty=true;left=false;if(input.classList.contains('scrubbing'))void flush();else timer=setTimeout(()=>void flush(),delay);};
+ // The shared numeric widget cancels then blurs during document-level Escape.
+ // Discard before that blur can flush the uncommitted typed draft.
+ const cancelled=()=>{cancel();version++;discard();};
  const leave=()=>{left=true;void flush({leaving:true});};
  const key=event=>{if(event.key==='Enter'){void flush({leaving:true});}if(event.key==='Escape'){cancel();version++;discard();}};
- input.addEventListener('input',edit);input.addEventListener('change',leave);input.addEventListener('blur',leave);input.addEventListener('keydown',key);
- return {dispose(){disposed=true;cancel();version++;input.removeEventListener('input',edit);input.removeEventListener('change',leave);input.removeEventListener('blur',leave);input.removeEventListener('keydown',key);}};
+ input.addEventListener('input',edit);input.addEventListener('change',leave);input.addEventListener('blur',leave);input.addEventListener('keydown',key);input.addEventListener('pointercancel',cancelled);
+ return {dispose(){disposed=true;cancel();version++;input.removeEventListener('input',edit);input.removeEventListener('change',leave);input.removeEventListener('blur',leave);input.removeEventListener('keydown',key);input.removeEventListener('pointercancel',cancelled);}};
 }
