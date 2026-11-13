@@ -4,12 +4,17 @@ import {palmFrame,wristBoundary,HAND_VIEW} from './hand-input-geometry.mjs';
 // Presentation follows Iron Gland's proper [-X,-Y,+Z] opposite-camera view.
 // This is a camera-plane input overlay, not calibrated scene contact.
 export function createHandInputView({scene,camera,onFrame,redraw}) {
-  const root=new Group();root.name='Hand input overlay';root.visible=false;
-  root.userData.handInputOverlay=true;root.userData.kaminosEditorOnly=true;scene.add(root);
-  const meshes=new Map();let last=null;
+  // The host owns outer visibility while capturing; tracking owns inner presence.
+  const captureRoot=new Group();captureRoot.name='Hand input overlay';
+  captureRoot.userData.handInputOverlay=true;captureRoot.userData.kaminosEditorOnly=true;scene.add(captureRoot);
+  const root=new Group();root.name='Tracked hands';root.visible=false;captureRoot.add(root);
+  const meshes=new Map();let last=null,geometryDirty=false,previousPose=null;
   const updateView=()=>{
     if(!last?.hands?.length){root.visible=false;return;}
-    root.visible=true;camera.updateMatrixWorld();root.position.copy(camera.getWorldPosition(new Vector3()));
+    camera.updateMatrixWorld();
+    const pose=[...camera.matrixWorld.elements,...camera.projectionMatrix.elements];
+    if(!geometryDirty&&previousPose&&pose.every((value,index)=>value===previousPose[index]))return;
+    geometryDirty=false;previousPose=pose;root.visible=true;root.position.copy(camera.getWorldPosition(new Vector3()));
     root.quaternion.copy(camera.getWorldQuaternion(root.quaternion));
     const distance=Math.max(camera.near*2,1),p=camera.projectionMatrix.elements;
     const width=2*(camera.isPerspectiveCamera?distance:1)/p[0],height=2*(camera.isPerspectiveCamera?distance:1)/p[5];
@@ -46,9 +51,9 @@ export function createHandInputView({scene,camera,onFrame,redraw}) {
         for(let i=0;i<values.length;i++)positions[i]=values[i]*HAND_VIEW[i%3]-palm.center.getComponent(i%3);
         mesh.geometry.attributes.position.needsUpdate=true;mesh.geometry.computeVertexNormals();
       }
-      last=result;updateView();
+      last=result;geometryDirty=true;updateView();
     },
-    read:()=>({visible:root.visible,sides:[...meshes].filter(([,m])=>m.visible&&root.visible).map(([s])=>s),placement:'camera-plane; uncalibrated'}),
-    dispose(){off();scene.remove(root);for(const mesh of meshes.values()){mesh.geometry.dispose();mesh.material.dispose();}},
+    read:()=>({visible:captureRoot.visible&&root.visible,sides:[...meshes].filter(([,m])=>m.visible&&root.visible&&captureRoot.visible).map(([s])=>s),placement:'camera-plane; uncalibrated'}),
+    dispose(){off();scene.remove(captureRoot);for(const mesh of meshes.values()){mesh.geometry.dispose();mesh.material.dispose();}},
   };
 }
