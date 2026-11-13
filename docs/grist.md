@@ -57,9 +57,37 @@ Keep operator interaction responsive while refinement advances through explicit 
 
 The frozen source is the finest completed material state, with analytical grains/particulates and relevant optical parameters. Rendering resolution and the physical carrier resolution remain independent. No new general path tracer is required to establish this mechanical composition.
 
+## Compatibility audit before implementation
+
+Operator request, 2026-11-13: identify decisions in HOT and Hybrid Grains that differ from MLS-MPM or from the proposed composition before changing them. No solver code had been written when this request arrived. These are actual implementation differences, not categorical mathematical impossibility claims.
+
+### HOT's released MLS path is explicit-only
+
+At the pinned HOT revision, `Lib/MPM/MpmSimulationBase.cpp:102–104` requires `mls_mpm` to use quadratic/cubic APIC and `symplectic == true`. `Projects/multigrid/MultigridSimulation.h:188` implements a backward-Euler nonlinear solve with coarse system matrices and transfer operators. HOT is not a switch beneath our explicit MLS force kernels. Combining them would require consistent force/stress derivatives, boundary treatment and coarse operators. Retaining APIC alone does not establish that consistency. Choosing the local explicit core provisionally forgoes HOT's demonstrated stiff implicit stepping and convergence benefit.
+
+Primary code: [HOT initialization](https://github.com/penn-graphics-research/HOT/blob/d8d57be410ed343c3fb37af6020cf5e14a0d1bec/Lib/MPM/MpmSimulationBase.cpp#L94), [implicit step](https://github.com/penn-graphics-research/HOT/blob/d8d57be410ed343c3fb37af6020cf5e14a0d1bec/Projects/multigrid/MultigridSimulation.h#L188).
+
+### Hybrid Grains' transfers and reconciliation differ
+
+The released 2D implementation uses a PIC/FLIP velocity blend in `mpmgrains2d/MaterialPoints.cpp:204–245`; `PhysicsGrid.cpp:274` rasterizes mass times point velocity without the APIC affine term. APIC/MLS need not be mathematically incompatible with hybrid coupling, but replacing transfers changes numerics and requires affine/rotational response and momentum accounting to be checked.
+
+`hybridgrains2dnew/Coupling.cpp:533–580` exchanges equal/opposite impulses between continuum and discrete grid momenta and checks matching velocities. The driver separately weights material mass in the overlap, resamples regions and reconstructs state. Coarse full-mass mechanics plus one-way fine local detail is an alternative approximation. Retain no-double-mass accounting and explicit history transfer; dropping reciprocal reconciliation does not retain their coupled mechanical validation.
+
+Its continuum law is pressure-dependent Drucker–Prager-style granular plasticity (`ConstitutiveModel.cpp`), with zero shear yield when uncompressed/expanded. Cohesive clay, bond weakening and fracture are intentional new material behavior. Resampling and history reconstruction also require adaptation for persistent fine identity/damage. The paper discusses different DEM/MPM stability limits; separately, the released 2D driver rejects unequal discrete/continuum timesteps at `HybridGrains2DSim.cpp:237`. Staggered local clocks are another extension, not something established by adopting the release.
+
+Primary code: [PIC/FLIP update](https://github.com/peterchencyc/libHybridGrains/blob/1e311642b9f81a6a21bb3deef000db322e7dcc5f/mpmgrains2d/MaterialPoints.cpp#L204), [reconciliation](https://github.com/peterchencyc/libHybridGrains/blob/1e311642b9f81a6a21bb3deef000db322e7dcc5f/hybridgrains2dnew/Coupling.cpp#L533), [material law](https://github.com/peterchencyc/libHybridGrains/blob/1e311642b9f81a6a21bb3deef000db322e7dcc5f/mpmgrains2d/ConstitutiveModel.cpp), [driver](https://github.com/peterchencyc/libHybridGrains/blob/1e311642b9f81a6a21bb3deef000db322e7dcc5f/hybridgrains2dnew/HybridGrains2DSim.cpp).
+
+### Additional browser implementations
+
+[EA PB-MPM](https://github.com/electronicarts/pbmpm/tree/61749b6c2d2631ed243f86882752ba43196f2de7) is a substantial additional contender: WebGPU WGSL, optimized main and readable `siggraph2024` branches, BSD-3-Clause. The released particle/grid state is **2D** (vec2/mat2), not a drop-in 3D solver. Its current `g2p2g.wgsl` includes sand plasticity and local displacement correction. The [two-page paper](https://media.contentapi.ea.com/content/dam/ea/seed/presentations/seed-siggraph2024-pbmpm-paper.pdf), read in full, uses MLS-MPM quadratic transfers with iterative compliant constraints. Iteration-dependent softness is an explicit tradeoff. It also describes deleting badly conditioned elastic particles; current source has a disable path. Persistent source material cannot silently inherit disappearance as stabilization. PB-MPM is now a formulation contender alongside explicit MLS and a larger HOT-style implicit solver, not an adopted replacement.
+
+[WebGPUMPM](https://github.com/chetan-parthiban/WebGPUMPM/tree/37802a61fafb7faa1ab20db18b71450b3847f5ab) is an older 3D fluid/jello/snow reference. Checked source uses GLSL-to-SPIR-V and obsolete WebGPU APIs (`computeStage`, shader `transform`); the browser label does not establish present compatibility. Its README discloses accelerated final GIFs. [Breakpoint](https://github.com/danieljgerhardt/Breakpoint) reports a 3D DirectX PB-MPM implementation; its README/project description was located, not its full kernels audited.
+
+External inspection was source-only; no numerical correctness or current M4/browser performance is established. HOT's PDF and the full Hybrid Grains paper could not be fetched by the web tool in this follow-up; the source-code claims above come from pinned implementations, with paper search excerpts used only for the separately identified timestep discussion.
+
 ## Recommended first build
 
-Adapt the local GPU APIC material core into a separate Grist module, retaining the existing water and Hill consumers. Borrow source explicitly rather than rebasing the whole fine-earth program onto either product branch. Start from the current main tree and port only the needed dependencies.
+Provisional baseline recommendation: adapt the local GPU APIC material core into a separate Grist module, retaining the existing water and Hill consumers. The PB-MPM contender and HOT compatibility issue reopen time-integrator selection before implementation; no formulation has been adopted by runtime code. Borrow source explicitly rather than rebasing the whole fine-earth program onto either product branch. Start from the current main tree and port only the needed dependencies.
 
 Connect one cohesive matrix region, embedded two-sphere grit and the ordinary movable forming tool to one fine particulate level. The decisive interaction is to press and then drag material around a hard inclusion: inspect regional deformation, local fine rearrangement and, once the separation mechanism is present, a detached portion moving independently. Show the actual particulate material and preserve state through refinement. Start with the same material state when comparing coarse and refined evolution.
 
