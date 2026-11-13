@@ -23,21 +23,29 @@ fn gridBox(ro:vec3<f32>,rd:vec3<f32>,hi:vec3<f32>)->vec2<f32>{
  for(var a=0u;a<3u;a++){if(abs(rd[a])<1e-12){if(ro[a]<-1.0||ro[a]>hi[a]){return vec2<f32>(1,0);}}else{let x=(-1.0-ro[a])/rd[a];let y=(hi[a]-ro[a])/rd[a];near=max(near,min(x,y));far=min(far,max(x,y));}}
  return vec2<f32>(near,far);
 }
-// Exact traversal of the prepared piecewise-constant coefficient cells.
-fn gridSegmentTau(ro:vec3<f32>,rd:vec3<f32>,start:f32,end:f32,hi:vec3<f32>)->f32{
- if(end<=start){return 0.0;}let dims=vec3<i32>(textureDimensions(medium));let pitch=(hi+vec3<f32>(1))/vec3<f32>(dims);
- let at=(ro+rd*start+vec3<f32>(1))/pitch;var cell=clamp(vec3<i32>(floor(at)),vec3<i32>(0),dims-1);
- for(var a=0u;a<3u;a++){if(rd[a]<0&&at[a]==floor(at[a])){cell[a]=max(0,cell[a]-1);}}
- var t=start;var tau=0.0;
- loop{
-  var next=vec3<f32>(1e30);
-  for(var a=0u;a<3u;a++){if(abs(rd[a])>1e-12){let edge=-1.0+(f32(cell[a])+select(0.0,1.0,rd[a]>0))*pitch[a];next[a]=(edge-ro[a])/rd[a];}}
-  let stop=min(end,min(next.x,min(next.y,next.z)));
-  tau+=max(0.0,textureLoad(medium,cell,0).w)*max(0.0,stop-t);
-  if(stop>=end){break;}
-  for(var a=0u;a<3u;a++){if(next[a]<=stop){cell[a]+=select(-1,1,rd[a]>0);}}
-  if(any(cell<vec3<i32>(0))||any(cell>=dims)){break;}t=max(t,stop);
- }return tau;
+// Slice cuts only stop the integral, never restart its cell walk. Retain
+// the current coefficient and crossing so finer depth bins don't reload it.
+struct GridWalk {cell:vec3<i32>,next:vec3<f32>,cursor:f32,tau:f32,sigma:f32}
+fn gridCrossings(ro:vec3<f32>,rd:vec3<f32>,pitch:vec3<f32>,cell:vec3<i32>)->vec3<f32>{
+ let moving=abs(rd)>vec3<f32>(1e-12);
+ let edge=-vec3<f32>(1)+(vec3<f32>(cell)+select(vec3<f32>(0),vec3<f32>(1),rd>vec3<f32>(0)))*pitch;
+ return select(vec3<f32>(1e30),(edge-ro)/select(vec3<f32>(1),rd,moving),moving);
+}
+fn gridAdvance(ro:vec3<f32>,rd:vec3<f32>,dims:vec3<i32>,pitch:vec3<f32>,stop:f32,walk:ptr<function,GridWalk>){
+ while((*walk).cursor<stop){
+  let cell=(*walk).cell;if(any(cell<vec3<i32>(0))||any(cell>=dims)){return;}
+  let next=(*walk).next;let crossing=min(next.x,min(next.y,next.z));let cut=min(stop,crossing);
+  if(cut>(*walk).cursor){
+   if((*walk).sigma<0.0){(*walk).sigma=max(0.0,textureLoad(medium,cell,0).w);}
+   (*walk).tau+=(*walk).sigma*(cut-(*walk).cursor);
+   (*walk).cursor=cut;
+  }
+  if(stop<crossing){return;}
+  let moved=cell+select(vec3<i32>(0),select(vec3<i32>(-1),vec3<i32>(1),rd>vec3<f32>(0)),next<=vec3<f32>(crossing));
+  (*walk).cell=moved;
+  (*walk).next=gridCrossings(ro,rd,pitch,moved);
+  (*walk).sigma=-1.0;
+ }
 }
 @compute @workgroup_size(8,8) fn build(@builtin(global_invocation_id) id:vec3<u32>){
  if(any(id.xy>=depthParams.size.xy)){return;}let xy=vec2<i32>(id.xy);let uv=(vec2<f32>(id.xy)+.5)/vec2<f32>(depthParams.size.xy);let ndc=uv*vec2<f32>(2,-2)+vec2<f32>(-1,1);
@@ -48,13 +56,18 @@ fn gridSegmentTau(ro:vec3<f32>,rd:vec3<f32>,start:f32,end:f32,hi:vec3<f32>)->f32
  if(solid<1.0){let c=u.inverse*vec4<f32>(ndc,select(solid*2.0-1.0,solid,u.gain.w>.5),1);hit.y=min(hit.y,dot(c.xyz/c.w-ro,rd));}
  let start=hit.x;let end=max(start,hit.y);let originDepth=(u.vp*vec4<f32>(ro,1)).w;let slope=(u.vp*vec4<f32>(rd,0)).w;
  var lo=bitcast<f32>(depthBounds[0]);var high=bitcast<f32>(depthBounds[1]);if(high<=lo){if(lo<1e30&&lo>0.0){high=lo+.5;lo-=.5;}else{lo=originDepth;high=lo+1.0;}}
- var cursor=start;var tau=0.0;var base=0.0;
+ let dims=vec3<i32>(textureDimensions(medium));let pitch=(hi+vec3<f32>(1))/vec3<f32>(dims);
+ let at=(ro+rd*start+vec3<f32>(1))/pitch;let lower=floor(at);
+ // Apply the inward face convention before clamping; at the upper boundary
+ // floor(at) can be dims, and the first negative-direction cell is dims-1.
+ let cell=clamp(vec3<i32>(lower)-select(vec3<i32>(0),vec3<i32>(1),(rd<vec3<f32>(0))&(at==lower)),vec3<i32>(0),dims-1);
+ var walk=GridWalk(cell,gridCrossings(ro,rd,pitch,cell),start,0.0,-1.0);var base=0.0;
  for(var k=0u;k<=depthParams.size.w;k++){
   let z=mix(lo,high,f32(k)/f32(depthParams.size.w));let stop=clamp((z-originDepth)/slope,start,end);
-  tau+=gridSegmentTau(ro,rd,cursor,stop,hi);cursor=stop;
-  if(k==0u){base=tau;}else{let layer=k-1u;let at=id.xy+vec2<u32>(layer%depthParams.size.z,layer/depthParams.size.z)*depthParams.size.xy;textureStore(gridPrefix,vec2<i32>(at),vec4<f32>(tau));}
+  gridAdvance(ro,rd,dims,pitch,stop,&walk);
+  if(k==0u){base=walk.tau;}else{let layer=k-1u;let at=id.xy+vec2<u32>(layer%depthParams.size.z,layer/depthParams.size.z)*depthParams.size.xy;textureStore(gridPrefix,vec2<i32>(at),vec4<f32>(walk.tau));}
  }
- tau+=gridSegmentTau(ro,rd,cursor,end,hi);textureStore(gridBaseTotal,xy,vec4<f32>(base,tau,0,0));
+ gridAdvance(ro,rd,dims,pitch,end,&walk);textureStore(gridBaseTotal,xy,vec4<f32>(base,walk.tau,0,0));
 }
 `;
 
