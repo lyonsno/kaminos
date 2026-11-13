@@ -8,7 +8,9 @@ export function createVolumeWorkerFrameBinding({appHost,volume,applyFrameInputs=
   const context=volume?.foregroundGpuContext?.();
   const dormant=allowDormant&&context?.active===false&&context.device===null&&context.queue==null;
   if(!device||queue!==device.queue||!dormant&&(context?.device!==device||context?.queue!==queue))throw Error('worker flame binding requires the app shared device and queue');
-  if(context.renderer!=='ordinary-volume'||context.productFrameOwner!=='prototype')throw Error('worker flame binding requires the ordinary volume renderer');
+  // Current volume has one renderer and no renderer discriminator. Preserve
+  // rejection of explicit foreign legacy markers and caller-owned frames.
+  if(context.renderer!==undefined&&context.renderer!=='ordinary-volume'||context.productFrameOwner!=='prototype')throw Error('worker flame binding requires the ordinary volume renderer');
  }
  checkVolume();
  if(typeof appHost.requester!=='function'||typeof appHost.activateFrames!=='function'||typeof volume.renderSharedFrame!=='function'||typeof applyFrameInputs!=='function')throw Error('worker flame binding requires frame and input callbacks');
