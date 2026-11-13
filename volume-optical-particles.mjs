@@ -18,7 +18,7 @@ export function opticalParticleSettings(input={}) {
   burnTime:8,cooling:10,heatRelease:.35,sootYield:.25,smokeLife:24,reactionSeedLength:1,reactionSupportCoupling:1,renewalDiagnostics:false,
   flow:1,rise:0,drag:4,expansion:0,spacing:1,maxAge:0,
   populationWidth:0,populationHeight:0,targetScale:1,fineAcquisition:0,flowAlignment:0,pixelFloor:.5,supportFloor:0,projection:1,
-  capacity:0,acquisitionMode:0,acquisitionSamples:8192,emitterBirthsPerStep:128,lightRefreshEvery:4,filmJitter:1,fineCoverage:1,coarseCoverage:0,sourceBias:.75,sourceHistory:4,sourceMargin:1,
+  capacity:0,acquisitionMode:0,acquisitionSamples:8192,emitterBirthsPerStep:128,lightRefreshEvery:0,filmJitter:1,fineCoverage:1,coarseCoverage:0,sourceBias:.75,sourceHistory:4,sourceMargin:1,
   depthMode:0,depthSlices:16,depthScale:.25,fillExtinction:0,extinctionSlack:0,extinctionView:0,scatteredGain:input.scatteredGain??input.carriedSmokeGain??1,scatteredLife:0,carriedSmokeGain:1,generatedSmokeGain:1,showParticles:true,showRaymarch:false,sourceColorOutput:false,...PARTICLE_STATE_DEFAULTS,...PARTICLE_WORK_DEFAULTS,profileMode:input.profileMode??([input.emissionFalloff,input.extinctionFalloff].some(v=>v!==undefined&&v!==1)?1:0),...input};
  if(![0,1,2].includes(s.depthMode)||!Number.isSafeInteger(s.depthSlices)||s.depthSlices<1||s.depthSlices>0xffffffff||s.depthScale<=0)throw Error('Invalid particle depth settings');
  const flags=['enabled','showParticles','showRaymarch','sourceColorOutput','renewalDiagnostics',...PARTICLE_WORK_FLAGS];for(const key of flags)if(typeof s[key]!=='boolean')throw Error('Particle '+key+' must be boolean');
@@ -65,8 +65,8 @@ fn particleMaterial(p:Particle,u:Options)->vec4<f32>{
  let emission=p.emission.xyz*u.gain.x;
  let lightLife=select(u.time.w,u.lighting.y,u.lighting.y>0);
  var scattered=p.source.xyz*exp(-age/lightLife)*u.lighting.x;
- // Emitter-born carriers cache incident light, then scatter by current soot.
- if(u.acquisition.x==2u){
+ // Refreshed carriers cache incident light, then scatter by current soot.
+ if(u.acquisition.x==2u||p.source.w<0.0){
   let sigmaS=max(0.0,p.state.z)*u.material.x*u.material.y*u.material.z*u.material.w;
   scattered=p.source.xyz*sigmaS*u.lighting.x;
  }
@@ -220,11 +220,21 @@ var<workgroup> statsAges:array<vec4<f32>,64>;
 
 `;
 const EMITTER_COMPUTE=PARTICLE_COMPUTE_WGSL+PARTICLE_EMITTER_WGSL;
-const REFRESH_COMPUTE=OPTIONS+DISTRIBUTED_SMOKE_WGSL.replaceAll('@group(2)','@group(0)').replaceAll('@binding(0)','@binding(1)').replaceAll('@binding(1) var<storage,read> smokeBoundaryMasks','@binding(2) var<storage,read> smokeBoundaryMasks').replaceAll('@binding(2) var<storage,read> smokeSupportPlanes','@binding(3) var<storage,read> smokeSupportPlanes')+/* wgsl */`
+const REFRESH_COMPUTE=OPTIONS+DISTRIBUTED_SMOKE_WGSL+/* wgsl */`
+override NEWBORNS_ONLY:bool=false;
 @group(0) @binding(0) var<storage,read_write> particles:array<Particle>;
+@group(0) @binding(1) var<storage,read> newbornSlots:array<u32>;
 @compute @workgroup_size(64) fn refreshIncident(@builtin(global_invocation_id) id:vec3<u32>){
- if(id.x>=arrayLength(&particles)||particles[id.x].anchor.w<=0.0){return;}
- let p=particles[id.x];particles[id.x].source=vec4<f32>(distributedMeanIncident(p.anchor.xyz),p.anchor.w);
+ var i=id.x;
+ if(NEWBORNS_ONLY){
+  if(i>=newbornSlots[0]){return;}
+  i=newbornSlots[i+1u];
+ }
+ if(i>=arrayLength(&particles)||particles[i].anchor.w<=0.0){return;}
+ let p=particles[i];
+ if(NEWBORNS_ONLY&&p.source.w!=0.0){return;}
+ // Negative marks incident irradiance rather than the original captured q-E.
+ particles[i].source=vec4<f32>(distributedMeanIncident(p.anchor.xyz),-p.anchor.w);
 }
 `;
 const RENDER=/* wgsl */`${OPTIONS}
@@ -321,7 +331,7 @@ export function createOpticalParticles(device,{transparent=false,indexedQuads=tr
  const exchange=createParticleField(device,{particleWgsl:'struct Particle {anchor:vec4<f32>,source:vec4<f32>,emission:vec4<f32>,motion:vec4<f32>,shape:vec4<f32>,state:vec4<f32>}'});
  const follow=createParticleFollow(device);
  let exchangeState=null,stagedAcquisition=null,followState=null;
- let emitterPipelines=null,emitterOptions=null,emitterCdf=null,emitterFree=null,refreshPipeline=null,lastLightStep=null,lastLightGeneration=null;
+ let emitterPipelines=null,emitterOptions=null,emitterCdf=null,emitterFree=null,refreshModule=null,refreshLayout=null,refreshEmptyGroup=null,refreshParticleLayout=null,refreshIncidentLayout=null,lastLightStep=null,lastLightGeneration=null;const refreshPipelines=new Map();
  function prepareEmitterGpu(plan,slots){
   if(!emitterPipelines){
    const module=device.createShaderModule({label:'native emitter carrier birth',code:EMITTER_COMPUTE});
@@ -378,8 +388,22 @@ export function createOpticalParticles(device,{transparent=false,indexedQuads=tr
   const emitterMode=s.acquisitionMode===2;
   const emitterPlan=emitterMode?emitterBirthDispatch(device,s,emitter,dims,step,requestedDt,source.backtrace):null;
   if(resetNeeded){lastLightStep=null;lastLightGeneration=null;}
-  const refreshDue=emitterMode&&requestedDt>0&&s.lightRefreshEvery>0&&(lastLightStep===null||step-lastLightStep>=s.lightRefreshEvery);
+  const refreshDue=requestedDt>0&&s.lightRefreshEvery>0&&(lastLightStep===null||step-lastLightStep>=s.lightRefreshEvery);
   const refreshThisDraw=refreshDue&&!!incident;
+  const initializeBirthLight=!!emitterPlan&&!!incident&&!refreshThisDraw;
+  if((refreshThisDraw||initializeBirthLight)&&!refreshModule){
+   refreshModule=device.createShaderModule({code:REFRESH_COMPUTE,label:'same-carrier shared incident light'});
+   const visibility=GPUShaderStage.COMPUTE,emptyLayout=device.createBindGroupLayout({entries:[]});
+   refreshEmptyGroup=device.createBindGroup({layout:emptyLayout,entries:[]});
+   refreshParticleLayout=device.createBindGroupLayout({entries:[
+    {binding:0,visibility,buffer:{type:'storage'}},{binding:1,visibility,buffer:{type:'read-only-storage'}},
+   ]});
+   refreshIncidentLayout=device.createBindGroupLayout({entries:[
+    {binding:0,visibility,texture:{sampleType:'unfilterable-float',viewDimension:'3d'}},
+    {binding:1,visibility,buffer:{type:'read-only-storage'}},{binding:2,visibility,buffer:{type:'read-only-storage'}},
+   ]});
+   refreshLayout=device.createPipelineLayout({bindGroupLayouts:[refreshParticleLayout,emptyLayout,refreshIncidentLayout]});
+  }
   if(!particles||particles.size!==slots*96){retire(particles?[particles]:[]);particles=device.createBuffer({label:'shared world optical material carriers',size:slots*96,usage:storage});}
   const directTransfer=!gridActive&&fusedResolve&&targetWidth===outputWidth&&targetHeight===outputHeight;
   const formats=directTransfer?['rgba16float']:['rgba16float','rgba32float'],textureBytes=targetWidth*targetHeight*(directTransfer?8:24);
@@ -416,19 +440,26 @@ export function createOpticalParticles(device,{transparent=false,indexedQuads=tr
    }
    p.end();
   }
-  if(refreshThisDraw){
-   refreshPipeline??=device.createComputePipeline({label:'current incident field at retained carrier positions',layout:'auto',compute:{module:device.createShaderModule({code:REFRESH_COMPUTE}),entryPoint:'refreshIncident'}});
-   const p=encoder.beginComputePass({label:'refresh carrier incident illumination',...profileWrites('lightRefresh')});p.setPipeline(refreshPipeline);
-   p.setBindGroup(0,device.createBindGroup({layout:refreshPipeline.getBindGroupLayout(0),entries:[
-    {binding:0,resource:{buffer:particles}},{binding:1,resource:incident.texture.createView()},
-    {binding:2,resource:{buffer:incident.masks}},{binding:3,resource:{buffer:incident.planes}},
-   ]}));p.dispatchWorkgroups(Math.ceil(slots/64));p.end();lastLightStep=step;lastLightGeneration=incident.generation;
+  if(refreshThisDraw||initializeBirthLight){
+   const newbornOnly=initializeBirthLight;
+   if(!refreshPipelines.has(newbornOnly))refreshPipelines.set(newbornOnly,device.createComputePipeline({label:'current incident field at retained carrier positions',layout:refreshLayout,compute:{module:refreshModule,entryPoint:'refreshIncident',constants:{NEWBORNS_ONLY:newbornOnly}}}));
+   const pipeline=refreshPipelines.get(newbornOnly);
+   const p=encoder.beginComputePass({label:newbornOnly?'initialize emitter carrier light':'refresh carrier incident illumination',...profileWrites('lightRefresh')});p.setPipeline(pipeline);
+   p.setBindGroup(0,device.createBindGroup({layout:refreshParticleLayout,entries:[
+    {binding:0,resource:{buffer:particles}},{binding:1,resource:{buffer:newbornOnly?emitterFree:emptyField}},
+   ]}));p.setBindGroup(1,refreshEmptyGroup);
+   p.setBindGroup(2,device.createBindGroup({layout:refreshIncidentLayout,entries:[
+    {binding:0,resource:incident.texture.createView()},{binding:1,resource:{buffer:incident.masks}},{binding:2,resource:{buffer:incident.planes}},
+   ]}));p.dispatchWorkgroups(Math.ceil((newbornOnly?Math.min(emitterPlan.count,slots):slots)/64));p.end();
+   if(refreshThisDraw){lastLightStep=step;lastLightGeneration=incident.generation;}
   }
   if(resetNeeded||requestedDt>0)exchange.invalidate();
   if(!gridActive&&gridField){gridField.dispose();gridField=null;}
   if(!s.depthMode&&depthField){depthField.dispose();depthField=null;}depthPlan=depthField?.layout??null;
   const emitterScratchBytes=(emitterOptions?.size??0)+(emitterCdf?.size??0)+(emitterFree?.size??0);
-  const readState=()=>({emitter:emitterMode?{effective:emitter?'admitted-immersed-source':'unavailable',reason:emitter?null:source.emitterUnavailable??'no-admitted-immersed-source',birthStep:emitterPlan?.sourceStep??null,birthsRequested:emitterPlan?.count??0,uncapturedSteps:Math.max(0,requestedDt-(emitterPlan?1:0)),light:{effective:s.lightRefreshEvery===0?'frozen':incident?'prepared-distributed-field':'unavailable',refreshed:refreshThisDraw,lastStep:lastLightStep,generation:lastLightGeneration},scratchBytes:emitterScratchBytes}:null,requested:true,effective:'world-optical-particles',width,height,slots,spacing:s.spacing,populationSize:s.capacity?[slots,1]:[columns,rows],sourcePixels:pixels,targetSize:[targetWidth,targetHeight],bytes:emitterScratchBytes+particles.size+textureBytes+(depthPlan?.bytes??0)+(quadIndices?.size??0)+(exchangeState?.bytes??0)+options.size+thermal.size+camera.size+pool.size+emptyField.size,sourceBytes:source.buffer.size,totalBytes:emitterScratchBytes+particles.size+textureBytes+source.buffer.size+(depthPlan?.bytes??0)+(quadIndices?.size??0)+(exchangeState?.bytes??0)+options.size+thermal.size+camera.size+pool.size+emptyField.size,memoryScope:"current pool, targets, grouping and uniforms; excludes in-flight retired resources and external fields",frames:frame,step,stepDelta:dt,requestedStepDelta:requestedDt,reactionStepDelta:dt*(source.reactionStepScale??1),renewal:lastRenewal?{...lastRenewal}:null,settings:requested,effectiveDepthMode:s.depthMode,
+  const lightState={effective:!incident&&(emitterMode||s.lightRefreshEvery>0)?'unavailable':s.lightRefreshEvery===0?'frozen':'prepared-distributed-field',
+   refreshed:refreshThisDraw,initializesNewborns:initializeBirthLight||refreshThisDraw&&!!emitterPlan,lastStep:lastLightStep,generation:lastLightGeneration};
+  const readState=()=>({lightRefresh:lightState,emitter:emitterMode?{effective:emitter?'admitted-immersed-source':'unavailable',reason:emitter?null:source.emitterUnavailable??'no-admitted-immersed-source',birthStep:emitterPlan?.sourceStep??null,birthsRequested:emitterPlan?.count??0,uncapturedSteps:Math.max(0,requestedDt-(emitterPlan?1:0)),light:lightState,scratchBytes:emitterScratchBytes}:null,requested:true,effective:'world-optical-particles',width,height,slots,spacing:s.spacing,populationSize:s.capacity?[slots,1]:[columns,rows],sourcePixels:pixels,targetSize:[targetWidth,targetHeight],bytes:emitterScratchBytes+particles.size+textureBytes+(depthPlan?.bytes??0)+(quadIndices?.size??0)+(exchangeState?.bytes??0)+options.size+thermal.size+camera.size+pool.size+emptyField.size,sourceBytes:source.buffer.size,totalBytes:emitterScratchBytes+particles.size+textureBytes+source.buffer.size+(depthPlan?.bytes??0)+(quadIndices?.size??0)+(exchangeState?.bytes??0)+options.size+thermal.size+camera.size+pool.size+emptyField.size,memoryScope:"current pool, targets, grouping and uniforms; excludes in-flight retired resources and external fields",frames:frame,step,stepDelta:dt,requestedStepDelta:requestedDt,reactionStepDelta:dt*(source.reactionStepScale??1),renewal:lastRenewal?{...lastRenewal}:null,settings:requested,effectiveDepthMode:s.depthMode,
    presentation:directTransfer?'direct-optical-transfer':'resolved-image',resolvePass:!directTransfer,geometry:indexedQuads?'indexed-quad':'expanded-quad',geometryBytes:quadIndices?.size??0,uniqueVertexReferences:indexedQuads?4:6,outputSize:[outputWidth,outputHeight],freshSamples:source.samples??pixels,work:{updateSlots:advancing?slots:0,updatePassSlots:updatePass?slots:0,reactionEnabled:advancing&&s.reactionEnabled,transportEnabled:advancing&&s.transportEnabled,birthCapacityPerFrame:birthsThisDraw?Math.min(source.samples??pixels,slots):0,drawInstances:s.showParticles?slots:0,particlePixels:s.showParticles?targetWidth*targetHeight:0,exchange:exchangeState?.work,maxFootprint:s.maxFootprint,profileMode:s.profileMode,opticalCutoff:s.opticalCutoff},follow:followState,collection:s.acquisitionMode?'rotating world-space pool':'camera-stratified slots',screenSupportUnits:s.acquisitionMode?'display pixels':'source pixels',drawn:s.showParticles,raymarchVisible:s.showRaymarch,recordFloats:24,shapeEncoding:'birth pitch; octahedral flow direction XY; represented ray length',
    clipDepth:depthZeroToOne?'zero-to-one':'minus-one-to-one',source:'native optical observation plus actual interpolated Fine fuel/heat/soot/oxidizer',flow:'current sampled Fine velocity plus authored heat-driven residual',reaction:'carried reactants; stoichiometric burn, thermal release, cooling and soot retirement',exchange:exchangeState?{bytes:exchangeState.bytes,cellDims:exchangeState.cellDims,cellCount:exchangeState.cellCount,planned:exchangeState.planned,residentGrouping:exchangeState.residentGrouping,fraction:exchangeState.effectiveFraction,fractions:exchangeState.fractions,grouping:exchangeState.grouping,mixing:exchangeState.mixing,field:exchangeState.field?{valid:exchangeState.field.valid,step:exchangeState.lastFieldStep,nodeDims:exchangeState.field.nodeDims,nodeCount:exchangeState.field.nodeCount,spacing:exchangeState.field.spacing,bytes:exchangeState.field.bytes}:null,work:exchangeState.work,counts:'pending explicit readback'}:null,lifetime:'state-weighted representation clock; independent advanced maximum age',view:s.debugView?'carried-material-diagnostic':'optical' ,gridAssist:{requested:gridRequested,effective:gridActive?'current-single-grid-extinction':gridUnavailable?'unavailable':'off',reason:gridUnavailable,strength:requested.fillExtinction,effectiveStrength:s.fillExtinction,slack:s.extinctionSlack,view:requested.extinctionView,frame:gridActive?gridExtinction.frame:null,generation:gridActive?gridExtinction.generation:null,coefficientSampling:gridActive?'prepared cell coefficients, exact cell traversal':'none'},depthField:depthPlan?{...depthPlan,mode:s.depthMode===1?'uniform-slice-mixture':'fractional-source-depth',range:'GPU retained positive camera-depth min/max',support:'one billboard center slice; piecewise-constant XY',cost:'bounds + one deposition + prefix + source raster'}:null,composition:s.depthMode?'depth-sliced particle extinction; ordered slices':'additive optical moments; approximate mixed-depth attenuation',generatedSmoke:'actual carried soot, updated by reaction and exchange; total visibility controlled by extinction gain',reset:resetNeeded});
   if(!s.showParticles){if(!s.showRaymarch){const clear=encoder.beginRenderPass({label:'hidden particle display clear',...profileWrites('present'),colorAttachments:[{view,loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}]});clear.end();}if(retired.length){const old=retired.splice(0);queueMicrotask(()=>device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>old.forEach(x=>x.destroy())));}info=readState();return info;}

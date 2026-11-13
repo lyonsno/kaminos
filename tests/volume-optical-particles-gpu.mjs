@@ -411,9 +411,24 @@ test('emitter births use admitted supply without a ray batch, and light refresh 
    assert.deepEqual(cohort(refreshed).map(p=>p.slice(8)),first.map(p=>p.slice(8)),'refresh cannot change material, support or survival');
    owner.reset();
    await draw(3,{emitterBirthsPerStep:2});
-   const lowerRate=cohort(await draw(4,{emitterBirthsPerStep:2})).filter(p=>p[3]>0);
+   const lowerRate=cohort(await draw(4,{emitterBirthsPerStep:2,lightRefreshEvery:0})).filter(p=>p[3]>0);
    assert.equal(lowerRate.length,2);
+   assert.ok(lowerRate.every(p=>Math.abs(p[4]-7)<1e-5),'new carriers receive initial illumination even with refresh disabled');
    assert.ok(Math.abs(lowerRate.reduce((q,p)=>q+p[16]**2*p[19],0)-.25)<1e-6,'lower birth rate keeps the supplied volume');
+   illuminate(11);
+   const secondCohort=cohort(await draw(5,{emitterBirthsPerStep:2,lightRefreshEvery:0}));
+   assert.ok(secondCohort.every(p=>Math.abs(p[4]-(p[3]===1?11:7))<1e-5),'newborn lighting leaves earlier cached samples alone');
+   // The ray-born comparison can opt in to the same refresh; old presets
+   // keep their captured scattering until it is explicitly requested.
+   owner.reset();
+   d.queue.writeBuffer(dummy,0,new Float32Array([8,0,0,1,-.5,-.5,-.5,1,-.5,.5,1,1,3,0,0,0]));
+   source.samples=1;source.pixels=1;
+   const ray=(await draw(6,{acquisitionMode:1,acquisitionEnabled:true,refresh:1,lightRefreshEvery:0})).records.slice(0,24);
+   assert.equal(ray[4],5);assert.ok(ray[7]>0);
+   const relit=(await draw(7,{acquisitionMode:1,acquisitionEnabled:false,lightRefreshEvery:1})).records.slice(0,24);
+   assert.ok(Math.abs(relit[4]-11)<1e-5);assert.ok(relit[7]<0);
+   assert.equal(relit[3],ray[3]+1);
+   assert.deepEqual(relit.slice(8),ray.slice(8));
   }finally{owner.dispose();grid.dispose();for(const resource of [sourceUniform,dummy,aperture,noise,collection,solid,target,depth,mask,planes,light])resource.destroy();}
  });
 });

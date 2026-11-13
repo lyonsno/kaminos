@@ -14043,8 +14043,8 @@ export function createKaminosVolumePrototype({
     if(particleSourceFrame){
       opticalParticles??=createOpticalParticles(device,{transparent:transparentCanvas});
       const cameraValues=new Float32Array([...emissiveWhiteMatrix[0],0,...emissiveWhiteMatrix[1],0,...emissiveWhiteMatrix[2],0,0,uniforms[373],uniforms[374],0,0,0,uniforms[46],0]);
-      const sceneSource=emitterParticles?sceneVolumeSource?.describe():null;
-      const lightField=sceneSource?.status==='encoded'&&distributedFrame?.generation===sceneSource.generation&&distributedFrame.frame===sceneSource.frame&&!distributedFrame.previewStale?distributedFrame.smokeReconstruction:null;
+      const sceneSource=emitterParticles||particleSettings.lightRefreshEvery>0?sceneVolumeSource?.describe():null;
+      const lightField=emitterGridSupported&&sceneSource?.status==='encoded'&&distributedFrame?.generation===sceneSource.generation&&distributedFrame.frame===sceneSource.frame&&!distributedFrame.previewStale?distributedFrame.smokeReconstruction:null;
       const emitter=emitterParticles&&lastParticleEmitter?.allocation===state.thermalFluidAllocationId&&lastParticleEmitter?.sourceStep===state.simStepCount-1?lastParticleEmitter:null;
       state.opticalParticles=opticalParticles.encode(encoder,{view,emitter,
         incident:lightField?{texture:lightField.texture,masks:lightField.masks,planes:lightField.planes,generation:distributedFrame.generation,frame:distributedFrame.frame}:null,
