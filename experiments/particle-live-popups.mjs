@@ -48,8 +48,10 @@ export function mountParticleLivePopups({document,root,controls,readCoverage,set
   if(item){event.preventDefault();event.stopPropagation();const other=item===light?cover:light;if(item.panel.hidden&&!other.panel.hidden)other.toggle();item.toggle();sync(true);}
  };
  document.addEventListener('keydown',keyHandler,true);
- const lightNote=create('p','Refresh uses the current scene. Between refreshes the last field is held. The switch leaves flame emission and extinction running.');
+ const lightNote=create('p','Receiver grid stores incoming light. Transport grid holds the emission and extinction that the rays sample. The flame simulation and Fill are unchanged.');
  const lightStatus=create('p');lightStatus.setAttribute('role','status');lightStatus.style.cssText='min-height:2em;color:#b4cddd;margin-bottom:0';
+ const useScene=create('button','Use scene settings');useScene.type='button';
+ useScene.addEventListener('click',()=>{try{doLighting(null);}catch(error){lightFailed(error);}});
  const lightQuality=create('p');lightQuality.style.cssText='color:#b4cddd;margin:8px 0';
  const lightError=create('p');lightError.setAttribute('role','alert');lightError.style.color='#ffc181';lightError.hidden=true;
  const lightFields=[];
@@ -62,7 +64,10 @@ export function mountParticleLivePopups({document,root,controls,readCoverage,set
  const lightFailed=e=>{lightError.hidden=false;lightError.textContent=e.message;};
  for(const [key,name,type,min,step,max] of [
   ['enabled','Distributed lighting','checkbox'],['intervalMs','Refresh interval (ms)','number',1,10],
-  ['gain','Light gain','number',0,.05],['environmentBlur','Environment blur','number',0,.025,1],
+  ['gain','Light gain','number',0,.05],
+  ['directions','Directions','number',2,2],
+  ['volumeGrid','Receiver grid width','number',1,1],
+  ['sourceGrid','Transport grid width','number',1,1],['environmentBlur','Environment blur','number',0,.025,1],
   ['lightSurfaces','Light scene surfaces','checkbox'],
  ]){
   const input=create('input');input.type=type;
@@ -70,11 +75,12 @@ export function mountParticleLivePopups({document,root,controls,readCoverage,set
   if(type==='checkbox')input.addEventListener('change',()=>{try{doLighting({[key]:input.checked});}catch(e){lightFailed(e);sync(true);}});
   else{
    input.min=String(min);input.step=String(step);if(max!==undefined)input.max=String(max);
-   const binding=bindParticleNumber({input,read:()=>liveValues(readLighting())[key],apply:v=>doLighting({[key]:v}),onError:lightFailed,onAccepted:()=>{lightError.hidden=true;}});
+   const quality=['directions','volumeGrid','sourceGrid'].includes(key);
+   const binding=bindParticleNumber({input,read:()=>liveValues(readLighting())[key],apply:v=>doLighting({[key]:v}),onError:lightFailed,onAccepted:()=>{lightError.hidden=true;},scrubCommit:quality?'release':'live'});
    const drag=controls.installNumberDrag?.({input,grip:caption,step});cleanups.push(()=>{binding.dispose();drag?.dispose?.();});
   }
  }
- light.panel.append(lightQuality,lightNote,lightStatus,lightError);
+ light.panel.append(lightQuality,lightNote,lightStatus,lightError,useScene);
 
  const basis=create('select'),basisRow=row('Horizontal axis',basis);
  for(const [value,label] of [['lifetime','Lifetime'],['mixing','Fuel consumed']]){const option=create('option',label);option.value=value;basis.append(option);}
@@ -172,15 +178,18 @@ export function mountParticleLivePopups({document,root,controls,readCoverage,set
   if(light.panel.hidden||(!force&&performance.now()-last<250))return;
   last=performance.now();
   const s=readLighting(),v=liveValues(s);
+  useScene.hidden=!s?.requested;
   for(const {key,input} of lightFields){
    input.disabled=!s;
    if(input.type==='checkbox')input.checked=Boolean(v[key]);
    else if(document.activeElement!==input&&!input.classList.contains('scrubbing'))input.value=Number.isFinite(v[key])?String(v[key]):'';
   }
-  const quality=s?'Scene quality · grid '+s.native.volumeGrid+' wide · '+s.native.directions+' directions':'';
+  const effective=s?.applied??(!s?.requested?s?.native:null);
+  const quality=effective?'Field · '+effective.directions+' directions · receiver '+effective.volumeGrid+' · transport '+(effective.sourceDimensions?.join('×')??effective.sourceGrid):'';
+  lightQuality.hidden=!quality;
   if(lightQuality.textContent!==quality)lightQuality.textContent=quality;
   const status=!s?'This scene does not have the shared hybrid lighting route.':
-    s.error?'Last refresh failed: '+s.error:s.requested?.enabled===false?'Off · no new distributed solves.':
+    s.error?'Lighting edit unavailable: '+s.error+(s.applied?' · holding the previous field.':''):s.requested?.enabled===false?'Off · no new distributed solves.':
     !s.requested?'Using scene defaults · edits enable paced refresh.':
     s.applied?(Object.entries(s.requested).every(([k,value])=>s.applied[k]===value)?'Holding the field':'Settings queued · holding the previous field')+' from source frame '+s.applied.frame+'.':'Waiting for the next lighting refresh.';
   if(lightStatus.textContent!==status)lightStatus.textContent=status;

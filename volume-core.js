@@ -58,7 +58,7 @@ import { DISPLAY_RECONSTRUCTION_WGSL, createDisplayReconstruction, resolveDispla
 export { resolveDisplayReconstruction } from './volume-display-reconstruction.mjs';
 import { SOOT_BURNOUT_WGSL, resolvePhysicsAppearance, physicsAppearanceUniformValues } from './volume-physics-appearance.mjs';
 import { WAVELET_TURBULENCE_WGSL, WAVELET_TURBULENCE_IDENTITY, resolveWaveletTurbulence, waveletTurbulenceUniformValues, waveletOctaveUniformValues, velocityBandEnergies } from './volume-wavelet-turbulence.mjs';
-import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
+import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame, sceneLightGridDimensions } from './scene-volume-source.mjs';
 import { createThermalSubmission } from './volume-thermal-submission.mjs';
 import { createSceneVolumeTransport } from './scene-volume-transport.mjs';
 import { GRID_HEIGHT_MAX_RATIO, resolveGridHeight, gridHeightForShape, raymarchDomainBox } from './volume-grid-shape.mjs';
@@ -8576,7 +8576,7 @@ export function createKaminosVolumePrototype({
   let boundarySidecarBuildPipeline = null;
   let displayReconstruction = null;
   // The draw that last dispatched the emissive seed (review GR-02).
-  let sceneVolumeSource = null;
+  let sceneVolumeSource = null, particleExtinctionSource = null;
   let sceneVolumeSourceRequested = false;
   let sceneTransportConsumer = null;
   let sceneTransport = null;
@@ -9451,6 +9451,7 @@ export function createKaminosVolumePrototype({
     sceneSolidCellsCpu = null;
     sceneVolumeSource?.destroy();
     sceneVolumeSource = null;
+    particleExtinctionSource?.destroy();particleExtinctionSource=null;
     displayReconstruction?.destroy();
     displayReconstruction = null;
 
@@ -13663,21 +13664,31 @@ export function createKaminosVolumePrototype({
   const liveLightingMode=()=>sceneSourcePolicy?.mode()??'strict';
   const liveLightingDomain=()=>JSON.stringify([state.thermalFluidAllocationId,gridSize,gridHeight,productTransform,worldSmokeKey,intermediateKey,uniforms[368]]);
   const needsParticleGridSource=()=>particleSettings.enabled&&(particleSettings.fillExtinction>0||particleSettings.extinctionView>0);
+  const lightingGridDimensions=width=>sceneLightGridDimensions(width,gridSize,gridHeight,device?.limits);
   function distributedFrameIsUsable(source=sceneVolumeSource?.describe()){
-    if(!distributedFrame||source?.status!=='encoded')return false;
+    if(!distributedFrame)return false;
     const mode=liveLightingMode();
     if(mode==='off')return false;
     if(mode==='paced')return distributedFrame.domainIdentity===liveLightingDomain()&&distributedFrame.heldPolicy==='paced-last-solve';
-    return distributedFrame.generation===source.generation;
+    return source?.status==='encoded'&&distributedFrame.generation===source.generation;
   }
 
-  function encodeSharedSceneSource(encoder) {
+  function encodeSharedSceneSource(encoder,{width=SCENE_SOURCE_GRID,fillOnly=false}={}) {
     if (!sceneVolumeSourceRequested || uniforms[368] <= 1.5) {
       sceneVolumeSource?.invalidate('inactive-source-route');
       if (sceneSourceFrameConsumer) throw new Error('shared-scene-source-requires-emissive-material-route');
       return null;
     }
-    sceneVolumeSource ||= createSceneVolumeSource({device, module: shader, uniformBuffer, fluidBuffers, frontBuffers, getReactantTextures: () => reactantTextures,
+    const [grid,gridY]=lightingGridDimensions(width);
+    let current=fillOnly?particleExtinctionSource:sceneVolumeSource;
+    if(current&&current.describe().dimensions[0]!==grid){
+      // Publish the replacement only after construction. A rejected size
+      // cannot strand the old source handle pointing at destroyed storage.
+      const retired=current;current=null;
+      if(fillOnly)particleExtinctionSource=null;else sceneVolumeSource=null;
+      retired.destroy();
+    }
+    current ||= createSceneVolumeSource({device, module: shader, uniformBuffer, fluidBuffers, frontBuffers, getReactantTextures: () => reactantTextures,
       worldRenderUniform,getWorldSmoke:()=>{
         if(!worldSmoke||state.worldSmoke?.effective!=='one-way-world-field')return null;
         const map=worldSmokeMapping(worldSmoke.plan,worldSmoke.anchor,productTransform);
@@ -13685,10 +13696,11 @@ export function createKaminosVolumePrototype({
         const middle=middleMap?{texture:intermediateFlow.optical,dimensions:intermediateFlow.plan.materialDims,localMin:middleMap.renderMin,localMax:middleMap.renderMax}:null;
         return {texture:worldSmoke.optical,dimensions:worldSmoke.plan.materialDims,localMin:map.renderMin,localMax:map.renderMax,middle};
       },
-      grid: SCENE_SOURCE_GRID, gridY: SCENE_SOURCE_GRID * gridHeight / gridSize, fluidGrid: gridSize, fluidGridY: gridHeight});
-    sceneVolumeSource.encode(encoder, currentFluid, state.frameCount,productTransform);
-    if (sceneMediumSource) sceneVolumeSource.encodeOpticalDepth(encoder, sceneMediumSource.position, sceneMediumSource.stepLength);
-    return {source: sceneVolumeSource.describe(), medium: sceneVolumeSource.opticalDepthField(), simStepCount: state.simStepCount, domainIdentity:liveLightingDomain()};
+      grid,gridY,fluidGrid:gridSize,fluidGridY:gridHeight});
+    if(fillOnly)particleExtinctionSource=current;else sceneVolumeSource=current;
+    current.encode(encoder,currentFluid,state.frameCount,productTransform);
+    if(!fillOnly&&sceneMediumSource)current.encodeOpticalDepth(encoder,sceneMediumSource.position,sceneMediumSource.stepLength);
+    return {source:current.describe(),medium:current.opticalDepthField(),simStepCount:state.simStepCount,domainIdentity:liveLightingDomain()};
   }
 
   function prepareFixedCountAllocation(encoder,optical) {
@@ -13785,13 +13797,23 @@ export function createKaminosVolumePrototype({
     const createEncoder=()=>device.createCommandEncoder({label:'same-source scene volume presentation'});
     let next;
     const mode=liveLightingMode();
-    const solve=sceneSourceFrameConsumer&&(mode==='strict'||(mode==='paced'&&sceneSourcePolicy.due()&&uniforms[368]>1.5));
+    const lightingDomain=mode==='paced'?liveLightingDomain():null;
+    let solve=sceneSourceFrameConsumer&&(mode==='strict'||(mode==='paced'&&sceneSourcePolicy.due(lightingDomain)&&uniforms[368]>1.5));
+    const width=mode==='paced'?sceneSourcePolicy.sourceWidth():SCENE_SOURCE_GRID;
+    if(solve&&mode==='paced'){
+      try{sceneSourcePolicy.validateSource();}catch(error){sceneSourcePolicy.rejectSource(error,lightingDomain);solve=false;}
+    }
+    const fill=needsParticleGridSource()&&uniforms[368]>1.5;
+    const separateFill=fill&&(solve?width!==SCENE_SOURCE_GRID:mode==='paced'&&sceneVolumeSource?.describe().dimensions[0]!==SCENE_SOURCE_GRID);
+    if(!separateFill){particleExtinctionSource?.destroy();particleExtinctionSource=null;}
     if(solve) {
-      next=prepareSceneSourceFrame({encoder,finish:finishVolumeEncoder,encode:encodeSharedSceneSource,submit,consume:sceneSourceFrameConsumer,
-        renderHost:renderSceneTransportHost,createEncoder});
+      next=prepareSceneSourceFrame({encoder,finish:finishVolumeEncoder,encode:encoder=>{
+        if(separateFill)encodeSharedSceneSource(encoder,{fillOnly:true});
+        return encodeSharedSceneSource(encoder,{width});
+      },submit,consume:sceneSourceFrameConsumer,renderHost:renderSceneTransportHost,createEncoder});
     } else {
-      if(mode==='paced')sceneSourcePolicy.retain(liveLightingDomain());
-      if(needsParticleGridSource()&&uniforms[368]>1.5)encodeSharedSceneSource(encoder);
+      if(mode==='paced')sceneSourcePolicy.retain(lightingDomain);
+      if(fill)encodeSharedSceneSource(encoder,{fillOnly:separateFill});
       // The off/held route still owes the host a normal scene depth frame.
       submit([finishVolumeEncoder(encoder)]);renderSceneTransportHost();next=createEncoder();
     }
@@ -14072,7 +14094,7 @@ export function createKaminosVolumePrototype({
       const emitter=emitterParticles&&lastParticleEmitter?.allocation===state.thermalFluidAllocationId&&lastParticleEmitter?.sourceStep===state.simStepCount-1?lastParticleEmitter:null;
       state.opticalParticles=opticalParticles.encode(encoder,{view,emitter,
         incident:lightField?{texture:lightField.texture,masks:lightField.masks,planes:lightField.planes,generation:distributedFrame.generation,frame:distributedFrame.frame,appearanceEdit:distributedFrame.appearanceEdit??null}:null,
-        allowUnavailableGridExtinction:true,gridExtinction:particleSettings.fillExtinction>0||particleSettings.extinctionView>0?{...sceneVolumeSource?.describe(),expectedFrame:state.frameCount}:null,format:targetPipeline===readbackPipeline?'rgba8unorm':format,source:{...particleSourceFrame,reactionStepScale:resolveTimeStepConfig(controlsSnapshot).effective.dtScale},fine:fluidBuffers[currentFluid],reactants:reactantTextures[currentFluid],model:state.reactantCombustion.effective.model,material:{sharedIncidentEnabled:liveLightingMode()==='strict'||!!lightField,captureDistributedScatter:!!distributedGroup,density:uniforms[23],extinction:uniforms[EMISSIVE_UNIFORM_OFFSET],albedo:uniforms[EMISSIVE_UNIFORM_OFFSET+1],smokeVisible:uniforms[306]>.5?0:1,kelvinPerHeat:state.physicsAppearance.kelvinPerHeat,thermalGain:uniforms[371],cleanGain:uniforms[372],sootBurnoutRate:state.physicsAppearance.effective.sootBurnout?state.physicsAppearance.sootBurnoutRate:0,sootBurnoutKelvin:state.physicsAppearance.sootBurnoutKelvin},dims:[gridSize,gridHeight,gridSize],invViewProj:invViewProj.elements,settings:{...particleSettings,...particleReactionFromSimulation(state.reactantCombustion)},profileWrites:activeParticleProfileWrites??(()=>({})),cameraValues,depthZeroToOne:camera.coordinateSystem===THREE.WebGPUCoordinateSystem,depth:ordinarySceneDepthTexture??ordinarySceneDepthFallback,identity:JSON.stringify(emitterParticles?[productTransform,state.thermalFluidAllocationId]:[worldSmokeKey,intermediateKey,productTransform,state.particleSourceGeneration])});
+        allowUnavailableGridExtinction:true,gridExtinction:particleSettings.fillExtinction>0||particleSettings.extinctionView>0?{...(particleExtinctionSource??sceneVolumeSource)?.describe(),expectedFrame:state.frameCount}:null,format:targetPipeline===readbackPipeline?'rgba8unorm':format,source:{...particleSourceFrame,reactionStepScale:resolveTimeStepConfig(controlsSnapshot).effective.dtScale},fine:fluidBuffers[currentFluid],reactants:reactantTextures[currentFluid],model:state.reactantCombustion.effective.model,material:{sharedIncidentEnabled:liveLightingMode()==='strict'||!!lightField,sharedIncidentOff:liveLightingMode()==='off',captureDistributedScatter:!!distributedGroup,density:uniforms[23],extinction:uniforms[EMISSIVE_UNIFORM_OFFSET],albedo:uniforms[EMISSIVE_UNIFORM_OFFSET+1],smokeVisible:uniforms[306]>.5?0:1,kelvinPerHeat:state.physicsAppearance.kelvinPerHeat,thermalGain:uniforms[371],cleanGain:uniforms[372],sootBurnoutRate:state.physicsAppearance.effective.sootBurnout?state.physicsAppearance.sootBurnoutRate:0,sootBurnoutKelvin:state.physicsAppearance.sootBurnoutKelvin},dims:[gridSize,gridHeight,gridSize],invViewProj:invViewProj.elements,settings:{...particleSettings,...particleReactionFromSimulation(state.reactantCombustion)},profileWrites:activeParticleProfileWrites??(()=>({})),cameraValues,depthZeroToOne:camera.coordinateSystem===THREE.WebGPUCoordinateSystem,depth:ordinarySceneDepthTexture??ordinarySceneDepthFallback,identity:JSON.stringify(emitterParticles?[productTransform,state.thermalFluidAllocationId]:[worldSmokeKey,intermediateKey,productTransform,state.particleSourceGeneration])});
       if(captureFresh)particleCaptureClock.mark(state.simStepCount,captureIdentity);
       state.opticalParticles.reference=referenceReceipt;state.opticalParticles.sourceColorOutput=!particleSourceOnly;
       state.opticalParticles.acquisition=acquisitionPlan;
@@ -18731,13 +18753,14 @@ export function createKaminosVolumePrototype({
         frontStaging.destroy();
       }
     },
+    sceneLightGridDimensions:lightingGridDimensions,
     sceneLightSamplingTexture(){return rayStartNoiseTexture;},
     sceneLightSamplingFrame(){return state.simStepCount;},
     fireIrradianceLightField,
     setSceneLightingRebuildPending,
     setSceneVolumeSourceEnabled(enabled) {
       sceneVolumeSourceRequested = enabled === true;
-      if (!sceneVolumeSourceRequested) {sceneVolumeSource?.destroy(); sceneVolumeSource = null;}
+      if (!sceneVolumeSourceRequested) {sceneVolumeSource?.destroy();sceneVolumeSource=null;particleExtinctionSource?.destroy();particleExtinctionSource=null;}
       return {requested: sceneVolumeSourceRequested};
     },
     setSceneSourceFrameConsumer(consumer, policy=null) {

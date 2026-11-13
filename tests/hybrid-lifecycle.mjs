@@ -316,8 +316,23 @@ const paced=mountDistributedSceneRadiance({renderer,scene,prototype,device,volum
 try{
  let finish;
  device.queue.onSubmittedWorkDone=()=>new Promise(resolve=>{finish=resolve;});
- paced.configureLiveLighting({enabled:true,intervalMs:1,gain:.6});
  consume({...field,domainIdentity:'a'});
+ const original=hostFrame;
+ assert.equal(original.heldPolicy,'paced-last-solve','the working scene field can survive the handoff to paced lighting');
+ paced.configureLiveLighting({enabled:true,intervalMs:1,gain:.6,directions:8,volumeGrid:4,sourceGrid:8});
+ paced.setGain(0);paced.setDirections(24);paced.setLightGrid(2);
+ assert.equal(hostFrame,original,'scene setting replay cannot blank the previous field');
+ assert.equal(paced.liveLightingState().requested.gain,.6,'scene setting replay must not reset an explicit popup gain');
+ assert.equal(paced.liveLightingState().requested.directions,8);
+ assert.equal(paced.liveLightingState().requested.volumeGrid,4);
+ assert.throws(()=>paced.configureLiveLighting({directions:3}),/even/);
+ assert.throws(()=>paced.configureLiveLighting({sourceGrid:1.5}),/integer/);
+ consume({...field,domainIdentity:'a',source:{...field.source,dimensions:[8,16,8]}});
+ assert.equal(paced.liveLightingState().applied.directions,8);
+ assert.equal(paced.liveLightingState().applied.volumeGrid,4);
+ assert.equal(paced.liveLightingState().applied.sourceGrid,8);
+ assert.deepEqual(paced.liveLightingState().applied.sourceDimensions,[8,16,8]);
+ assert.equal(hostFrame.volumeReceivers,128);
  assert.equal(paced.liveLightingState().applied.gain,.6);
  assert.equal(hostFrame.heldPolicy,'paced-last-solve');
  assert.equal(hostFrame.domainIdentity,'a');
@@ -333,9 +348,23 @@ try{
  assert.equal(passes.length,work,'off never submits lighting');
  finish();await new Promise(resolve=>setImmediate(resolve));
  paced.configureLiveLighting({enabled:true,gain:.8});
- consume({...field,domainIdentity:'b'});
+ consume({...field,domainIdentity:'b',source:{...field.source,dimensions:[8,16,8]}});
  assert.ok(passes.length>work);
  assert.equal(hostFrame.generation,field.source.generation);
  assert.equal(paced.liveLightingState().applied.gain,.8);
  finish();await new Promise(resolve=>setImmediate(resolve));
-}finally{delete device.queue.onSubmittedWorkDone;paced.dispose();}
+ const lastGood=hostFrame;
+ paced.configureLiveLighting({volumeGrid:6});
+ failPass='live distributed flame transport';
+ consume({...field,domainIdentity:'b',source:{...field.source,dimensions:[8,16,8]}});
+ assert.equal(hostFrame,lastGood,'failed receiver replacement holds last complete field');
+ assert.equal(paced.liveLightingState().applied.volumeGrid,4);
+ assert.match(paced.liveLightingState().error,/injected/);
+ assert.equal(paced.canRender(),true);
+ finish();await new Promise(resolve=>setImmediate(resolve));
+ failPass=null;
+ paced.configureLiveLighting({volumeGrid:6});
+ consume({...field,domainIdentity:'b',source:{...field.source,dimensions:[8,16,8]}});
+ assert.equal(paced.liveLightingState().applied.volumeGrid,6,'valid edit recovers from a failed replacement');
+ finish();await new Promise(resolve=>setImmediate(resolve));
+}finally{failPass=null;delete device.queue.onSubmittedWorkDone;paced.dispose();}

@@ -9,6 +9,14 @@ export function sceneSourceDomain(dimensions=[1,2,1]) {
   const lo=[-1,-1,-1],hi=dimensions.map(n=>-1+2*n/dimensions[0]);
   return {dimensions:[...dimensions],lo,hi,volume:hi.reduce((v,x,a)=>v*(x-lo[a]),1)};
 }
+export function sceneLightGridDimensions(width, fluidWidth, fluidHeight, limits={}) {
+  if(!Number.isSafeInteger(width)||width<1)throw Error('Lighting transport grid width must be a positive integer');
+  const height=width*fluidHeight/fluidWidth;
+  if(!Number.isSafeInteger(height))throw Error('Lighting transport grid width must fit the flame box aspect ratio (whole cells in height)');
+  const dims=[width,height,width];
+  if(dims.some(n=>n>(limits.maxTextureDimension3D??Infinity)||Math.ceil(n/4)>(limits.maxComputeWorkgroupsPerDimension??Infinity)))throw Error('Lighting transport grid exceeds device capacity');
+  return dims;
+}
 export function sceneLightingDomain(field) {
   const domain=sceneSourceDomain(field.dimensions);
   for(const [name,expected] of [['localMin',domain.lo],['localMax',domain.hi]])
@@ -246,12 +254,13 @@ fn seedSceneMiddleMedium(@builtin(global_invocation_id) c:vec3<u32>){
 @compute @workgroup_size(4,4,4)
 fn seedSceneVolumeSource(@builtin(global_invocation_id) c: vec3<u32>) {
   seatGridShape();
-  if (any(c >= vec3<u32>(SCENE_SOURCE_GRID, SCENE_SOURCE_GRID_Y, SCENE_SOURCE_GRID))) { return; }
+  let dims=textureDimensions(sceneSourceOut);
+  if (any(c >= dims)) { return; }
   var coefficients = vec4<f32>(0.0);
   var scattering=0.0;
   for (var k=0u; k<8u; k++) {
     let offset = (vec3<f32>(f32(k&1u),f32((k>>1u)&1u),f32((k>>2u)&1u))+vec3<f32>(0.5))*0.5;
-    let p = (vec3<f32>(c)+offset)*(2.0/f32(SCENE_SOURCE_GRID))-vec3<f32>(1.0);
+    let p = (vec3<f32>(c)+offset)*(2.0/f32(dims.x))-vec3<f32>(1.0);
     var medium: EmissiveMaterial;
     if (u.open_world_boundary.z > 0.5) { medium = fastEmissiveMaterialAt(p, 1.0); }
     else { medium = sceneEmissiveMaterialAt(p); }
