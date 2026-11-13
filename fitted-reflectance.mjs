@@ -36,16 +36,22 @@ export function readFittedReflectance(meta) {
  return meta;
 }
 
-export async function loadFittedReflectance(url,{sha256,fetcher=fetch}={}){
- async function checked(path,expected) {
+async function checked(fetcher,path,expected) {
   const response=await fetcher(path);if(!response.ok)throw Error('Fitted reflectance HTTP '+response.status);
   const bytes=await response.arrayBuffer();
   const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),v=>v.toString(16).padStart(2,'0')).join('');
   if(digest!==expected)throw Error('Fitted reflectance payload digest mismatch');
   return bytes;
- }
+}
+
+export async function loadFittedReflectanceManifest(url,{sha256,fetcher=fetch}={}){
  const base=new URL(url,globalThis.location?.href??'http://localhost/');
- const meta=readFittedReflectance(JSON.parse(new TextDecoder().decode(await checked(base,sha256))));
+ const meta=readFittedReflectance(JSON.parse(new TextDecoder().decode(await checked(fetcher,base,sha256))));
+ return {base,meta};
+}
+
+export async function loadFittedReflectance(url,{sha256,fetcher=fetch}={}){
+ const {base,meta}=await loadFittedReflectanceManifest(url,{sha256,fetcher});
  const levels=await Promise.all(meta.levels.map(async level=>{
   const path=new URL(level.url,base);
   if(base.pathname==='/api/read'){
@@ -54,7 +60,7 @@ export async function loadFittedReflectance(url,{sha256,fetcher=fetch}={}){
    const mounted=new URL(base);mounted.searchParams.set('path',item.slice(0,item.lastIndexOf('/')+1)+level.url);
    path.href=mounted.href;
   }
-  const bytes=await checked(path,level.sha256);
+  const bytes=await checked(fetcher,path,level.sha256);
   if(bytes.byteLength!==level.size**2*44)throw Error('Fitted reflectance byte count mismatch');
   const source=new DataView(bytes),data=new Float32Array(bytes.byteLength/4);
   for(let i=0;i<data.length;i++){

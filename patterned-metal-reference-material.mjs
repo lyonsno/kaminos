@@ -43,17 +43,23 @@ const evaluate=wgslFn(`fn patternedResponse(base:texture_2d<f32>,nmap:texture_2d
  return max(mix(vec3(lobe*fd.x*(1.+fd.x*missing))+color*(nl*(1.-fd.y)/3.14159265359),lobe*fc*(1.+fc*missing),m),vec3(0.));
 }`);
 
-export async function loadPatternedMetalMaterial(url,expected,options) {
- async function checked(location,sha) {
+async function checked(location,sha) {
   const r=await fetch(location);if(!r.ok)throw Error('PatternedMetal source HTTP '+r.status);
   const bytes=await r.arrayBuffer();
   const actual=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),v=>v.toString(16).padStart(2,'0')).join('');
   if(actual!==sha)throw Error('PatternedMetal source digest mismatch');
   return bytes;
- }
- const base=new URL(url,location.href);
+}
+
+export async function loadPatternedMetalManifest(url,expected) {
+ const base=new URL(url,globalThis.location?.href??'http://localhost/');
  const manifest=JSON.parse(new TextDecoder().decode(await checked(base,expected)));
- if(manifest.schema!=='kaminos.patterned-metal-reference.v1'||manifest.neuralSource!=='305b4b9c12e679398c487603dd8245c3f348526c'||manifest.falcorSource!=='d629c967fa800af81cf5c916bfb2a825b012f473')throw Error('Wrong PatternedMetal source graph');
+ if(manifest.schema!=='kaminos.patterned-metal-reference.v1'||manifest.neuralSource!=='305b4b9c12e679398c487603dd8245c3f348526c'||manifest.falcorSource!=='d629c967fa800af81cf5c916bfb2a825b012f473'||manifest.response!=='projected-bsdf')throw Error('Wrong PatternedMetal source graph');
+ return {base,manifest};
+}
+
+export async function loadPatternedMetalMaterial(url,expected,options) {
+ const {base,manifest}=await loadPatternedMetalManifest(url,expected);
  const maps=[];
  try {
   for(const name of ['basecolor','normal','roughness','metallic']){

@@ -65,14 +65,14 @@ def directions(count, seed):
 def fit_tile(target, view, light, *, steps):
     """Fit any batch of texels; directions occupy the penultimate axis."""
     if type(steps) is not int or steps<1: raise ValueError('Positive fit steps required')
-    labels=np.asarray(target)
-    if labels.ndim!=3 or labels.shape[1:]!=(len(view),3) or not np.isfinite(labels).all() or (labels<0).any():
-        raise ValueError('Expected finite, nonnegative [texel, direction, RGB] responses')
-    p=mx.broadcast_to(mx.array([.04,.04,.04,.25,.25,.25,0,0,.28,.45,0]),(len(target),1,11))
+    labels=np.asarray(target,dtype=np.float32)
+    if labels.ndim!=3 or not labels.size or labels.shape[1:]!=(len(view),3) or not np.isfinite(labels).all() or (labels<0).any():
+        raise ValueError('Expected nonempty, finite, nonnegative [texel, direction, RGB] responses')
+    p=mx.broadcast_to(mx.array([.04,.04,.04,.25,.25,.25,0,0,.28,.45,0]),(len(labels),1,11))
     lo=mx.array([0.]*6+[-1.5,-1.5,.012,.012,-math.pi])
     hi=mx.array([1.]*6+[1.5,1.5,1.,1.,math.pi])
     initial=p
-    log_target=mx.log1p(target)
+    log_target=mx.log1p(mx.array(labels))
     def loss(params,v,l,labels):
         error=mx.log1p(response(params,v,l))-labels
         return mx.mean(mx.sqrt(error*error+1e-6))
@@ -108,7 +108,8 @@ def fit_level(evaluate, size, *, steps, pairs, chunk, seed, uv_origin=(0.,0.), u
             q=np.concatenate((np.broadcast_to(tile[:,None,:],(len(tile),len(v),2)),
                               np.broadcast_to(np.asarray(v),(len(tile),len(v),3)),
                               np.broadcast_to(np.asarray(l),(len(tile),len(l),3))),axis=2)
-            return mx.array(evaluate(q.reshape(-1,8))).reshape(len(tile),len(v),3)
+            labels=evaluate(q.reshape(-1,8))
+            return np.asarray(labels,dtype=np.float32).reshape(len(tile),len(v),3)
         _,fit=fit_tile(query(view,light),view,light,steps=steps)
         target=np.asarray(query(held_view,held_light))
         if not np.isfinite(target).all() or (target<0).any():

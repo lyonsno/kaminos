@@ -1,4 +1,4 @@
-import {MeshStandardNodeMaterial,DataTexture,RGBAFormat,FloatType,NearestFilter,NoColorSpace,TSL} from './lib/three.webgpu.js';
+import {BufferAttribute,MeshStandardNodeMaterial,DataTexture,RGBAFormat,FloatType,NearestFilter,NoColorSpace,DoubleSide,TSL} from './lib/three.webgpu.js';
 import {FITTED_REFLECTANCE_WGSL} from './fitted-reflectance.mjs';
 const {wgsl, wgslFn, texture, uv, uniform, positionViewDirection, TBNViewMatrix, dFdx, dFdy, vec2, vec3}=TSL;
 
@@ -20,8 +20,31 @@ export function createLocalResponseMaterial(name, response, {uvScale=1}={}) {
    return model;
   }
  }
- const material=new LocalResponse();material.name=name;material.isMeshStandardNodeMaterial=false;
+ const material=new LocalResponse();material.name=name;material.side=DoubleSide;
+ material.isMeshStandardNodeMaterial=false;material.isMeshStandardMaterial=false;
  return {material,scale,dispose:()=>material.dispose()};
+}
+
+// Keep the geometry and depth of UV-degenerate faces; exclude only their
+// undefined directional finish from all three sides of the comparison.
+export function splitCarrierTangentFaces(geometry, invalid) {
+ const index=geometry.index,uv=geometry.getAttribute('uv');
+ const count=index?.count??uv?.count??0,valid=[],unresolved=[];
+ for(let i=0;i<count;i+=3){
+  const a=index?index.getX(i):i,b=index?index.getX(i+1):i+1,c=index?index.getX(i+2):i+2;
+  const det=uv?(uv.getX(b)-uv.getX(a))*(uv.getY(c)-uv.getY(a))-(uv.getY(b)-uv.getY(a))*(uv.getX(c)-uv.getX(a)):1;
+  (invalid.has(a)||invalid.has(b)||invalid.has(c)||!Number.isFinite(det)||det===0?unresolved:valid).push(a,b,c);
+ }
+ if(!valid.length)throw Error('Carrier has no faces with a coherent UV frame');
+ if(!unresolved.length)return null;
+ const result=geometry.clone();
+ // Avoid spread-argument limits on real TRELLIS index buffers.
+ const IndexType=geometry.getAttribute('position')?.count>65536?Uint32Array:Uint16Array;
+ const packed=new IndexType(valid.length+unresolved.length);
+ packed.set(valid);packed.set(unresolved,valid.length);
+ result.setIndex(new BufferAttribute(packed,1));result.clearGroups();
+ result.addGroup(0,valid.length,0);result.addGroup(valid.length,unresolved.length,1);
+ return {geometry:result,validFaces:valid.length/3,unresolvedFaces:unresolved.length/3};
 }
 
 export function createFittedReflectanceMaterial(bundle,options) {

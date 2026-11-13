@@ -10,6 +10,15 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / 'tools'))
 
 @unittest.skipUnless(importlib.util.find_spec('mlx'), 'Optional MLX dependency')
 class FittedReflectanceTest(unittest.TestCase):
+    def test_empty_directional_teacher_tile_is_rejected(self):
+        import mlx.core as mx
+        import numpy as np
+        from fitted_reflectance import directions, fit_tile
+        mx.set_default_device(mx.cpu)
+        v, l = directions(8, 17)
+        with self.assertRaisesRegex(ValueError, 'nonempty'):
+            fit_tile(np.empty((0, 8, 3)), v, l, steps=1)
+
     def test_fit_recovers_tilted_anisotropic_response_on_heldout_angles(self):
         import mlx.core as mx
         import numpy as np

@@ -2,6 +2,24 @@
 import assert from 'node:assert/strict';
 import {FITTED_REFLECTANCE_WGSL,readFittedReflectance,loadFittedReflectance} from '../fitted-reflectance.mjs';
 import {withKaminosGpu,evalWgslBatch} from '../tools/shader-herder.mjs';
+import {createLocalResponseMaterial,splitCarrierTangentFaces} from '../fitted-reflectance-material.mjs';
+import {sceneGIReceives} from '../scene-gi-settings.mjs';
+import {BufferGeometry,Float32BufferAttribute,DoubleSide,TSL} from '../lib/three.webgpu.js';
+
+const directOnly=createLocalResponseMaterial('Direct response control',()=>TSL.vec3(0));
+assert.equal(sceneGIReceives(directOnly.material),false,'direct-only response must not acquire the PBR white SSGI receiver');
+assert.equal(directOnly.material.side,DoubleSide,'open carriers need the same coverage as the neural route');
+directOnly.dispose();
+const strip=new BufferGeometry();
+strip.setIndex([0,1,2,2,1,3]);
+strip.setAttribute('tangent',new Float32BufferAttribute([1,0,0,1,1,0,0,1,1,0,0,1,0,0,0,1],4));
+const partition=splitCarrierTangentFaces(strip,new Set([3]));
+assert.equal(partition.validFaces,1);
+assert.equal(partition.unresolvedFaces,1);
+assert.deepEqual([...partition.geometry.index.array],[0,1,2,2,1,3]);
+assert.deepEqual(partition.geometry.groups,[{start:0,count:3,materialIndex:0},{start:3,count:3,materialIndex:1}]);
+assert.deepEqual(strip.groups,[]);
+partition.geometry.dispose();strip.dispose();
 
 await withKaminosGpu(async ctx=>{
  const result=await evalWgslBatch(ctx,{preamble:FITTED_REFLECTANCE_WGSL,

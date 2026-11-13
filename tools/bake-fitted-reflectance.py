@@ -28,8 +28,9 @@ def run(args):
     try:
         if not report['job'] or not mx.metal.is_available():
             raise RuntimeError('Greenroom admission and Metal required')
-        report['commit']=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
-        if report['commit']!=os.getenv('EXPECTED_COMMIT') or subprocess.check_output(['git','status','--porcelain'],text=True).strip():
+        repo=Path(__file__).resolve().parents[1]
+        report['commit']=subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip()
+        if report['commit']!=os.getenv('EXPECTED_COMMIT') or subprocess.check_output(['git','status','--porcelain'],cwd=repo,text=True).strip():
             raise RuntimeError('Pinned clean source required')
         source=Path(args.source)
         if sha(source.read_bytes())!=args.source_sha256:

@@ -1,9 +1,9 @@
-import {Box3,CylinderGeometry,DirectionalLight,Group,Mesh,Vector3} from '../lib/three.webgpu.js';
-import {loadFittedReflectance} from '../fitted-reflectance.mjs';
-import {createFittedReflectanceMaterial} from '../fitted-reflectance-material.mjs';
+import {Box3,CylinderGeometry,DirectionalLight,DoubleSide,Group,Mesh,MeshBasicMaterial,Vector3} from '../lib/three.webgpu.js';
+import {loadFittedReflectance,loadFittedReflectanceManifest} from '../fitted-reflectance.mjs';
+import {createFittedReflectanceMaterial,splitCarrierTangentFaces} from '../fitted-reflectance-material.mjs';
 import {loadNeuralAppearanceBundle} from '../neural-appearance-bundle.mjs';
 import {createNeuralAppearanceMaterial} from '../neural-appearance-material.mjs';
-import {loadPatternedMetalMaterial} from '../patterned-metal-reference-material.mjs';
+import {loadPatternedMetalMaterial,loadPatternedMetalManifest} from '../patterned-metal-reference-material.mjs';
 
 const routes={source:'Source (native maps)',fitted:'Fitted anisotropic GGX',neural:'Neural decoder'};
 const valid=x=>typeof x?.url==='string'&&/^[a-f0-9]{64}$/.test(x?.sha256??'');
@@ -15,9 +15,17 @@ export default {
   if(!host.scene.renderer().backend.isWebGPUBackend)throw Error('Reflectance comparison needs WebGPU');
   const uvScale=inputs.uvScale??1;
   if(!Number.isFinite(uvScale)||uvScale<=0)throw Error('Positive UV scale required');
+  // Verify only the small manifests at startup; finish textures still load on selection.
+  const [source,fitted]=await Promise.all([
+   valid(inputs.source)?loadPatternedMetalManifest(inputs.source.url,inputs.source.sha256):null,
+   valid(inputs.fitted)?loadFittedReflectanceManifest(inputs.fitted.url,{sha256:inputs.fitted.sha256}):null,
+  ]);
+  const comparisonSource=source?inputs.source.sha256:fitted.meta.sourceSha256;
+  if(fitted&&fitted.meta.sourceSha256!==comparisonSource)throw Error('Fitted material was baked from a different source');
   const session=await host.scene.open(),materials=new Map(),meshes=[];
+  const unresolved=new MeshBasicMaterial({color:0x3a3541,side:DoubleSide});
   const options={uvScale};
-  let asset,lightId,mode=inputs.mode??(inputs.source?'source':'fitted'),issue=null,generation=0,closed=false,sync=()=>{};
+  let asset,lightId,mode=inputs.mode??(source?'source':'fitted'),issue=null,generation=0,closed=false,sync=()=>{};
   let lightAngle=inputs.lightAngle??-28;
   const studio=globalThis.kaminosArrivalLighting;
   const priorStudio=studio?.read().studioLightsEnabled;
@@ -37,6 +45,7 @@ export default {
    const material=materials.get(mode);
    return {mode,carrier:asset?.id,carrierSource:inputs.asset?.url??'fixture:uv-cylinder',meshes:meshes.length,
     authoredTangents:meshes.filter(m=>!generatedTangents.has(m.geometry)).length,derivedTangentGeometries:generatedTangents.size,
+    unresolvedFaces:[...partitions.values()].reduce((n,p)=>n+p.unresolvedFaces,0),
     activeMaterial:material?.material.name??null,lightId,lightAngle,uvScale,error:issue,
     source:inputs.source??null,fitted:inputs.fitted??null,neural:inputs.neural??null,
     fittedLevels:materials.get('fitted')?.levels??null,
@@ -55,16 +64,14 @@ export default {
      }
      if(next==='fitted'){
       const bundle=await loadFittedReflectance(input.url,{sha256:input.sha256});
-      if(inputs.source&&bundle.sourceSha256!==inputs.source.sha256)throw Error('Fitted material was baked from a different source');
+      if(bundle.sourceSha256!==comparisonSource)throw Error('Fitted material was baked from a different source');
       material=createFittedReflectanceMaterial(bundle,options);material.levels=bundle.levels.map(l=>l.size);
       material.sourceSha256=bundle.sourceSha256;
      }
      if(next==='neural'){
       const bundle=await loadNeuralAppearanceBundle(input.url,{sha256:input.sha256});
       const sourceSha256=bundle.provenance?.sourceHash;
-      const comparisonSource=inputs.source?.sha256??materials.get('fitted')?.sourceSha256
-       ??(valid(inputs.fitted)?(await loadFittedReflectance(inputs.fitted.url,{sha256:inputs.fitted.sha256})).sourceSha256:null);
-      if(!comparisonSource||sourceSha256!==comparisonSource||
+      if(sourceSha256!==comparisonSource||
        (bundle.provenance?.teacher?.sourceHash!=null&&bundle.provenance.teacher.sourceHash!==comparisonSource)){
        throw Error('Neural material has no matching source provenance');
       }
@@ -78,20 +85,22 @@ export default {
      if(closed||token!==generation){material.dispose();return read();}
      materials.set(next,material);
     }
-    for(const mesh of meshes)mesh.material=material.material;
+    for(const mesh of meshes)mesh.material=partitions.has(mesh)?[material.material,unresolved]:material.material;
     mode=next;issue=null;session.redraw();sync();
     updateInputs({...inputs,mode,lightAngle});
     record({kind:'reflectance-comparison.finish',phase:'applied',effective:read()});return read();
    }catch(error){if(token===generation){issue=String(error.message??error);sync();}throw error;}
   }
-  const originals=new Map(), generatedTangents=new Set();
+  const originals=new Map(), generatedTangents=new Set(),partitions=new Map();
   const cleanup=async()=>{
    closed=true;generation++;
-   for(const [mesh,material] of originals)mesh.material=material;
+   for(const [mesh,original] of originals){mesh.material=original.material;mesh.geometry=original.geometry;}
+   for(const partition of partitions.values())partition.geometry.dispose();
    for(const geometry of generatedTangents)geometry.deleteAttribute('tangent');
    try {await session.dispose();}
    finally {
     for(const material of materials.values())material.dispose();
+    unresolved.dispose();
     if(isolate&&studio.read().studioLightsEnabled===false)studio.setStudioLights(true);
    }
   };
@@ -119,13 +128,9 @@ export default {
      const length=Math.hypot(tangent.getX(i),tangent.getY(i),tangent.getZ(i));
      if(!Number.isFinite(length)||length<.5||Math.abs(tangent.getW(i))!==1)invalid.add(i);
     }
-    if(invalid.size){
-     const idx=o.geometry.index,used=new Set();
-     if(idx){for(let i=0;i<idx.count;i++){const vertex=idx.getX(i);if(invalid.has(vertex))used.add(vertex);}}
-     else invalid.forEach(i=>used.add(i));
-     if(used.size)throw Error(`Carrier has ${used.size} referenced vertices with degenerate UV tangents; choose a clean part or prepare its chart`);
-    }
-    meshes.push(o);originals.set(o,o.material);
+    const partition=splitCarrierTangentFaces(o.geometry,invalid);
+    meshes.push(o);originals.set(o,{material:o.material,geometry:o.geometry});
+    if(partition){partitions.set(o,partition);o.geometry=partition.geometry;}
    }});
    if(!meshes.length)throw Error('No matching carrier mesh');
    const box=new Box3().setFromObject(asset.root),s=box.getSize(new Vector3()).length();
@@ -152,7 +157,8 @@ export default {
    select.onchange=()=>invoke('selectFinish',select.value).catch(()=>sync());
    angle.oninput=()=>invoke('setLightAngle',Number(angle.value)).catch(()=>sync());
    root.append('Finish ',select,' Neutral light angle ',angle,status);
-   sync=()=>{select.value=mode;angle.value=String(lightAngle);status.textContent=issue??'Direct light on the same mesh. Orbit or sweep the neutral light.';};sync();
+   sync=()=>{select.value=mode;angle.value=String(lightAngle);const missing=read().unresolvedFaces;
+    status.textContent=issue??(missing?`${missing} faces without a usable UV frame use a neutral finish in every mode.`:'Direct light on the same mesh. Orbit or sweep the neutral light.');};sync();
   },dispose:cleanup};
  }
 };
