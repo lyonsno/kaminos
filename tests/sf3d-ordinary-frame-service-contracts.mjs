@@ -7,7 +7,7 @@ let scheduled = [], submitted = [], executions = 0;
 let serviceInput, fail = false;
 const device = {queue: {submit() {throw new Error('private submit');}}};
 const state = {active: true, frameCount: 0, simStepCount: 0};
-const make = new Function('state','device','requestAnimationFrame','cancelAnimationFrame','renderOrdinaryFrame','canvas','emitStatus','performance', `
+const make = new Function('state','device','requestAnimationFrame','cancelAnimationFrame','renderOrdinaryFrame','surface','emitStatus','performance', `
 let deviceRetired = false;
 let foregroundRequester = null, foregroundPending = null, foregroundSequence = 0, raf = 0;
 let sceneLightingRebuildPending = false, stillPresentationHeld = false, foregroundDrain = Promise.resolve();
@@ -21,7 +21,7 @@ const api = make(state, device, fn => (scheduled.push(fn), scheduled.length), ()
   if (fail) throw new Error('renderer failed');
   service.submit(['actual-frame']);
   return {status:'submitted', frameCount: ++state.frameCount, simStepCount: ++state.simStepCount, renderer:'ordinary', atMs:now};
-}, {classList:{remove(){}}}, () => {}, {now:()=>10});
+}, {setActive(){}}, () => {}, {now:()=>10});
 api.setForegroundOpportunityRequester(input => {
   serviceInput = input;
   return {completion: Promise.resolve().then(() => input.run({device, queue:device.queue, submit: commands => submitted.push(commands)})).then(result=>({status:'completed',result}))};

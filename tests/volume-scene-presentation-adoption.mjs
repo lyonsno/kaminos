@@ -10,6 +10,7 @@ function fixture({ active = false, initialized = false } = {}) {
   const end = source.indexOf('    async setActive(', start);
   const method = source.slice(start, end).trim().replace(/^setSceneCompositionPresentation/, 'function').replace(/,$/, '');
   const state = { active }, calls = [], canvas = { style: {} };
+  const surface = {setTransparent:value=>{canvas.style.background=value?'transparent':'';}};
   let transparentCanvas = false;
   const device = initialized ? {} : null, format = 'bgra8unorm', gridSize = 32;
   const GPUTextureUsage = { RENDER_ATTACHMENT: 16, COPY_SRC: 1 };

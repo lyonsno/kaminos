@@ -28,7 +28,7 @@ async function fixture({gate=null,failure=null}={}){
   boundarySplatRequested:()=>false,browserResidualCanApply:()=>false,
   ensureGpu:async()=>{},ensureBrowserResidualModel:async()=>{},invalidateRaymarchReadouts:()=>{},
   requestAnimationFrame:fn=>{scheduled.set(++nextRaf,fn);return nextRaf;},cancelAnimationFrame:id=>scheduled.delete(id),
-  canvas:{classList:{add(){},remove(){}},remove:()=>destroyed.push('canvas')},emitStatus:event=>events.push(event),performance};
+  surface:{setActive(){},dispose:()=>destroyed.push('canvas')},canvas:{classList:{add(){},remove(){}},remove:()=>destroyed.push('canvas')},emitStatus:event=>events.push(event),performance};
  for(const name of ['particleTimings','particleAcquisitionTarget','integralReconstruction','splitIntegral','opticalParticles','particleTelemetryCanvas','domainRemapper','worldRenderField','distributedBindings','worldOpticalFallback','worldRenderUniform','rayAllocationHistory','sceneTransportConsumer','sceneTransport','rayStepTelemetry','scenePointBindings','persistentSparseCohortGpuState','fourArmHeldStateRuntimeState','fourArmHeldStateResidualGrid','frameTexture','rayStartNoiseTexture','ordinarySceneDepthFallback','boundarySplatHdrTexture','boundarySplatOpticalTexture','fourArmHeldStateLinearTexture','fourArmHeldStateResidualTexture','fourArmHeldStateResidualParamsBuffer','browserResidualFeatureTexture','externalEmitterBuffer','analyticEmitterInjectionUniformBuffer','volumePresentationControlsBuffer','boundarySplatCameraBuffer'])scope[name]=null;
  scope.frameTexture={destroy:()=>destroyed.push('frameTexture')};
  scope.clearBoundarySplatLiveUnionCoefficientOverlay=()=>{};
