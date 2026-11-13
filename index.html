@@ -11117,7 +11117,7 @@ async function initScene() {
   let rawSceneOutput, outlinedSceneOutput, outlinedCameraOutput, sceneEmissiveCamera = null;
   const giOutputGraphs = new Map();
   let sceneEmissionSource=null,sceneFlameHDR=null;
-  sceneBloom=createSceneBloom({bloom,convertToTexture,vec4,initial:{enabled:lightingWorkParams.get('scene_bloom')==='1',composeFlame:lightingWorkParams.get('scene_bloom')==='1'},rebuild:()=>rebuildSceneGIOutput(),redraw:()=>markDirty()});
+  sceneBloom=createSceneBloom({bloom,convertToTexture,vec4,initial:{enabled:initialViewerParams.get('scene_bloom')==='1',composeFlame:initialViewerParams.get('scene_bloom')==='1'},rebuild:()=>rebuildSceneGIOutput(),redraw:()=>markDirty()});
   const bloomHost=document.createElement('section');bloomHost.id='scene-bloom-controls';document.getElementById('rendering-fire-controls').before(bloomHost);
   const reflectionHost=document.createElement('section');reflectionHost.id='scene-reflection-controls';document.getElementById('scene-gi-refinement-status').after(reflectionHost);
   let reflectionControls=null;

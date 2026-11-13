@@ -1,4 +1,5 @@
 // kaminos-test: node
+import fs from 'node:fs';import vm from 'node:vm';
 import {test} from 'node:test';import assert from 'node:assert/strict';
 import {checkedSceneBloom,createSceneBloom} from '../scene-bloom.mjs';
 import {installSceneBloomControls} from '../scene-bloom-controls.mjs';
@@ -25,4 +26,15 @@ test('bloom uses a separate physical-emission input and refuses an ambiguous sou
  assert.throws(()=>api.output(input),/emission/i,'whole-scene brightness cannot silently replace an emission attachment');
  api.output(input,emission);assert.equal(source,emission);
  assert.equal(api.read().signal,'physical-emission');
+});
+
+test('ordinary page constructs bloom from its current query without an orphaned lighting binding',()=>{
+ const page=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const start=page.indexOf('  sceneBloom=createSceneBloom(');assert.ok(start>=0);
+ const source=page.slice(start,page.indexOf('\n',start));
+ for(const enabled of [false,true]){
+  let captured;const params=new URLSearchParams(enabled?'scene_bloom=1':'');
+  const context={initialViewerParams:params,location:{search:params.toString()},URLSearchParams,bloom:{},convertToTexture:{},vec4:{},createSceneBloom:options=>(captured=options,{}),rebuildSceneGIOutput(){},markDirty(){}};
+  vm.runInNewContext(source,context);assert.equal(captured.initial.enabled,enabled);assert.equal(captured.initial.composeFlame,enabled);
+ }
 });
