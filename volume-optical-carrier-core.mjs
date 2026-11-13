@@ -14,6 +14,7 @@ export function validateCarrierSettings(s){
  if(![0,1].includes(s.carrierMode)||typeof s.carrierPreserveAmount!=='boolean')throw Error('Invalid optical carrier mode or amount policy');
  for(const key of Object.keys(CARRIER_DEFAULTS))if(!['carrierMode','carrierPreserveAmount'].includes(key)&&(!Number.isFinite(s[key])||s[key]<0))throw Error('Invalid '+key);
  if(s.carrierLifetime<=0||!Number.isSafeInteger(s.carrierRefreshEvery)||s.carrierRefreshEvery<1)throw Error('Carrier lifetime and refresh interval must be positive');
+ if(s.carrierMode&&s.capacity<1)throw Error('Optical carrier capacity must be a positive explicit count');
  return s;
 }
 
@@ -62,21 +63,21 @@ fn carrierGridMaterial(p:vec3<f32>)->CarrierMaterial{
  let i=id.x;if(i>=u.size.z){return;}let slots=u.size.z;
  let offset=(i+slots-carrier.births.x%slots)%slots;
  let count=carrier.births.y;let isBirth=count>0u&&(count>=slots||offset<count);
- var p=particles[i];var shape=carrierShapes[i];var elapsed=u.time.x;
+ var p=particles[i];var shape=carrierShapes[i];var elapsed=u.time.x*u.fine.w;
  if(isBirth){
   var sequence=carrier.births.x+offset;
   if(count>=slots){sequence+=((count-1u-offset)/slots)*slots;}
   let seed=hash32(sequence);let r=vec3<f32>(f32(hash32(seed)),f32(hash32(seed+1u)),f32(hash32(seed+2u)))/4294967296.0;
   let position=mix(carrier.lo.xyz,carrier.hi.xyz,r);
-  p=Particle(vec4<f32>(position,1),vec4<f32>(0),vec4<f32>(0),vec4<f32>(0),vec4<f32>(source.flow.z,0,1,source.flow.z*u.seed.x),vec4<f32>(0));
+  p=Particle(vec4<f32>(position,1),vec4<f32>(0),vec4<f32>(0),vec4<f32>(0),vec4<f32>(source.flow.z,0,1,source.flow.z),vec4<f32>(0));
   shape=CarrierShape(vec4<f32>(1,0,0,0),vec4<f32>(0,1,0,0),vec4<f32>(0,0,1,0));
-  elapsed=u.time.x*(1.0-(f32(sequence-carrier.births.x)+.5)/f32(count));
+  elapsed=u.time.x*u.fine.w*(1.0-(f32(sequence-carrier.births.x)+.5)/f32(count));
  }
  if(p.anchor.w<=0){return;}
  let age=p.anchor.w-1.0+elapsed;
  if(age>=carrier.life.x||!particleInsideFine(p.anchor.xyz)){p.anchor.w=0;particles[i]=p;return;}
  let jet=carrierVelocityJet(p.anchor.xyz);
- let seconds=elapsed*u.time.z;
+ let seconds=elapsed*u.time.z/u.fine.w;
  var deformation=mat3x3<f32>(shape.x.xyz,shape.y.xyz,shape.z.xyz);
  deformation=carrierDeformation(deformation,jet.gradient,seconds,carrier.deform.x,carrier.deform.y,carrier.deform.z);
  p.anchor=vec4<f32>(p.anchor.xyz+jet.velocity*seconds*u.transport.x,age+1.0);
@@ -107,7 +108,7 @@ export function createOpticalCarrierCore(device,preamble){
    if(!source.emitterBounds)throw Error('Optical carriers need an admitted emitter support; no fallback ray acquisition is used');
    if(!shapes||shapes.size!==slots*48){retire(shapes);shapes=device.createBuffer({label:'retained optical carrier deformation axes',size:slots*48,usage});clear=true;}
    if(clear){reset();encoder.clearBuffer(shapes);}
-   const nextClock=clock+dt;let requested=s.birthsEnabled?Math.floor(nextClock*s.carrierRate)-Math.floor(clock*s.carrierRate):0;
+   const nextClock=clock+dt*(source.reactionStepScale??1);let requested=s.birthsEnabled?Math.floor(nextClock*s.carrierRate)-Math.floor(clock*s.carrierRate):0;
    if(requested>0xffffffff||total+requested>0xffffffff)throw Error('Carrier birth sequence exceeds u32; reset the experiment to continue');
    const refresh=lastRefresh===null||source.step-lastRefresh>=s.carrierRefreshEvery;
    const data=new ArrayBuffer(80),f=new Float32Array(data),u=new Uint32Array(data);

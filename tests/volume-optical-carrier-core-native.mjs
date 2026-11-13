@@ -18,6 +18,7 @@ test('source-born optical route has explicit births, grid refresh, held state an
  d.queue.writeBuffer(fine,0,material);d.queue.writeTexture({texture:reactants},oxygen,{bytesPerRow:16,rowsPerImage:2},[2,2,2]);
  const settings={enabled:true,carrierMode:1,capacity:4,acquisitionMode:1,acquisitionEnabled:false,exchangeEnabled:false,groupingEnabled:false,followFraction:0,carrierRate:2,carrierLifetime:4,carrierEaseIn:0,carrierEaseOut:0,flow:0};
  async function draw(step,patch={}){source.step=step;const e=d.createCommandEncoder(),p=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthStoreOp:'store',depthClearValue:1}});p.end();const passes=[];owner.encode(e,{view:target.createView(),format:'rgba8unorm',source,fine,reactants,dims:[2,2,2],invViewProj:identity,settings:{...settings,...patch},cameraValues:camera,depth,identity:'clean-carrier-fixture',profileWrites:name=>{passes.push(name);return{};}});d.queue.submit([e.finish()]);await d.queue.onSubmittedWorkDone();return {...await owner.sample(),passes};}
+ async function pixels(){const read=d.createBuffer({size:2048,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});try{const e=d.createCommandEncoder();e.copyTextureToBuffer({texture:target},{buffer:read,bytesPerRow:256},[8,8]);d.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);return new Uint8Array(read.getMappedRange().slice(0));}finally{read.unmap();read.destroy();}}
  try{
   const a=await draw(0);assert.equal(a.records.filter((v,i)=>i%24===3&&v>0).length,0);
   const b=await draw(1);assert.equal(b.records.filter((v,i)=>i%24===3&&v>0).length,2);assert.equal(b.state.carrier.totalBirths,2);assert.equal(b.state.carrier.rayAcquisition,false);assert.equal(b.state.exchange,null);assert.equal(b.passes.includes('births'),false);
@@ -25,6 +26,7 @@ test('source-born optical route has explicit births, grid refresh, held state an
   for(let i=0;i<2;i++)assert.deepEqual(Array.from(b.records.slice(i*24+20,i*24+24)).map(x=>Math.round(x*10)),[10,8,2,30]);
   const held=await draw(1,{carrierStrain:5,carrierRotation:3});assert.deepEqual(held.records,b.records);assert.equal(held.passes.includes('update'),false);assert.equal(held.state.carrier.requestedBirths,0);
   assert.deepEqual(held.deformation,b.deformation,'paused shape is held too');
+  const firstPixels=await pixels();const depthEdited=await draw(1,{depthSupport:4});assert.deepEqual(depthEdited.records,b.records);assert.notDeepEqual(await pixels(),firstPixels,'depth support is an immediate optical change on held carriers');
   for(let i=0;i<8;i++)material[i*16]=((i>>1)&1)*.5;
   d.queue.writeBuffer(fine,0,material);
   const sheared=await draw(2,{carrierRate:0,carrierRelaxation:0});assert.ok(Math.abs(sheared.deformation[4])>.4,'actual trilinear velocity gradient shears support even with stationary centers');assert.deepEqual(sheared.records.slice(0,3),b.records.slice(0,3));
@@ -32,6 +34,7 @@ test('source-born optical route has explicit births, grid refresh, held state an
   const refreshed=await draw(3,{carrierRate:0});assert.ok(Math.abs(refreshed.records[22]-.9)<1e-6,'material follows current grid rather than a local reaction');
   const retired=await draw(6,{carrierRate:0});assert.equal(retired.records.filter((v,i)=>i%24===3&&v>0).length,0);
   material.fill(0);for(let i=0;i<8;i++){material[i*16+6]=1;oxygen[i*2+1]=.1;}d.queue.writeBuffer(fine,0,material);d.queue.writeTexture({texture:reactants},oxygen,{bytesPerRow:16,rowsPerImage:2},[2,2,2]);owner.reset();await draw(0);const clean=await draw(1);assert.ok(clean.records[8]+clean.records[9]+clean.records[10]>0,'fresh grid burn emits even without soot');
+  owner.reset();source.reactionStepScale=.5;await draw(0);const halfStep=await draw(1);assert.equal(halfStep.state.carrier.totalBirths,1,'birth rate uses reference time, not integer call count');assert.ok(halfStep.records[3]>1&&halfStep.records[3]<1.5,'age uses the same reference clock');
   assert.throws(()=>opticalParticleSettings({...settings,fillExtinction:1,depthMode:2}),/does not run/);
  }finally{owner.dispose();sourceOwner.dispose();resources.forEach(r=>r.destroy());}
 }));

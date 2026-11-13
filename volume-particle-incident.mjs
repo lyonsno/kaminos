@@ -15,7 +15,7 @@ fn particleIncoming(point:vec3<f32>)->vec3<f32>{
 fn particleRenderMaterial(p:Particle,u:Options)->vec4<f32>{
  let original=particleMaterial(p,u);if(particleIncidentConfig.weights.x<.5){return original;}
  let fade=select(select(1.0,particleLifeFade(p.motion.w,u.lifeControl.y),u.lifeControl.x>0),1.0-clamp(p.motion.w,0.0,1.0),u.lighting.z>.5);
- let intrinsic=p.emission.xyz*u.gain.x*p.shape.w*fade;
+ let intrinsic=p.emission.xyz*u.gain.x*p.shape.w*fade*select(1.0,u.seed.x,u.lighting.z>.5);
  let scattered=original.w*particleIncidentConfig.weights.y*particleIncoming(p.anchor.xyz);
  let mode=particleIncidentConfig.weights.w;
  return vec4<f32>(select(vec3<f32>(0),intrinsic,mode!=1.0)+select(vec3<f32>(0),scattered,mode!=0.0),original.w);

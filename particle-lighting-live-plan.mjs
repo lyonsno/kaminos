@@ -17,6 +17,7 @@ export function particleLightingSourcePlan({records,state,settings:input}){
  if(keys.some(k=>!Number.isFinite(native[k])||native[k]<0)||!material||['density','extinction','smokeVisible'].some(k=>!Number.isFinite(material[k])||material[k]<0))throw Error('Effective native source optics are required');
  const sourceSettings=Object.fromEntries(keys.map(k=>[k,native[k]]));sourceSettings.extinction=material.density*material.extinction*material.smokeVisible*native.opacity;delete sourceSettings.opacity;sourceSettings.supportSigmas=settings.supportSigmas;
  sourceSettings.carrierMode=native.carrierMode??0;
+ if(sourceSettings.carrierMode){if(!Number.isFinite(native.depthSupport)||native.depthSupport<0)throw Error('Current carrier depth support is required');sourceSettings.gain*=native.depthSupport;sourceSettings.extinction*=native.depthSupport;}
  const lo=[-1,-1,-1],hi=[1,-1+2*context.dims[1]/context.dims[0],1];let active=0;
  for(let i=0;i<state.slots;i++){
   const p=i*24;if(records[p+3]<=0||records[p+16]<=0||records[p+19]<=0||((native.stateLife>0||native.carrierMode===1)&&records[p+15]>=1)||!(records[p+8]>0||records[p+9]>0||records[p+10]>0||records[p+22]>0))continue;active++;

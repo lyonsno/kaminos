@@ -30,12 +30,12 @@ export default {
     section('Population');
     control('Capacity','capacity','Fixed retained slots. Changing capacity clears this experiment’s population.',512,1);
     control('Births / reference step','carrierRate','Camera-independent births, uniformly distributed within the admitted emitter support box. Capacity is a rotating pool, not a source-sampling budget.',16);
-    control('Lifetime (steps)','carrierLifetime','Hard optical lifetime. This does not change the grid chemistry.',1,.001);
-    control('Ease-in (steps)','carrierEaseIn','Smooth optical appearance after birth. Zero gives immediate appearance. Overlapping ease windows multiply.',1);
-    control('Ease-out (steps)','carrierEaseOut','Smooth optical fade before retirement. Zero gives immediate removal.',1);
+    control('Lifetime (steps)','carrierLifetime','Hard optical lifetime, evaluated on simulation advancement. Does not edit a paused population or change grid chemistry.',1,.001);
+    control('Ease-in (steps)','carrierEaseIn','Smooth optical appearance after birth, evaluated on simulation advancement. Zero gives immediate appearance. Overlapping ease windows multiply.',1);
+    control('Ease-out (steps)','carrierEaseOut','Smooth optical fade before retirement, evaluated on simulation advancement. Zero gives immediate removal.',1);
     control('Material refresh (steps)','carrierRefreshEvery','Sample current grid material at each carrier center on this cadence. No independent particle combustion or exchange.',1,1);
     section('Flow Deformation');
-    control('Translation','flow','Grid velocity multiplier for center motion, independent of local support deformation.',.05);
+    control('Translation','flow','Grid velocity multiplier for center motion, independent of local support deformation. At zero, existing centers hold and new births remain at the emitter.',.05);
     control('Rotation','carrierRotation','Accumulate the rotational part of local grid velocity variation. Zero removes this contribution.',.1);
     control('Stretch and shear','carrierStrain','Accumulate the symmetric part of local velocity variation. Zero removes stretch and shear.',.1);
     control('Shape relaxation','carrierRelaxation','Return deformation toward the original axes per flow time unit. Zero retains deformation until retirement.',.01);

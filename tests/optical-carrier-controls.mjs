@@ -24,6 +24,7 @@ test('fresh carrier controls apply typed values, preserve zero and dispose back 
   const rate=all(root).find(x=>x.dataset.carrier==='carrierRate');assert.ok(rate);rate.value='0';rate.dispatchEvent(new Event('input'));rate.dispatchEvent(new Event('change'));await new Promise(resolve=>setTimeout(resolve,0));assert.equal(settings.carrierRate,0);
   owner.operations.setOptions({carrierRotation:0,carrierStrain:0,carrierRelaxation:0});assert.equal(settings.carrierRotation,0);assert.equal(settings.carrierStrain,0);assert.equal(settings.carrierRelaxation,0);
   assert.throws(()=>owner.operations.setOptions({fillExtinction:1}),/does not run/);
+  assert.throws(()=>owner.operations.setOptions({capacity:0}),/positive explicit/);
  }finally{await owner.dispose();}
  assert.equal(settings.carrierMode,0);assert.equal(settings.enabled,false);assert.equal(callbacks.length,0);
 });

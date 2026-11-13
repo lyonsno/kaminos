@@ -66,7 +66,7 @@ fn particleMaterial(p:Particle,u:Options)->vec4<f32>{
  let lightLife=select(u.time.w,u.lighting.y,u.lighting.y>0);
  let scattered=p.source.xyz*exp(-age/lightLife)*u.lighting.x;
  let fade=select(select(1.0,particleLifeFade(p.motion.w,u.lifeControl.y),u.lifeControl.x>0),1.0-clamp(p.motion.w,0.0,1.0),u.lighting.z>.5);
- return vec4<f32>((emission+scattered)*p.shape.w,max(0.0,p.state.z)*u.material.x*u.material.y*u.material.w*p.shape.w*u.gain.y)*fade;
+ return vec4<f32>((emission+scattered)*p.shape.w,max(0.0,p.state.z)*u.material.x*u.material.y*u.material.w*p.shape.w*u.gain.y)*fade*select(1.0,u.seed.x,u.lighting.z>.5);
 }
 `;
 export const PARTICLE_PROJECTION_WGSL=/* wgsl */`

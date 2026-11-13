@@ -13787,7 +13787,7 @@ export function createKaminosVolumePrototype({
     if(state.displayReconstruction)state.displayReconstruction.outerFields=state.worldRenderField.effective;
     if(worldRenderChanged)rebuildFluidBindGroups();
     device.queue.writeBuffer(worldRenderUniform,80,new Float32Array([state.worldRenderField.effective==='inactive'?0:1,...(state.worldRenderField.materialDims??[0,0,0])]));
-    if (displayReconstruction?.encode(encoder,currentFluid,
+    if (!(particleSettings.enabled&&particleSettings.carrierMode)&&displayReconstruction?.encode(encoder,currentFluid,
       [state.fluidStateResetCount,state.simStepCount,JSON.stringify(controlsSnapshot)],displayTimestampWrites)) {
       state.displayReconstruction = {...state.displayReconstruction,...displayReconstruction.read(),builtThisDraw:true};
     } else if (state.displayReconstruction && !sceneSourcePreparedEncoders.has(encoder)) state.displayReconstruction.builtThisDraw=false;
