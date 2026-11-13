@@ -19,7 +19,7 @@ export function opticalParticleSettings(input={}) {
   flow:1,rise:0,drag:4,expansion:0,spacing:1,maxAge:0,
   populationWidth:0,populationHeight:0,targetScale:1,fineAcquisition:0,flowAlignment:0,pixelFloor:.5,supportFloor:0,projection:1,
   capacity:0,acquisitionMode:0,acquisitionSamples:8192,emitterBirthsPerStep:128,lightRefreshEvery:0,filmJitter:1,fineCoverage:1,coarseCoverage:0,sourceBias:.75,sourceHistory:4,sourceMargin:1,
-  depthMode:0,depthSlices:16,depthScale:.25,fillExtinction:0,extinctionSlack:0,extinctionView:0,scatteredGain:input.scatteredGain??input.carriedSmokeGain??1,scatteredLife:0,carriedSmokeGain:1,generatedSmokeGain:1,showParticles:true,showRaymarch:false,sourceColorOutput:false,...PARTICLE_STATE_DEFAULTS,...PARTICLE_WORK_DEFAULTS,profileMode:input.profileMode??([input.emissionFalloff,input.extinctionFalloff].some(v=>v!==undefined&&v!==1)?1:0),...input};
+  depthMode:0,depthSlices:16,depthScale:.25,fillExtinction:0,extinctionSlack:0,extinctionView:0,scatteredGain:input.scatteredGain??input.carriedSmokeGain??1,scatteredLife:0,carriedSmokeGain:1,generatedSmokeGain:1,showParticles:true,showRaymarch:false,referenceEmission:0,sourceColorOutput:false,...PARTICLE_STATE_DEFAULTS,...PARTICLE_WORK_DEFAULTS,profileMode:input.profileMode??([input.emissionFalloff,input.extinctionFalloff].some(v=>v!==undefined&&v!==1)?1:0),...input};
  if(![0,1,2].includes(s.depthMode)||!Number.isSafeInteger(s.depthSlices)||s.depthSlices<1||s.depthSlices>0xffffffff||s.depthScale<=0)throw Error('Invalid particle depth settings');
  const flags=['enabled','showParticles','showRaymarch','sourceColorOutput','renewalDiagnostics',...PARTICLE_WORK_FLAGS];for(const key of flags)if(typeof s[key]!=='boolean')throw Error('Particle '+key+' must be boolean');
  for(const [k,v] of Object.entries(s))if(!flags.includes(k)&&(!Number.isFinite(v)||v<0||!Number.isFinite(Math.fround(v))))throw Error(`Invalid particle ${k}`);
@@ -30,6 +30,7 @@ export function opticalParticleSettings(input={}) {
  for(const key of ['emitterBirthsPerStep','lightRefreshEvery'])if(!Number.isSafeInteger(s[key])||s[key]>0xffffffff)throw Error('Invalid particle '+key);
  if(s.acquisitionSamples<1||![0,1,2].includes(s.acquisitionMode)||s.filmJitter>1||s.sourceBias>1||s.fineCoverage>1||s.coarseCoverage>1)throw Error('Invalid particle acquisition policy');
  if(![0,1].includes(s.projection)||s.flowAlignment>1||s.fineAcquisition>1||s.targetScale<=0)throw Error('Invalid particle projection, alignment or target scale');
+ if(s.referenceEmission>1)throw Error('Reference march emission must be between zero and one');
  if(s.reactionSupportCoupling>1||s.fillExtinction>1||![0,1,2].includes(s.extinctionView))throw Error('Invalid particle reaction coupling or extinction assist');
  if((s.fillExtinction>0||s.extinctionView>0)&&!s.depthMode)throw Error('Extinction assist requires depth-sliced integration');
  if(s.refresh>1||s.radius<=0||s.stretch<=0||s.burnTime<=0||s.cooling<=0||s.smokeLife<=0||s.drag<=0)throw Error('Particle fractions must be at most one and scales/lifetimes positive');

@@ -108,3 +108,27 @@ test('Fill exposes a small active strength and accepts an exact typed zero',asyn
   assert.equal(x.trace.reset.length,0);
  }finally{await x.dispose();}
 });
+
+test('hybrid march emission is independently editable and full reference ignores it',async()=>{
+ const x=await mounted({inputs:{particles:{showRaymarch:true,showParticles:true}}});
+ try{
+  const input=x.field('referenceEmission');assert.ok(input,'hybrid march emission control is missing');
+  assert.equal(Number(input.value),0);assert.equal(input.disabled,false);
+  input.classList.add('scrubbing');input.value='0.25';input.fire('input');await Promise.resolve();
+  assert.equal(x.accepted().referenceEmission,.25);
+  x.owner.operations.setOptions({showParticles:false});
+  assert.equal(input.disabled,true);assert.equal(x.accepted().referenceEmission,.25);
+ }finally{await x.dispose();}
+});
+
+test('the transport toggle is unavailable when the entire retained update is held',async()=>{
+ const x=await mounted();try{
+  assert.equal(x.field('transportEnabled').disabled,false);
+  x.owner.operations.setOptions({updateEnabled:false});
+  assert.equal(x.field('transportEnabled').disabled,true);
+  assert.equal(x.field('reactionEnabled').disabled,true);
+  assert.equal(x.accepted().transportEnabled,true,'holding the parent preserves the authored motion setting');
+  x.owner.operations.setOptions({updateEnabled:true});
+  assert.equal(x.field('transportEnabled').disabled,false);
+ }finally{await x.dispose();}
+});

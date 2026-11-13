@@ -4,3 +4,11 @@ import {decodeParticleTiming,createParticleTiming} from '../volume-particle-timi
 import {withKaminosGpu,withGpuErrorScopes} from '../tools/shader-herder.mjs';
 test('missing, partial, blank, invalid and duplicate timestamp rows cannot become timings',()=>{const id={frame:7,step:4,route:'native'};for(const [names,times] of [[[],[]],[['a'],[]],[['a'],[0n,0n]],[['a'],[10n,9n]],[['a','a'],[1n,2n,3n,4n]]])assert.equal(decodeParticleTiming(names,times,id).ok,false);const r=decodeParticleTiming(['field'],[10n,1000010n],id);assert.equal(r.passes.field,1);assert.deepEqual(r.identity,id);});
 test('passive native timestamps require explicit submission and cannot manufacture an extra frame',async()=>withKaminosGpu(async({device:d})=>{if(!d.features.has('timestamp-query'))return;await withGpuErrorScopes(d,'passive particle timing',async()=>{const t=createParticleTiming(d);assert.equal(t.begin({enabled:false,every:1,frame:0,step:0,route:'native',passNames:['a']}),null);const run=t.begin({enabled:true,every:1,frame:0,step:0,route:'native',passNames:['a']});assert.ok(run);const pipeline=d.createComputePipeline({layout:'auto',compute:{module:d.createShaderModule({code:'@compute @workgroup_size(1) fn main(){}'}),entryPoint:'main'}});const e=d.createCommandEncoder(),p=e.beginComputePass(run.writes('a'));p.setPipeline(pipeline);p.dispatchWorkgroups(1);p.end();assert.throws(()=>run.writes('a'),/duplicate/);run.finish(e);assert.equal(t.read().ok,false,'encoding alone is not evidence');d.queue.submit([e.finish()]);await run.submitted();assert.equal(t.read().ok,true,JSON.stringify(t.read()));assert.deepEqual(t.read().identity,{frame:0,step:0,route:'native'});assert.equal(t.begin({enabled:true,every:3,frame:1,step:1,route:'native',passNames:['a']}),null);t.dispose();});}));
+
+test('passive timing does not show the previous run after timings are switched off or rearmed',()=>{
+ const t=createParticleTiming({features:new Set()});
+ t.begin({enabled:true,every:1,frame:0,step:0,route:'native',passNames:['a']});
+ assert.equal(t.read().reason,'GPU timestamps unavailable');
+ t.begin({enabled:false,every:1,frame:1,step:1,route:'native',passNames:['a']});assert.equal(t.read().reason,'Passive GPU intervals off');
+ t.begin({enabled:true,every:30,frame:2,step:2,route:'native',passNames:['a']});assert.equal(t.read().reason,'Waiting for a fresh particle frame');
+});
