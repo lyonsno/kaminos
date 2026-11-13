@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {IMMERSED_SINGLE_SOURCE_WGSL as immersedSingle} from '../volume-immersed-source-collection-wgsl.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as core from '../volume-core.js';
@@ -133,7 +134,7 @@ test('uniforms: the slab basis, turbulence and the pattern flag ride a fifth and
 });
 
 test('the kernel samples the coverage map and the lattice at the slab-local cell, and keeps the plain slab for the sponge exemption', () => {
-  const fn = kernel.slice(kernel.indexOf('fn immersedPatternedWeight('), kernel.indexOf('\n}\n', kernel.indexOf('fn immersedPatternedWeight(')));
+  const fn = immersedSingle.slice(immersedSingle.indexOf('fn immersedPatternedWeight('), immersedSingle.indexOf('\n}\n', immersedSingle.indexOf('fn immersedPatternedWeight(')));
   assert.match(fn, /let e1 = u\.immersed_source_e\.xyz;/);
   assert.match(fn, /let e2 = normalize\(cross\(e1, n\)\);/, 'the kernel normalises, as the CPU does');
   assert.match(fn, /let materialPerVelocity = max\(1e-8, u\.immersed_source_f\.y\);/);

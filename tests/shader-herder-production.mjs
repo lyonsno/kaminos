@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {IMMERSED_SINGLE_SOURCE_WGSL as immersedSingle} from '../volume-immersed-source-collection-wgsl.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -13,8 +14,8 @@ struct ImmersedUniform {
   immersed_source_c: vec4<f32>,
 };
 var<private> u: ImmersedUniform;
-${extractWgslFunction(core, 'immersedDirection')}
-${extractWgslFunction(core, 'immersedSourceWeight')}
+${extractWgslFunction(immersedSingle, 'immersedDirection')}
+${extractWgslFunction(immersedSingle, 'immersedSourceWeight')}
 `;
 
 test('production immersed source has full centre weight, antialiased slab edge and zero outside support', async () => {

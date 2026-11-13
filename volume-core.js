@@ -1,3 +1,4 @@
+import {immersedSourceIntegerBounds} from './volume-immersed-source-geometry-gpu.mjs';
 import {createGPUImmersedCollection} from './volume-immersed-source-gpu.mjs';
 import {createGPUImmersedWorldSources} from './volume-immersed-world-source-gpu.mjs';
 import {createDeferredPipelines} from './deferred-pipelines.mjs';
@@ -11,7 +12,7 @@ import {checkedWorldFrame} from './volume-world-frame.mjs';
 import {validateAllocation} from './volume-material-hierarchy.mjs';
 import {gridTuningPlan} from './volume-grid-tuning.mjs';
 import {TRANSFER_GEOMETRY_WGSL} from './volume-grid-transfer.mjs';
-import {IMMERSED_COLLECTION_WGSL} from './volume-immersed-source-collection-wgsl.mjs';
+import {IMMERSED_COLLECTION_WGSL,IMMERSED_SINGLE_SOURCE_WGSL} from './volume-immersed-source-collection-wgsl.mjs';
 import {checkedImmersedSources,createRuntimeImmersedSourceCache,IMMERSED_COLLECTION_IDENTITY} from './volume-immersed-source-collection.mjs';
 export {compileImmersedSourceCollection} from './volume-immersed-source-collection.mjs';
 import { FIRE_EMISSION_EXTENT_WGSL } from './fire-emission-extent.mjs';
@@ -4393,46 +4394,7 @@ fn centreVelocityAt(c: vec3<i32>) -> vec3<f32> {
 // scalars use. (A per-component −½ sample offset was tried first and moved the
 // velocity pattern +½ cell per step: the lean flipped to +x instead of going.)
 
-fn immersedDirection() -> vec3<f32> {
-  return u.immersed_source_b.xyz;
-}
-
-// Weight of a cell in the immersed source's slab: an antialiased indicator of
-// |along| ≤ t/2 and radial ≤ r in cell units (cell centres at integer + 0.5).
-// The CPU mirror immersedSourceWeights computes the same number.
-fn immersedSourceWeight(cellCenter: vec3<f32>) -> f32 {
-  if (u.immersed_source_a.x < 0.5) { return 0.0; }
-  let d = cellCenter - u.immersed_source_a.yzw;
-  let n = immersedDirection();
-  let along = dot(d, n);
-  let radial = length(d - along * n);
-  let halfThickness = max(0.5, 0.5 * u.immersed_source_c.x);
-  let radius = u.immersed_source_b.w;
-  // Edges ascend: Metal leaves smoothstep with reversed edges undefined.
-  return (1.0 - smoothstep(halfThickness - 0.5, halfThickness + 0.5, abs(along))) * (1.0 - smoothstep(radius - 0.5, radius + 0.5, radial));
-}
-
-// The slab's pattern and inlet turbulence (slab inlet dynamics, report §33):
-// the slab-local cell (u, v) of the disc plane indexes the floor coverage map
-// (built for the slab's pattern, centred at GRID/2) and the inlet turbulence
-// lattice, exactly as the CPU mirror indexes them. slabWeight is the plain
-// disc indicator; the pattern can only remove, the turbulence modulates.
-fn immersedPatternedWeight(cellCenter: vec3<f32>, slabWeight: f32) -> f32 {
-  if (slabWeight <= 0.0) { return 0.0; }
-  let d = cellCenter - u.immersed_source_a.yzw;
-  let n = immersedDirection();
-  let e1 = u.immersed_source_e.xyz;
-  let e2 = normalize(cross(e1, n));
-  let materialPerVelocity = max(1e-8, u.immersed_source_f.y);
-  let patternWidth = i32(round(f32(GRID) * materialPerVelocity));
-  let patternCentre = f32(patternWidth) * 0.5;
-  let slabCell = vec2<i32>(clamp(i32(floor(patternCentre + dot(d, e1) * materialPerVelocity)), 0, patternWidth - 1), clamp(i32(floor(patternCentre + dot(d, e2) * materialPerVelocity)), 0, patternWidth - 1));
-  var coverage = 1.0;
-  if (u.immersed_source_f.x > 0.5) { coverage = textureLoad(inflowCoverage, slabCell, 0).x; }
-  var perturbation = 0.0;
-  if (u.immersed_source_e.w > 0.0) { perturbation = textureLoad(inflowPerturbation, slabCell, 0).x; }
-  return slabWeight * coverage * max(0.0, 1.0 + u.immersed_source_e.w * perturbation);
-}
+${IMMERSED_SINGLE_SOURCE_WGSL}
 
 ${IMMERSED_COLLECTION_WGSL}
 
@@ -8374,7 +8336,19 @@ export function createKaminosVolumePrototype({
   let debugOpticalStepping = opticalSteppingConfig({mode:controlsSnapshot.raymarchMode??'numerical',tolerance:controlsSnapshot.opticalTolerance??0.001});
   let rayStepTelemetry = null;
   let splitIntegral=null,splitIntegralShader=null,splitSettings=splitIntegralSettings();
-  let opticalParticles=null,particleSettings=opticalParticleSettings();
+  let opticalParticles=null,particleSettings=opticalParticleSettings(),lastParticleEmitter=null;
+  function captureParticleEmitterStep(){
+    lastParticleEmitter=null;
+    if(!particleSettings.enabled||particleSettings.acquisitionMode!==2||!immersedCollectionTexture||!sceneSolidTexture)return;
+    const collection=immersedCollectionRecords!==null?immersedCollectionPrepared?.sources?.filter(x=>x.config.effective.admitted):null;
+    if(immersedCollectionRecords!==null&&(collection?.length!==1||immersedCollectionGPU?.encodedStep!==state.simStepCount))return;
+    const config=collection?.[0]?.config??state.immersedSource;
+    if(!config?.effective?.admitted)return;
+    const bounds=immersedSourceIntegerBounds(config.effective,{grid:gridSize,gridHeight});
+    lastParticleEmitter={...bounds,sourceStep:state.simStepCount,sourceId:collection?.[0]?.id??'immersed-emitter',
+      allocation:state.thermalFluidAllocationId,uniformValues:immersedSourceUniformValues(config),
+      aperture:inflowCoverageTexture,noise:inflowPerturbationTexture,solid:sceneSolidTexture,collection:immersedCollectionTexture};
+  }
   let integralReconstruction=null, reconstructionSample=0;
   let integralGuideDisplay=integralGuideDisplaySettings();
   let integralEvaluation=null, integralCameraValues=null, integralCameraSignature=null, integralSceneSignature=null;
@@ -12586,6 +12560,7 @@ export function createKaminosVolumePrototype({
     const analyticInjected=encodeAnalyticEmitterInjection(encoder);
     if(velocityOwner&&analyticInjected){velocityOwner.prepare(fineTransferInputs());velocityOwner.encode(encoder,'injectMomentum');}
     if (state.joinedBoundary?.admitted) {
+      captureParticleEmitterStep();
       state.simStepCount += 1;
       encodeGpuThermalConsumer(encoder);
       updateSimCostLedger();
@@ -12597,6 +12572,7 @@ export function createKaminosVolumePrototype({
     },velocityOwner);
     if(velocityOwner){velocityOwner.prepare(fineTransferInputs());velocityOwner.encode(encoder,'prolongVelocity',options.finalTimestampWrites);state.fineGrid={...state.fineGrid,dispatched:true,step:state.simStepCount};}
     encodeWorldSmoke(encoder, worldPlan, options.worldTiming);
+    captureParticleEmitterStep();
     state.simStepCount += 1;
     encodeGpuThermalConsumer(encoder);
     updateSimCostLedger();
@@ -13841,7 +13817,9 @@ export function createKaminosVolumePrototype({
       &&!sceneTransportConsumer&&!(controlsSnapshot.gridOverlay>0)&&!(controlsSnapshot.flowDebug>0)
       &&volumePresentationModeEffective==='beauty';
     const particleChemistry=particleReactionFromSimulation(state.reactantCombustion);
-    const particleCaptureRequested=particleSettings.enabled&&!!particleChemistry&&reconstructionSupported&&!options.particleReference;
+    const emitterParticles=particleSettings.acquisitionMode===2;
+    const emitterGridSupported=state.worldSmoke?.effective!=='one-way-world-field'&&!state.joinedBoundary?.admitted;
+    const particleCaptureRequested=particleSettings.enabled&&!!particleChemistry&&reconstructionSupported&&!options.particleReference&&(!emitterParticles||emitterGridSupported);
     // Particle births own their one-evaluation capture; loading an authored
     // basin must not silently switch it to that basin's ordinary marcher.
     const referenceConfig=options.particleReference&&debugOpticalStepping.value>=4
@@ -13850,7 +13828,7 @@ export function createKaminosVolumePrototype({
       ? opticalSteppingConfig({mode:'budgeted',tolerance:debugOpticalStepping.tolerance}) : referenceConfig,
       {emissive:selectEmissive,trace:Boolean(options.opticalTrace),exterior:state.worldSmoke?.effective==='one-way-world-field',
         localSource:particleCaptureRequested,explicit:debugOpticalSteppingExplicit&&!particleCaptureRequested});
-    if(particleCaptureRequested){optical.requested=debugOpticalStepping.mode;optical.reason='particle-source-one-fresh-evaluation';}
+    if(particleCaptureRequested){optical.requested=debugOpticalStepping.mode;optical.reason=emitterParticles?'source-born-carriers-without-camera-evaluations':'particle-source-one-fresh-evaluation';}
     const reconstruct=reconstructionRequested!=='off'&&reconstructionSupported&&!particleSettings.enabled;
     if(!reconstruct)integralReconstruction?.disable(reconstructionRequested==='off'?'disabled':'unsupported-route');
     state.integralReconstruction={requested:reconstructionRequested,effective:'off',reason:reconstructionRequested!=='off'?'requires-ordinary-emissive-beauty-without-debug-overlays':null};
@@ -13867,10 +13845,10 @@ export function createKaminosVolumePrototype({
       const field=owner=>owner?{...owner.remapResources(),map:worldSmokeMapping(owner.plan,owner.anchor,productTransform).fineToField}:null;
       const world=field(state.worldSmoke?.effective==='one-way-world-field'?worldSmoke:null),middle=field(state.worldSmoke?.effective==='one-way-world-field'?intermediateFlow:null);
       const viewProj=new THREE.Matrix4().copy(invViewProj).invert().elements;
-      const batch=focusedAcquisition?particleBudget().batch:{width:state.width,height:state.height,pixels:state.width*state.height,samples:state.width*state.height};
+      const batch=emitterParticles&&particleCaptureRequested?{width:1,height:1,pixels:0,samples:0}:focusedAcquisition?particleBudget().batch:{width:state.width,height:state.height,pixels:state.width*state.height,samples:state.width*state.height};
       const poolIdentity=JSON.stringify([worldSmokeKey,intermediateKey,productTransform,state.particleSourceGeneration]);
       const bootstrap=!opticalParticles||opticalParticles.needsReset({width:batch.width,height:batch.height,step:state.simStepCount,settings:particleSettings,identity:poolIdentity});
-      captureFresh=particleCaptureRequested&&particleCaptureClock.due({enabled:particleSettings.acquisitionEnabled,step:state.simStepCount,interval:particleSettings.acquisitionEvery,identity:captureIdentity,advancing:state.simStepCount>(opticalParticles?.read().step??state.simStepCount),bootstrap});
+      captureFresh=particleCaptureRequested&&!emitterParticles&&particleCaptureClock.due({enabled:particleSettings.acquisitionEnabled,step:state.simStepCount,interval:particleSettings.acquisitionEvery,identity:captureIdentity,advancing:state.simStepCount>(opticalParticles?.read().step??state.simStepCount),bootstrap});
       let acquisition=null;
       if(focusedAcquisition){
         const fine={lo:[-1,-1,-1],hi:[1,2*gridHeight/gridSize-1,1]};
@@ -13886,13 +13864,13 @@ export function createKaminosVolumePrototype({
         viewProj,world,middle,acquisition,
         backtrace:resolveTimeStepConfig(controlsSnapshot).effective.backtraceScale,fineScale:2/gridSize,
         staggered:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode==='staggered',sourcesOnly:particleCaptureRequested,capture:!particleCaptureRequested||captureFresh});
-      splitGroup=prepared.group;state.splitIntegral=prepared.state;particleSourceFrame=prepared.sourceFrame;
-      if(particleSourceFrame){Object.assign(particleSourceFrame,{samples:captureFresh?batch.samples:0,configuredSamples:batch.samples,outputWidth:state.width,outputHeight:state.height,displayWidth:state.displayWidth,displayHeight:state.displayHeight,reactionStepScale:resolveTimeStepConfig(controlsSnapshot).effective.dtScale});
+      splitGroup=prepared.group;state.splitIntegral=emitterParticles&&particleCaptureRequested?{...prepared.state,effective:'carrier-transport-bindings',freshEvaluations:0,recordAllocation:'no-camera-source-batch'}:prepared.state;particleSourceFrame=prepared.sourceFrame;
+      if(particleSourceFrame){Object.assign(particleSourceFrame,{...(emitterParticles?{pixels:0,emitterUnavailable:'requires-one-current-admitted-immersed-emitter'}:{}),samples:captureFresh?batch.samples:0,configuredSamples:batch.samples,outputWidth:state.width,outputHeight:state.height,displayWidth:state.displayWidth,displayHeight:state.displayHeight,reactionStepScale:resolveTimeStepConfig(controlsSnapshot).effective.dtScale});
         if(focusedAcquisition&&captureFresh)opticalParticles?.prepareAcquisition(encoder,{source:particleSourceFrame,fine:fluidBuffers[currentFluid],dims:[gridSize,gridHeight,gridSize],settings:{...particleSettings,...particleReactionFromSimulation(state.reactantCombustion)},model:state.reactantCombustion.effective.model,staggered:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode==='staggered',profileWrites:activeParticleProfileWrites??(()=>({})),identity:JSON.stringify([worldSmokeKey,intermediateKey,productTransform,state.particleSourceGeneration])});
       }
     }else if(!options.particleReference){state.splitIntegral=splitIntegral.disable(effectiveSplitSettings.mode==='off'?'off':device.limits.maxStorageBuffersPerShaderStage<10?'requires-10-fragment-storage-buffers':'requires-Fixed-evaluations-ordinary-joined-emissive-beauty');state.splitIntegral.requested=effectiveSplitSettings.mode;}
     if(splitBufferBefore!==splitIntegral.buffer)rebuildFluidBindGroups();
-    const particleSourceOnly=!!particleSourceFrame&&(focusedAcquisition||!particleSettings.sourceColorOutput);
+    const particleSourceOnly=!!particleSourceFrame&&(emitterParticles||focusedAcquisition||!particleSettings.sourceColorOutput);
     if(particleSourceOnly){entryPoint='fsParticleSource';colorTargets[0].writeMask=0;}
     const opticalConstants = {OPTICAL_STEP_MODE:optical.value,RAY_STEP_STATS:rayStepTelemetry.active,SPLIT_INTEGRAL:splitActive};
     state.opticalStepping = { ...optical, effective: optical.mode,
@@ -14065,12 +14043,17 @@ export function createKaminosVolumePrototype({
     if(particleSourceFrame){
       opticalParticles??=createOpticalParticles(device,{transparent:transparentCanvas});
       const cameraValues=new Float32Array([...emissiveWhiteMatrix[0],0,...emissiveWhiteMatrix[1],0,...emissiveWhiteMatrix[2],0,0,uniforms[373],uniforms[374],0,0,0,uniforms[46],0]);
-      state.opticalParticles=opticalParticles.encode(encoder,{view,allowUnavailableGridExtinction:true,gridExtinction:particleSettings.fillExtinction>0||particleSettings.extinctionView>0?{...sceneVolumeSource?.describe(),expectedFrame:state.frameCount}:null,format:targetPipeline===readbackPipeline?'rgba8unorm':format,source:{...particleSourceFrame,reactionStepScale:resolveTimeStepConfig(controlsSnapshot).effective.dtScale},fine:fluidBuffers[currentFluid],reactants:reactantTextures[currentFluid],model:state.reactantCombustion.effective.model,material:{density:uniforms[23],extinction:uniforms[EMISSIVE_UNIFORM_OFFSET],albedo:uniforms[EMISSIVE_UNIFORM_OFFSET+1],smokeVisible:uniforms[306]>.5?0:1,kelvinPerHeat:state.physicsAppearance.kelvinPerHeat,thermalGain:uniforms[371],cleanGain:uniforms[372],sootBurnoutRate:state.physicsAppearance.effective.sootBurnout?state.physicsAppearance.sootBurnoutRate:0,sootBurnoutKelvin:state.physicsAppearance.sootBurnoutKelvin},dims:[gridSize,gridHeight,gridSize],invViewProj:invViewProj.elements,settings:{...particleSettings,...particleReactionFromSimulation(state.reactantCombustion)},profileWrites:activeParticleProfileWrites??(()=>({})),cameraValues,depthZeroToOne:camera.coordinateSystem===THREE.WebGPUCoordinateSystem,depth:ordinarySceneDepthTexture??ordinarySceneDepthFallback,identity:JSON.stringify([worldSmokeKey,intermediateKey,productTransform,state.particleSourceGeneration])});
+      const sceneSource=emitterParticles?sceneVolumeSource?.describe():null;
+      const lightField=sceneSource?.status==='encoded'&&distributedFrame?.generation===sceneSource.generation&&distributedFrame.frame===sceneSource.frame&&!distributedFrame.previewStale?distributedFrame.smokeReconstruction:null;
+      const emitter=emitterParticles&&lastParticleEmitter?.allocation===state.thermalFluidAllocationId&&lastParticleEmitter?.sourceStep===state.simStepCount-1?lastParticleEmitter:null;
+      state.opticalParticles=opticalParticles.encode(encoder,{view,emitter,
+        incident:lightField?{texture:lightField.texture,masks:lightField.masks,planes:lightField.planes,generation:distributedFrame.generation,frame:distributedFrame.frame}:null,
+        allowUnavailableGridExtinction:true,gridExtinction:particleSettings.fillExtinction>0||particleSettings.extinctionView>0?{...sceneVolumeSource?.describe(),expectedFrame:state.frameCount}:null,format:targetPipeline===readbackPipeline?'rgba8unorm':format,source:{...particleSourceFrame,reactionStepScale:resolveTimeStepConfig(controlsSnapshot).effective.dtScale},fine:fluidBuffers[currentFluid],reactants:reactantTextures[currentFluid],model:state.reactantCombustion.effective.model,material:{density:uniforms[23],extinction:uniforms[EMISSIVE_UNIFORM_OFFSET],albedo:uniforms[EMISSIVE_UNIFORM_OFFSET+1],smokeVisible:uniforms[306]>.5?0:1,kelvinPerHeat:state.physicsAppearance.kelvinPerHeat,thermalGain:uniforms[371],cleanGain:uniforms[372],sootBurnoutRate:state.physicsAppearance.effective.sootBurnout?state.physicsAppearance.sootBurnoutRate:0,sootBurnoutKelvin:state.physicsAppearance.sootBurnoutKelvin},dims:[gridSize,gridHeight,gridSize],invViewProj:invViewProj.elements,settings:{...particleSettings,...particleReactionFromSimulation(state.reactantCombustion)},profileWrites:activeParticleProfileWrites??(()=>({})),cameraValues,depthZeroToOne:camera.coordinateSystem===THREE.WebGPUCoordinateSystem,depth:ordinarySceneDepthTexture??ordinarySceneDepthFallback,identity:JSON.stringify(emitterParticles?[productTransform,state.thermalFluidAllocationId]:[worldSmokeKey,intermediateKey,productTransform,state.particleSourceGeneration])});
       if(captureFresh)particleCaptureClock.mark(state.simStepCount,captureIdentity);
       state.opticalParticles.reference=referenceReceipt;state.opticalParticles.sourceColorOutput=!particleSourceOnly;
       state.opticalParticles.acquisition=acquisitionPlan;
-      state.opticalParticles.work={...state.opticalParticles.work,configuredFreshBudget:particleSourceFrame.configuredSamples,freshEvaluationBudget:particleSourceFrame.samples,acquisitionPixels:captureFresh?particleSourceFrame.pixels:0,acquisitionEnabled:particleSettings.acquisitionEnabled,acquisitionEvery:particleSettings.acquisitionEvery,lastCaptureStep:particleCaptureClock.read().lastCaptureStep,overflow:'at most one birth per retained slot per acquisition; remaining observations stay in the source batch',outside:'shared lighting, material preparation and simulation are separate work'};
-    }else if(!options.particleReference){state.opticalParticles={requested:particleSettings.enabled,effective:particleSettings.enabled&&!particleChemistry?'unavailable':'off',reason:particleSettings.enabled?(!particleChemistry?'Carried composition requires the active Reactant law and its oxidizer field':'requires-one-fresh-Fixed-evaluations-ordinary-joined-beauty'):'disabled'};}
+      state.opticalParticles.work={...state.opticalParticles.work,configuredFreshBudget:particleSourceFrame.configuredSamples,freshEvaluationBudget:particleSourceFrame.samples,acquisitionPixels:captureFresh?particleSourceFrame.pixels:0,acquisitionEnabled:particleSettings.acquisitionEnabled,acquisitionEvery:particleSettings.acquisitionEvery,lastCaptureStep:particleCaptureClock.read().lastCaptureStep,overflow:emitterParticles?'new births can use only free slots; existing carriers are not overwritten':'at most one birth per retained slot per acquisition; remaining observations stay in the source batch',outside:'shared lighting, material preparation and simulation are separate work'};
+    }else if(!options.particleReference){state.opticalParticles={requested:particleSettings.enabled,effective:particleSettings.enabled&&!particleChemistry?'unavailable':'off',reason:particleSettings.enabled?(!particleChemistry?'Carried composition requires the active Reactant law and its oxidizer field':emitterParticles&&!emitterGridSupported?'Emitter births require one Fine grid without joined boundaries':'requires-ordinary-emissive-beauty'):'disabled'};}
     if(reconstruct) {
       const cameraValues=new Float32Array([...emissiveWhiteMatrix[0],0,...emissiveWhiteMatrix[1],0,...emissiveWhiteMatrix[2],0,
         0,uniforms[373],uniforms[374],0,0,0,uniforms[46],0]);
@@ -14375,7 +14358,7 @@ export function createKaminosVolumePrototype({
       } else {
         if(particleSettings.enabled&&particleSettings.liveTimings&&!particleProfileWrites){
           particleTimings??=createParticleTiming(device);const plan=particleFieldPlan(device.limits,{slots:particleBudget().slots,dims:[gridSize,gridHeight,gridSize],pitch:2/gridSize,cellSize:particleSettings.exchangeSpacing>0?particleSettings.exchangeSpacing/(2/gridSize):particleSettings.exchangeCellSize});
-          passiveParticleSample=particleTimings.begin({enabled:true,every:particleSettings.timingEvery,frame:state.frameCount,step:state.simStepCount,route:state.effectiveRoute??state.backend,passNames:['acquisition',...plan.groupingProfilePasses,...plan.fieldProfilePasses,'follow','update','births','depthBounds','depthDeposit','depthPrefix','gridExtinction','raster','resolve','present']});
+          passiveParticleSample=particleTimings.begin({enabled:true,every:particleSettings.timingEvery,frame:state.frameCount,step:state.simStepCount,route:state.effectiveRoute??state.backend,passNames:['acquisition',...plan.groupingProfilePasses,...plan.fieldProfilePasses,'follow','update','births','lightRefresh','depthBounds','depthDeposit','depthPrefix','gridExtinction','raster','resolve','present']});
         }
         encodeDraw(encoder, currentTexture.createView(), 'kaminos volume canvas pass',pipeline,{particleProfileWrites:passiveParticleSample?.writes});
         passiveParticleSample?.finish(encoder);
@@ -18412,7 +18395,7 @@ export function createKaminosVolumePrototype({
       const pausedBefore=capturePaused;
       this.setCapturePaused(true);await foregroundDrain;
       const plan=particleFieldPlan(device.limits,{slots:particleBudget().slots,dims:[gridSize,gridHeight,gridSize],pitch:2/gridSize,cellSize:particleSettings.exchangeSpacing>0?particleSettings.exchangeSpacing/(2/gridSize):particleSettings.exchangeCellSize});
-      const passNames=['acquisition',...plan.groupingProfilePasses,...plan.fieldProfilePasses,'follow','update','births','depthBounds','depthDeposit','depthPrefix','gridExtinction','raster','resolve','present'];
+      const passNames=['acquisition',...plan.groupingProfilePasses,...plan.fieldProfilePasses,'follow','update','births','lightRefresh','depthBounds','depthDeposit','depthPrefix','gridExtinction','raster','resolve','present'];
       const labels=[],query=device.createQuerySet({type:'timestamp',count:passNames.length*2});
       const resolved=device.createBuffer({size:passNames.length*16,usage:GPUBufferUsage.QUERY_RESOLVE|GPUBufferUsage.COPY_SRC});
       const readback=device.createBuffer({size:passNames.length*16,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});

@@ -1,5 +1,6 @@
 // Expected proposal assignments; domains can overlap and hit/birth counts differ.
 export function particleProposalShares(s){
+ if(s.acquisitionMode===2)return {mode:'emitter-supply',source:null,fine:null,broad:null,unassigned:null};
  if(!s.acquisitionMode)return {mode:'camera-stratified',source:null,fine:null,broad:null,unassigned:null};
  const total=s.fineCoverage+s.coarseCoverage,remainder=1-s.sourceBias;
  return {mode:'independent-batch',source:s.sourceBias,fine:total?remainder*s.fineCoverage/total:0,broad:total?remainder*s.coarseCoverage/total:0,unassigned:total?0:remainder};
@@ -87,13 +88,13 @@ fn splitAcquisitionHit(pixel:vec2<f32>,ro:vec3<f32>,rd:vec3<f32>,fine:vec2<f32>,
 
 export function particleResourceBudget(s,{limit,renderScale,displayWidth,displayHeight,flowCells=0}){
     const outputWidth=Math.max(1,Math.floor(displayWidth*renderScale)),outputHeight=Math.max(1,Math.floor(displayHeight*renderScale));
-    const batch=s.acquisitionMode?particleBatch(s.acquisitionSamples,outputWidth/outputHeight,limit.maxTextureDimension2D):{width:outputWidth,height:outputHeight,samples:outputWidth*outputHeight,pixels:outputWidth*outputHeight};
+    const batch=s.acquisitionMode===2?{width:1,height:1,samples:0,pixels:0}:s.acquisitionMode?particleBatch(s.acquisitionSamples,outputWidth/outputHeight,limit.maxTextureDimension2D):{width:outputWidth,height:outputHeight,samples:outputWidth*outputHeight,pixels:outputWidth*outputHeight};
     const slots=s.capacity||(s.populationWidth||Math.ceil(batch.width/s.spacing))*(s.populationHeight||Math.ceil(batch.height/s.spacing));
     const maxTargetScale=Math.min(limit.maxTextureDimension2D/outputWidth,limit.maxTextureDimension2D/outputHeight);
     if(s.targetScale>maxTargetScale)throw Error(`Particle target scale ${s.targetScale.toFixed(3)} exceeds device maximum ${maxTargetScale.toFixed(3)} at ${outputWidth} × ${outputHeight}; previous target preserved`);
     if(Math.max(outputWidth,outputHeight)>limit.maxTextureDimension2D)throw Error('Source output exceeds device texture dimensions; previous source preserved');
     if(!Number.isSafeInteger(slots)||slots>0xffffffff||slots*96>Math.min(limit.maxBufferSize,limit.maxStorageBufferBindingSize)||Math.ceil(slots/64)>limit.maxComputeWorkgroupsPerDimension)throw Error('Particle capacity exceeds effective device storage or dispatch limit; previous population preserved');
-    const sourceBytes=batch.pixels*64+flowCells*16;
+    const sourceBytes=s.acquisitionMode===2?64:batch.pixels*64+flowCells*16;
     if(sourceBytes>Math.min(limit.maxBufferSize,limit.maxStorageBufferBindingSize)||Math.ceil(batch.samples/64)>limit.maxComputeWorkgroupsPerDimension)throw Error('Fresh source batch including coarse flow exceeds effective device storage binding or dispatch limit; previous source preserved');
     const depthField=particleDepthLayout(s,{width:Math.ceil(outputWidth*s.targetScale),height:Math.ceil(outputHeight*s.targetScale),limit});
     return {depthField,batch,slots,sourceBytes,outputWidth,outputHeight,maxTargetScale,maxCapacity:Math.min(0xffffffff,Math.floor(Math.min(limit.maxBufferSize,limit.maxStorageBufferBindingSize)/96),limit.maxComputeWorkgroupsPerDimension*64)};

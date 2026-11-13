@@ -47,3 +47,47 @@ fn immersedContributions(cell:vec3<f32>) -> ImmersedContributions {
  return ImmersedContributions(slabUnion,weight,supply,1.0-remaining,mixture,velocity);
 }
 `;
+
+// Shared single-source support law, using the caller's simulation lattice and inlet bindings.
+export const IMMERSED_SINGLE_SOURCE_WGSL=/* wgsl */`
+fn immersedDirection() -> vec3<f32> {
+  return u.immersed_source_b.xyz;
+}
+
+// Weight of a cell in the immersed source's slab: an antialiased indicator of
+// |along| ≤ t/2 and radial ≤ r in cell units (cell centres at integer + 0.5).
+// The CPU mirror immersedSourceWeights computes the same number.
+fn immersedSourceWeight(cellCenter: vec3<f32>) -> f32 {
+  if (u.immersed_source_a.x < 0.5) { return 0.0; }
+  let d = cellCenter - u.immersed_source_a.yzw;
+  let n = immersedDirection();
+  let along = dot(d, n);
+  let radial = length(d - along * n);
+  let halfThickness = max(0.5, 0.5 * u.immersed_source_c.x);
+  let radius = u.immersed_source_b.w;
+  // Edges ascend: Metal leaves smoothstep with reversed edges undefined.
+  return (1.0 - smoothstep(halfThickness - 0.5, halfThickness + 0.5, abs(along))) * (1.0 - smoothstep(radius - 0.5, radius + 0.5, radial));
+}
+
+// The slab's pattern and inlet turbulence (slab inlet dynamics, report §33):
+// the slab-local cell (u, v) of the disc plane indexes the floor coverage map
+// (built for the slab's pattern, centred at GRID/2) and the inlet turbulence
+// lattice, exactly as the CPU mirror indexes them. slabWeight is the plain
+// disc indicator; the pattern can only remove, the turbulence modulates.
+fn immersedPatternedWeight(cellCenter: vec3<f32>, slabWeight: f32) -> f32 {
+  if (slabWeight <= 0.0) { return 0.0; }
+  let d = cellCenter - u.immersed_source_a.yzw;
+  let n = immersedDirection();
+  let e1 = u.immersed_source_e.xyz;
+  let e2 = normalize(cross(e1, n));
+  let materialPerVelocity = max(1e-8, u.immersed_source_f.y);
+  let patternWidth = i32(round(f32(GRID) * materialPerVelocity));
+  let patternCentre = f32(patternWidth) * 0.5;
+  let slabCell = vec2<i32>(clamp(i32(floor(patternCentre + dot(d, e1) * materialPerVelocity)), 0, patternWidth - 1), clamp(i32(floor(patternCentre + dot(d, e2) * materialPerVelocity)), 0, patternWidth - 1));
+  var coverage = 1.0;
+  if (u.immersed_source_f.x > 0.5) { coverage = textureLoad(inflowCoverage, slabCell, 0).x; }
+  var perturbation = 0.0;
+  if (u.immersed_source_e.w > 0.0) { perturbation = textureLoad(inflowPerturbation, slabCell, 0).x; }
+  return slabWeight * coverage * max(0.0, 1.0 + u.immersed_source_e.w * perturbation);
+}
+`;

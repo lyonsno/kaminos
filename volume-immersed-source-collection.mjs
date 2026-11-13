@@ -44,7 +44,7 @@ export function compileImmersedSourceCollection(records,{controls={},grid,gridHe
  });
  return {identity:IMMERSED_COLLECTION_IDENTITY,count:sources.length,width,height,layers:sources.length+1,data,sources};
 }
-export {IMMERSED_COLLECTION_WGSL} from './volume-immersed-source-collection-wgsl.mjs';
+export {IMMERSED_COLLECTION_WGSL,IMMERSED_SINGLE_SOURCE_WGSL} from './volume-immersed-source-collection-wgsl.mjs';
 
 // Fine owns injection in its cells; each disjoint exterior parcel supplies the
 // same physical source to independently sized world flow/material recipients.
