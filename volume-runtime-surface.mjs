@@ -13,7 +13,7 @@ export function createBrowserVolumeSurface({viewport,identity,routeIdentity,canv
       const rect=viewport.getBoundingClientRect(),win=viewport.ownerDocument?.defaultView??globalThis;
       return {left:rect.left,top:rect.top,width:rect.width,height:rect.height,
         fallbackWidth:Math.max(1,Math.floor((win.innerWidth||1280)-Math.max(0,rect.left||0))),
-        fallbackHeight:Math.max(1,Math.floor(win.innerHeight||720)),pixelRatio:Math.max(1,Number(win.devicePixelRatio)||1)};
+        fallbackHeight:Math.max(1,Math.floor(win.innerHeight||720)),pixelRatio:Number.isFinite(Number(win.devicePixelRatio))&&Number(win.devicePixelRatio)>0?Number(win.devicePixelRatio):1};
     },
     bounds:()=>canvas.getBoundingClientRect(),
     resize(width,height){canvas.width=width;canvas.height=height;canvas.style.width='100%';canvas.style.height='100%';canvas.style.imageRendering='auto';},
