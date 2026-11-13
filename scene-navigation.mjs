@@ -1,4 +1,4 @@
-import {BufferAttribute, Vector2, Vector3, Quaternion, Raycaster} from './lib/three.core.js';
+import {BufferAttribute, Vector2, Vector3, Quaternion, Raycaster, Matrix4, DoubleSide, BackSide} from './lib/three.core.js';
 import {MeshBVH, acceleratedRaycast} from './node_modules/three-mesh-bvh/build/index.module.js';
 
 const Y = new Vector3(0, 1, 0);
@@ -51,11 +51,37 @@ function buildNavigationIndex(geometry) {
   });
 }
 
+// Indirect BVH roots need not follow BufferGeometry material groups. Query
+// candidates without a group side, then apply the authored triangle group's
+// side/material identity. The query borrows geometry without changing the mesh,
+// its material array, or the render index.
+const candidateMaterial=DoubleSide;
+function indexedNavigationRaycast(raycaster,intersects){
+  if(!Array.isArray(this.material)||!this.geometry.boundsTree)return acceleratedRaycast.call(this,raycaster,intersects);
+  const queryMesh=Object.create(this);queryMesh.material=candidateMaterial;
+  const queryRay=Object.create(raycaster);queryRay.firstHitOnly=false;
+  const candidates=[];acceleratedRaycast.call(queryMesh,queryRay,candidates);
+  const direction=raycaster.ray.direction.clone().transformDirection(new Matrix4().copy(this.matrixWorld).invert());
+  const range=this.geometry.drawRange,selected=[];
+  for(const hit of candidates){
+    const offset=hit.faceIndex*3;if(offset<range.start||offset>=range.start+range.count)continue;
+    for(const group of this.geometry.groups){
+      if(offset<group.start||offset>=group.start+group.count)continue;
+      const material=this.material[group.materialIndex];if(!material)continue;
+      const facing=hit.face.normal.dot(direction);
+      if(material.side!==DoubleSide&&(material.side===BackSide?facing<=0:facing>=0))continue;
+      selected.push({...hit,object:this,face:{...hit.face,materialIndex:group.materialIndex}});
+    }
+  }
+  if(raycaster.firstHitOnly===true){selected.sort((a,b)=>a.distance-b.distance);if(selected.length)intersects.push(selected[0]);}
+  else for(const hit of selected)intersects.push(hit);
+}
+
 function useIndexedRaycast(mesh) {
   if (!originalRaycasts.has(mesh)) originalRaycasts.set(mesh, {
     own: Object.hasOwn(mesh, 'raycast'), method: mesh.raycast,
   });
-  mesh.raycast = acceleratedRaycast;
+  mesh.raycast = indexedNavigationRaycast;
 }
 
 function restoreRaycast(mesh) {
