@@ -311,3 +311,31 @@ try{
   delete globalThis.window;
 }
 
+
+const paced=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,smokeRefinement:1,pointCount:2,surfaceEnabled:false});
+try{
+ let finish;
+ device.queue.onSubmittedWorkDone=()=>new Promise(resolve=>{finish=resolve;});
+ paced.configureLiveLighting({enabled:true,intervalMs:1,gain:.6});
+ consume({...field,domainIdentity:'a'});
+ assert.equal(paced.liveLightingState().applied.gain,.6);
+ assert.equal(hostFrame.heldPolicy,'paced-last-solve');
+ assert.equal(hostFrame.domainIdentity,'a');
+ const generation=hostFrame.generation,work=passes.length;
+ field.source.generation++;
+ consume({...field,domainIdentity:'a'});
+ assert.equal(passes.length,work,'new frame cannot overlap the outstanding solve');
+ assert.equal(hostFrame.generation,generation,'held source retains its provenance');
+ paced.configureLiveLighting({enabled:false});
+ assert.equal(hostFrame,null,'off detaches the distributed field immediately');
+ assert.equal(paced.canRender(),true,'off keeps the host presentable');
+ consume({...field,domainIdentity:'a'});
+ assert.equal(passes.length,work,'off never submits lighting');
+ finish();await new Promise(resolve=>setImmediate(resolve));
+ paced.configureLiveLighting({enabled:true,gain:.8});
+ consume({...field,domainIdentity:'b'});
+ assert.ok(passes.length>work);
+ assert.equal(hostFrame.generation,field.source.generation);
+ assert.equal(paced.liveLightingState().applied.gain,.8);
+ finish();await new Promise(resolve=>setImmediate(resolve));
+}finally{delete device.queue.onSubmittedWorkDone;paced.dispose();}

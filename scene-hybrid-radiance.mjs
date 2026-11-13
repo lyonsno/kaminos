@@ -17,6 +17,7 @@ import {createSceneSmokeEnvironment,validateSmokeEnvironmentBlur} from './scene-
 import {validateShadowMediumResolution} from './scene-shadow-medium.mjs';
 import {collectSceneSmokeLights} from './scene-smoke-lights.mjs';
 import {createExteriorSmokeLight} from './scene-exterior-light.mjs';
+import {createSceneLightingCadence} from './scene-lighting-cadence.mjs';
 
 // Opt-in prototype. Smoke retains distributed transport. Surfaces consume a
 // live GPU reduction of that same source, with independent raster visibility.
@@ -97,6 +98,58 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   buildPoints(pointCount);
   const originals=new Map(),localVisibility=createLocalSceneVisibility();let gather=null,geometryRevision=null,frame=null,disposed=false,valid=false;
   let gain=1,sourceSoftness=0,surfaceScattering=false,smokeMode='distributed',angularPattern='fixed',angularRotation=0,retainComparisons=false;
+  const cadence=createSceneLightingCadence();
+  let lightingRequested=null,lightingApplied=null,lightingError=null,completedSolves=0;
+  let frameDomain=null,frameSurface=false;
+  function lightingSettings(patch){
+    if(disposed)throw Error('hybrid lighting disposed');
+    if(patch===null){
+      const restore=lightingRequested?.previous;cadence.clear();lightingRequested=null;lightingApplied=null;lightingError=null;
+      if(restore){gain=restore.gain;smokeEnvironmentBlur=restore.environmentBlur;smokeEnvironment.setBlur(smokeEnvironmentBlur);}
+      return null;
+    }
+    for(const key of Object.keys(patch))if(!['enabled','intervalMs','gain','environmentBlur','lightSurfaces'].includes(key))throw Error('Unknown live lighting control '+key);
+    const previous=lightingRequested?.previous??{gain,environmentBlur:smokeEnvironmentBlur};
+    const next={gain,environmentBlur:smokeEnvironmentBlur,lightSurfaces:surfaceEnabled,...cadence.read(),...patch};
+    nonnegative(next.gain);validateSmokeEnvironmentBlur(next.environmentBlur);
+    if(typeof next.lightSurfaces!=='boolean')throw Error('Lighting surfaces must be boolean');
+    const requested=cadence.configure(next);lightingRequested={previous,requested};lightingError=null;
+    if(!requested.enabled){lightingApplied=null;valid=false;surfaceOn.value=false;prototype.setSceneDistributedLightFrame(null);}
+    if(!requested.lightSurfaces)surfaceOn.value=false;
+    return requested;
+  }
+  function lightingState(){
+    return {requested:cadence.read(),applied:lightingApplied,completedSolves,error:lightingError,
+      source:frame?{frame:frame.frame,generation:frame.generation}:null,
+      native:{gain,environmentBlur:smokeEnvironmentBlur,lightSurfaces:surfaceEnabled,volumeGrid,directions}};
+  }
+  function prepareLive(field){
+    if(!lightingRequested)return prepare(field);
+    const edit=cadence.begin(performance.now());
+    if(!edit)return;
+    let submitted=false;
+    try{
+      gain=edit.gain;smokeEnvironmentBlur=edit.environmentBlur;smokeEnvironment.setBlur(smokeEnvironmentBlur);
+      prepare(field);
+      const solved=frame;lightingApplied={...edit,frame:solved.frame,generation:solved.generation};
+      lightingError=null;submitted=true;
+    }catch(error){lightingApplied=null;lightingError=String(error.message);surfaceOn.value=false;}
+    finally{
+      void device.queue.onSubmittedWorkDone().then(()=>{if(submitted)completedSolves++;},error=>{
+        lightingError=String(error.message);valid=false;surfaceOn.value=false;if(!disposed)prototype.setSceneDistributedLightFrame(null);
+      }).finally(()=>cadence.complete());
+    }
+  }
+  const liveSourcePolicy={
+    mode:()=>!lightingRequested?'strict':lightingRequested.requested.enabled?'paced':'off',
+    due:()=>cadence.due(performance.now())&&!rebuilding&&status.status!=='lighting-compile-failed',
+    retain(domain){
+      if(!lightingRequested)return;
+      // A held lighting field is reusable only in the domain in which it was solved.
+      if(!valid||domain!==frameDomain){lightingApplied=null;surfaceOn.value=false;prototype.setSceneDistributedLightFrame(null);}
+      else surfaceOn.value=surfaceEnabled&&lightingRequested.requested.lightSurfaces&&frameSurface;
+    },
+  };
   let sourceTransform=validateSceneSourceTransform();
   const status={identity:'hybrid-distributed-smoke-point-surfaces-v0',status:'awaiting-source',surfaceTransport:'gpu-point-regions',surfaceReceivers:0,pointCount,shadowResolution,shadowSoftness,shadowSampling,blockerSamples,filterSamples,maxShadowResolution:device.limits.maxTextureDimension2D,volumeGrid,directions,
     geometryBuilds:0,visibilityBuilds:0,previewStale:false,receiverSpacingRequested:0,surfaceReconstructionRequested:0,
@@ -200,18 +253,20 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       const sceneLights=collectSceneSmokeLights(scene,sourceTransform);
       frame=gather.encode(field.source,{gain,sourceSoftness,surfaceScattering,smokeEnabled:smokeMode==='distributed',environment,sceneLights,samplingFrame:prototype.sceneLightSamplingFrame?.()??field.source.frame});
       const exterior=smokeMode==='distributed'?exteriorLight.encode(field.source,{geometry:packed,revision,directions,gain,sourceSoftness,environment,sceneLights}):null;
-      const reduction=surfaceEnabled?points.encode(gather.transportSource()):null;
-      const medium=surfaceEnabled&&smokeShadowSteps&&smokeShadow?smokeShadow.encode(field.source,reduction):null;
-      if(surfaceEnabled){
+      const renderSurfaces=surfaceEnabled&&(lightingRequested?.requested.lightSurfaces??true);
+      const reduction=renderSurfaces?points.encode(gather.transportSource()):null;
+      const medium=renderSurfaces&&smokeShadowSteps&&smokeShadow?smokeShadow.encode(field.source,reduction):null;
+      if(renderSurfaces){
         if(comparison.implementation==='shared')renderFireShadowBatch({scene,shadows:lights.map(light=>light.shadow),casterScene,flameBox});
         else casterScene.withCapture(()=>{for(const light of lights)light.shadow.render();},{flameBox});
       }
       frame={...frame,exterior,pointRegions:reduction,smokeShadow:medium,surfaceTransport:status.surfaceTransport,previewStale:false};
-      prototype.setSceneDistributedLightFrame(smokeMode==='distributed'?{texture:gather.smoke,...frame}:null);
+      frameDomain=field.domainIdentity??null;frameSurface=renderSurfaces;surfaceOn.value=renderSurfaces;
+      prototype.setSceneDistributedLightFrame(smokeMode==='distributed'?{texture:gather.smoke,...frame,...(lightingRequested?{heldPolicy:'paced-last-solve',domainIdentity:frameDomain}:null)}:null);
       valid=true;status.status='submitted-awaiting-presentation';delete status.error;onStatus({...status});
     } catch(error){status.status='preparation-failed';status.error=String(error.message);prototype.setSceneDistributedLightFrame(null);onStatus({...status});throw error;}
   }
-  prototype.setSceneMediumSource(null);prototype.setSceneSourceFrameConsumer(prepare);
+  prototype.setSceneMediumSource(null);prototype.setSceneSourceFrameConsumer(prepareLive,liveSourcePolicy);
   const nonnegative=(v)=>{if(!Number.isFinite(v)||v<0)throw new Error('nonnegative finite gain required');return v;};
   function setQuadrature(value,sampling='all'){
     validateSourceQuadrature(value,sampling);
@@ -226,6 +281,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     }
   }
   return {
+    configureLiveLighting:lightingSettings,liveLightingState:lightingState,
     setLightGrid(value){
       if(!Number.isSafeInteger(value)||value<1)throw Error('positive integer light grid required');
       volumeGatherPlan({volumeGrid:value,sourceDimensions:sourceDomain.dimensions,directions,smokeRefinement,
@@ -243,7 +299,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       smokeShadowSteps=steps;smokeShadowResolution=resolution;smokeShadowFilter=filter;smokeShadowFilterAngle=angleDegrees;smokeShadowFilterTaps=tapsPerAxis;smokeShadowMediumResolution=mediumResolution;
       if(!smokeShadow?.supportsLiveQuality)requestRebuild();
     },
-    setSurfaceEnabled(value){if(typeof value!=='boolean')throw Error('surface lighting enabled must be boolean');if(disposed)throw Error('hybrid lighting disposed');if(surfaceEnabled===value)return;surfaceEnabled=value;surfaceOn.value=value;casterScene.setEnabled(value);valid=false;onStatus({...status});},
+    setSurfaceEnabled(value){if(typeof value!=='boolean')throw Error('surface lighting enabled must be boolean');if(disposed)throw Error('hybrid lighting disposed');if(surfaceEnabled===value)return;surfaceEnabled=value;surfaceOn.value=value&&(!lightingRequested||(lightingRequested.requested.enabled&&lightingRequested.requested.lightSurfaces&&frameSurface));casterScene.setEnabled(value);valid=false;onStatus({...status});},
     async setShadowCasterLevel(value){await casterScene.setLevel(value);onStatus({...status});},
     setShadowBudget(patch){return casterScene.setShadowBudget(patch);},
     prepareShadowCasters({flameBox=null}={}){return casterScene.prepareCapture({flameBox});},
@@ -254,8 +310,8 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       comparison=next;worldCellSize.value=next.worldCellSize;
       if(rebuild)requestRebuild();
     },
-    setSmokeEnvironmentBlur(value){smokeEnvironmentBlur=validateSmokeEnvironmentBlur(value);smokeEnvironment.setBlur(smokeEnvironmentBlur);},
-    setGain(value){gain=nonnegative(value);},setSurfaceGain(value){surfaceGain.value=nonnegative(value);},
+    setSmokeEnvironmentBlur(value){smokeEnvironmentBlur=validateSmokeEnvironmentBlur(value);smokeEnvironment.setBlur(smokeEnvironmentBlur);if(lightingRequested)lightingSettings({environmentBlur:smokeEnvironmentBlur});},
+    setGain(value){gain=nonnegative(value);if(lightingRequested)lightingSettings({gain});},setSurfaceGain(value){surfaceGain.value=nonnegative(value);},
     setSurfaceScattering(value){surfaceScattering=!!value;},setSourceSoftness(value){sourceSoftness=validateSourceSoftness(value);},
     setSmokeMode(value){if(!['distributed','legacy'].includes(value))throw new Error('unknown smoke mode');smokeMode=value;},
     setDirections(value){volumeGatherPlan({volumeGrid,sourceDimensions:sourceDomain.dimensions,directions:value,smokeRefinement,angularPattern,sceneLightCount:collectSceneSmokeLights(scene,sourceTransform).lights.length},device.limits);directions=value;status.directions=value;},
@@ -283,7 +339,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     // they affect point surfaces; the prototype UI marks them inapplicable.
     setReceiverSpacing(value){status.receiverSpacingRequested=value;},setSurfaceReconstruction(value){status.surfaceReconstructionRequested=value;},setEditing(){},
     debugState(){return {...status,smokeEnvironmentBlur,angularPattern,angularRotation,shadowEdgeFilter,surfaceEnabled,smokeShadowSteps,smokeShadowResolution,smokeShadowFilter,smokeShadowFilterAngle,smokeShadowFilterTaps,smokeShadowMediumResolution,smokeShadowWork:smokeShadowWork({steps:smokeShadowSteps,resolution:smokeShadowResolution,filter:smokeShadowFilter,angleDegrees:smokeShadowFilterAngle,tapsPerAxis:smokeShadowFilterTaps,count:pointCount}),mediumExtinction:smokeShadowSteps?'radial-prefix-atlas':'omitted',shadowCasterLevel:casterScene.debugState().level,casters:casterScene.debugState(),shadowImplementation:comparison.implementation,shadowGrain:comparison.grain,shadowWorldCellSize:comparison.worldCellSize,pointSampling,pointEvaluationBudget,pointSelection:pointEvaluationBudget?'cyclic-complementary':pointSampling,evaluatedPointCount:surfaceEnabled?sourceEvaluationCount(pointCount,pointEvaluationBudget,pointSampling):0,capturedPointCount:surfaceEnabled?pointCount:0,gain,sourceTransform,sourceSoftness,smokeMode,surfaceScattering,surfaceGain:surfaceGain.value,frame,shadows:lights.map(l=>l.shadow.debugState())};},
-    canRender(){const source=prototype.sceneVolumeSourceField();return !disposed&&valid&&source.status==='encoded'&&source.generation===frame?.generation&&source.frame===frame?.frame;},
+    canRender(){if(lightingRequested)return !disposed;const source=prototype.sceneVolumeSourceField();return !disposed&&valid&&source.status==='encoded'&&source.generation===frame?.generation&&source.frame===frame?.frame;},
     readback(options){if(!gather)throw new Error('hybrid not encoded');return gather.readback(options);},
     readPointRegions(){if(!surfaceEnabled)throw Error('surface lighting disabled');if(!valid)throw Error('hybrid source not current');return points.readback();},
     dispose(){

@@ -466,3 +466,19 @@ test('emitter births use admitted supply without a ray batch, and light refresh 
   }finally{owner.dispose();grid.dispose();for(const resource of [sourceUniform,dummy,aperture,noise,collection,solid,target,depth,mask,planes,light])resource.destroy();}
  });
 });
+
+test('production coverage curves change footprint and depth opacity on held carriers',async()=>{
+ await withKaminosGpu(async({device:d})=>opticalFixture(d,async({seed,draw,owner})=>{
+  const rows=new Float32Array(16*16);rows.set([4,2,1,1,0,0,0,1,-.5,.5,1,1,4,2,1,0]);seed(rows);
+  const settings={depthMode:2,depthSlices:4,depthScale:1,gain:0,scatteredGain:0};
+  const normal=await draw(0,settings), original=await owner.sample();
+  const centerAlpha=(pixels)=>Math.max(...[0,1,2,3].flatMap(y=>[0,1,2,3].map(x=>pixels[y*256+x*4+3])));
+  assert.ok(centerAlpha(normal)>10,'fixture has a visible opaque contribution');
+  const noExtinction=await draw(0,{...settings,coverage:{opacity:[[0,0],[1,1]]}});
+  assert.equal(centerAlpha(noExtinction),0,'opacity is sampled at birth and removes optical depth');
+  const hidden=await draw(0,{...settings,coverage:{footprint:[[0,0],[1,1]]}});
+  assert.ok(hidden.every(x=>x===0),'a zero footprint removes the carrier despite the pixel floor');
+  assert.deepEqual((await owner.sample()).records,original.records,'curve edits must not reset or evolve the retained records');
+  assert.deepEqual(await draw(0,settings),normal,'flat curves restore the image');
+ }));
+});

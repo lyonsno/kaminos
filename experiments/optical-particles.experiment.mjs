@@ -2,12 +2,13 @@ import {opticalParticleSettings} from '../volume-optical-particles.mjs';
 import {particleProposalShares} from '../volume-particle-acquisition.mjs';
 import {PARTICLE_WORK_FLAGS} from '../volume-particle-work.mjs';
 import {bindParticleNumber} from '../particle-number-control.mjs';
+import {mountParticleLivePopups} from './particle-live-popups.mjs';
 const REACTION_KEYS=['burnTime','cooling','heatRelease','sootYield','smokeLife'];
 export default {
  id:'optical-particles',title:'A Reactive Lagrangian Optical Integrator for Subgrid Flame Super-Resolution',
  async create({host,inputs={},record,updateInputs}){
   let settings=opticalParticleSettings({enabled:true,...inputs.particles});
-  let sourceSettings={...inputs.source};
+  let sourceSettings={...inputs.source},lightingSettings=inputs.lighting??null,lightingOwner=null,popups=null;
   let reactionOverrides={...Object.fromEntries(Object.entries(inputs.particles??{}).filter(([key])=>(inputs.particles?.materialStateVersion===1?REACTION_KEYS:["burnTime","cooling","heatRelease"]).includes(key))),...inputs.simulationReaction};
   await host.volume?.ready;const session=await host.scene.open(),win=host.controls.document.defaultView;
   let current=null,previous=null,panel,notice,error=null,measurement=null,proposalLabel,renewalLabel,population=null,reading=false,lastPopulationRead=0,disposed=false,workPopulation=null,workReading=false,lastWorkRead=0,hud=null,hudTop=null,hudBottom=null,lastHud=0,frameMs=null,hadTiming=false;const drags=[],fields=new Map(),stats=new Map();
@@ -49,13 +50,32 @@ export default {
 
    for(const [key,{input,digits}] of fields){const focused=!!settings.acquisitionMode,emitter=settings.acquisitionMode===2;input.disabled=(key==='referenceEmission'&&(!settings.showRaymarch||!settings.showParticles))||(!settings.updateEnabled&&['transportEnabled','reactionEnabled'].includes(key))||(emitter&&['acquisitionEnabled','acquisitionEvery','refresh','followFraction','followJitter','followFuel','followHeat','followSmoke','scatteredLife'].includes(key))||(!emitter&&key==='emitterBirthsPerStep')||(!settings.profileMode&&['emissionFalloff','extinctionFalloff'].includes(key))||(settings.exchangeSpacing>0&&key==='exchangeCellSize')||(focused&&['populationWidth','populationHeight','spacing','fineAcquisition'].includes(key))||(settings.acquisitionMode!==1&&['acquisitionSamples','filmJitter','fineCoverage','coarseCoverage','sourceBias','sourceHistory','sourceMargin'].includes(key));input.style.opacity=input.disabled?'.4':'1';if(key==='targetScale'&&e.budgets)input.max=String(e.budgets.maxTargetScale);if(key==='capacity'&&e.budgets)input.max=String(e.budgets.maxCapacity);if(host.controls.document.activeElement===input||input.classList.contains('scrubbing'))continue;const v=value(key,e);if(input.type==='checkbox'){input.checked=!!v;continue;}const next=Number.isFinite(v)?(key==='fillExtinction'&&v>0&&v<10**-digits?String(v):v.toFixed(digits)):'';if(input.value!==next)input.value=next;}
   }
+  const persist=()=>updateInputs({particles:settings,simulationReaction:reactionOverrides,source:sourceSettings,...(lightingSettings?{lighting:lightingSettings}:{})});
+  function lightingRoute(){
+   const owner=win.__kaminosSceneRadiance;
+   if(!owner?.configureLiveLighting)return null;
+   if(lightingSettings&&owner!==lightingOwner){owner.configureLiveLighting(lightingSettings);lightingOwner=owner;}
+   return owner;
+  }
+  function setLighting(patch){
+   const owner=lightingRoute();if(!owner)throw Error('No active shared hybrid lighting route');
+   lightingSettings=owner.configureLiveLighting(patch);lightingOwner=owner;
+   persist();record({kind:'particle.distributed-lighting',settings:lightingSettings});session.redraw();
+   return owner.liveLightingState();
+  }
+  function setCoverage(coverage){
+   const next=opticalParticleSettings({...settings,coverage});
+   source().setOpticalParticles(next);settings=next;
+   persist();record({kind:'particle.coverage',coverage:settings.coverage});session.redraw();
+   return settings.coverage;
+  }
   function commitOptions(patch,reactionOnly=false){
    const next=opticalParticleSettings({...settings,...patch}),reaction=Object.fromEntries(Object.entries(patch).filter(([key])=>REACTION_KEYS.includes(key)));
    const runtime=source(),shared=!!runtime.opticalParticleState().simulationReaction;
    runtime.validateOpticalParticleBudget?.(next);runtime.setOpticalParticles(next);
    if(shared&&Object.keys(reaction).length)runtime.setParticleSimulationReaction(reaction);
    settings=next;reactionOverrides={...reactionOverrides,...reaction};
-   updateInputs({particles:settings,simulationReaction:reactionOverrides,source:sourceSettings});
+   persist();
    record(reactionOnly?{kind:shared?'simulation.reaction':'particle.reaction-fallback',values:reaction}:{kind:'optical-particles.settings',settings,simulationReaction:reactionOverrides});session.redraw();sync(true);return read();
   }
   function setReaction(patch){for(const key of Object.keys(patch))if(!REACTION_KEYS.includes(key))throw Error('Unknown particle reaction control '+key);return commitOptions(patch,true);}
@@ -64,10 +84,10 @@ export default {
    for(const [key,v] of Object.entries(patch))if(!['renderScale','raySteps'].includes(key)||!Number.isFinite(v)||v<=0)throw Error('Invalid source control '+key);
    const runtime=source();
    runtime.validateOpticalParticleBudget?.(settings,patch);
-   applySource(runtime,patch);sourceSettings={...sourceSettings,...patch};updateInputs({particles:settings,simulationReaction:reactionOverrides,source:sourceSettings});record({kind:'particle.source-controls',values:patch});session.redraw();sync(true);return read();
+   applySource(runtime,patch);sourceSettings={...sourceSettings,...patch};persist();record({kind:'particle.source-controls',values:patch});session.redraw();sync(true);return read();
   }
   async function samplePopulation(){if(reading)return population;reading=true;lastPopulationRead=Date.now();try{const next=await source().sampleOpticalParticleStatistics();if(!disposed){population=next;sync();}return next;}finally{reading=false;}}
-  const operations={setOptions,setReaction,setSource,samplePopulation,async measure(options={}){measurement=await source().measureOpticalParticleFrame(options);sync();return measurement;},reset(){source().resetOpticalParticles();session.redraw();sync(true);return read();},
+  const operations={setOptions,setReaction,setSource,setCoverage,setLighting,samplePopulation,async measure(options={}){measurement=await source().measureOpticalParticleFrame(options);sync();return measurement;},reset(){source().resetOpticalParticles();session.redraw();sync(true);return read();},
    setRadius({axis,value:v}){if(!['horizontal','vertical'].includes(axis))throw Error('Unknown radius axis');if(!Number.isFinite(v)||v<=0)throw Error('Radius must be positive');const vertical=settings.radius*settings.stretch;return axis==='vertical'?setOptions({stretch:v/settings.radius}):setOptions({radius:v,stretch:vertical/v});}
   };
   function syncHud(e,force=false){if(!hud)return;hud.style.display=settings.hud?'block':'none';if(!settings.hud)return;const firstTiming=e.timings?.ok&&!hadTiming;hadTiming=!!e.timings?.ok;if(!force&&!firstTiming&&Date.now()-lastHud<250)return;lastHud=Date.now();const rect=current?.opticalParticleViewport?.()?.getBoundingClientRect?.();if(rect){hud.style.left=rect.left+'px';hud.style.top=rect.top+'px';hud.style.width=rect.width+'px';hud.style.height=rect.height+'px';const bars=['authoring-viewport-tools','experiment-toolbar','transform-bar','info-bar'].map(id=>host.controls.document.getElementById(id)).map(el=>el?.getBoundingClientRect?.()).filter(b=>b&&b.width>0&&b.height>0&&b.left<rect.right&&b.right>rect.left);const top=bars.filter(b=>b.top<rect.top+rect.height/2).reduce((v,b)=>Math.max(v,b.bottom),rect.top),bottom=bars.filter(b=>b.top>=rect.top+rect.height/2).reduce((v,b)=>Math.min(v,b.top),rect.bottom);hudTop.style.top=Math.max(2,top-rect.top+4)+'px';hudBottom.style.bottom=Math.max(2,rect.bottom-bottom+4)+'px';}
@@ -77,11 +97,13 @@ export default {
    const field=e.exchange?.field,planned=e.exchange?.planned,fieldText=field?`${field.nodeDims.join('×')} @step ${field.step}`:'off',planText=planned&&field&&planned.nodeDims.join('×')!==field.nodeDims.join('×')?` → ${planned.nodeDims.join('×')} next`:'';text(hudBottom,`field ${fieldText}${planText} · grouping ${ex?.grouping?'on':'held/off'} · exchange ${ex?.fieldGather?'on':'held/off'} · target ${e.targetSize?.join('×')??'—'} · depth ${e.depthField?[e.depthField.width,e.depthField.height,e.depthField.slices].join('×'):'off'} · ${(e.totalBytes/1048576||0).toFixed(1)} MiB\n${timings} · particle GPU intervals exclude shared simulation/lighting`);
   }
   const stop=session.onFrame(({deltaSeconds}={})=>{if(Number.isFinite(deltaSeconds)&&deltaSeconds>0)frameMs=frameMs===null?deltaSeconds*1000:frameMs*.9+deltaSeconds*100;
+   if(lightingSettings&&win.__kaminosSceneRadiance!==lightingOwner)lightingRoute();popups?.sync();
    sync();if(settings.hud&&current?.sampleOpticalParticleWork&&!workReading&&Date.now()-lastWorkRead>=1000){lastWorkRead=Date.now();workReading=true;void current.sampleOpticalParticleWork().then(r=>{if(!disposed){workPopulation=r;sync(true);}}).catch(e=>{error=e.message;}).finally(()=>{workReading=false;});}if(settings.renewalDiagnostics&&!reading&&Date.now()-lastPopulationRead>=1000)void samplePopulation().catch(e=>{error=e.message;sync();});});
   return {read,operations,mount({root,document,invoke}){panel=root;let controlRoot=root;
    function section(label){const fieldset=document.createElement('fieldset'),legend=document.createElement('legend');legend.textContent=label;fieldset.style.cssText='min-width:0;border:1px solid #555;border-radius:6px;padding:8px;margin:12px 0';fieldset.append(legend);root.append(fieldset);controlRoot=fieldset;}
 
    if(document.body&&current?.opticalParticleViewport){hud=document.createElement('div');hud.setAttribute('aria-label','Live particle work');hud.style.cssText='position:fixed;pointer-events:none;z-index:90;color:#fff;font:11px ui-monospace,monospace;text-shadow:0 1px 2px #000;overflow:hidden';hudTop=document.createElement('div');hudBottom=document.createElement('div');hudTop.style.cssText='position:absolute;top:2px;left:6px;right:6px;background:#101820aa;padding:3px 5px';hudBottom.style.cssText='position:absolute;bottom:2px;left:6px;right:6px;background:#101820aa;padding:3px 5px;white-space:pre-wrap';hud.append(hudTop,hudBottom);document.body.append(hud);}
+   if(document.body&&document.createElementNS)popups=mountParticleLivePopups({document,root,controls:host.controls,readCoverage:()=>settings.coverage,setCoverage,readLighting:()=>lightingRoute()?.liveLightingState(),setLighting});
    const intro=document.createElement('p');intro.textContent='Particles carry fuel, heat, soot and oxygen from the grid. They travel with the flow, exchange composition with nearby carriers, burn available reactants and fade according to their remaining material. Tune that journey below.';root.append(intro);
    const status=document.createElement('div');status.setAttribute('aria-label','Particle allocation');status.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:4px 12px;font-variant-numeric:tabular-nums;margin:12px 0';
    for(const [key,label] of [['target','Acquisition batch (px)'],['fresh','Fresh sample budget'],['output','Fire output (px)'],['particleTarget','Particle target (px)'],['depth','Depth field (px × slices)'],['population','Population grid'],['slots','Particle slots'],['memory','Optical buffers'],['step','Simulation step']]){const name=document.createElement('span'),v=document.createElement('span');name.textContent=label;v.dataset.particleStat=key;v.style.cssText='white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;font-family:monospace;min-width:0';status.append(name,v);stats.set(key,v);}root.append(status);
@@ -204,6 +226,6 @@ export default {
    control('Reaction support expansion','expansion','Fractional growth of both radii as a carrier consumes its initial fuel. 0 holds size; 1 permits doubling after that fuel is spent. It changes the footprint without pushing the grid.');
    const reset=document.createElement('button');reset.textContent='Clear particle observations';reset.title='Clear the retained particle pool and begin collecting fresh observations. The simulation is preserved.';reset.addEventListener('click',()=>invoke('reset'));root.append(reset);
    const note=document.createElement('p');note.textContent='Carried reaction, exchange, transport and survival use simulation reference time and hold while paused. Radius, normalized profile and visibility edits can be compared on that held material. Camera movement preserves particles. Source-focused collection also preserves them through output and batch resizing; capacity and acquisition-mode changes clear the pool. Tracking and sampling edits affect subsequent updates. Soot follows its carried composition; captured illumination retains its birth lighting and fades separately. Internal depth ordering remains approximate.';root.append(note);sync();
-  },async dispose(){disposed=true;stop();hud?.remove();drags.forEach(x=>x?.dispose?.());try{if(current){current.setOpticalParticles(previous.particles);current.setSplitIntegral(previous.split);}}finally{await session.dispose();}}};
+  },async dispose(){disposed=true;stop();popups?.dispose();if(lightingOwner===win.__kaminosSceneRadiance)lightingOwner?.configureLiveLighting(null);hud?.remove();drags.forEach(x=>x?.dispose?.());try{if(current){current.setOpticalParticles(previous.particles);current.setSplitIntegral(previous.split);}}finally{await session.dispose();}}};
  }
 };

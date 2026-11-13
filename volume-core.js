@@ -8589,7 +8589,7 @@ export function createKaminosVolumePrototype({
   let distributedBindings = null;
   const distributedPipelines = new Map();
   const scenePointPipelines = new Map();
-  let sceneSourceFrameConsumer = null;
+  let sceneSourceFrameConsumer = null, sceneSourcePolicy = null;
   const sceneSourcePreparedEncoders = new WeakSet();
   let sceneMediumSource = null;
   let emissiveWhiteKelvin = null;
@@ -13660,6 +13660,17 @@ export function createKaminosVolumePrototype({
     return effectivePipeline;
   }
 
+  const liveLightingMode=()=>sceneSourcePolicy?.mode()??'strict';
+  const liveLightingDomain=()=>JSON.stringify([state.thermalFluidAllocationId,gridSize,gridHeight,productTransform,worldSmokeKey,intermediateKey,uniforms[368]]);
+  const needsParticleGridSource=()=>particleSettings.enabled&&(particleSettings.fillExtinction>0||particleSettings.extinctionView>0);
+  function distributedFrameIsUsable(source=sceneVolumeSource?.describe()){
+    if(!distributedFrame||source?.status!=='encoded')return false;
+    const mode=liveLightingMode();
+    if(mode==='off')return false;
+    if(mode==='paced')return distributedFrame.domainIdentity===liveLightingDomain()&&distributedFrame.heldPolicy==='paced-last-solve';
+    return distributedFrame.generation===source.generation;
+  }
+
   function encodeSharedSceneSource(encoder) {
     if (!sceneVolumeSourceRequested || uniforms[368] <= 1.5) {
       sceneVolumeSource?.invalidate('inactive-source-route');
@@ -13677,7 +13688,7 @@ export function createKaminosVolumePrototype({
       grid: SCENE_SOURCE_GRID, gridY: SCENE_SOURCE_GRID * gridHeight / gridSize, fluidGrid: gridSize, fluidGridY: gridHeight});
     sceneVolumeSource.encode(encoder, currentFluid, state.frameCount,productTransform);
     if (sceneMediumSource) sceneVolumeSource.encodeOpticalDepth(encoder, sceneMediumSource.position, sceneMediumSource.stepLength);
-    return {source: sceneVolumeSource.describe(), medium: sceneVolumeSource.opticalDepthField(), simStepCount: state.simStepCount};
+    return {source: sceneVolumeSource.describe(), medium: sceneVolumeSource.opticalDepthField(), simStepCount: state.simStepCount, domainIdentity:liveLightingDomain()};
   }
 
   function prepareFixedCountAllocation(encoder,optical) {
@@ -13725,7 +13736,7 @@ export function createKaminosVolumePrototype({
           }
           let code=WGSL,lighting=null;
           if(distributedGroup) {
-            if(distributedFrame?.generation!==sceneVolumeSource?.describe().generation)throw new Error('Native scene transport lighting is stale');
+            if(!distributedFrameIsUsable())throw new Error('Native scene transport lighting is stale');
             code=code.replaceAll('medium.scattering * incidentAt(p)','medium.scattering * distributedMeanIncident(p)')
               .replace('fn opticalIncidentMaskFlags(p: vec3<f32>) -> vec2<f32> { return vec2<f32>(0.0); }','fn opticalIncidentMaskFlags(p: vec3<f32>) -> vec2<f32> { return distributedLastMaskFlags; }')+DISTRIBUTED_SMOKE_WGSL;
             lighting={layout:distributedLayout,group:distributedGroup};
@@ -13741,7 +13752,7 @@ export function createKaminosVolumePrototype({
             forwardScale:[...forward,productTransform.scale],constants:{LEAN_EMISSIVE_RAYMARCH:lean,OPTICAL_STEP_MODE:optical.value}});
           state.sceneTransport={...receipt,sourceFrame,sourceStep,sourceIndex:currentFluid,
             worldTransform:{translate:[...productTransform.translate],scale:productTransform.scale},renderScale:state.renderScale,
-            material:'native-emissive-transport-v2',lighting:distributedGroup?'distributed':scenePointBindGroup?'scene-point':'unlit',
+            material:'native-emissive-transport-v2',lighting:distributedGroup?(liveLightingMode()==='paced'?'distributed-held-between-solves':'distributed'):scenePointBindGroup?'scene-point':'unlit',
             stepping:optical.mode,authority:'native-material-current-field-ordered-host-encoder'};
           return {...state.sceneTransport};
         },
@@ -13773,10 +13784,15 @@ export function createKaminosVolumePrototype({
         : device.queue.submit(list));
     const createEncoder=()=>device.createCommandEncoder({label:'same-source scene volume presentation'});
     let next;
-    if(sceneSourceFrameConsumer) {
+    const mode=liveLightingMode();
+    const solve=sceneSourceFrameConsumer&&(mode==='strict'||(mode==='paced'&&sceneSourcePolicy.due()&&uniforms[368]>1.5));
+    if(solve) {
       next=prepareSceneSourceFrame({encoder,finish:finishVolumeEncoder,encode:encodeSharedSceneSource,submit,consume:sceneSourceFrameConsumer,
         renderHost:renderSceneTransportHost,createEncoder});
     } else {
+      if(mode==='paced')sceneSourcePolicy.retain(liveLightingDomain());
+      if(needsParticleGridSource()&&uniforms[368]>1.5)encodeSharedSceneSource(encoder);
+      // The off/held route still owes the host a normal scene depth frame.
       submit([finishVolumeEncoder(encoder)]);renderSceneTransportHost();next=createEncoder();
     }
     sceneSourcePreparedEncoders.add(next);
@@ -13976,7 +13992,7 @@ export function createKaminosVolumePrototype({
       drawPipeline = scenePointPipelines.get(key);
     }
     if(distributedGroup) {
-      if(distributedFrame?.generation!==sceneVolumeSource?.describe().generation)throw new Error('distributed flame lighting is stale');
+      if(!distributedFrameIsUsable())throw new Error('distributed flame lighting is stale');
       const key=`${multisampled}:${targetPipeline===readbackPipeline}:${selectEmissive}${opticalKey}`
         + (options.opticalTrace ? ':optical-trace' : '');
       if(!distributedPipelines.has(key)) {
@@ -13999,7 +14015,7 @@ export function createKaminosVolumePrototype({
     if (uniforms[368] > 1.5) {
       if (!sceneSourcePreparedEncoders.has(encoder)) encodeSharedSceneSource(encoder);
       state.physicalColor.incidentLight = distributedGroup
-        ? {model:'distributed-volume-direct-radiance-v0',source:'same-generation-raw-emission-extinction',
+        ? {model:'distributed-volume-direct-radiance-v0',source:liveLightingMode()==='paced'?'paced-last-solve-raw-emission-extinction':'same-generation-raw-emission-extinction',
            support:'full-height-geometry-visible-receivers',generation:distributedFrame.generation,frame:distributedFrame.frame,
            receivers:distributedFrame.volumeReceivers,directions:distributedFrame.directions,legacyDispatched:false}
         : scenePointBindGroup
@@ -14052,11 +14068,11 @@ export function createKaminosVolumePrototype({
       opticalParticles??=createOpticalParticles(device,{transparent:transparentCanvas});
       const cameraValues=new Float32Array([...emissiveWhiteMatrix[0],0,...emissiveWhiteMatrix[1],0,...emissiveWhiteMatrix[2],0,0,uniforms[373],uniforms[374],0,0,0,uniforms[46],0]);
       const sceneSource=emitterParticles||particleSettings.lightRefreshEvery>0?sceneVolumeSource?.describe():null;
-      const lightField=emitterGridSupported&&sceneSource?.status==='encoded'&&distributedFrame?.generation===sceneSource.generation&&distributedFrame.frame===sceneSource.frame&&!distributedFrame.previewStale?distributedFrame.smokeReconstruction:null;
+      const lightField=emitterGridSupported&&distributedFrameIsUsable(sceneSource)&&(liveLightingMode()==='paced'||distributedFrame.frame===sceneSource.frame)&&!distributedFrame.previewStale?distributedFrame.smokeReconstruction:null;
       const emitter=emitterParticles&&lastParticleEmitter?.allocation===state.thermalFluidAllocationId&&lastParticleEmitter?.sourceStep===state.simStepCount-1?lastParticleEmitter:null;
       state.opticalParticles=opticalParticles.encode(encoder,{view,emitter,
         incident:lightField?{texture:lightField.texture,masks:lightField.masks,planes:lightField.planes,generation:distributedFrame.generation,frame:distributedFrame.frame}:null,
-        allowUnavailableGridExtinction:true,gridExtinction:particleSettings.fillExtinction>0||particleSettings.extinctionView>0?{...sceneVolumeSource?.describe(),expectedFrame:state.frameCount}:null,format:targetPipeline===readbackPipeline?'rgba8unorm':format,source:{...particleSourceFrame,reactionStepScale:resolveTimeStepConfig(controlsSnapshot).effective.dtScale},fine:fluidBuffers[currentFluid],reactants:reactantTextures[currentFluid],model:state.reactantCombustion.effective.model,material:{density:uniforms[23],extinction:uniforms[EMISSIVE_UNIFORM_OFFSET],albedo:uniforms[EMISSIVE_UNIFORM_OFFSET+1],smokeVisible:uniforms[306]>.5?0:1,kelvinPerHeat:state.physicsAppearance.kelvinPerHeat,thermalGain:uniforms[371],cleanGain:uniforms[372],sootBurnoutRate:state.physicsAppearance.effective.sootBurnout?state.physicsAppearance.sootBurnoutRate:0,sootBurnoutKelvin:state.physicsAppearance.sootBurnoutKelvin},dims:[gridSize,gridHeight,gridSize],invViewProj:invViewProj.elements,settings:{...particleSettings,...particleReactionFromSimulation(state.reactantCombustion)},profileWrites:activeParticleProfileWrites??(()=>({})),cameraValues,depthZeroToOne:camera.coordinateSystem===THREE.WebGPUCoordinateSystem,depth:ordinarySceneDepthTexture??ordinarySceneDepthFallback,identity:JSON.stringify(emitterParticles?[productTransform,state.thermalFluidAllocationId]:[worldSmokeKey,intermediateKey,productTransform,state.particleSourceGeneration])});
+        allowUnavailableGridExtinction:true,gridExtinction:particleSettings.fillExtinction>0||particleSettings.extinctionView>0?{...sceneVolumeSource?.describe(),expectedFrame:state.frameCount}:null,format:targetPipeline===readbackPipeline?'rgba8unorm':format,source:{...particleSourceFrame,reactionStepScale:resolveTimeStepConfig(controlsSnapshot).effective.dtScale},fine:fluidBuffers[currentFluid],reactants:reactantTextures[currentFluid],model:state.reactantCombustion.effective.model,material:{sharedIncidentEnabled:liveLightingMode()!=='off',captureDistributedScatter:!!distributedGroup,density:uniforms[23],extinction:uniforms[EMISSIVE_UNIFORM_OFFSET],albedo:uniforms[EMISSIVE_UNIFORM_OFFSET+1],smokeVisible:uniforms[306]>.5?0:1,kelvinPerHeat:state.physicsAppearance.kelvinPerHeat,thermalGain:uniforms[371],cleanGain:uniforms[372],sootBurnoutRate:state.physicsAppearance.effective.sootBurnout?state.physicsAppearance.sootBurnoutRate:0,sootBurnoutKelvin:state.physicsAppearance.sootBurnoutKelvin},dims:[gridSize,gridHeight,gridSize],invViewProj:invViewProj.elements,settings:{...particleSettings,...particleReactionFromSimulation(state.reactantCombustion)},profileWrites:activeParticleProfileWrites??(()=>({})),cameraValues,depthZeroToOne:camera.coordinateSystem===THREE.WebGPUCoordinateSystem,depth:ordinarySceneDepthTexture??ordinarySceneDepthFallback,identity:JSON.stringify(emitterParticles?[productTransform,state.thermalFluidAllocationId]:[worldSmokeKey,intermediateKey,productTransform,state.particleSourceGeneration])});
       if(captureFresh)particleCaptureClock.mark(state.simStepCount,captureIdentity);
       state.opticalParticles.reference=referenceReceipt;state.opticalParticles.sourceColorOutput=!particleSourceOnly;
       state.opticalParticles.acquisition=acquisitionPlan;
@@ -16437,6 +16453,7 @@ export function createKaminosVolumePrototype({
 
   async function sampleFrame(options = {}) {
     if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
+    if(options.settleParticleInputs===true&&liveLightingMode()!=='strict')return {ok:false,reason:'settled-inputs-require-strict-lighting'};
     if(options.settleParticleInputs===true&&(!simulationPaused||!particleSettings.enabled||!particleSettings.acquisitionMode||!sceneSourceFrameConsumer||!distributedGroup))return {ok:false,reason:'settled-inputs-require-held-distributed-particles'};
     let settledParticleInputs=null;
     const advanceSim = options.advanceSim !== false;
@@ -18397,6 +18414,7 @@ export function createKaminosVolumePrototype({
       if(typeof settleInputs!=='boolean')return {ok:false,reason:'invalid-settle-inputs-option'};
       const held=simulationPaused||normalizeLookFreeze(controlsSnapshot.lookFreeze)&&lookFreezeCanPin(state);
       if(settleInputs&&!held)return {ok:false,reason:'settled-inputs-require-paused-simulation'};
+      if(settleInputs&&liveLightingMode()!=='strict')return {ok:false,reason:'settled-inputs-require-strict-lighting'};
       if(settleInputs&&(!sceneSourceFrameConsumer||!distributedGroup))return {ok:false,reason:'settled-inputs-require-distributed-scene-source'};
       if(!state.active||!device||!particleSettings.enabled)return {ok:false,reason:'requires-active-optical-particles'};
       if(!timestampQueriesAvailable())return {ok:false,reason:'gpu-timestamps-unavailable'};
@@ -18722,12 +18740,12 @@ export function createKaminosVolumePrototype({
       if (!sceneVolumeSourceRequested) {sceneVolumeSource?.destroy(); sceneVolumeSource = null;}
       return {requested: sceneVolumeSourceRequested};
     },
-    setSceneSourceFrameConsumer(consumer) {
+    setSceneSourceFrameConsumer(consumer, policy=null) {
       if (consumer !== null && typeof consumer !== 'function') throw new Error('scene source consumer must be a function or null');
       if (consumer && ((typeof getSceneDepth !== 'function'))) {
         throw new Error('scene source consumer requires ordinary shared-device scene-depth host');
       }
-      sceneSourceFrameConsumer = consumer;
+      sceneSourceFrameConsumer = consumer;sceneSourcePolicy=consumer?policy:null;
       if (consumer) sceneVolumeSourceRequested = true;
       return {enabled: Boolean(consumer), authority: 'ordered-submission-not-gpu-completion'};
     },
