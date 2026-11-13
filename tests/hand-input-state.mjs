@@ -67,3 +67,21 @@ function fixture(overrides={}) {
   await input.dispose();
 }
 console.log('shared hand input lifecycle passed');
+{
+  let closed=0;
+  const {input,calls}=fixture({record:{close:async()=>closed++},loadModel:async()=>{throw Error('load failed');}});
+  await assert.rejects(input.setEnabled(true),/load failed/);
+  assert.equal(closed,1,'failed activation must close its capture worker');
+  assert.equal(input.read().enabled,false,'fatal activation must release the enabled state');
+  await input.setAuto('left',false);
+  assert.equal(calls.schedules.length,0,'changing an auto setting after failure must not restart capture');
+  await input.dispose();
+}
+{
+  const {input,calls}=fixture();await input.setEnabled(true);
+  await input.setAuto('left',false);calls.schedules.length=0;
+  await input.setAuto('right',false);
+  assert.equal(calls.schedules.length,0,'no armed side means no empty per-video-frame loop');
+  await input.setAuto('left',true);assert.equal(calls.schedules.length,1);
+  await input.dispose();
+}

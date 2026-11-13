@@ -1,10 +1,11 @@
 import {Group,Mesh,BufferGeometry,BufferAttribute,MeshStandardMaterial,Vector3} from './lib/three.core.js';
+import {palmFrame,wristBoundary,HAND_VIEW} from './hand-input-geometry.mjs';
 
 // Presentation follows Iron Gland's proper [-X,-Y,+Z] opposite-camera view.
 // This is a camera-plane input overlay, not calibrated scene contact.
 export function createHandInputView({scene,camera,onFrame,redraw}) {
   const root=new Group();root.name='Hand input overlay';root.visible=false;
-  root.userData.handInputOverlay=true;scene.add(root);
+  root.userData.handInputOverlay=true;root.userData.kaminosEditorOnly=true;scene.add(root);
   const meshes=new Map();let last=null;
   const updateView=()=>{
     if(!last?.hands?.length){root.visible=false;return;}
@@ -18,7 +19,8 @@ export function createHandInputView({scene,camera,onFrame,redraw}) {
       if(!hand)continue;
       const box=hand.detection.bbox,[iw,ih]=last.imageSize;
       mesh.position.set((.5-(box[0]+box[2])/2/iw)*width,(.5-(box[1]+box[3])/2/ih)*height,-distance);
-      mesh.scale.setScalar(height*(box[3]-box[1])/ih/.20);
+      // Fixed display magnification preserves metric differences and finger articulation.
+      mesh.scale.setScalar(height/.5);
     }
     redraw();
   };
@@ -33,14 +35,15 @@ export function createHandInputView({scene,camera,onFrame,redraw}) {
         if(!mesh){
           const geometry=new BufferGeometry();geometry.setAttribute('position',new BufferAttribute(new Float32Array(778*3),3));
           mesh=new Mesh(geometry,new MeshStandardMaterial({color:0x637a82,metalness:.38,roughness:.45}));
-          mesh.frustumCulled=false;root.add(mesh);meshes.set(hand.handedness,mesh);
+          mesh.frustumCulled=false;mesh.raycast=()=>{};root.add(mesh);meshes.set(hand.handedness,mesh);
         }
         const indices=new Uint16Array(faces);
         if(hand.handedness==='left')for(let i=0;i<indices.length;i+=3)[indices[i+1],indices[i+2]]=[indices[i+2],indices[i+1]];
         mesh.geometry.setIndex(new BufferAttribute(indices,1));
-        const positions=mesh.geometry.attributes.position.array,center=[0,0,0];
-        for(let i=0;i<values.length;i++)center[i%3]+=values[i]/778;
-        for(let i=0;i<values.length;i++)positions[i]=(values[i]-center[i%3])*(i%3===2?1:-1);
+        const palm=palmFrame(values,wristBoundary(faces),hand.handedness);
+        if(!palm)throw Error('Tracked hand has no valid palm frame');
+        const positions=mesh.geometry.attributes.position.array;
+        for(let i=0;i<values.length;i++)positions[i]=values[i]*HAND_VIEW[i%3]-palm.center.getComponent(i%3);
         mesh.geometry.attributes.position.needsUpdate=true;mesh.geometry.computeVertexNormals();
       }
       last=result;updateView();

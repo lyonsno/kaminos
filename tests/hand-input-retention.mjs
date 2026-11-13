@@ -1,0 +1,21 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import {createCaptureWriter} from '../hand-input-retention-worker.mjs';
+const calls=[];
+const writer=createCaptureWriter({encode:async()=>'encoded-png',store:{async put(value){calls.push(structuredClone(value));return {...value,request:{sessionId:'session'},source:{sha256:'1'.repeat(64),path:'capture.png'}};}},writeEvent:async()=>{}});
+await writer.enqueue({type:'capture',capture:{captureId:'one',request:{sessionId:'session'}},bitmap:{close(){}}});
+await writer.enqueue({type:'outcome',captureId:'one',outcome:{state:'presented'}});
+assert.equal(calls[0].request.image,'encoded-png');
+assert.equal(calls[1].request.image,undefined,'outcomes must reuse the acknowledged PNG instead of uploading it twice');
+assert.equal(calls[1].source.sha256,'1'.repeat(64));
+console.log('capture outcomes reuse the durable original image');
+const {openCaptureStore}=await import('../hand-input-capture-store.mjs');
+let opened=0;const saved=[];
+globalThis.indexedDB={open(){opened++;const db={close(){},transaction(){const transaction={objectStore:()=>({put:value=>saved.push(value)})};queueMicrotask(()=>transaction.oncomplete());return transaction;}};const request={result:db};queueMicrotask(()=>request.onsuccess());return request;}};
+const capture={captureId:'one',request:{image:'original-png'}};
+const store=await openCaptureStore(async()=>({retained:true,captureId:'one',source:{sha256:'1'.repeat(64)}}));
+const acknowledged=await store.put(capture);assert.equal(opened,0,'successful canonical retention must not grow the internal browser database');assert.equal(acknowledged.request.image,undefined);
+const broken=await openCaptureStore(async()=>{throw Error('server unavailable');});
+await assert.rejects(broken.put(capture),/server unavailable/);assert.equal(saved[0].request.image,'original-png','failed external retention must preserve the raw source locally');
+const incomplete=await openCaptureStore(async()=>({retained:true,captureId:'one'}));
+await assert.rejects(incomplete.put(capture),/identity is missing/);assert.equal(saved[1].request.image,'original-png');store.close();broken.close();incomplete.close();

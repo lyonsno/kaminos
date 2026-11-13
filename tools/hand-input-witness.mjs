@@ -37,7 +37,7 @@ try {
       const img=new Image();img.src=${JSON.stringify(fixture??'')};await img.decode();
       const canvas=document.createElement('canvas');canvas.width=img.width;canvas.height=img.height;
       const ctx=canvas.getContext('2d');const draw=()=>{ctx.save();ctx.fillStyle='#777';ctx.fillRect(0,0,canvas.width,canvas.height);if(!__handsWitness.blank){if(__handsWitness.mirror){ctx.translate(canvas.width,0);ctx.scale(-1,1);}ctx.drawImage(img,0,0);}ctx.restore();};
-      draw();const timer=setInterval(draw,100);const stream=canvas.captureStream(10);
+      __handsWitness.draw=draw;draw();const timer=setInterval(draw,100);const stream=canvas.captureStream(10);
       for(const track of stream.getTracks()){__handsWitness.tracks.push(track);const stop=track.stop.bind(track);track.stop=()=>{clearInterval(timer);stop();};}return stream;
     };`});
   evaluate=async expression=>{const r=await call('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw Error(r.exceptionDetails.exception?.description??r.exceptionDetails.text);return r.result.value;};
@@ -52,18 +52,19 @@ try {
   if(bounds.left<0||bounds.right>bounds.width||bounds.bottom>bounds.height)throw Error('Hand controls clip the viewport');
   if(await evaluate('kaminosHands.read().enabled'))throw Error('Hand input started without activation');
   if(args.infer){
+    let previous=null;
     for(const model of ['spiralconv','dsconv','wilor']){
       report.phase=model;await save();
       await evaluate(`kaminosHands.setModel(${JSON.stringify(model)})`);
       if(!await evaluate('kaminosHands.read().enabled'))await evaluate('kaminosHands.setEnabled(true)');
       await wait(`kaminosHands.read().phase==='error'||kaminosHands.read().last?.hands.some(h=>h.handedness==='right')`);
-      const row=await evaluate(`({state:kaminosHands.read(),view:kaminosHands.visualization()})`);Object.assign(row,{model,side:'right'});assertHandObservation(row);
+      const row=await evaluate(`({state:kaminosHands.read(),view:kaminosHands.visualization()})`);Object.assign(row,{model,side:'right'});assertHandObservation(row,previous);previous=row.state.last;
       report.steps.push(row);await shot(model+'-right');await save();
     }
     report.phase='left-auto';await save();
-    await evaluate(`kaminosHands.setAuto('right',false)`);await evaluate('__handsWitness.mirror=true');
+    await evaluate('__handsWitness.mirror=true;__handsWitness.draw()');await evaluate(`kaminosHands.setAuto('right',false)`);
     await wait(`kaminosHands.read().phase==='error'||kaminosHands.read().last?.hands.some(h=>h.handedness==='left')`);
-    const left=await evaluate('({state:kaminosHands.read(),view:kaminosHands.visualization()})');Object.assign(left,{model:'wilor',side:'left'});assertHandObservation(left);report.steps.push(left);await shot('left');
+    const left=await evaluate('({state:kaminosHands.read(),view:kaminosHands.visualization()})');Object.assign(left,{model:'wilor',side:'left'});assertHandObservation(left,previous);report.steps.push(left);await shot('left');
     report.phase='absence';await evaluate('__handsWitness.blank=true');
     await wait(`kaminosHands.read().last?.hands.length===0||kaminosHands.read().phase==='error'`);
     const absent=await evaluate('({state:kaminosHands.read(),view:kaminosHands.visualization()})');
