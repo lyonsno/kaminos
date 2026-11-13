@@ -1,5 +1,5 @@
 // Authored geometric approximation of columnar stone; no cooling or fracture simulation.
-export const causewayDefaults=Object.freeze({width:.12,depth:.12*Math.sqrt(3)/2,seed:73,relief:.003,shoulder:.09,dish:.12,grain:.018,sheetGap:.00025});
+export const causewayDefaults=Object.freeze({width:.12,depth:.12,seed:73,relief:.003,shoulder:.09,dish:.12,grain:.018,sheetGap:.00025,layoutJitter:.18,slant:.06,contextRadius:1});
 const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
 function randomGenerator(seed){let s=seed>>>0;return()=>{s=(Math.imul(s,1664525)+1013904223)>>>0;return(s+.5)/4294967296;};}
 const area=p=>Math.abs(p.reduce((s,a,i)=>{const b=p[(i+1)%p.length];return s+a[0]*b[1]-a[1]*b[0];},0))/2;
@@ -10,13 +10,13 @@ function mineral(x,z,id){const q=Math.sin(x*13931.37+z*7919.21+id*93.7)*43758.54
 export function validateCausewayConfig(options={}){
  const config={...causewayDefaults,...options};
  for(const [k,v]of Object.entries(config))if(!Number.isFinite(v)||v<0||(['width','depth'].includes(k)&&v===0))throw Error('Invalid causeway '+k);
- if(!Number.isSafeInteger(config.seed)||config.shoulder>.3||config.dish>.5||config.grain>.2)throw Error('Invalid causeway shape');
+ if(!Number.isSafeInteger(config.seed)||config.shoulder>.3||config.dish>.5||config.grain>1||!Number.isSafeInteger(config.contextRadius)||config.contextRadius<1)throw Error('Invalid causeway shape');
  return config;
 }
 export function createCausewaySource(options={}){
  const config=validateCausewayConfig(options);
  const rng=randomGenerator(config.seed),seeds=[];
- for(let row=0;row<4;row++)for(let col=0;col<4;col++)seeds.push({id:row*4+col,x:(col+.5+(row%2)*.5+(rng()-.5)*.65)*config.width/4-config.width/2,z:(row+.5+(rng()-.5)*.65)*config.depth/4-config.depth/2,phase:rng()*Math.PI*2,tone:rng(),level:rng()});
+ for(let row=0;row<4;row++)for(let col=0;col<4;col++)seeds.push({id:row*4+col,x:(col+.5+(row%2)*.5+(rng()-.5)*config.layoutJitter)*config.width/4-config.width/2,z:(row+.5+(rng()-.5)*config.layoutJitter)*config.depth/4-config.depth/2,phase:rng()*Math.PI*2,tone:rng(),level:rng()});
  const ghosts=[];for(let tz=-1;tz<=1;tz++)for(let tx=-1;tx<=1;tx++)for(const s of seeds)ghosts.push({...s,x:s.x+tx*config.width,z:s.z+tz*config.depth});
  const materials=[];for(let i=0;i<32;i++){const v=.16+.18*i/31;materials.push({name:'basalt mineral '+i,color:[v*.92,v*.98,v*1.05],roughness:.72+.18*(1-i/31),metalness:0});}
  const columns=seeds.map(s=>{
@@ -27,18 +27,23 @@ export function createCausewaySource(options={}){
   const boundary=[];for(let i=0;i<rim.length;i++){const a=rim[i],b=rim[(i+1)%rim.length];for(let j=0;j<3;j++)boundary.push([a[0]+(b[0]-a[0])*j/3,a[1]+(b[1]-a[1])*j/3]);}
   const topHeight=-config.sheetGap-config.relief*(.12+.62*s.level+.1*Math.sin(s.x*35+s.z*24));
   const top=boundary.map(p=>{const a=Math.atan2(p[1]-s.z,p[0]-s.x),inset=config.shoulder*(1+.13*Math.sin(3*a+s.phase));return[s.x+(p[0]-s.x)*(1-inset),s.z+(p[1]-s.z)*(1-inset)];});
-  return {...s,cell:poly,cellArea:area(poly),sides:poly.length,boundary,topHeight,topArea:area(top)};
+  const u=2*Math.PI*s.x/config.width,v=2*Math.PI*s.z/config.depth;
+  const topSlope=[(.8*Math.cos(u+.4)*Math.cos(v-.3)+.2*Math.cos(s.phase))*config.slant*config.relief/(config.width/4),(-.8*Math.sin(u+.4)*Math.sin(v-.3)+.2*Math.sin(s.phase))*config.slant*config.relief/(config.depth/4)];
+  const radius=boundary.reduce((a,p)=>a+Math.hypot(p[0]-s.x,p[1]-s.z),0)/boundary.length;
+  return {...s,cell:poly,cellArea:area(poly),sides:poly.length,boundary,topHeight,topArea:area(top),topSlope,edgeThickness:Math.min(radius*config.shoulder,config.relief*.6)};
  });
  const triangles=[];
  const add=(a,b,c,materialIndex,column,region,tile)=>{const ab=b.map((v,i)=>v-a[i]),ac=c.map((v,i)=>v-a[i]);const normal=[ab[1]*ac[2]-ab[2]*ac[1],ab[2]*ac[0]-ab[0]*ac[2],ab[0]*ac[1]-ab[1]*ac[0]];if(Math.hypot(...normal)<1e-16)return;triangles.push({a,b,c,materialIndex,column,region,tile});};
- for(let tz=-1;tz<=1;tz++)for(let tx=-1;tx<=1;tx++){
-  const tile=[tx,tz],translate=p=>[p[0]+tx*config.width,p[1],p[2]+tz*config.depth];
+ {
+  const tile=[0,0],translate=p=>[...p];
   for(const c of columns){
    const count=c.boundary.length;
    const topHeight=(x,z,radial)=>{
     const grain=config.relief*config.grain*(mineral(x,z,c.id)-.5)*clamp((1-radial)/.15);
-    const dish=config.relief*config.dish*(1-radial*radial)*(.65+.35*Math.sin(c.phase));
-    return Math.min(-config.sheetGap,c.topHeight-dish+grain);
+    const rimFraction=Math.max(.025,c.edgeThickness/(config.width/8));
+    const q=clamp((1-radial)/rimFraction),fade=q*q*(3-2*q);
+    const dish=config.relief*config.dish*(1-radial*radial)*fade*(.65+.35*Math.sin(c.phase));
+    return Math.min(-config.sheetGap,c.topHeight+c.topSlope[0]*(x-c.x)+c.topSlope[1]*(z-c.z)-dish+grain);
    };
    const vertex=(radial,index,drop=0)=>{
     const a=c.boundary[index%count],dx=a[0]-c.x,dz=a[1]-c.z,angle=Math.atan2(dz,dx);
@@ -60,12 +65,24 @@ export function createCausewaySource(options={}){
     for(let k=1;k+1<polygon.length;k++)push(topVertex(polygon[0]),topVertex(polygon[k+1]),topVertex(polygon[k]),'top');
    }
    let upper=rim;
-   for(const [radial,drop,region]of [[1.01,.16,'shoulder'],[1.005,.7,'side'],[1.0,1.7,'side'],[1,3.2,'side']]){
-    const lower=Array.from({length:count},(_,i)=>vertex(radial,i,drop));
-    for(let i=0;i<count;i++){const j=(i+1)%count;push(upper[i],upper[j],lower[j],region);push(upper[i],lower[j],lower[i],region);}upper=lower;
+   const normal=[-c.topSlope[0],1,-c.topSlope[1]],normalLength=Math.hypot(...normal);normal.forEach((v,i)=>normal[i]=v/normalLength);
+   for(const angle of [Math.PI/12,Math.PI/6,Math.PI/4,Math.PI/3,5*Math.PI/12,Math.PI/2]){
+    const lower=Array.from({length:count},(_,i)=>{
+     const a=c.boundary[i],dx=a[0]-c.x,dz=a[1]-c.z,phi=Math.atan2(dz,dx),retreat=config.shoulder*(1+.13*Math.sin(3*phi+c.phase));
+     const scale=Math.min(.985,1-retreat+retreat*.8*Math.sin(angle)),drop=c.edgeThickness*(1-Math.cos(angle));
+     const x=c.x+dx*scale,z=c.z+dz*scale,y=c.topHeight+c.topSlope[0]*(x-c.x)+c.topSlope[1]*(z-c.z);
+     return[x-normal[0]*drop,Math.min(-config.sheetGap,y-normal[1]*drop),z-normal[2]*drop];
+    });
+    for(let i=0;i<count;i++){const j=(i+1)%count;push(upper[i],upper[j],lower[j],'shoulder');push(upper[i],lower[j],lower[i],'shoulder');}upper=lower;
+   }
+   const shoulderBase=upper;
+   for(const drop of [.7,1.7,3.2]){
+    const lower=shoulderBase.map((p,i)=>{const waist=1-.009*(1+Math.sin(drop*11+c.phase));return[c.x+(p[0]-c.x)*waist,p[1]-config.relief*drop,c.z+(p[2]-c.z)*waist];});
+    for(let i=0;i<count;i++){const j=(i+1)%count;push(upper[i],upper[j],lower[j],'side');push(upper[i],lower[j],lower[i],'side');}upper=lower;
    }
   }
   const y=-config.sheetGap-config.relief*3,a=translate([-config.width/2,y,-config.depth/2]),b=translate([config.width/2,y,-config.depth/2]),c=translate([config.width/2,y,config.depth/2]),d=translate([-config.width/2,y,config.depth/2]);add(a,c,b,1,-1,'backing',tile);add(a,d,c,1,-1,'backing',tile);
  }
- return {schema:'kaminos.causeway-source.v1',config,columns,triangles,materials,captureDomain:{width:config.width,depth:config.depth},referenceHeight:.00005,chart:{width:config.width,depth:config.depth,offsetMeters:.004,boundary:'repeat'},boundary:'Periodic column realization with one whole tile of physical context on each side; finite context is not infinite transport.',representation:'Authored shallow columnar stone, varying shoulders, dished tops and mineral facets. No cooling, erosion or fracture simulation.'};
+ const repeated=[];for(let tz=-config.contextRadius;tz<=config.contextRadius;tz++)for(let tx=-config.contextRadius;tx<=config.contextRadius;tx++)for(const t of triangles){const point=p=>[p[0]+tx*config.width,p[1],p[2]+tz*config.depth];repeated.push({...t,a:point(t.a),b:point(t.b),c:point(t.c),tile:[tx,tz]});}
+ return {schema:'kaminos.causeway-source.v1',config,columns,triangles:repeated,materials,captureDomain:{width:config.width,depth:config.depth},referenceHeight:.00005,chart:{width:config.width,depth:config.depth,offsetMeters:.004,boundary:'repeat'},boundary:`Periodic column realization with ${config.contextRadius} whole tiles of physical context on each side; finite context is not infinite transport.`,representation:'Authored shallow columnar stone, varying shoulders, dished tops and mineral facets. No cooling, erosion or fracture simulation.'};
 }

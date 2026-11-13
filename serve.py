@@ -32,6 +32,9 @@ _scene_catalogue_spec = importlib.util.spec_from_file_location("kaminos_scene_ca
 _scene_catalogue_module = importlib.util.module_from_spec(_scene_catalogue_spec)
 _scene_catalogue_spec.loader.exec_module(_scene_catalogue_module)
 SceneCatalogue = _scene_catalogue_module.SceneCatalogue
+_material_sources_spec = importlib.util.spec_from_file_location("kaminos_neural_material_sources", ROOT / "neural_material_sources.py")
+_material_sources_module = importlib.util.module_from_spec(_material_sources_spec)
+_material_sources_spec.loader.exec_module(_material_sources_module)
 _VANTAGE = None
 _VANTAGE_LOCK = threading.Lock()
 
@@ -4700,6 +4703,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_vantage_hub(parse_qs(parsed.query))
         elif parsed.path == "/api/vantage/pages":
             self.handle_vantage_pages()
+        elif parsed.path == "/api/neural-material-sources":
+            _material_sources_module.handle(self, "GET", ROOT)
         elif parsed.path == "/api/notes" or parsed.path.startswith("/api/notes/"):
             notes_http().handle(self, "GET", self.path)
         else:
@@ -4707,7 +4712,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path == '/api/preferences':
+        if parsed.path == '/api/neural-material-sources':
+            _material_sources_module.handle(self, 'POST', ROOT)
+        elif parsed.path == '/api/preferences':
             self.handle_preferences(write=True)
         elif parsed.path == '/api/prepare-image':
             self.handle_prepare_image(parse_qs(parsed.query))

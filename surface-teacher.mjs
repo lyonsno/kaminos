@@ -4,33 +4,35 @@ import {SURFACE_TEACHER_IMAGE_WGSL,SURFACE_TEACHER_QUERY_WGSL,SURFACE_TEACHER_HI
 
 const finite3=v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite);
 export class SurfaceTeacher {
- constructor(device,{triangles,materials,lights=[],environment=.15,bounces=3}) {
+ constructor(device,{triangles,materials,lights=[],environment=.15,bounces=3,periodic=null}) {
   this.device=device;this.resources=[];this.targets=[];this.pipelines={};this.disposed=false;this.serial=0;this.samples=0;this.valid=false;
   this.setTransport({environment,bounces});
   try{
-  this.params=this.buffer('surface teacher parameters',new Float32Array(44),GPUBufferUsage.UNIFORM);
+  this.params=this.buffer('surface teacher parameters',new Float32Array(48),GPUBufferUsage.UNIFORM);
   this.historyParams=this.buffer('surface teacher history parameters',new Float32Array(20),GPUBufferUsage.UNIFORM);
   this.filterParams=[1,2,4].map(step=>this.buffer('surface teacher wavelet step',new Float32Array([step,.01,0,0]),GPUBufferUsage.UNIFORM));
   for(const [name,code]of Object.entries({image:SURFACE_TEACHER_IMAGE_WGSL,query:SURFACE_TEACHER_QUERY_WGSL,history:SURFACE_TEACHER_HISTORY_WGSL,filter:SURFACE_TEACHER_FILTER_WGSL})){
    this.pipelines[name]=device.createComputePipeline({label:`surface teacher ${name}`,layout:'auto',compute:{module:device.createShaderModule({label:`surface teacher ${name}`,code}),entryPoint:'main'}});
   }
-   this.setScene({triangles,materials,lights});
+   this.setScene({triangles,materials,lights,periodic});
   }catch(error){this.dispose();throw error;}
  }
  buffer(label,data,usage=GPUBufferUsage.STORAGE){
   if(data.byteLength>this.device.limits.maxBufferSize||(usage&GPUBufferUsage.STORAGE)&&data.byteLength>this.device.limits.maxStorageBufferBindingSize)throw Error(`${label} exceeds the active device's buffer capacity`);
   const buffer=this.device.createBuffer({label,size:Math.max(16,data.byteLength),usage:usage|GPUBufferUsage.COPY_DST});this.device.queue.writeBuffer(buffer,0,data);this.resources.push(buffer);return buffer;
  }
- setScene({triangles,materials,lights=[]}){
+ setScene({triangles,materials,lights=[],periodic=null}){
   if(!Array.isArray(materials)||!materials.length||materials.some(m=>!finite3(m.color)||m.color.some(v=>v<0||v>1)||!Number.isFinite(m.roughness)||m.roughness<0||m.roughness>1||!Number.isFinite(m.metalness)||m.metalness<0||m.metalness>1))throw Error('physical material colors, roughness and metalness required');
   if(lights.some(l=>!finite3(l.position)||!finite3(l.color)||l.color.some(v=>v<0)||!['directional','point','spot'].includes(l.type)||l.type==='directional'&&Math.hypot(...l.position)===0||l.type==='spot'&&(!finite3(l.direction)||Math.hypot(...l.direction)===0||!Number.isFinite(l.angle)||l.angle<=0||l.angle>=Math.PI/2||!Number.isFinite(l.penumbra)||l.penumbra<0||l.penumbra>1)))throw Error('finite directional, inverse-square point or nonzero spot direction required');
   if(triangles.some(t=>!Number.isSafeInteger(t.materialIndex)||t.materialIndex<0||t.materialIndex>=materials.length))throw Error('each triangle must address an existing material');
+  if(periodic&&(![periodic.width,periodic.depth].every(v=>Number.isFinite(v)&&v>0)||![periodic.minY,periodic.maxY].every(Number.isFinite)||periodic.maxY<periodic.minY))throw Error('Invalid periodic surface domain');
+  if(periodic&&triangles.some(t=>[t.a,t.b,t.c].some(p=>Math.abs(p[0])>periodic.width/2+1e-7||Math.abs(p[2])>periodic.depth/2+1e-7||p[1]<periodic.minY-1e-7||p[1]>periodic.maxY+1e-7)))throw Error('Periodic geometry must lie in its canonical cell and vertical support');
   const packed=buildTriangleVisibility(triangles).packGpu();
   for(let i=0;i<packed.triangleCount;i++)packed.triangles[i*12+3]=triangles[packed.triangleIndices[i]].materialIndex;
   const materialData=new Float32Array(materials.length*8);materials.forEach((m,i)=>materialData.set([...m.color,1,m.roughness,m.metalness,0,0],i*8));
   const lightData=new Float32Array(Math.max(1,lights.length)*16);lights.forEach((l,i)=>{const direction=l.type==='spot'?l.direction.map(v=>v/Math.hypot(...l.direction)):[0,0,-1];lightData.set([...l.position,l.type==='spot'?2:l.type==='point'?1:0,...l.color,0,...direction,Math.cos(l.angle??0),Math.cos((l.angle??0)*(1-(l.penumbra??0))),0,0,0],i*16);});
   const next=[this.buffer('surface teacher BVH nodes',packed.nodes),this.buffer('surface teacher triangles',packed.triangles),this.buffer('surface teacher materials',materialData),this.buffer('surface teacher lights',lightData)];
-  for(const buffer of this.sceneBuffers||[]){buffer.destroy();this.resources.splice(this.resources.indexOf(buffer),1);}this.sceneBuffers=next;this.lightCount=lights.length;this.triangleCount=packed.triangleCount;this.reset('source or lighting changed');
+  for(const buffer of this.sceneBuffers||[]){buffer.destroy();this.resources.splice(this.resources.indexOf(buffer),1);}this.sceneBuffers=next;this.periodic=periodic?{...periodic}:null;this.lightCount=lights.length;this.triangleCount=packed.triangleCount;this.reset('source or lighting changed');
  }
  setTransport({environment=this.environment,bounces=this.bounces}){
   if(!Number.isFinite(environment)||environment<0||!Number.isSafeInteger(bounces)||bounces<1)throw Error('nonnegative environment and positive integer path depth required');
@@ -40,7 +42,7 @@ export class SurfaceTeacher {
  group(pipeline,resources){return this.device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:resources.map((resource,binding)=>({binding,resource:resource?.createView?resource.createView():{buffer:resource}}))});}
  common(){return [...this.sceneBuffers,this.params];}
  writeParams({view,cameraFrame,width=1,height=1,frame=this.serial,previousVP=this.previousVP}={}){
-  const data=new Float32Array(44),words=new Uint32Array(data.buffer);let vp=null;
+  const data=new Float32Array(48),words=new Uint32Array(data.buffer);let vp=null;
   if(cameraFrame){
    if(!Array.isArray(cameraFrame.viewProjection)||cameraFrame.viewProjection.length!==16||!cameraFrame.viewProjection.every(Number.isFinite)||!finite3(cameraFrame.position))throw Error('Finite shared camera matrix and position required');
    vp=new Matrix4().fromArray(cameraFrame.viewProjection);if(vp.determinant()===0)throw Error('Shared camera projection must be invertible');
@@ -50,17 +52,18 @@ export class SurfaceTeacher {
    const camera=new PerspectiveCamera(view.fov??45,width/height,view.near??.01,view.far??100);camera.coordinateSystem=WebGPUCoordinateSystem;camera.zoom=view.zoom??1;camera.position.fromArray(view.position);camera.up.fromArray(view.up??[0,1,0]);camera.lookAt(...view.target);camera.updateMatrixWorld(true);camera.updateProjectionMatrix();
    vp=new Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);data.set(vp.clone().invert().elements,0);data.set((previousVP??vp).elements,16);data.set(view.position,32);
   }
-  words.set([width,height,frame,this.bounces],36);data.set([0,0,this.environment,this.lightCount],40);this.device.queue.writeBuffer(this.params,0,data);return vp;
+  words.set([width,height,frame,this.bounces],36);data.set([0,0,this.environment,this.lightCount],40);if(this.periodic)data.set([this.periodic.width,this.periodic.depth,this.periodic.minY,this.periodic.maxY],44);this.device.queue.writeBuffer(this.params,0,data);return vp;
  }
  async evaluate(queries,{sample=0}={}){
   if(this.disposed)throw Error('surface teacher is disposed');
   if(!Array.isArray(queries)||!queries.length||queries.some(q=>!finite3(q.origin)||!finite3(q.direction)||Math.hypot(...q.direction)===0))throw Error('nonempty finite ray queries required');
+  if(this.periodic&&queries.some(q=>q.direction[1]===0))throw Error('Infinite exactly horizontal periodic rays are unsupported');
   const data=new Float32Array(queries.length*8);queries.forEach((q,i)=>data.set([...q.origin,0,...q.direction,0],i*8));
   const input=this.buffer('surface teacher ray queries',data);const output=this.buffer('surface teacher raw linear answers',new Float32Array(queries.length*4),GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC);
   const read=this.device.createBuffer({size:queries.length*16,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
   try{
    this.writeParams({frame:sample});const encoder=this.device.createCommandEncoder();const pass=encoder.beginComputePass();pass.setPipeline(this.pipelines.query);pass.setBindGroup(0,this.group(this.pipelines.query,[...this.common(),input,output]));pass.dispatchWorkgroups(Math.ceil(queries.length/64));pass.end();encoder.copyBufferToBuffer(output,0,read,0,queries.length*16);this.device.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);
-   const values=new Float32Array(read.getMappedRange()).slice();return Array.from({length:queries.length},(_,i)=>Array.from(values.subarray(i*4,i*4+4)));
+   const values=new Float32Array(read.getMappedRange()).slice();if(!values.every((v,i)=>Number.isFinite(v)&&(i%4===3||v>=0)))throw Error('Nonfinite surface transport; periodic horizon or coordinate precision failure');return Array.from({length:queries.length},(_,i)=>Array.from(values.subarray(i*4,i*4+4)));
   }finally{read.destroy();for(const b of [input,output]){b.destroy();this.resources.splice(this.resources.indexOf(b),1);}}
  }
  resize(width,height){
@@ -86,7 +89,7 @@ export class SurfaceTeacher {
   if(!this.accumulation)throw Error('no completed image to capture');
   const stride=Math.ceil(this.width*16/256)*256,size=stride*this.height;
   const read=this.device.createBuffer({size,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});
-  try{const encoder=this.device.createCommandEncoder();encoder.copyTextureToBuffer({texture:this.accumulation},{buffer:read,bytesPerRow:stride},[this.width,this.height]);this.device.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);const source=new Float32Array(read.getMappedRange());const result=new Float32Array(this.width*this.height*4);for(let y=0;y<this.height;y++)result.set(source.subarray(y*stride/4,y*stride/4+this.width*4),y*this.width*4);return result;}finally{read.destroy();}
+  try{const encoder=this.device.createCommandEncoder();encoder.copyTextureToBuffer({texture:this.accumulation},{buffer:read,bytesPerRow:stride},[this.width,this.height]);this.device.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);const source=new Float32Array(read.getMappedRange());const result=new Float32Array(this.width*this.height*4);for(let y=0;y<this.height;y++)result.set(source.subarray(y*stride/4,y*stride/4+this.width*4),y*this.width*4);if(!result.every((v,i)=>Number.isFinite(v)&&(i%4===3||v>=0))){const error=Error('Invalid surface transport or unsupported periodic horizon');error.linearPixels=result;error.pixelIndex=Math.floor(result.findIndex((v,i)=>!Number.isFinite(v)||(i%4!==3&&v<0))/4);throw error;}return result;}finally{read.destroy();}
  }
  publish(renderer,texture){
   if(renderer.backend.device!==this.device)throw Error('Surface teacher render device changed; reopen the experiment');
@@ -94,6 +97,6 @@ export class SurfaceTeacher {
   if(destination.width!==this.width||destination.height!==this.height||destination.format!=='rgba32float')throw Error('Surface teacher presentation texture extent or format mismatch');
   const encoder=this.device.createCommandEncoder();encoder.copyTextureToTexture({texture:this.output},{texture:destination},[this.width,this.height]);this.device.queue.submit([encoder.finish()]);
  }
- state(){return {route:'explicit-surface-webgpu-path-teacher-v1',triangles:this.triangleCount,width:this.width??0,height:this.height??0,samples:this.samples,frame:this.serial,bounces:this.bounces,environment:this.environment,resetReason:this.resetReason,accumulationMode:this.wasMoving?'responsive-history':'stationary-mean',reconstruction:'geometry-validated temporal accumulation and variance-guided atrous',rawOutput:'linear RGB; stationary alpha stores sample count, responsive alpha stores effective history weight',disposed:this.disposed};}
+ state(){return {route:'explicit-surface-webgpu-path-teacher-v1',periodic:this.periodic,triangles:this.triangleCount,width:this.width??0,height:this.height??0,samples:this.samples,frame:this.serial,bounces:this.bounces,environment:this.environment,resetReason:this.resetReason,accumulationMode:this.wasMoving?'responsive-history':'stationary-mean',reconstruction:'geometry-validated temporal accumulation and variance-guided atrous',rawOutput:'linear RGB; stationary alpha stores sample count, responsive alpha stores effective history weight',disposed:this.disposed};}
  dispose(){if(this.disposed)return;this.disposed=true;for(const value of [...this.resources,...this.targets])value.destroy();}
 }

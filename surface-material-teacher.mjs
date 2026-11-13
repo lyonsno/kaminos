@@ -9,15 +9,15 @@ struct Query {uvView:vec4<f32>,lightLod:vec4<f32>}
  if(id.x>=arrayLength(&queries)){return;}let q=queries[id.x];
  let v=vec3<f32>(q.uvView.z,-sqrt(max(0.0,1.0-dot(q.uvView.zw,q.uvView.zw))),q.uvView.w);
  let l=vec3<f32>(-q.lightLod.x,sqrt(max(0.0,1.0-dot(q.lightLod.xy,q.lightLod.xy))),-q.lightLod.y);
- var state=id.x*747796405u+(params.extent.z+1u)*2891336453u;var sum=vec3<f32>(0.0);
+ var state=id.x*747796405u+(params.extent.z+1u)*2891336453u;var sum=vec3<f32>(0.0);var failure=0u;
  for(var s=0u;s<u32(capture[0].w);s++){
   // Box footprint in the material reference plane, explicitly not a camera
   // frame integral or a denoised label. Directions use the decoder's incoming convention.
   let uv=q.uvView.xy+(vec2<f32>(random(&state),random(&state))-.5)*exp2(q.lightLod.z)/vec2<f32>(capture[0].z,capture[1].y);
   let origin=vec3<f32>((uv.x-.5)*capture[0].x,capture[0].y,(uv.y-.5)*capture[1].x);
-  sum+=pathTraceIncident(origin,v,&state,l,true);
+  sum+=pathTraceIncident(origin,v,&state,l,true);failure=max(failure,periodicReason);
  }
- let response=sum/(capture[0].w*l.y);answers[id.x*3u]=response.r;answers[id.x*3u+1u]=response.g;answers[id.x*3u+2u]=response.b;
+ let response=select(sum/(capture[0].w*l.y),vec3<f32>(-f32(failure)),failure>0u);answers[id.x*3u]=response.r;answers[id.x*3u+1u]=response.g;answers[id.x*3u+2u]=response.b;
 }
 `;
 export const SURFACE_MATERIAL_GRID_WGSL=SURFACE_TEACHER_COMMON_WGSL+/* wgsl */`
@@ -32,16 +32,16 @@ struct Query {uvView:vec4<f32>,lightLod:vec4<f32>}
  let v=vec3<f32>(q.uvView.z,-sqrt(1.0-dot(q.uvView.zw,q.uvView.zw)),q.uvView.w);
  let l=vec3<f32>(-q.lightLod.x,sqrt(1.0-dot(q.lightLod.xy,q.lightLod.xy)),-q.lightLod.y);
  let extent=vec2<f32>(capture[0].x,capture[1].x);
- var state=index*747796405u+(params.extent.z+1u)*2891336453u;var sum=vec3<f32>(0.0);
+ var state=index*747796405u+(params.extent.z+1u)*2891336453u;var sum=vec3<f32>(0.0);var failure=0u;
  for(var s=0u;s<u32(capture[0].w);s++){
   let uv=q.uvView.xy+(vec2<f32>(random(&state),random(&state))-.5)*exp2(q.lightLod.z)/vec2<f32>(capture[0].z,capture[1].y);
   let origin=vec3<f32>((uv.x-.5)*extent.x,capture[0].y,(uv.y-.5)*extent.y);
-  sum+=pathTraceIncident(origin,v,&state,l,true);
+  sum+=pathTraceIncident(origin,v,&state,l,true);failure=max(failure,periodicReason);
  }
  let origin=vec3<f32>((q.uvView.x-.5)*extent.x,capture[0].y,(q.uvView.y-.5)*extent.y);
  let hit=trace(origin,v,1e20);var p=vec4<f32>(0.0);var n=vec4<f32>(0.0);
  if(hit.id!=0xffffffffu){p=vec4<f32>(origin+v*hit.t,1.0);n=vec4<f32>(hit.normal,triangles[hit.id].a.w+1.0);}
- textureStore(raw,id.xy,vec4<f32>(sum/(capture[0].w*l.y),1.0));textureStore(positions,id.xy,p);textureStore(normals,id.xy,n);
+ failure=max(failure,periodicReason);textureStore(raw,id.xy,vec4<f32>(select(sum/(capture[0].w*l.y),vec3<f32>(-f32(failure)),failure>0u),1.0));textureStore(positions,id.xy,p);textureStore(normals,id.xy,n);
 }
 `;
 export class SurfaceMaterialTeacher extends SurfaceTeacher{
@@ -64,7 +64,7 @@ export class SurfaceMaterialTeacher extends SurfaceTeacher{
    for(let step=0;step<3;step++){const target=this.filtered[step%2];dispatch(this.pipelines.filter,[output,this.points[0],this.normals[0],target,this.filterParams[step]]);output=target;}
    this.device.queue.submit([encoder.finish()]);
    this.accumulation=this.raw;const raw=await this.readLinear();this.accumulation=output;const filtered=await this.readLinear();
-   const rgb=rgba=>{const result=new Float32Array(width*height*3);for(let i=0;i<width*height;i++)result.set(rgba.subarray(i*4,i*4+3),i*3);if(!result.every(Number.isFinite))throw Error('Non-finite material grid response');return result;};
+   const rgb=rgba=>{const result=new Float32Array(width*height*3);for(let i=0;i<width*height;i++)result.set(rgba.subarray(i*4,i*4+3),i*3);if(!result.every(v=>Number.isFinite(v)&&v>=0))throw Error('Non-finite material grid response');return result;};
    return {queries,raw:rgb(raw),filtered:rgb(filtered)};
   }finally{for(const b of [input,config]){b.destroy();this.resources.splice(this.resources.indexOf(b),1);}}
  }
@@ -82,7 +82,7 @@ export class SurfaceMaterialTeacher extends SurfaceTeacher{
    const config=this.buffer('material footprint',new Float32Array([tileSize,referenceHeight,resolution,samples,tileDepth,resolutionHeight,0,0]),GPUBufferUsage.UNIFORM);resources.push(config);
    read=this.device.createBuffer({size:count*12,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});
    this.writeParams({frame:seed});const encoder=this.device.createCommandEncoder(),pass=encoder.beginComputePass();pass.setPipeline(this.materialPipeline);pass.setBindGroup(0,this.group(this.materialPipeline,[...this.common(),input,output,config]));pass.dispatchWorkgroups(Math.ceil(count/64));pass.end();encoder.copyBufferToBuffer(output,0,read,0,count*12);this.device.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);
-   const rgb=new Float32Array(read.getMappedRange().slice(0));if(!rgb.every(Number.isFinite))throw Error('Non-finite material response');return rgb;
+   const rgb=new Float32Array(read.getMappedRange().slice(0));if(!rgb.every(v=>Number.isFinite(v)&&v>=0)){const error=Error('Invalid material response or periodic transport failure');error.queries=queries;error.capture={tileSize,tileDepth,referenceHeight,resolution,resolutionHeight,samples,seed};throw error;}return rgb;
   }finally{read?.destroy();for(const b of resources){b.destroy();this.resources.splice(this.resources.indexOf(b),1);}}
  }
 }
