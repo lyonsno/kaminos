@@ -52,7 +52,7 @@ try{
     report.adapter=ctx.adapterInfo;
     let gpu=null,teacher=null;
     try{
-      gpu=await createNeumipTraining(ctx.device,student,{batchSize:rows.length});gpu.setQueries(new Float32Array(rows.flat()));gpu.setTargets(targets);
+      gpu=await createNeumipTraining(ctx.device,student,{batchSize:rows.length,trainingRecipe:'legacy-unsmoothed-v1'});gpu.setQueries(new Float32Array(rows.flat()));gpu.setTargets(targets);
       const actual=await gpu.gradients();near([...actual.rgb],reference(student,rows),'student forward');
       const gradients=selections.map(i=>actual.values[i]);near(gradients,expected,'finite-difference gradients',{absolute:2e-6,relative:.015});
       assert.ok(Math.abs(actual.values[layout.networks.offset_network.layers[3].biasesOffset])>1e-7,'depth path must carry a nonzero appearance gradient');
@@ -79,7 +79,7 @@ try{
         const big=createNeumipStudent({resolution:512,seed:37});
         for(const field of [big.offset,...big.mips])field.data.fill(.05);
         for(const layer of big.layers){layer.weights.fill(.025);layer.biases.fill(.02);}
-        const large=await createNeumipTraining(ctx.device,big,{batchSize:1});
+        const large=await createNeumipTraining(ctx.device,big,{batchSize:1,trainingRecipe:'legacy-unsmoothed-v1'});
         try{
           large.setQueries(new Float32Array([.6,.6,0,0,0,0,8,0]));large.setTargets(new Float32Array([.1,.2,.3]));
           const grad=await large.gradients(),tail=large.layout.count-1,g=grad.values[tail];

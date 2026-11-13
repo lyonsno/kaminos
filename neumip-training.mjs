@@ -1,17 +1,21 @@
+import {AUTHOR_SPATIAL_RECIPE,LEGACY_SPATIAL_RECIPE,checkedNeumipTrainingRecipe,neumipSpatialTrainingState,createNeumipSpatialFilter} from './neumip-spatial-training.mjs';
+export {neumipSpatialTrainingState} from './neumip-spatial-training.mjs';
 import {validateNeumipChart,chartOffsetScale} from './neumip-chart.mjs';
 import {createHandoffState,buildHandoffMath,STONE_HANDOFF_ARCHITECTURE} from './stone-handoff-model.mjs';
 // Browser/native WebGPU training for Kaminos's released NeuMIP web format.
 // Parameters remain float32; all levels are independent learned fields.
 const TARGET_STATE=Symbol('NeuMIP current target batch');
-export function createNeumipStudent({resolution=64,height=resolution,seed=1,handoff,chart}={}) {
+export function createNeumipStudent({resolution=64,height=resolution,seed=1,handoff,chart,trainingRecipe=LEGACY_SPATIAL_RECIPE}={}) {
+  checkedNeumipTrainingRecipe(trainingRecipe);
   if(!Number.isInteger(resolution)||resolution<2||!Number.isInteger(Math.log2(resolution)))throw Error('NeuMIP resolution must be a power of two >= 2');
   if(!Number.isInteger(Math.log2(height))||height<2)throw Error('NeuMIP height must be a power of two >= 2');
   if(chart)chart=validateNeumipChart(chart);
   let state=seed>>>0;
   const random=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return (state+.5)/4294967296;};
   const normal=()=>Math.sqrt(-2*Math.log(random()))*Math.cos(2*Math.PI*random());
-  const texture=(width,height,channels)=>({width,height,channels,data:Float32Array.from({length:width*height*channels},()=>normal()*.05)});
+  const texture=(width,height,channels)=>({width,height,channels,data:Float32Array.from({length:width*height*channels},()=>normal()*(trainingRecipe===AUTHOR_SPATIAL_RECIPE?.1:.05))});
   const offset=texture(resolution,height,6),mips=[];
+  if(trainingRecipe===AUTHOR_SPATIAL_RECIPE)offset.data.fill(0);
   for(let w=resolution,h=height;Math.max(w,h)>=2;w=Math.max(1,w/2),h=Math.max(1,h/2))mips.push(texture(w,h,8));
   const layers=[];
   for(const [prefix,sizes] of [['offset_network',[8,24,24,24,1]],['main',[12,24,24,24,6]]])for(let k=0;k<4;k++){
@@ -48,10 +52,11 @@ export function neumipTrainingLayout(model) {
 }
 
 // Exact storage requirements, shared by device admission and allocation.
-export function neumipTrainingBufferSizes(layout,batchSize) {
+export function neumipTrainingBufferSizes(layout,batchSize,{trainingRecipe=LEGACY_SPATIAL_RECIPE}={}) {
+  checkedNeumipTrainingRecipe(trainingRecipe);
   if(!Number.isSafeInteger(batchSize)||batchSize<1)throw Error('batchSize must be positive');
   return {parameters:layout.count*4,queries:batchSize*8*4,targets:batchSize*3*4,gradients:layout.count*4,
-    scratch:batchSize*layout.scratchStride*4,partial:layout.weightCount*Math.ceil(batchSize/64)*4,moments:layout.count*8};
+    scratch:batchSize*layout.scratchStride*4,partial:layout.weightCount*Math.ceil(batchSize/64)*4,moments:layout.count*8,...(trainingRecipe===AUTHOR_SPATIAL_RECIPE?{spatialParameters:layout.count*4,spatialScratch:layout.count*4,spatialGradient:layout.count*4}:{})};
 }
 
 export function restoreNeumipParameters(model,layout,values) {
@@ -94,7 +99,7 @@ export function buildNeumipTrainingWGSL(layout) {
       v=scratch[base+${actCount+l.deltaOffset}u+w-${l.biasesOffset}u];
     }`).join('\n');
   return `
-struct Config { count:u32,step:u32,lrWeights:f32,lrFields:f32,lodBias:f32,trainRich:f32,trainCheap:f32,richEnabled:f32 }
+struct Config { count:u32,step:u32,lrWeights:f32,lrFields:f32,lodBias:f32,trainRich:f32,trainCheap:f32,richEnabled:f32,freezeOffset:u32,_pad0:u32,_pad1:u32,_pad2:u32 }
 @group(0) @binding(0) var<storage,read_write> p:array<f32>;
 @group(0) @binding(1) var<storage,read> queries:array<f32>;
 @group(0) @binding(2) var<storage,read_write> targets:array<f32>;
@@ -211,7 +216,7 @@ var<workgroup> sums:array<f32,64>;
   for(var b=0u;b<blocks;b++){sum+=partial[w*blocks+b];}atomicStore(&grad[w],bitcast<u32>(sum));
 }
 @compute @workgroup_size(64) fn adam(@builtin(global_invocation_id) id:vec3<u32>,@builtin(num_workgroups) groups:vec3<u32>){
-  let i=id.x+id.y*groups.x*64u;if(i>=${layout.count}u){return;}${paired?`if(i>=${fields[cheapStartField].offset}u){if(cfg.trainCheap<0.5){return;}}else{if(cfg.trainRich<0.5){return;}}`:``}let g=bitcast<f32>(atomicLoad(&grad[i]))/f32(cfg.count);
+  let i=id.x+id.y*groups.x*64u;if(i>=${layout.count}u){return;}${paired?`if(i>=${fields[cheapStartField].offset}u){if(cfg.trainCheap<0.5){return;}}else{if(cfg.trainRich<0.5){return;}}`:``}if(cfg.freezeOffset!=0u&&i>=FIELD[0]&&i<FIELD[0]+WIDTH[0]*HEIGHT[0]*CHANNELS[0]){return;}let g=bitcast<f32>(atomicLoad(&grad[i]))/f32(cfg.count);
   let mv=moments[i];let next=vec2<f32>(0.9*mv.x+0.1*g,0.999*mv.y+0.001*g*g);moments[i]=next;
   let lr=select(cfg.lrFields,cfg.lrWeights,i<${weightCount}u);
   p[i]-=lr*(next.x/(1.0-pow(0.9,f32(cfg.step))))/(sqrt(next.y/(1.0-pow(0.999,f32(cfg.step))))+1e-8);
@@ -221,9 +226,11 @@ var<workgroup> sums:array<f32,64>;
 
 // Receives an existing device: browser Kit and native Dawn use identical WGSL.
 // The caller owns scheduling/admission and can pause between fenced updates.
-export async function createNeumipTraining(device,model,{batchSize=4096}={}) {
+export async function createNeumipTraining(device,model,{batchSize=4096,trainingRecipe:requestedRecipe}={}) {
+  const explicitRecipe=requestedRecipe!==undefined,trainingRecipe=checkedNeumipTrainingRecipe(requestedRecipe);
+  if(model.handoff&&trainingRecipe===AUTHOR_SPATIAL_RECIPE)throw Error('Author spatial recipe for paired handoff requires a separate cheap-field filtering contract');
   if(!Number.isSafeInteger(batchSize)||batchSize<1)throw Error('batchSize must be positive');
-  const layout=neumipTrainingLayout(model),sizes=neumipTrainingBufferSizes(layout,batchSize),buffers=[];
+  const layout=neumipTrainingLayout(model),sizes=neumipTrainingBufferSizes(layout,batchSize,{trainingRecipe}),buffers=[];
   for(const [label,bytes] of Object.entries(sizes)){
     if(bytes>device.limits?.maxStorageBufferBindingSize)throw Error(`NeuMIP storage binding ${label} requires ${bytes} bytes; device limit is ${device.limits.maxStorageBufferBindingSize}. Request sufficient device limits.`);
     if(bytes>device.limits?.maxBufferSize)throw Error(`NeuMIP buffer ${label} requires ${bytes} bytes; device limit is ${device.limits.maxBufferSize}`);
@@ -237,7 +244,7 @@ export async function createNeumipTraining(device,model,{batchSize=4096}={}) {
   const scratch=storage('neumip activations and deltas',sizes.scratch);
   const partial=storage('neumip reduced weight gradients',sizes.partial);
   const moments=storage('neumip Adam moments',sizes.moments);
-  const config=device.createBuffer({label:'neumip train configuration',size:32,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});buffers.push(config);
+  const config=device.createBuffer({label:'neumip train configuration',size:48,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});buffers.push(config);
   const bindingLayout=device.createBindGroupLayout({entries:Array.from({length:8},(_,binding)=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:binding===7?'uniform':binding===1?'read-only-storage':'storage'}}))});
   const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[bindingLayout]});
   const code=buildNeumipTrainingWGSL(layout),module=device.createShaderModule({label:'NeuMIP directional learning',code});
@@ -246,7 +253,9 @@ export async function createNeumipTraining(device,model,{batchSize=4096}={}) {
   const pipelines={};for(const entryPoint of ['teacher','inference','backward','weightPartials','collectWeights','adam']){
     pipelines[entryPoint]=await device.createComputePipelineAsync({label:`NeuMIP ${entryPoint}`,layout:pipelineLayout,compute:{module,entryPoint}});
   }
-  const group=device.createBindGroup({layout:bindingLayout,entries:[parameters,queries,targets,gradients,scratch,partial,moments,config].map((buffer,binding)=>({binding,resource:{buffer}}))});
+  const spatial=trainingRecipe===AUTHOR_SPATIAL_RECIPE?await createNeumipSpatialFilter(device,layout,{parameters,gradients,storage,buffers}):null;
+  const makeGroup=(parameterBuffer,gradientBuffer)=>device.createBindGroup({layout:bindingLayout,entries:[parameterBuffer,queries,targets,gradientBuffer,scratch,partial,moments,config].map((buffer,binding)=>({binding,resource:{buffer}}))});
+  const group=makeGroup(spatial?.parameters??parameters,gradients),adamGroup=spatial?makeGroup(parameters,spatial.rawGradient):group;
   device.queue.writeBuffer(parameters,0,layout.values);
   let count=batchSize,step=0,queryVersion=0,queryBits=null,currentTargets=null;
   const targetsFor=encoder=>{
@@ -254,12 +263,12 @@ export async function createNeumipTraining(device,model,{batchSize=4096}={}) {
     if(currentTargets.encoder&&currentTargets.encoder!==encoder)throw Error('Pending teacher targets belong to a different encoder');
     return {count,queryBits,device};
   };
-  const configure=({lodBias=0,lrWeights=.001,lrFields=.01,trainRich=true,trainCheap=true,richEnabled=true}={})=>{
-    const data=new ArrayBuffer(32),view=new DataView(data);view.setUint32(0,count,true);view.setUint32(4,Math.max(1,step),true);
-    view.setFloat32(8,lrWeights,true);view.setFloat32(12,lrFields,true);view.setFloat32(16,lodBias,true);view.setFloat32(20,trainRich?1:0,true);view.setFloat32(24,trainCheap?1:0,true);view.setFloat32(28,richEnabled?1:0,true);device.queue.writeBuffer(config,0,data);
+  const configure=({lodBias=0,lrWeights=.001,lrFields=.01,trainRich=true,trainCheap=true,richEnabled=true,spatialStep=step}={})=>{
+    const data=new ArrayBuffer(48),view=new DataView(data);view.setUint32(0,count,true);view.setUint32(4,Math.max(1,step),true);
+    view.setFloat32(8,lrWeights,true);view.setFloat32(12,lrFields,true);view.setFloat32(16,lodBias,true);view.setFloat32(20,trainRich?1:0,true);view.setFloat32(24,trainCheap?1:0,true);view.setFloat32(28,richEnabled?1:0,true);view.setUint32(32,neumipSpatialTrainingState(trainingRecipe,spatialStep).trainOffsetField?0:1,true);device.queue.writeBuffer(config,0,data);
   };
   const maxGroups=device.limits?.maxComputeWorkgroupsPerDimension??65535;
-  const dispatch=(encoder,name,x,y=1)=>{if(x>maxGroups||y>maxGroups)throw Error(`NeuMIP ${name} dispatch ${x}x${y} exceeds device workgroup limit ${maxGroups}`);const pass=encoder.beginComputePass({label:`NeuMIP ${name}`});pass.setPipeline(pipelines[name]);pass.setBindGroup(0,group);pass.dispatchWorkgroups(x,y);pass.end();};
+  const dispatch=(encoder,name,x,y=1)=>{if(x>maxGroups||y>maxGroups)throw Error(`NeuMIP ${name} dispatch ${x}x${y} exceeds device workgroup limit ${maxGroups}`);const pass=encoder.beginComputePass({label:`NeuMIP ${name}`});pass.setPipeline(pipelines[name]);pass.setBindGroup(0,name==='adam'?adamGroup:group);pass.dispatchWorkgroups(x,y);pass.end();};
   const read=async(buffer,size)=>{
     const staging=device.createBuffer({size,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});
     try{const e=device.createCommandEncoder();e.copyBufferToBuffer(buffer,0,staging,0,size);device.queue.submit([e.finish()]);await staging.mapAsync(GPUMapMode.READ);return new Float32Array(staging.getMappedRange().slice(0));}finally{staging.destroy();}
@@ -267,22 +276,26 @@ export async function createNeumipTraining(device,model,{batchSize=4096}={}) {
   const readPredictions=async({includeLoss=false}={})=>{const all=await read(scratch,count*layout.scratchStride*4),rgb=new Float32Array(count*3);let loss=0;
     for(let q=0;q<count;q++){const base=q*layout.scratchStride+layout.actCount+layout.deltaCount;loss+=all[base];rgb.set(all.subarray(base+1,base+4),q*3);}
     if(!rgb.every(Number.isFinite)||(includeLoss&&!Number.isFinite(loss)))throw Error('Non-finite NeuMIP fit');return includeLoss?{rgb,loss:loss/count}:{rgb};};
-  return {layout,buffers:{parameters,queries,targets,gradients,scratch,partial,moments},code,
+  return {layout,buffers:{parameters,queries,targets,gradients,scratch,partial,moments,config},code,trainingRecipe,spatialState:()=>neumipSpatialTrainingState(trainingRecipe,step),
     setQueries(values){if(!(values instanceof Float32Array)||values.length%8||values.length<8||values.length>batchSize*8||!values.every(Number.isFinite))throw Error('Invalid NeuMIP queries');count=values.length/8;queryVersion++;currentTargets=null;queryBits=new Uint32Array(values.buffer,values.byteOffset,values.length).slice();device.queue.writeBuffer(queries,0,values);},
     setTargets(values){if(!(values instanceof Float32Array)||values.length!==count*3||!values.every(Number.isFinite))throw Error('Invalid NeuMIP RGB targets');device.queue.writeBuffer(targets,0,values);currentTargets={version:queryVersion,encoder:null};},
-    async evaluate(options={}){configure(options);const e=device.createCommandEncoder();dispatch(e,'inference',Math.ceil(count/64));device.queue.submit([e.finish()]);return readPredictions();},
-    async teach(options={}){configure(options);const version=queryVersion,n=count,e=device.createCommandEncoder();dispatch(e,'teacher',Math.ceil(n/64));device.queue.submit([e.finish()]);const rgb=await read(targets,n*3*4);currentTargets={version,encoder:null};return rgb;},
-    encodeTeacher(encoder,options={}){configure(options);dispatch(encoder,'teacher',Math.ceil(count/64));currentTargets={version:queryVersion,encoder};},
+    async evaluate(options={}){configure(options);const e=device.createCommandEncoder();spatial?.forward(e,step);dispatch(e,'inference',Math.ceil(count/64));device.queue.submit([e.finish()]);return readPredictions();},
+    async teach(options={}){configure(options);const version=queryVersion,n=count,e=device.createCommandEncoder();spatial?.forward(e,step);dispatch(e,'teacher',Math.ceil(n/64));device.queue.submit([e.finish()]);const rgb=await read(targets,n*3*4);currentTargets={version,encoder:null};return rgb;},
+    encodeTeacher(encoder,options={}){configure(options);spatial?.forward(encoder,step);dispatch(encoder,'teacher',Math.ceil(count/64));currentTargets={version:queryVersion,encoder};},
     copyTargetsFrom(encoder,source){
       const state=source[TARGET_STATE]?.(encoder);
       if(!state||state.count!==count||state.device!==device||!queryBits||!state.queryBits||queryBits.some((v,i)=>v!==state.queryBits[i]))throw Error('Teacher target batch does not match current queries');
       encoder.copyBufferToBuffer(source.buffers.targets,0,targets,0,count*3*4);currentTargets={version:queryVersion,encoder};
     },
-    async gradients(options={}){targetsFor(null);configure(options);const e=device.createCommandEncoder();e.clearBuffer(gradients);dispatch(e,'backward',Math.ceil(count/64));dispatch(e,'weightPartials',layout.weightCount,Math.ceil(count/64));dispatch(e,'collectWeights',Math.ceil(layout.weightCount/64));device.queue.submit([e.finish()]);return {values:await read(gradients,layout.count*4),...await readPredictions({includeLoss:true})};},
-    encodeUpdate(encoder,options={}){targetsFor(encoder);step++;configure(options);encoder.clearBuffer(gradients);dispatch(encoder,'backward',Math.ceil(count/64));dispatch(encoder,'weightPartials',layout.weightCount,Math.ceil(count/64));dispatch(encoder,'collectWeights',Math.ceil(layout.weightCount/64));const groups=Math.ceil(layout.count/64),rows=Math.ceil(groups/maxGroups);dispatch(encoder,'adam',Math.ceil(groups/rows),rows);},
+    async gradients(options={}){targetsFor(null);configure(options);const e=device.createCommandEncoder();spatial?.forward(e,step);e.clearBuffer(gradients);dispatch(e,'backward',Math.ceil(count/64));dispatch(e,'weightPartials',layout.weightCount,Math.ceil(count/64));dispatch(e,'collectWeights',Math.ceil(layout.weightCount/64));spatial?.adjoint(e);device.queue.submit([e.finish()]);return {values:await read(spatial?.rawGradient??gradients,layout.count*4),...await readPredictions({includeLoss:true})};},
+    encodeUpdate(encoder,options={}){if(!explicitRecipe)throw Error('Select a NeuMIP training recipe before optimizer updates');targetsFor(encoder);const spatialStep=step;step++;configure({...options,spatialStep});spatial?.forward(encoder,spatialStep);encoder.clearBuffer(gradients);dispatch(encoder,'backward',Math.ceil(count/64));dispatch(encoder,'weightPartials',layout.weightCount,Math.ceil(count/64));dispatch(encoder,'collectWeights',Math.ceil(layout.weightCount/64));spatial?.adjoint(encoder);const groups=Math.ceil(layout.count/64),rows=Math.ceil(groups/maxGroups);dispatch(encoder,'adam',Math.ceil(groups/rows),rows);},
     [TARGET_STATE]:targetsFor,
     readPredictions,
-    async exportModel(){return restoreNeumipParameters(model,layout,await read(parameters,layout.count*4));},
+    async exportModel(){
+      if(!spatial)return restoreNeumipParameters(model,layout,await read(parameters,layout.count*4));
+      const e=device.createCommandEncoder();spatial.forward(e,step);device.queue.submit([e.finish()]);
+      const baked=structuredClone(model);return restoreNeumipParameters(baked,neumipTrainingLayout(baked),await read(spatial.parameters,layout.count*4));
+    },
     dispose(){buffers.forEach(b=>b.destroy());},
     resetOptimizer(){const e=device.createCommandEncoder();e.clearBuffer(moments);device.queue.submit([e.finish()]);step=0;},
     get step(){return step;},

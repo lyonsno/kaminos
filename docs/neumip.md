@@ -83,3 +83,45 @@ GLSL, and the Cereal archive schema in
 [`straintensor/NeuMIP`](https://github.com/straintensor/NeuMIP).
 The author code copyright and terms are retained in
 [the license notice](licenses/neumip-license.txt).
+
+## Spatial training curriculum
+
+`tools/neumip-fit.mjs` and `tools/ground-material-fit.mjs` select
+`author-web-spatial-v1` for new fits. This restores the spatial portion of the
+released `StandardWeb` recipe: zero offset-field initialization, appearance
+field initialization at standard deviation .1, differentiable periodic Gaussian
+filtering before both feature lookups, and the transpose of that filter in the
+raw-parameter gradient path. The initial sigma is eight base-level texels;
+`8 * 2 ** (-step / (10000 / 3))` reaches one at step10,000. Appearance sigma has
+floor .1 and scales by `2 ** mip`; offset sigma has floor one, and offset-field
+optimization stops after step10,000. The offset decoder remains trainable.
+
+Export bakes the effective filtered fields into the ordinary model format;
+the renderer needs no additional smoothing operation. Frozen teacher models
+use ordinary inference and are not filtered a second time. The low-level
+training factory requires an explicit `trainingRecipe` before optimizer updates.
+Inference without a recipe retains the ordinary unsmoothed model evaluation.
+
+The new-fit defaults are30,000updates. Explicit `--steps` or config `fit.steps`
+remain honored, including shorter preview runs. Each checkpoint records the
+actual spatial state; a short fit can stop while broad smoothing is still
+active and is not a convergence claim. Select the reproducible previous route
+with `--training-recipe legacy-unsmoothed-v1` in `tools/neumip-fit.mjs`, or
+`"trainingRecipe": "legacy-unsmoothed-v1"` in a ground/grass fit config.
+
+This is spatial-recipe parity, not a reproduction of the full author training
+method. Current runners retain linear-RGB half-squared difference, their own
+optimizer rates/network initialization and query exposure, and their existing
+frozen-model or independent geometry target construction. The author recommends
+other objective/scale-weighting choices. Those differences remain explicit.
+The implementation follows pinned author code
+[`c1e2f2aa`](https://github.com/straintensor/NeuMIP/tree/c1e2f2aa3488b7460cbf19f5bf6d1c4343926178),
+particularly `experiments/simple.py`, `neural_rendering.py`, `mipmaptexture.py`
+and `utils/tensor.py`.
+
+CPU schedule/API checks run through `tests/neumip-training-curriculum.mjs` and
+`tests/neumip-training.mjs`. The native numerical witness is
+`tools/neumip-spatial-training-check.mjs OUTPUT_DIR`; run it through Greenroom.
+It executes the production filters, full material gradients, export/reload,
+explicit baseline and optimizer freeze behavior. A Dawn null-backend validation
+only establishes shader/pipeline validity, not these numerical claims.
