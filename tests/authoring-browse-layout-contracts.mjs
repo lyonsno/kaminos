@@ -26,3 +26,17 @@ test('mesh thumbnails frame the object box, not its bounding sphere',()=>{
  const wide=thumbnailDistance({size:[3,0.5,0.5],fovDeg:fov,aspect:1,margin:1});
  assert.ok(1.5/(wide-0.25)<=halfV*1.0001,'the full width stays inside a square view');
 });
+
+// Exercise the actual installed action independently of layout DOM. The worker
+// selection is asynchronous; the click target, not a previous selection, wins.
+test('double-click waits for clicked image selection and does not add the previous mesh',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const source=await readFile(new URL('../authoring-browse-layout.mjs',import.meta.url),'utf8');
+ const code=source.slice(source.indexOf("  byId('asset-entries').addEventListener('dblclick'"),source.indexOf('\n  function render('));
+ let action,finish,selected={kind:'mesh',source:'/old.glb'},added=0;const opened=[];
+ const image={kind:'image',source:'/new.png'},gate=new Promise(resolve=>finish=resolve);
+ const controller={read:()=>({entries:[image],selected}),select:async entry=>{await gate;selected=entry;},add:async()=>{added++;}};
+ new Function('byId','controller','open','canAdd',code)(()=>({addEventListener:(_name,fn)=>action=fn}),controller,mode=>opened.push([mode,selected.source]),true);
+ const pending=action({target:{closest:()=>({dataset:{assetPath:image.source}})}});
+ assert.equal(added,0);assert.deepEqual(opened,[]);finish();await pending;assert.deepEqual(opened,[['generate','/new.png']]);
+});
