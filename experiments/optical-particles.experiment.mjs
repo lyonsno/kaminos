@@ -107,8 +107,8 @@ export default {
    if(stretchLegend){
     stretchLegend.hidden=settings.debugView!==9;
     const m=e.stretch;
-    const source=m?.fieldStep==null?'No measurement. Advance carriers with flow enabled.':
-     `${m.status==='held'?'Held · ':''}Fine field at step ${m.fieldStep}, before moving carriers from step ${m.fromStep}. Flow ${m.flow}, backtrace ${m.backtrace}, reference time scale ${m.referenceStepScale}.`;
+    const source=m?.fieldStep==null?'No Fine field offered for this view. Advance carriers with flow enabled.':
+     `${m.status==='held'?'Held · ':''}Fine field at step ${m.fieldStep} offered to carriers at step ${m.fromStep}. Only non-gray carriers were measured. Flow ${m.flow}, backtrace ${m.backtrace}, reference time scale ${m.referenceStepScale}.`;
     text(stretchLegend,`Gray: unmeasured · Blue: no widening · Warm: widening. ${source}`);
    }
    text(notice,error??(settings.debugView===8&&!e.exchange?.field?.valid?'Exchange field has not been built. Advance with connected exchange enabled to inspect its neighborhood heat.':e.gridAssist?.effective==='unavailable'?'Extinction assist unavailable: '+e.gridAssist.reason:e.effective==='world-optical-particles'?(e.simulationReaction?'':'This basin’s Reactant law is inactive; carried material uses the authored particle reaction values.'):e.reason??'Waiting for the fire volume.'));
