@@ -9,7 +9,7 @@ async function fixture(d,run){
  const owner=createOpticalParticles(d,{transparent:true}),matrix=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
  const buffer=d.createBuffer({size:64,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC}),uniform=d.createBuffer({size:240,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
  const fine=d.createBuffer({size:8*64,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST}),reactants=d.createTexture({size:[2,2,2],dimension:'3d',format:'rg32float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});
- const source={buffer,uniform,width:1,height:1,pixels:1,samples:1,step:0,backtrace:1,viewProj:matrix};
+ const source={buffer,uniform,width:1,height:1,pixels:1,samples:1,outputWidth:8,outputHeight:8,step:0,backtrace:1,viewProj:matrix};
  const sf=new Float32Array(60);sf.set(matrix);sf.set([0,2,1,0],28);d.queue.writeBuffer(uniform,0,sf);
  const target=d.createTexture({size:[8,8],format:'rgba8unorm',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC}),depth=d.createTexture({size:[1,1],format:'depth32float',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING});
  const camera=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,1,1,0,0,0,1,0]);
