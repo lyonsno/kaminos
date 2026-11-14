@@ -17,7 +17,7 @@ test('a hidden support exposed in assembly Edit Mode keeps the native gizmo',()=
  c.assemblyEditing.scope=()=>null;c.attachViewportGizmo(target);assert.equal(c.transformControls.object,null,'ordinary hidden objects stay hidden from the gizmo');
 });
 test('native Delete reaches assembly parts but still yields to joint editing',()=>{
- const c={polyEdit:{active:()=>false},sceneComponents:{active:()=>true,ownsTransforms:()=>false},greenroomPreviewIsActive:()=>false,splatCorrectionMode:null,workingScene:{selection:{ids:['support']}}};
+ const c={document:{activeElement:null,querySelector:()=>null},polyEdit:{active:()=>false},sceneComponents:{active:()=>true,ownsTransforms:()=>false},greenroomPreviewIsActive:()=>false,splatCorrectionMode:null,workingScene:{selection:{ids:['support']}}};
  vm.runInNewContext(grab('shouldIgnoreSceneObjectDeleteShortcut'),c);const event={key:'Delete',target:{tagName:'DIV'}};
  assert.equal(c.shouldIgnoreSceneObjectDeleteShortcut(event),false);c.sceneComponents.ownsTransforms=()=>true;assert.equal(c.shouldIgnoreSceneObjectDeleteShortcut(event),true);
 });
@@ -46,4 +46,21 @@ test('subtract marquee does not swallow the next outliner click',()=>{
  vm.runInNewContext(grab('installSelectionInput'),c);c.installSelectionInput();c.window.kaminosSelection.box();
  const event={button:1,clientX:0,clientY:0,target:{closest:()=>false},preventDefault(){},stopImmediatePropagation(){}};
  listeners.pointerdown(event);listeners.pointerup(event);let swallowed=false;listeners.click({...event,stopImmediatePropagation(){swallowed=true;}});assert.equal(swallowed,false);
+});
+
+test('particle panel Delete cannot remove the viewport-selected flame source',()=>{
+ const c={polyEdit:null,sceneComponents:null,greenroomPreviewIsActive:()=>false,splatCorrectionMode:null,
+  document:{activeElement:null,querySelector:()=>null},workingScene:{selection:{ids:['flame-emitter']}}};
+ vm.runInNewContext(grab('shouldIgnoreSceneObjectDeleteShortcut'),c);
+ const event=(target,key='Backspace')=>({key,target,defaultPrevented:false});
+ const panelFocus={tagName:'SECTION',closest:selector=>selector.includes('.particle-live-popup')?{}:null};
+ const grip={tagName:'SPAN',closest:selector=>selector.includes('#experiment-owner-slot')?{}:null};
+ const viewport={tagName:'CANVAS',closest:()=>null};
+ assert.equal(c.shouldIgnoreSceneObjectDeleteShortcut(event(panelFocus)),true,'opening the coverage popup gives keyboard ownership to the popup');
+ assert.equal(c.shouldIgnoreSceneObjectDeleteShortcut(event(grip,'Delete')),true,'adjusting a property is not a viewport delete gesture');
+ assert.equal(c.shouldIgnoreSceneObjectDeleteShortcut({...event(viewport),defaultPrevented:true}),true);
+ c.document.querySelector=()=>({});
+ assert.equal(c.shouldIgnoreSceneObjectDeleteShortcut(event(viewport)),true,'a scrub can have pointer capture while the viewport retains keyboard focus');
+ c.document.querySelector=()=>null;
+ assert.equal(c.shouldIgnoreSceneObjectDeleteShortcut(event(viewport,'Delete')),false,'ordinary viewport deletion remains available');
 });

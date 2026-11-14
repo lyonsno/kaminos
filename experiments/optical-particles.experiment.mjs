@@ -3,6 +3,7 @@ import {particleProposalShares} from '../volume-particle-acquisition.mjs';
 import {PARTICLE_WORK_FLAGS} from '../volume-particle-work.mjs';
 import {bindParticleNumber} from '../particle-number-control.mjs';
 import {mountParticleLivePopups} from './particle-live-popups.mjs';
+const SOURCE_FIELDS={renderScale:'volume-render-scale',raySteps:'volume-steps'};
 const BOUNDARY_FIELDS={ambientWidthWorld:'widthWorld',ambientExchangeTime:'exchangeTime',ambientVelocityDamping:'velocityDamping'};
 const REACTION_KEYS=['burnTime','cooling','heatRelease','sootYield','smokeLife'];
 function inactiveControls(settings){
@@ -98,7 +99,11 @@ export default {
    },
   };
   const read=()=>({settings,ambientBoundary:source().ambientBoundaryState?.()??null,effective:source().opticalParticleState(),proposal:{...particleProposalShares(settings),conditionalOn:settings.acquisitionMode===2?null:'no-accepted-tracking',trackingAttemptFraction:settings.acquisitionMode===2?null:settings.followFraction,acceptedTrackingFraction:null},population,workPopulation,error,measurement});
-  const value=(key,e,boundary)=>key in BOUNDARY_FIELDS?(key==='ambientWidthWorld'?boundary?.effective.widthWorld:boundary?.settings[BOUNDARY_FIELDS[key]]):key==='sourceRenderScale'?e.sourceRenderScale:key==='sourceRaySteps'?e.sourceRaySteps:key==='verticalRadius'?settings.radius*settings.stretch:key==='radius'?settings.radius:e.simulationReaction&&REACTION_KEYS.includes(key)?e.simulationReaction[key]:settings[key];
+  function authoredSourceValue(key){
+   const node=host.controls.document.getElementById(SOURCE_FIELDS[key]),value=Number(node?.value);
+   return Number.isFinite(value)&&value>0?value:sourceSettings[key];
+  }
+  const value=(key,e,boundary)=>key in BOUNDARY_FIELDS?(key==='ambientWidthWorld'?boundary?.effective.widthWorld:boundary?.settings[BOUNDARY_FIELDS[key]]):key==='sourceRenderScale'?authoredSourceValue('renderScale')??e.sourceRenderScale:key==='sourceRaySteps'?authoredSourceValue('raySteps')??e.sourceRaySteps:key==='verticalRadius'?settings.radius*settings.stretch:key==='radius'?settings.radius:e.simulationReaction&&REACTION_KEYS.includes(key)?e.simulationReaction[key]:settings[key];
   const text=(el,next)=>{if(el.textContent!==next)el.textContent=next;};
   let controlPolicy,unavailable,stretchLegend;
   function sync(force=false){if(!panel)return;let e;try{e=read().effective;}catch(err){error=err.message;e={};}
@@ -128,10 +133,7 @@ export default {
   function snapshotInputs(){
    const runtime=source(),effective=runtime.opticalParticleState(),reaction=effective.simulationReaction??reactionOverrides;
    const sourceControls={...sourceSettings};
-   for(const [key,id] of [['renderScale','volume-render-scale'],['raySteps','volume-steps']]){
-    const node=host.controls.document.getElementById(id),value=Number(node?.value);
-    if(Number.isFinite(value)&&value>0)sourceControls[key]=value;
-   }
+   for(const key of Object.keys(SOURCE_FIELDS)){const value=authoredSourceValue(key);if(value!==undefined)sourceControls[key]=value;}
    const boundary=runtime.ambientBoundaryState?.()?.settings??boundaryOverrides;
    return structuredClone({...forwarded,particles:opticalParticleSettings({...runtime.opticalParticleSettings(),...reaction}),simulationReaction:reaction,source:sourceControls,
     ...(Object.keys(boundary).length?{ambientBoundary:boundary}:{}),...(lightingSettings?{sharedLighting:lightingSettings}:{})});
@@ -234,9 +236,9 @@ export default {
    control('Evaluate fresh observations','acquisitionEnabled','Hard acquisition gate. Off skips the source observation render and tracking proposals while retained carriers continue. It preserves the configured sample budget and does not reset the pool.');
    control('Acquire every N simulation steps','acquisitionEvery','Space fresh evaluations over simulation steps. A disabled interval is not caught up later. Carrier reaction and motion continue on their own schedule.',{step:1,digits:0,min:1});
    control('Accept new particles','birthsEnabled','Hard birth gate independent of fresh evaluations. Off prevents both source-focused and legacy births while keeping the retained material and configured birth acceptance.');
-   control('Fire output scale','sourceRenderScale','Final fire canvas resolution relative to the viewport. Source-focused acquisition has a separate Ray evaluations budget and preserves its retained pool when this changes. Legacy acquisition also uses this resolution for its source image. Uses the native Render scale control.',{step:.01,min:.1,operation:'setSource'});
+   control('Fire output scale','sourceRenderScale','Final fire canvas resolution relative to the viewport. Source-focused acquisition has a separate Ray evaluations budget and preserves its retained pool when this changes. Legacy acquisition also uses this resolution for its source image. Uses the native Render scale control. Viewport Preview may render below the requested scale.',{step:.01,min:.1,operation:'setSource'});
    control('Particle target scale','targetScale','Resolution of particle optical accumulation relative to Fire output. 0.5 gives one quarter as many accumulation pixels while keeping the particle population. The result is linearly upsampled. A paused target-size edit preserves the retained records.',{step:.05,min:.01});
-   control('Reference ray steps','sourceRaySteps','Authored ray budget for the separate reference image. Particle acquisition still uses one fresh local material evaluation per source pixel. Increasing this affects reference cost when Display reference march is enabled.',{step:1,digits:0,min:1,operation:'setSource'});
+   control('Reference ray steps','sourceRaySteps','Authored ray budget for the separate reference image. Particle acquisition still uses one fresh local material evaluation per source pixel. Increasing this affects reference cost when Display reference march is enabled. The value here is the authored request; Viewport Preview may use fewer steps.',{step:1,digits:0,min:1,operation:'setSource'});
    control('Population width (slots)','populationWidth','Allocated particle-grid width. 0 follows source width divided by Particle spacing. A positive value is independent of source and particle render resolution. Changing either population dimension clears the pool. More slots reuse observations; they do not add material evaluations.',{step:1,digits:0});
    control('Population height (slots)','populationHeight','Allocated particle-grid height. 0 follows source height divided by Particle spacing. Together width × height is the retained record count. Actual device storage capacity is enforced; no hidden population cap.',{step:1,digits:0});
    control('Particle spacing (source px)','spacing','1 keeps one particle slot per fire-target pixel. 2 keeps one per 2 × 2 block: about one quarter of the particle storage/update/draw work. Each update selects a source within its block. The one-evaluation source image stays full size. This affects automatic population dimensions; changing their size clears the pool. Explicit dimensions override spacing. Lower density can change brightness.',{step:1,digits:0,min:1});

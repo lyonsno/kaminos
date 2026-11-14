@@ -243,3 +243,15 @@ test('scene snapshot includes accepted optical settings and the shared reaction 
   finally{await y.dispose();}
  }finally{await x.dispose();}
 });
+
+test('typed reference steps remain visible even when the live viewport caps the march',async()=>{
+ const x=await mounted({preview:true,inputs:{particles:{showRaymarch:true},source:{raySteps:60}}});try{
+  const input=x.field('sourceRaySteps');
+  assert.equal(Number(input.value),60);
+  input.value='42';input.fire('input');input.fire('change');
+  await Promise.resolve();await Promise.resolve();
+  assert.equal(x.owner.snapshotInputs().source.raySteps,42);
+  assert.equal(Number(input.value),42);
+  assert.equal(x.owner.read().effective.sourceRaySteps,12);
+ }finally{await x.dispose();}
+});

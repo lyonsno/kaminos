@@ -10593,13 +10593,16 @@ window.removeSceneObject = function(id) {
 };
 
 function shouldIgnoreSceneObjectDeleteShortcut(e) {
-  if (polyEdit?.active()||sceneComponents?.ownsTransforms()) return true;
+  if (!(e.key === 'Delete' || e.key === 'Backspace')) return true;
+  if (e.defaultPrevented || polyEdit?.active() || sceneComponents?.ownsTransforms()) return true;
   const target = e.target;
+  const particleControls = '#experiment-owner-slot, .particle-live-popup';
+  if (target?.closest?.(particleControls) || document.activeElement?.closest?.(particleControls)) return true;
+  if (document.querySelector('#experiment-owner-slot input.scrubbing, .particle-live-popup input.scrubbing')) return true;
   const tagName = target?.tagName;
   if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') return true;
   if (target?.isContentEditable || target?.closest?.('[contenteditable="true"]')) return true;
   if (e.metaKey || e.ctrlKey || e.altKey) return true;
-  if (!(e.key === 'Delete' || e.key === 'Backspace')) return true;
   if (greenroomPreviewIsActive() || splatCorrectionMode) return true;
   return !workingScene.selection.ids.length;
 }
