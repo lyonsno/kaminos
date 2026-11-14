@@ -112,6 +112,7 @@ export function installRelativeNumberDrag({grip,input,step,snap=null,onStart=()=
     const ended=gesture;gesture=null;ended.continuous?.stop();
     if(ended.target.hasPointerCapture?.(ended.pointerId))ended.target.releasePointerCapture(ended.pointerId);
     input.classList?.remove('scrubbing');
+    input.removeAttribute?.('data-number-drag-active');
     return ended;
   }
   function finish(cancel=false) {
@@ -155,6 +156,7 @@ export function installRelativeNumberDrag({grip,input,step,snap=null,onStart=()=
       const rate=min!==null&&max!==null&&max>min?(max-min)/300:step;
       gesture={target,x:event.clientX,lastX:event.clientX,startValue:Number(input.value),value:Number(input.value),min,max,rate,pointerId:event.pointerId,moved:false};
       target.setPointerCapture(event.pointerId);
+      input.setAttribute?.('data-number-drag-active','');
       gesture.continuous=beginContinuousPointer(target,{x:event.clientX,y:event.clientY},{move:({dx,event})=>adjust(dx,event.shiftKey),lost:()=>finish(true),unavailable:()=>{input.title='Continuous pointer unavailable · Drag to adjust · Click to type';}});
     });
     target.addEventListener('pointermove',event=>{

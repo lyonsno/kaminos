@@ -59,8 +59,8 @@ test('particle panel Delete cannot remove the viewport-selected flame source',()
  assert.equal(c.shouldIgnoreSceneObjectDeleteShortcut(event(panelFocus)),true,'opening the coverage popup gives keyboard ownership to the popup');
  assert.equal(c.shouldIgnoreSceneObjectDeleteShortcut(event(grip,'Delete')),true,'adjusting a property is not a viewport delete gesture');
  assert.equal(c.shouldIgnoreSceneObjectDeleteShortcut({...event(viewport),defaultPrevented:true}),true);
- c.document.querySelector=()=>({});
- assert.equal(c.shouldIgnoreSceneObjectDeleteShortcut(event(viewport)),true,'a scrub can have pointer capture while the viewport retains keyboard focus');
+ c.document.querySelector=selector=>selector.includes('[data-number-drag-active]')?{}:null;
+ assert.equal(c.shouldIgnoreSceneObjectDeleteShortcut(event(viewport)),true,'pressing a grip reserves the gesture before the first pixel of motion');
  c.document.querySelector=()=>null;
  assert.equal(c.shouldIgnoreSceneObjectDeleteShortcut(event(viewport,'Delete')),false,'ordinary viewport deletion remains available');
 });
