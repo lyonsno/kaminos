@@ -19,6 +19,102 @@ test('cooperative scope drains admitted frames before its handler applies a new 
   finishFrame.resolve();const observed=await frame.completion;await load.completion;
   assert.equal(appliedBeforeFrame,false);assert.equal(observed.output.drawn,true);assert.equal(applied,true);
 });
+test('ordered preparation draws the prior scene, drains its frame, then commits before later edits',async t=>{
+  const preparing=deferred(),prepared=deferred(),drawing=deferred(),draw=deferred(),order=[];
+  let x=0;
+  const {client}=await harness(t,async()=>({
+    commands:{add:async(_,ctx)=>{
+      await ctx.withFrames(async()=>{ctx.report({preparing:true});preparing.resolve();await prepared.promise;},{foregroundEdits:false});
+      return ctx.commitForeground(editCtx=>{
+        editCtx.assertCurrent();order.push('commit add');x=1;return {x};
+      });
+    }},
+    foregroundCommands:{move(){order.push('later edit');x=2;return {x};}},
+    requestMutation:async(_,__,ctx,apply)=>{ctx.assertCurrent();return {mutationApplied:true,value:apply({})};},
+    requestFrame:async(_,ctx,apply)=>{drawing.resolve();await draw.promise;return apply();},
+    frame(){order.push('draw '+x);return {x};},
+  }));
+  t.after(()=>{prepared.resolve();draw.resolve();});
+  await client.initialize({}).completion;
+  const add=client.request('add');add.completion.catch(()=>{});
+  await preparing.promise;
+  const move=client.request('move'),frame=client.request('frame');
+  for(const h of [move,frame])h.completion.catch(()=>{});
+  await drawing.promise;
+  const duringPreparation=[...order];
+  prepared.resolve();await tick();
+  const beforeFrameSettled=[...order];
+  draw.resolve();
+  assert.deepEqual(duringPreparation,[],'a later edit must not overtake preparation');
+  assert.deepEqual(beforeFrameSettled,[],'the commit must wait for the admitted frame');
+  assert.deepEqual((await frame.completion).output,{x:0});
+  assert.deepEqual((await add.completion).output.value,{x:1});
+  assert.deepEqual((await move.completion).output.value,{x:2});
+  assert.deepEqual(order,['draw 0','commit add','later edit']);
+});
+
+test('cancelled preparation never enters the local foreground commit',async t=>{
+  const preparing=deferred(),prepared=deferred(),order=[];
+  const {client}=await harness(t,async()=>({
+    commands:{add:async(_,ctx)=>{
+      await ctx.withFrames(async()=>{preparing.resolve();await prepared.promise;},{foregroundEdits:false});
+      return ctx.commitForeground(()=>order.push('commit add'));
+    }},
+    foregroundCommands:{move(){order.push('later edit');return true;}},
+    requestMutation:async(_,__,ctx,apply)=>{ctx.assertCurrent();return {value:apply({})};},
+    requestFrame:async(_,ctx,draw)=>draw(),frame:()=>({drawn:true}),
+  }));
+  t.after(()=>prepared.resolve());
+  await client.initialize({}).completion;
+  const add=client.request('add');add.completion.catch(()=>{});
+  await preparing.promise;
+  const move=client.request('move');move.completion.catch(()=>{});
+  add.cancel('Cancel detached preparation');
+  assert.equal((await client.request('frame').completion).output.drawn,true);
+  prepared.resolve();
+  await assert.rejects(add.completion,/Cancel detached preparation/);
+  await move.completion;assert.deepEqual(order,['later edit']);
+});
+test('cancellation after a local commit preserves applied identity through ordered settlement',async t=>{
+  const applied=deferred(),finish=deferred();
+  let x=0;
+  const {client}=await harness(t,async()=>({
+    commands:{add:async(_,ctx)=>{
+      await ctx.commitForeground(()=>{x=1;return {x};});
+      applied.resolve();await finish.promise;return {x};
+    }},
+    requestMutation:async(_,__,_ctx,apply)=>({mutationApplied:true,value:apply({})}),
+    control:()=>true,
+  }));
+  t.after(()=>finish.resolve());
+  await client.initialize({}).completion;
+  const add=client.request('add');add.completion.catch(()=>{});
+  await applied.promise;
+  add.cancel('Cancel after application');
+  // A control sent after cancellation witnesses its observation by the host.
+  await assert.rejects(add.control('observe-cancel').completion,/Cancel after application/);
+  finish.resolve();
+  await assert.rejects(add.completion,error=>error.mutationApplied===true&&/Cancel after application/.test(error.message));
+  assert.equal(x,1);
+});
+
+test('an unawaited local commit keeps later ordered work behind its actual settlement',async t=>{
+  const committing=deferred(),finish=deferred(),order=[];
+  const {client}=await harness(t,async()=>({
+    commands:{add:(_,ctx)=>{void ctx.commitForeground(()=>{order.push('commit');});return {queued:true};}},
+    requestMutation:async(_,__,ctx,apply)=>{committing.resolve();await finish.promise;return {value:apply({})};},
+    retire(){order.push('retire');return {retired:true};},
+  }));
+  t.after(()=>finish.resolve());
+  await client.initialize({}).completion;
+  const add=client.request('add');add.completion.catch(()=>{});
+  await committing.promise;
+  const retire=client.request('retire');retire.completion.catch(()=>{});
+  await tick();const beforeFinish=[...order];finish.resolve();
+  await add.completion;await retire.completion;
+  assert.deepEqual(beforeFinish,[]);assert.deepEqual(order,['commit','retire']);
+});
+
 test('pre-initialization commands fail promptly instead of leaving an unresolved request',async t=>{
   const {client,host,port}=await harness(t,async()=>({commands:{}}));
   const delivered=new Promise(resolve=>port.addEventListener('message',resolve,{once:true}));

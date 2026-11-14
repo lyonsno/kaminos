@@ -10,7 +10,7 @@ registerHooks({resolve(specifier,context,next){
  return local?{url:new URL(local,import.meta.url).href,shortCircuit:true}:next(specifier,context);
 }});
 let api={};try{api=await import('../scene-worker-scene-resources.mjs');}catch(error){if(error.code!=='ERR_MODULE_NOT_FOUND'||error.url!==new URL('../scene-worker-scene-resources.mjs',import.meta.url).href)throw error;}
-const context=()=>{const signal=new AbortController().signal;return {signal,assertCurrent(){signal.throwIfAborted();},reports:[],report(value){this.reports.push(value);}};};
+const context=()=>{const signal=new AbortController().signal;const ctx={signal,assertCurrent(){signal.throwIfAborted();},reports:[],report(value){this.reports.push(value);}};ctx.withFrames=async run=>run();ctx.commitForeground=async run=>({mutationApplied:true,value:run(ctx,{})});return ctx;};
 const source='demos/material-recipes/two-finishes.glb',bytes=readFileSync(new URL('../'+source,import.meta.url));
 const saved=(id='mesh')=>({version:8,objects:[{id,type:'glb',source,transform:{position:[1,2,3],rotation:[0,.4,0],scale:[2,1,1]},materials:{side:THREE.DoubleSide,transparent:true,opacity:.6}}],groups:[],activeObjectId:id,selectionIds:[id],
  environment:{name:'neutral',exposure:2,intensity:.7,showBackground:true,ground:{height:-2,color:'#123456'}},postprocessing:{sceneGI:{gain:3,radius:7}}});
@@ -219,10 +219,57 @@ test('actual worker editor selects, changes and undoes the live GLB without relo
  const moved=f.shell.foregroundCommands['scene.transform']({id:'mesh',transform:pose},f.ctx);
  assert.equal(f.shell.ordinary.workingScene.find('mesh').object,original);assert.deepEqual(original.position.toArray(),pose.position);assert.deepEqual(moved.ui.objects[0].transform,pose);assert.equal(moved.ui.history.undoCount,1);
  assert.throws(()=>f.shell.foregroundCommands['scene.transform']({id:'mesh',transform:{...pose,scale:[1,NaN,1]}},f.ctx),/finite/);assert.deepEqual(original.scale.toArray(),pose.scale);
- f.shell.foregroundCommands['scene.undo'](null,f.ctx);assert.deepEqual(original.position.toArray(),[1,2,3]);
- f.shell.foregroundCommands['scene.redo'](null,f.ctx);assert.deepEqual(original.position.toArray(),pose.position);
+ await f.shell.commands['scene.undo'](null,f.ctx);assert.deepEqual(original.position.toArray(),[1,2,3]);
+ await f.shell.commands['scene.redo'](null,f.ctx);assert.deepEqual(original.position.toArray(),pose.position);
  assert.throws(()=>f.shell.foregroundCommands['scene.select']({ids:['absent']},f.ctx),/absent/);assert.deepEqual(f.shell.ordinary.workingScene.selection.ids,['mesh']);
- await f.shell.commands['scene.applyDocument']({document:saved('replacement')},f.ctx);assert.equal(f.shell.foregroundCommands['scene.undo'](null,f.ctx).ui.history.undoCount,0,'replacement cannot replay old-root edits');
+ await f.shell.commands['scene.applyDocument']({document:saved('replacement')},f.ctx);assert.equal((await f.shell.commands['scene.undo'](null,f.ctx)).ui.history.undoCount,0,'replacement cannot replay old-root edits');
+ }finally{await f.shell.retire(f.ctx);delete globalThis.self;}
+});
+test('actual retained mesh Add, transform, remove and asynchronous replay share history and Save/reopen',async()=>{
+ globalThis.self=globalThis;const bodies=[],f=fixture({document:saved(),postSceneDocument:async body=>{bodies.push(JSON.parse(body));return {ok:true,status:200,json:async()=>({saved:'mesh-edited.kaminos.json'})};}});
+ f.ctx.withFrames=async(run,options)=>{assert.equal(options.foregroundEdits,false);return run();};
+ f.ctx.commitForeground=async run=>{const value=run(f.ctx,{device:f.device,queue:f.device.queue});assert.equal(typeof value?.then,'undefined');return {mutationApplied:true,value};};
+ try{
+  await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},context:f.ctx});
+  assert.equal(typeof f.shell.commands['scene.importAsset'],'function','ordinary worker must own retained asset admission and history');
+  const imported=await f.shell.commands['scene.importAsset']({source,fileName:'two-finishes.glb',label:'Added mesh',generation:{extra:{seed:17}},provenance:{extra:'retained'},transform:{position:[8,0,0],rotation:[0,0,0],scale:[1,1,1]}},f.ctx);
+  const id=imported.objectId;assert.ok(id);assert.equal(imported.mutationApplied,true);assert.deepEqual(imported.ui.selection.ids,[id]);assert.equal(imported.ui.history.undoCount,1);
+  assert.equal(f.shell.ordinary.workingScene.find(id).object.parent,f.scene);
+  f.shell.ordinary.workingScene.find(id).object.traverse(node=>{if(node.isMesh)assert.equal(typeof node.geometry.boundsTree?.raycast,'function','new mesh must finish navigation preparation before admission');});
+  f.shell.foregroundCommands['scene.transformComponent']({id,field:'position.x',value:9},f.ctx);
+  await f.shell.commands['scene.remove']({id},f.ctx);assert.equal(Boolean(f.shell.ordinary.workingScene.find(id)),false);
+  const undone=await f.shell.commands['scene.undo'](null,f.ctx);assert.equal(undone.ui.history.undoCount,2);assert.equal(f.shell.ordinary.workingScene.find(id).object.position.x,9);
+  await f.shell.commands['scene.undo'](null,f.ctx);assert.equal(f.shell.ordinary.workingScene.find(id).object.position.x,8);
+  await f.shell.commands['scene.redo'](null,f.ctx);assert.equal(f.shell.ordinary.workingScene.find(id).object.position.x,9);
+  const camera={position:[3,4,5],target:[0,1,0],up:[0,1,0],near:.02,far:80,fov:43};
+  const saved=await f.shell.commands['scene.save']({camera,saveAs:true,name:'mesh-edited'},f.ctx);
+  const record=bodies[0].objects.find(row=>row.id===id);assert.equal(record.source,source);assert.deepEqual(record.generation,{extra:{seed:17}});assert.deepEqual(record.assetOrigin.provenance,{extra:'retained'});
+  await f.shell.commands['scene.applyDocument']({document:saved.document,sceneFile:saved.filename},f.ctx);
+  assert.equal(f.shell.ordinary.workingScene.find(id).object.position.x,9);assert.equal((await f.shell.commands['scene.undo'](null,f.ctx)).ui.history.undoCount,0);
+ }finally{await f.shell.retire(f.ctx);delete globalThis.self;}
+});
+test('known applied Undo with failed drawing reconciles real membership and history without a second removal',async()=>{
+ globalThis.self=globalThis;const f=fixture({document:saved()});let fail=false;
+ f.ctx.withFrames=async run=>run();
+ f.ctx.commitForeground=async run=>{const value=run(f.ctx,{});if(fail)throw Object.assign(Error('draw failed'),{mutationApplied:true});return {mutationApplied:true,value};};
+ try{
+  await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},context:f.ctx});
+  const added=await f.shell.commands['scene.importAsset']({source,fileName:'added.glb'},f.ctx);fail=true;
+  await assert.rejects(f.shell.commands['scene.undo'](null,f.ctx),error=>error.message==='draw failed'&&error.mutationApplied===true);
+  assert.equal(Boolean(f.shell.ordinary.workingScene.find(added.objectId)),false);
+  let state=await f.shell.commands['scene.editorState'](null,f.ctx);assert.equal(state.ui.history.undoCount,0);assert.equal(state.ui.history.redoCount,1);
+  fail=false;await f.shell.commands['scene.redo'](null,f.ctx);assert.ok(f.shell.ordinary.workingScene.find(added.objectId));
+  state=await f.shell.commands['scene.editorState'](null,f.ctx);assert.equal(state.ui.history.undoCount,1);assert.equal(state.ui.history.redoCount,0);
+ }finally{await f.shell.retire(f.ctx);delete globalThis.self;}
+});
+test('cancellation after detached preparation preserves the current root, selection and history',async()=>{
+ globalThis.self=globalThis;const f=fixture({document:saved()});let canceled=false,commits=0;
+ const ctx={...f.ctx,assertCurrent(){if(canceled)throw Error('edit canceled');},withFrames:async run=>{const value=await run();canceled=true;return value;},commitForeground:async run=>{commits++;return {mutationApplied:true,value:run(ctx,{})};}};
+ try{
+  await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},context:f.ctx});const old=f.shell.ordinary.workingScene.find('mesh').object;
+  await assert.rejects(f.shell.commands['scene.importAsset']({source,fileName:'cancelled.glb'},ctx),/edit canceled/);
+  assert.equal(commits,0);assert.equal(f.shell.ordinary.workingScene.find('mesh').object,old);assert.deepEqual(f.shell.ordinary.workingScene.selection.ids,['mesh']);
+  const current=await f.shell.commands['scene.editorState'](null,f.ctx);assert.equal(current.ui.objects.length,1);assert.equal(current.ui.history.undoCount,0);
  }finally{await f.shell.retire(f.ctx);delete globalThis.self;}
 });
 test('worker capture uses edited roots, current selection, actual appearance and the caller camera',async()=>{
@@ -254,7 +301,7 @@ test('worker capture uses edited roots, current selection, actual appearance and
 test('selection and empty history never release the save hold left by failed document application',async()=>{
  globalThis.self=globalThis;let fail=false,posts=0;const f=fixture({document:saved(),domainOverrides:{document:{assertSupported(){},prepareDocument(){},beforeReplace(){},afterReplace(){if(fail)throw Error('afterReplace failed');}}},postSceneDocument:async()=>{posts++;return {ok:true,json:async()=>({saved:'partial.kaminos.json'})};}});
  try{await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},context:f.ctx});fail=true;await assert.rejects(f.shell.commands['scene.applyDocument']({document:saved()},f.ctx),/afterReplace failed/);assert.equal(f.shell.ordinary.document.session.state().blocked,true);
- f.shell.foregroundCommands['scene.select']({ids:['mesh']},f.ctx);f.shell.foregroundCommands['scene.undo'](null,f.ctx);f.shell.foregroundCommands['scene.redo'](null,f.ctx);
+ f.shell.foregroundCommands['scene.select']({ids:['mesh']},f.ctx);await f.shell.commands['scene.undo'](null,f.ctx);await f.shell.commands['scene.redo'](null,f.ctx);
  assert.equal(f.shell.ordinary.document.session.state().blocked,true,'projection/history cannot certify a partial scene');
  await assert.rejects(f.shell.commands['scene.save']({camera:{position:[3,4,5],target:[0,0,0],up:[0,1,0],near:.01,far:100,fov:40}},f.ctx),/save blocked/);assert.equal(posts,0);
  fail=false;await f.shell.commands['scene.applyDocument']({document:saved()},f.ctx);assert.equal(f.shell.ordinary.document.session.state().blocked,false);

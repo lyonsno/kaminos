@@ -51,7 +51,7 @@ export function createSceneWorkerSceneResources(context){
  const workingScene=createWorkingScene(),ao=createSceneAOState(),environment=createSceneEnvironmentState({presets:SCENE_HDR_PRESETS});
  let appearance=null,authored=null,document=null,domains=null,frames=null,display=null,sceneBloom=null,selection=null,materials=null,beautyLods=null,giProxies=null;
  let started=false,retiring=false,attached=false,frameCount=0,draw=null,output=null,shading=null,domainRetired=false,rootsRetired=false;
- let lightingPreparation=null,volume=null,lightingHeld=false,documentHolds=0,authoring=null,documentTemplate=null;
+ let lightingPreparation=null,volume=null,lightingHeld=false,documentHolds=0,authoring=null,documentTemplate=null,prepareMesh=null;
  let gi=resolveSceneGIControlState(),reflections=resolveReflectionSettings(),bloomSettings=checkedSceneBloom({enabled:paramsFor(payload).get('scene_bloom')==='1',composeFlame:paramsFor(payload).get('scene_bloom')==='1'}),ground={},editorDisplay=checkedViewportDisplay(),startup=null;
  let arrival={sceneKind:'static-asset',lookId:DEFAULT_STUDIO_LOOK_ID,studioLightsEnabled:true,materialTuningEnabled:false,bounds:null,materialProfile:inspectArrivalMaterialProfile([]),plan:null};
  const graphs=new Map(),wireMaterials=[],pendingRoots=new Set(),stops=[];
@@ -157,8 +157,11 @@ export function createSceneWorkerSceneResources(context){
      onRungLoaded:(_owner,root)=>{materials.sync();void prepareNavigationGeometry(root);},onRepresentationChanged:()=>materials.sync(),onRepresentationReleased:(_root,representation)=>materials.releaseObject(representation),canDisplayRung:(...args)=>materials.canDisplay(...args)});
     materials=createSceneMaterials({entries:()=>[...workingScene.objects,...workingScene.suspendedObjects()],retainedEntries:()=>workingScene.retainedObjects(),definitions:sceneMaterialPrograms,representations:entry=>beautyLods.materialRoots(entry.object)});
     authored=createAuthoredSceneRuntime({scene,workingScene,readers:{transform:sceneObjectTransformState,materials:getMaterialStateForObject,...domains.recordReaders},
-     roots:{...domains.roots,prepare(entry){if(entry.giProxy){const task=entry.giProxy.enabled?giProxies.select(entry.object,entry.giProxy.selection):giProxies.disable(entry.object,{retainLevels:true});Promise.resolve(task).catch(()=>{});}domains.roots?.prepare?.(entry);},restore(entry,record){restoreAuthoredSceneRecord(entry,record,{transform:applySceneObjectTransformState,materials:applyMaterialStateToObject,...domains.restoreOperations});domains.roots?.restore?.(entry,record);},dispose(root){domains.roots?.dispose?.(root);disposeRoot(root);}},
-     membership:domains.membership,replacement:{...domains.replacement,context:{...domains.replacement?.context,retire:async()=>{await sharedGpu.device.queue.onSubmittedWorkDone();await domains.replacement?.context?.retire?.();}}},
+     roots:{...domains.roots,prepare(entry){if(entry.giProxy){const task=entry.giProxy.enabled?giProxies.select(entry.object,entry.giProxy.selection):giProxies.disable(entry.object,{retainLevels:true});Promise.resolve(task).catch(()=>{});}domains.roots?.prepare?.(entry);},restore(entry,record){restoreAuthoredSceneRecord(entry,record,{transform:applySceneObjectTransformState,materials:applyMaterialStateToObject,...domains.restoreOperations});domains.roots?.restore?.(entry,record);materials.sync();},dispose(root){domains.roots?.dispose?.(root);disposeRoot(root);}},
+     membership:{...domains.membership,
+      prepareRecord:record=>{if(record.type!=='glb')throw Error('Detached reconstruction is not mounted for '+record.type);return prepareMesh(record);},
+      prepareMutation:run=>authoring.prepare(run),commitMutation:run=>authoring.commit(run)},
+     replacement:{...domains.replacement,context:{...domains.replacement?.context,retire:async()=>{await sharedGpu.device.queue.onSubmittedWorkDone();await domains.replacement?.context?.retire?.();}}},
      assertRecordSupported(record,loaders){if(record.type==='glb')return;return domains.assertRecordSupported(record,loaders);},
      createLoaders({registerSceneObject}){
       const show=createSceneGlbLoader({GLTFLoader,workingScene,readScene:()=>scene,readAssetBytes:services.readAssetBytes??readAssetBytes,
@@ -167,6 +170,13 @@ export function createSceneWorkerSceneResources(context){
        prepareArrivedMeshMaterials,applyAssetArrival:(root,mode)=>{pendingRoots.add(root);if(mode)throw Error('Fresh asset placement needs its ordinary geometry arrival service');return null;},
        registerSceneObject:(root,...args)=>{pendingRoots.delete(root);return registerSceneObject(root,...args);},
        ...services.glbOptions});
+      prepareMesh=async record=>{
+       const ctx=authoring.constructionContext();
+       const prepared=await show.prepare(record.source,{clear:false,normalize:false,activate:false,returnAsset:true,metadata:record,signal:ctx.signal,isCurrent:()=>{try{ctx.assertCurrent();return true;}catch{return false;}}});
+       try{await prepareNavigationGeometry(prepared.root);ctx.assertCurrent();
+        return {commit:()=>prepared.commit().root,dispose:()=>prepared.dispose()};
+       }catch(error){prepared.dispose();throw error;}
+      };
       return {...domains.loaders,glb:(record,options)=>show(record.source,{...options,clear:false,normalize:false,metadata:record})};
      }});
     document=createSceneDocumentApplication({runtime:authored,assertSupported:assertOrdinarySupport,
@@ -174,7 +184,7 @@ export function createSceneWorkerSceneResources(context){
      async beforeReplace(data,plan,meta){authoring?.clear();applySettings(data,meta.context);return domains.document.beforeReplace(data,plan,meta);},
      async afterReplace(data,plan,meta){materials.write(plan.materialLibrary??{recipes:[],bindings:[]});await giProxies.whenIdle();await Promise.all(workingScene.objects.map(row=>prepareNavigationGeometry(row.object)));current(meta.context);await domains.document.afterReplace(data,plan,meta);appearance.applyEnvironment();documentTemplate=structuredClone(data);},
      documentServices:{post:services.postSceneDocument??(body=>fetch('/api/save-scene',{method:'POST',headers:{'Content-Type':'application/json'},body})),restoreUrl:(_data,filename,address)=>savedSceneLocation(address.href,filename),readAddress:()=>{const url=new URL(payload.location?.href??payload.location);return {href:url.href,origin:url.origin,search:url.search,hash:url.hash};},...domains.documentServices}});
-    authoring=createSceneWorkerAuthoring({THREE,ordinary,fields:()=>domains.authoring?.fields?.()??[],checkTransform:(row,pose)=>{if(!domains.authoring?.checkTransform)throw Error('Transform owner is not mounted: '+row.type);domains.authoring.checkTransform(row,pose);}});
+    authoring=createSceneWorkerAuthoring({THREE,ordinary,editing:true,fields:()=>domains.authoring?.fields?.()??[],checkTransform:(row,pose)=>{if(!domains.authoring?.checkTransform)throw Error('Transform owner is not mounted: '+row.type);domains.authoring.checkTransform(row,pose);}});
     await domains.initialize(ctx);current(ctx);
     if(startup.startupDefaults.defaults){assertOrdinarySupport(startup.startupDefaults.defaults,{});applySettings(startup.startupDefaults.defaults,ctx);await domains.applyPreferences?.(startup,ctx);}
     replanAppearance();await appearance.initialize(ctx);current(ctx);
@@ -204,7 +214,7 @@ export function createSceneWorkerSceneResources(context){
       withBeautyFrame:(options,run)=>withViewportVisibility(workingScene.objects,visible,()=>beautyLods.withFrame(camera,options,()=>shading.renderWith(workingScene.objects.map(e=>e.object),editorDisplay.shading,run)))},
      onCameraStatus:value=>report(frameContext,{cameraStatus:value}),onWaterFrame:value=>domains.onWaterFrame?.(value),onWaterError:(error,fallback)=>required(domains.onWaterError,'water failure handling')(error,fallback),
      afterDraw:(receipt,now)=>{frameCount++;domains.afterDraw?.(receipt,now);}});
-    commandMap=mergeCommands({...document.commands,
+    commandMap=mergeCommands(authoring.asyncCommands,{...document.commands,
      async 'scene.loadFile'({file,sceneFile=null}={},ctx){current(ctx);if(!(file instanceof Blob))throw Error('Scene file must be a Blob');const data=JSON.parse(await file.text());current(ctx);return commandMap['scene.applyDocument']({document:data,sceneFile,emptySettings:true},ctx);},
      async 'scene.openSaved'({name,store=null}={},ctx){current(ctx);savedSceneLocation(payload.location.href,name);
       const request=services.fetchSceneDocument??fetch;

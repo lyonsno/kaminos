@@ -8,8 +8,16 @@ export function mountSceneWorkerEditor({document,window,page,readCamera,readUi,r
  const list=document.getElementById('scene-object-list'),empty=document.getElementById('scene-object-empty');
  const inspector=document.getElementById('transform-inspector'),fields=document.getElementById('transform-inspector-fields'),none=document.getElementById('transform-inspector-empty');
  const inputs=[...document.querySelectorAll('[data-transform-field]')],collapsed=new Set(),stops=[];
- let closed=false;const historyListeners=new Set();
- const call=async(name,input)=>{const reply=await page.request(name,input).completion;return reply.output?.value??reply.output;};
+ let closed=false,pending=0;const historyListeners=new Set();
+ const call=async(name,input)=>{
+  if(closed)throw Error('Scene editor is closed');
+  pending++;render(readUi());
+  try{const reply=await page.request(name,input).completion;return reply.output?.value??reply.output;}
+  catch(error){
+   if(error.mutationApplied===true)try{await page.request('scene.editorState').completion;}catch(cause){error.reconciliationError=cause;}
+   throw error;
+  }finally{pending--;render(readUi());}
+ };
  const run=action=>Promise.resolve().then(action).catch(error=>{report(error.message);render(readUi());});
  function listen(target,type,fn,options){target?.addEventListener(type,fn,options);stops.push(()=>target?.removeEventListener(type,fn,options));}
  function render(ui){
@@ -31,8 +39,9 @@ export function mountSceneWorkerEditor({document,window,page,readCamera,readUi,r
   if(inspector){inspector.hidden=false;inspector.dataset.selectedObjectId=selected?.id??'';inspector.dataset.selectionCount=String(selection.ids.length);}
   if(fields)fields.hidden=!selected;if(none){none.hidden=!!selected;none.textContent=selection.ids.length?'Choose one source or mesh to edit its transform':'No object selected';}
   if(selected){document.getElementById('transform-inspector-name').textContent=selected.label??selected.id;document.getElementById('transform-inspector-id').textContent=selected.id;}
+  for(const [id,title]of [['authoring-duplicate','Duplicate selected mesh'],['authoring-delete','Delete selected mesh']]){const button=document.getElementById(id);if(button){button.disabled=pending>0||selected?.type!=='glb';button.title=title;}}
   for(const listener of historyListeners)listener();
-  for(const input of inputs){input.disabled=!selected;const [group,axis]=input.dataset.transformField.split('.');const value=selected?.transform?.[group]?.[{x:0,y:1,z:2}[axis]];if(document.activeElement!==input)input.value=value===undefined?'':String(group==='rotation'?value*180/Math.PI:value);}
+  for(const input of inputs){input.disabled=!selected||pending>0;const [group,axis]=input.dataset.transformField.split('.');const value=selected?.transform?.[group]?.[{x:0,y:1,z:2}[axis]];if(document.activeElement!==input)input.value=value===undefined?'':String(group==='rotation'?value*180/Math.PI:value);}
  }
  for(const input of inputs)listen(input,'change',()=>{const id=readUi()?.selection?.activeId,value=input.value.trim()?Number(input.value):NaN;if(!id||!Number.isFinite(value)){report('Enter a finite transform value');return;}void run(()=>call('scene.transformComponent',{id,field:input.dataset.transformField,value:input.dataset.transformField.startsWith('rotation.')?value*Math.PI/180:value}));});
  async function save({result=false,saveAs=false,promptName=false,name=null}={}){
@@ -52,12 +61,18 @@ export function mountSceneWorkerEditor({document,window,page,readCamera,readUi,r
   if(sceneFile)window.history.replaceState(window.history.state,'',savedSceneLocation(window.location.href,sceneFile));
   report('Loaded: '+(sceneFile??file.name??'scene'));return {ok:true,...result};
  }
- const previous={saveScene:window.saveScene,saveSceneAs:window.saveSceneAs};
+ const previous={saveScene:window.saveScene,saveSceneAs:window.saveSceneAs,selection:window.kaminosSelection};
  const saveScene=options=>save(options),saveSceneAs=options=>save({...options,saveAs:true});window.saveScene=saveScene;window.saveSceneAs=saveSceneAs;
+ const selection=Object.freeze({duplicate:()=>run(()=>call('scene.duplicate',{})),remove:()=>run(()=>call('scene.remove',{}))});window.kaminosSelection=selection;
  listen(window,'keydown',event=>{
   if(event.target?.closest?.('input,textarea,select,[contenteditable="true"]'))return;
   if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='z'){event.preventDefault();event.stopImmediatePropagation();void run(()=>call(event.shiftKey?'scene.redo':'scene.undo'));}
+  else if(!event.metaKey&&!event.ctrlKey&&['Delete','Backspace'].includes(event.key)){event.preventDefault();event.stopImmediatePropagation();void selection.remove();}
+  else if(!event.metaKey&&!event.ctrlKey&&event.shiftKey&&event.key.toLowerCase()==='d'){event.preventDefault();event.stopImmediatePropagation();void selection.duplicate();}
  },true);
  render(null);
- return Object.freeze({render,save,load,async openSaved(choice){const result=await call('scene.openSaved',choice);window.history.replaceState(window.history.state,'',result.url);report('Loaded: '+result.filename);return {ok:true,...result};},select:ids=>call('scene.select',{ids,activeId:ids.at(-1)??null}),edits:Object.freeze({state:()=>readUi()?.history??{active:null,replaying:false,undoCount:0,redoCount:0},subscribe:listener=>{historyListeners.add(listener);return()=>historyListeners.delete(listener);},undo:()=>run(()=>call('scene.undo')),redo:()=>run(()=>call('scene.redo'))}),dispose(){closed=true;for(const stop of stops)stop();if(window.saveScene===saveScene)window.saveScene=previous.saveScene;if(window.saveSceneAs===saveSceneAs)window.saveSceneAs=previous.saveSceneAs;}});
+ return Object.freeze({render,save,load,importAsset:input=>call('scene.importAsset',input),remove:input=>call('scene.remove',input??{}),duplicate:input=>call('scene.duplicate',input??{}),
+  async openSaved(choice){const result=await call('scene.openSaved',choice);window.history.replaceState(window.history.state,'',result.url);report('Loaded: '+result.filename);return {ok:true,...result};},select:ids=>call('scene.select',{ids,activeId:ids.at(-1)??null}),
+  edits:Object.freeze({state:()=>({...readUi()?.history??{active:null,replaying:false,undoCount:0,redoCount:0},pending}),subscribe:listener=>{historyListeners.add(listener);return()=>historyListeners.delete(listener);},undo:()=>run(()=>call('scene.undo')),redo:()=>run(()=>call('scene.redo'))}),
+  dispose(){closed=true;for(const stop of stops)stop();if(window.saveScene===saveScene)window.saveScene=previous.saveScene;if(window.saveSceneAs===saveSceneAs)window.saveSceneAs=previous.saveSceneAs;if(window.kaminosSelection===selection)window.kaminosSelection=previous.selection;}});
 }

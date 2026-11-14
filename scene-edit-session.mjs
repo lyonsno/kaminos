@@ -179,7 +179,13 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
     replaying = true;
     notify();
     return Promise.resolve(result)
-      .then(finish)
+      .then(finish, async error => {
+        // A foreground writer can finish the authored change and then fail
+        // while drawing/acknowledging it. Keep chronology with the applied
+        // state; the caller still receives that presentation failure.
+        if (error.mutationApplied === true) await finish();
+        throw error;
+      })
       .finally(() => {
         replaying = false;
         notify();

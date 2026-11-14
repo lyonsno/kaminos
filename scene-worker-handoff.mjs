@@ -149,27 +149,40 @@ export function installSceneWorkerHost({port=globalThis,createRuntime}={}){
       if(entry.controller.signal.aborted)throw entry.controller.signal.reason;
       if(disconnected)throw Error('Scene worker transport disconnected');
     };
-    return Object.freeze({requestId:entry.data.requestId,signal:entry.controller.signal,lifecycle,assertCurrent,
+    const ctx=Object.freeze({requestId:entry.data.requestId,signal:entry.controller.signal,lifecycle,assertCurrent,
       epoch:()=>({...epoch}),advanceEpoch:part=>{assertCurrent();return advance(part,entry);},
       activate(){assertCurrent();phase='active';},
-      withFrames(run){
+      withFrames(run,{foregroundEdits=true}={}){
         assertCurrent();
         if(!initialized)throw Error('Scene worker not initialized');
-        if(typeof run!=='function'||entry.framesAllowed)throw Error('Invalid cooperative frame scope');
+        if(typeof run!=='function'||entry.frameScopeOpen||entry.commitPending||typeof foregroundEdits!=='boolean')throw Error('Invalid cooperative frame scope');
         if(typeof runtime?.requestFrame!=='function')throw Error('Cooperative frame admission adapter required');
-        entry.framesAllowed=true;admitFrames();
+        entry.frameScopeOpen=true;
+        entry.framesAllowed=true;entry.foregroundEditsAllowed=foregroundEdits;admitFrames();
         const scope=Promise.resolve().then(run).finally(async()=>{
           entry.framesAllowed=false;
-          await Promise.allSettled([...foregroundTasks].map(frame=>frame.settlement));
-          await Promise.allSettled([...controls]);
+          try{
+            await Promise.allSettled([...foregroundTasks].map(frame=>frame.settlement));
+            await Promise.allSettled([...controls]);
+          }finally{entry.frameScopeOpen=false;}
         });
         (entry.frameScopes??=[]).push(scope);
         scope.catch(()=>{}); // The command boundary observes failures, even if its adapter forgets to await.
         return scope;
       },
+      commitForeground(apply){
+        assertCurrent();
+        if(entry!==active||!entry.acceptsCommits||entry.frameScopeOpen||entry.commitPending)throw Error('Foreground commit requires an active ordered command with no open frame scope or commit');
+        entry.commitPending=true;
+        const task=mutate(entry.data.operation,entry.data.payload,ctx,apply).finally(()=>{entry.commitPending=false;});
+        (entry.commits??=[]).push(task);
+        task.catch(()=>{}); // The ordered command owns settlement even if the caller omits await.
+        return task;
+      },
       transfer(values){assertCurrent();if(!Array.isArray(values))throw Error('Result transfer list must be an array');entry.transfer=values;},
       report(value,{transfer=[]}={}){assertCurrent();send({kind:'progress',requestId:entry.data.requestId,sequence:entry.progress+1,value},transfer);entry.progress++;},
     });
+    return ctx;
   }
   function requireSettled(){
     if(mutationHeld)throw namedError('GpuRouteHeldError','Asynchronous mutation escaped its foreground transaction',{gpuRouteHeld:true});
@@ -177,6 +190,31 @@ export function installSceneWorkerHost({port=globalThis,createRuntime}={}){
     const runs=runtime.host.unsettledRuns();
     if(!Array.isArray(runs))throw Error('Invalid unsettled inference ledger');
     if(runs.length)throw namedError('GpuRouteHeldError','Scene worker has unsettled inference runs',{gpuRouteHeld:true});
+  }
+  async function mutate(operation,payload,ctx,handle){
+    if(phase!=='active')throw Error('Scene worker mutation is not active after invalidation');
+    if(typeof handle!=='function'||handle.constructor?.name==='AsyncFunction')throw Error('Foreground edit handler must be synchronous');
+    if(typeof runtime.requestMutation!=='function')throw Error('Foreground mutation admission adapter required');
+    const {requestId,signal,assertCurrent,report,transfer,epoch:readEpoch}=ctx;
+    const editContext=Object.freeze({requestId,signal,assertCurrent,report,transfer,epoch:readEpoch});
+    let accepting=true,called=false;
+    const apply=service=>{
+      if(!accepting||called)throw Error('Foreground mutation callback is no longer available');
+      ctx.assertCurrent();called=true;
+      const result=handle(editContext,service);
+      if(result&&typeof result.then==='function'){
+        Promise.resolve(result).catch(()=>{});
+        mutationHeld=true;
+        const cause=namedError('GpuRouteHeldError','Foreground edit handler must be synchronous; asynchronous mutation settlement unknown',{gpuRouteHeld:true,mutationApplied:null});
+        advance('device');phase='mutation-held';throw cause;
+      }
+      ctx.assertCurrent();return result;
+    };
+    try{
+      const output=await runtime.requestMutation(operation,payload,editContext,apply);
+      if(!called)throw Error('Foreground mutation adapter returned without applying the edit');
+      return output;
+    }finally{accepting=false;}
   }
   async function execute(entry){
     const {operation,payload}=entry.data;
@@ -224,36 +262,28 @@ export function installSceneWorkerHost({port=globalThis,createRuntime}={}){
         // draw/depth/source transaction remains synchronous inside that window.
         output=typeof runtime.requestFrame==='function'?await runtime.requestFrame(payload,ctx,draw):draw();
       }else if(Object.hasOwn(runtime.foregroundCommands??{},operation)){
-        if(phase!=='active')throw Error('Scene worker mutation is not active after invalidation');
         const handler=runtime.foregroundCommands[operation];
         if(typeof handler!=='function'||handler.constructor?.name==='AsyncFunction')throw Error('Foreground edit handler must be synchronous');
         if(Object.hasOwn(runtime.commands??{},operation))throw Error('Ambiguous scene worker command registration');
-        if(typeof runtime.requestMutation!=='function')throw Error('Foreground mutation admission adapter required');
-        const {requestId,signal,assertCurrent,report,transfer,epoch:readEpoch}=ctx;
-        const editContext=Object.freeze({requestId,signal,assertCurrent,report,transfer,epoch:readEpoch});
-        let accepting=true,called=false;
-        const apply=service=>{
-          if(!accepting||called)throw Error('Foreground mutation callback is no longer available');
-          ctx.assertCurrent();called=true;
-          const result=handler(payload,editContext,service);
-          if(result&&typeof result.then==='function'){
-            Promise.resolve(result).catch(()=>{});
-            mutationHeld=true;
-            const cause=namedError('GpuRouteHeldError','Foreground edit handler must be synchronous; asynchronous mutation settlement unknown',{gpuRouteHeld:true,mutationApplied:null});
-            advance('device');phase='mutation-held';throw cause;
-          }
-          ctx.assertCurrent();return result;
-        };
-        try{
-          output=await runtime.requestMutation(operation,payload,editContext,apply);
-          if(!called)throw Error('Foreground mutation adapter returned without applying the edit');
-        }finally{accepting=false;}
+        output=await mutate(operation,payload,ctx,(editContext,service)=>handler(payload,editContext,service));
       }else{
         if(!Object.hasOwn(runtime.commands??{},operation)||typeof runtime.commands[operation]!=='function')throw Error(`Unknown scene worker operation: ${operation}`);
+        entry.acceptsCommits=true;
         try{output=await runtime.commands[operation](payload,ctx);}
         finally{
-          const scopes=await Promise.allSettled(entry.frameScopes??[]);
-          const failed=scopes.find(scope=>scope.status==='rejected');
+          entry.acceptsCommits=false;
+          const [scopes,commits]=await Promise.all([
+            Promise.allSettled(entry.frameScopes??[]),Promise.allSettled(entry.commits??[]),
+          ]);
+          // Cancellation or projection can fail after a local commit succeeded.
+          // Preserve application custody across the outer ordered command.
+          for(const result of commits){
+            const applied=(result.status==='fulfilled'?result.value:result.reason)?.mutationApplied;
+            if(applied===null)entry.mutationApplied=null;
+            else if(applied===true&&entry.mutationApplied!==null)entry.mutationApplied=true;
+            else if(applied===false&&entry.mutationApplied===undefined)entry.mutationApplied=false;
+          }
+          const failed=[...scopes,...commits].find(result=>result.status==='rejected');
           if(failed)throw failed.reason;
         }
       }
@@ -265,6 +295,9 @@ export function installSceneWorkerHost({port=globalThis,createRuntime}={}){
     try{await execute(entry);}
     catch(cause){
       lastError=errorRecord(cause);
+      if(entry.mutationApplied===null||lastError.mutationApplied===null)lastError.mutationApplied=null;
+      else if(entry.mutationApplied===true||lastError.mutationApplied===true)lastError.mutationApplied=true;
+      else if(entry.mutationApplied===false)lastError.mutationApplied=false;
       if(entry.data.operation==='retire'||entry.data.operation==='initialize'&&runtime)lastError.gpuRouteHeld=true;
       if(phase==='starting')phase='failed';
       send({kind:'result',requestId:entry.data.requestId,ok:false,error:lastError});
@@ -300,7 +333,7 @@ export function installSceneWorkerHost({port=globalThis,createRuntime}={}){
       const entry=queue[index],operation=entry.data.operation;
       const frame=operation==='frame';
       const edit=!['initialize','retire'].includes(operation)&&Object.hasOwn(runtime?.foregroundCommands??{},operation);
-      if(!frame&&(!edit||authoredBlocked)){authoredBlocked=true;index++;continue;}
+      if(!frame&&(!active.foregroundEditsAllowed||!edit||authoredBlocked)){authoredBlocked=true;index++;continue;}
       queue.splice(index,1);foregroundTasks.add(entry);
       entry.settlement=frameTail.then(()=>settle(entry)).finally(()=>foregroundTasks.delete(entry));
       frameTail=entry.settlement.catch(cause=>{lastError=errorRecord(cause);phase='transport-failed';});

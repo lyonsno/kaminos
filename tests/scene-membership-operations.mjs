@@ -5,7 +5,7 @@ import {createWorkingScene} from '../working-scene.mjs';
 import {createSceneEdits} from '../scene-edit-session.mjs';
 import {createSceneMembershipOperations, membershipEditTargetId} from '../scene-membership-operations.mjs';
 
-function fixture({selectionScope = () => null, admit = () => {}, domains = {fixture:{retainRoot:true}}, reloadable = record => record.source !== null} = {}) {
+function fixture({selectionScope = () => null, admit = () => {}, domains = {fixture:{retainRoot:true}}, reloadable = record => record.source !== null, services={}} = {}) {
   const scene = createWorkingScene(), calls = [], messages = [];
   const edits = createSceneEdits({read:() => null, write(){}, admit});
   const add = (id, type = 'fixture', source = id) => {
@@ -25,6 +25,7 @@ function fixture({selectionScope = () => null, admit = () => {}, domains = {fixt
     captureContext:() => ({activeCameraId:'camera-before'}),
     status:message => messages.push(message),
     changed:({operation}) => calls.push(operation),
+    ...services,
   });
   operations.attachHistory(edits);
   return {scene, edits, operations, add, calls, messages};
@@ -44,6 +45,27 @@ test('membership history preserves root, group order, active group and insertion
   assert.equal(f.scene.activeGroupId,'pair');
   f.edits.clear();
   assert.equal(first.object.disposed,false,'dropping history cannot destroy a mounted root');
+});
+
+test('asynchronous membership replay prepares detached and commits root, groups and selection inside admission',async()=>{
+ let finish,prepared=0,admissions=0,inside=false;
+ const pending=new Promise(resolve=>{finish=resolve;});
+ const f=fixture({domains:{},services:{
+  async prepareRecord(record){prepared++;await pending;return {commit(){assert.equal(inside,true);return f.add(record.id,record.type,record.source).object;},dispose(){}};},
+  async prepareMutation(run){const result=await run();assert.equal(Boolean(f.scene.find('one')),false);return result;},
+  commitMutation(run){admissions++;inside=true;try{return run();}finally{inside=false;}},
+  select(ids,active){assert.equal(inside,true);f.scene.select(ids,active);},
+ }});
+ f.add('one');f.add('other');f.scene.select(['one']);
+ f.scene.setGroups([{id:'both',objectIds:['one','other']}]);
+ inside=true;f.operations.remove('one');inside=false;
+ const before=f.edits.state(),task=f.edits.undo();Promise.resolve(task).catch(()=>{});
+ assert.equal(prepared,1);assert.equal(Boolean(f.scene.find('one')),false);assert.equal(f.edits.state().replaying,true);
+ assert.equal(f.edits.state().undoCount,before.undoCount);finish();await task;
+ assert.equal(admissions,1);assert.deepEqual(f.scene.groups[0].objectIds,['one','other']);
+ assert.equal(f.scene.activeObjectId,'one');assert.equal(f.edits.state().replaying,false);
+ assert.equal(f.calls.includes('load'),false,'replay uses detached constructor instead of old publishing loader');
+ await f.edits.redo();assert.equal(admissions,2,'the inverse also uses admitted membership mutation');
 });
 
 test('a rejected edit leaves membership, groups, selection and resources intact', () => {

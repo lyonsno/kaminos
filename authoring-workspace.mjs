@@ -226,8 +226,8 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   };
   const updateHistory = () => {
     const state = edits.state();
-    byId('authoring-undo').disabled = !!state.active || state.replaying || !state.undoCount;
-    byId('authoring-redo').disabled = !!state.active || state.replaying || !state.redoCount;
+    byId('authoring-undo').disabled = !!state.active || state.replaying || state.pending>0 || !state.undoCount;
+    byId('authoring-redo').disabled = !!state.active || state.replaying || state.pending>0 || !state.redoCount;
   };
   edits.subscribe(updateHistory); updateHistory();
   // Selection already has a canonical inspector projection. Observe only its

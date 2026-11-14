@@ -107,6 +107,27 @@ test('an admission adapter cannot claim application without calling the transact
   assert.throws(()=>late({}),/no longer available/);assert.equal(f.object.position.x,0);
  }finally{await f.close();}
 });
+test('an ordered command commits through Kit after the model and keeps applied identity when its draw fails',async t=>{
+ const prepared=deferred(),finishPrep=deferred();
+ const f=await fixture(t,{normal:{add:async(_,ctx)=>{
+  await ctx.withFrames(async()=>{prepared.resolve();await finishPrep.promise;},{foregroundEdits:false});
+  return ctx.commitForeground((editCtx,service)=>{
+   editCtx.assertCurrent();assert.equal(typeof service.queue.submit,'function');
+   f.object.position.x=3;return {x:3};
+  });
+ }},draw:object=>{if(object.position.x===3)throw Error('render failed after ordered commit');}});
+ const add=f.client.request('add');add.completion.catch(()=>{});
+ const frame=f.client.request('frame');frame.completion.catch(()=>{});
+ try{
+  await turns();await f.boundary();
+  assert.equal((await frame.completion).output.result.x,0);
+  assert.equal(f.host.read().pending.includes(add.requestId),true);
+  await f.close();await prepared.promise;finishPrep.resolve();
+  await assert.rejects(add.completion,error=>error.mutationApplied===true&&/render failed after ordered commit/.test(error.message));
+  assert.equal(f.object.position.x,3);
+ }finally{finishPrep.resolve();await f.close().catch(()=>{});}
+});
+
 test('a later render failure reports that the synchronous scene edit already applied',async t=>{
  const f=await fixture(t,{draw:object=>{if(object.position.x===3)throw Error('render failed after edit');}});
  const edit=f.client.request('move',3);edit.completion.catch(()=>{});

@@ -37,3 +37,34 @@ test('prepared source keeps its exact independently owned root and avoids a dupl
  const f=fixture(),task=factory(f.services)('/mesh.glb',{preparedAsset:{scene:f.root,animations:f.clips},activate:false,returnAsset:true});f.lighting.resolve();
  assert.equal((await task).root,f.root);assert.equal(f.calls.includes('read'),false);assert.equal(f.calls.some(row=>row[0]==='parse'),false);assert.equal(f.calls.includes('activate'),false);
 });
+test('detached GLB preparation does not publish membership or complete until its single synchronous commit',async()=>{
+ const f=fixture(),load=factory(f.services);
+ assert.equal(typeof load.prepare,'function','GLB preparation must expose a detached publication handle');
+ const task=load.prepare('/mesh.glb',{clear:false,returnAsset:true,metadata:{id:'held',label:'Held mesh'}});
+ f.lighting.resolve();const prepared=await task;
+ assert.equal(prepared.root,f.root);assert.equal(f.root.parent,null);
+ assert.equal(f.calls.some(row=>row[0]==='admit'),false);assert.equal(f.calls.includes('activate'),false);assert.equal(f.calls.includes('complete'),false);
+ const result=prepared.commit();assert.equal(result.id,'retained');assert.equal(result.root,f.root);
+ assert.equal(f.root.parent,f.scene);assert.equal(f.calls.filter(row=>row[0]==='admit').length,1);
+ assert.throws(()=>prepared.commit(),/already|committed|settled/i);
+ prepared.dispose();assert.equal(f.calls.includes('dispose'),false,'committed root belongs to scene lifetime');
+});
+test('abandoned or stale prepared GLB releases only its detached root and cannot publish',async()=>{
+ for(const stale of [false,true]){
+  const f=fixture(),load=factory(f.services);assert.equal(typeof load.prepare,'function');
+  const task=load.prepare('/mesh.glb',{clear:false});f.lighting.resolve();const prepared=await task;
+  if(stale){f.change();assert.throws(()=>prepared.commit(),/stale/i);}else prepared.dispose();
+  prepared.dispose();assert.equal(f.calls.filter(row=>row==='dispose').length,1);
+  assert.equal(f.scene.children.length,0);assert.equal(f.calls.some(row=>row[0]==='admit'),false);
+  assert.throws(()=>prepared.commit(),/stale|disposed|settled/i);
+ }
+});
+test('cancelling detached preparation aborts its byte read and never admits the root',async()=>{
+ const f=fixture(),bytes=deferred(),controller=new AbortController();let signal;
+ f.services.readAssetBytes=(_file,options)=>{signal=options.signal;return bytes.promise;};
+ const task=factory(f.services).prepare('/mesh.glb',{signal:controller.signal,isCurrent:()=>!controller.signal.aborted});task.catch(()=>{});f.lighting.resolve();
+ controller.abort(Error('preparation canceled'));
+ try{assert.equal(signal.aborted,true,'caller cancellation must reach the actual asset byte reader');}
+ finally{bytes.resolve(new ArrayBuffer(12));await task.then(value=>value.dispose(),()=>{});}
+ assert.equal(f.calls.some(row=>row[0]==='admit'),false);
+});
