@@ -129,18 +129,23 @@ export function mountParticleLivePopups({document,root,controls,readCoverage,cov
  }
  function oneEdit(next,label){if(!beginCurve(label))return false;draft=next;return finishCurve(true);}
  basis.addEventListener('change',()=>{if(!oneEdit({...current(),basis:basis.value},'Change particle coverage axis'))redraw();});
+ const numericHistory=new Map();
  const historyKey=event=>{
-  if(!edits||cover.panel.hidden||!cover.panel.contains(event.target)||!(event.metaKey||event.ctrlKey)||event.altKey||event.key.toLowerCase()!=='z'||event.target.closest?.('input,textarea,[contenteditable]'))return;
+  if(!edits||cover.panel.hidden||!cover.panel.contains(event.target)||!(event.metaKey||event.ctrlKey)||event.altKey||event.key.toLowerCase()!=='z')return;
+  const number=numericHistory.get(event.target);
+  if(!number&&event.target.closest?.('input,textarea,[contenteditable]'))return;
   event.preventDefault();event.stopPropagation();
+  const refresh=()=>{if(number){const value=number.read();event.target.value=Number.isFinite(value)?String(value):'';}sync(true);};
+  if(number?.binding.discardPending()||number?.cancel()){refresh();return;}
   if(finishCurve(false))return;
-  try{const result=event.shiftKey?edits.redo():edits.undo();Promise.resolve(result).catch(curveFailed);}
+  try{const result=event.shiftKey?edits.redo():edits.undo();if(result&&typeof result.then==='function')result.then(refresh,curveFailed);else refresh();}
   catch(e){curveFailed(e);}
  };
  win.addEventListener('keydown',historyKey,true);
  const current=()=>draft??readCoverage();
  function bindCoverageNumber(input,caption,step,read,patch,label){
   let scrub=null;
-  const cancel=()=>{if(scrub){const before=scrub;scrub=null;coverageHistory.finish(false,before);}};
+  const cancel=()=>{if(!scrub)return false;const before=scrub;scrub=null;coverageHistory.finish(false,before);return true;};
   const binding=bindParticleNumber({input,read,apply:v=>{
    if(gesture)finishCurve(true);
    if(input.classList.contains('scrubbing')){
@@ -152,15 +157,14 @@ export function mountParticleLivePopups({document,root,controls,readCoverage,cov
     catch(e){coverageHistory.finish(false,before);throw e;}
    }
    sync(true);
-  },onError:curveFailed,onAccepted:()=>{curveError.hidden=true;}});
+  },onError:curveFailed,onAccepted:()=>{curveError.hidden=true;},typedCommit:'finish'});
+  numericHistory.set(input,{binding,read,cancel});
   input.addEventListener('pointercancel',cancel);
-  const seatHistoryFocus=e=>{if(e.key==='Enter')cover.panel.focus({preventScroll:true});};
-  input.addEventListener('keydown',seatHistoryFocus);
   const drag=controls.installNumberDrag?.({input,grip:caption,step,onEnd:()=>{
    if(scrub){const before=scrub;scrub=null;try{coverageHistory.finish(true,before);}catch(e){coverageHistory.finish(false,before);curveFailed(e);}}
    sync(true);
   }});
-  cleanups.push(()=>{cancel();input.removeEventListener('pointercancel',cancel);input.removeEventListener('keydown',seatHistoryFocus);binding.dispose();drag?.dispose?.();});
+  cleanups.push(()=>{cancel();numericHistory.delete(input);input.removeEventListener('pointercancel',cancel);binding.dispose();drag?.dispose?.();});
  }
  const supportFields=[];
  for(const [key,name,step] of [['pixelFloor','Pixel floor',.05],['maxFootprint','Footprint ceiling (px)',.25]]){

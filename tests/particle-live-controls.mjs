@@ -209,3 +209,17 @@ test('keeps the rejection visible after committing an invalid lighting edit',asy
   assert.equal(failure,'even widths only');
  }finally{binding.dispose();}
 });
+
+test('transactional numeric entry keeps typed drafts out of history until committed',async()=>{
+ const input=new EventTarget();input.value='4';input.classList={contains:()=>false};
+ let value=4;const commits=[];
+ const binding=bindParticleNumber({input,read:()=>value,apply:v=>{value=v;commits.push(v);},onError:assert.fail,onAccepted:()=>{},typedCommit:'finish',delay:1});
+ try{
+  input.value='2';input.dispatchEvent(new Event('input'));await new Promise(resolve=>setTimeout(resolve,15));
+  assert.deepEqual(commits,[]);
+  input.value='2.5';input.dispatchEvent(new Event('input'));
+  assert.equal(binding.discardPending(),true);assert.equal(input.value,'4');assert.equal(binding.discardPending(),false);
+  input.value='2.5';input.dispatchEvent(new Event('input'));input.dispatchEvent(new Event('change'));
+  assert.deepEqual(commits,[2.5]);assert.equal(binding.discardPending(),false);
+ }finally{binding.dispose();}
+});

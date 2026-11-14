@@ -1,5 +1,5 @@
 // Live numeric editing with local drafts and the shared number-drag gesture.
-export function bindParticleNumber({input,read,apply,onError,onAccepted,delay=150,scrubCommit='live'}){
+export function bindParticleNumber({input,read,apply,onError,onAccepted,delay=150,scrubCommit='live',typedCommit='live'}){
  let timer=null,version=0,disposed=false,dirty=false,left=false;
  const cancel=()=>{clearTimeout(timer);timer=null;};
  const restore=()=>{const v=read();input.value=Number.isFinite(v)?String(v):'';};
@@ -11,9 +11,9 @@ export function bindParticleNumber({input,read,apply,onError,onAccepted,delay=15
   try{await apply(value);if(!disposed&&revision===version)onAccepted();}
   catch(error){if(!disposed&&revision===version){dirty=true;onError(error);if(leaving||left){dirty=false;restore();}}}
  }
- const edit=()=>{cancel();version++;dirty=true;left=false;if(input.classList.contains('scrubbing')){if(scrubCommit==='live')void flush();}else timer=setTimeout(()=>void flush(),delay);};
+ const edit=()=>{cancel();version++;dirty=true;left=false;if(input.classList.contains('scrubbing')){if(scrubCommit==='live')void flush();}else if(typedCommit==='live')timer=setTimeout(()=>void flush(),delay);};
  const leave=()=>{left=true;void flush({leaving:true});};
  const key=event=>{if(event.key==='Enter'){void flush({leaving:true});}if(event.key==='Escape'){cancel();version++;discard();}};
  input.addEventListener('input',edit);input.addEventListener('change',leave);input.addEventListener('blur',leave);input.addEventListener('keydown',key);if(scrubCommit==='release')input.addEventListener('pointercancel',discard);
- return {dispose(){disposed=true;cancel();version++;input.removeEventListener('input',edit);input.removeEventListener('change',leave);input.removeEventListener('blur',leave);input.removeEventListener('keydown',key);if(scrubCommit==='release')input.removeEventListener('pointercancel',discard);}};
+ return {discardPending(){if(!dirty)return false;cancel();version++;discard();return true;},dispose(){disposed=true;cancel();version++;input.removeEventListener('input',edit);input.removeEventListener('change',leave);input.removeEventListener('blur',leave);input.removeEventListener('keydown',key);if(scrubCommit==='release')input.removeEventListener('pointercancel',discard);}};
 }
