@@ -11,6 +11,7 @@ export function createSceneMembershipOperations({
   createGroup = () => {},
   finishInteraction = () => {}, captureContext = () => ({}), selectionScope = () => null,
   changed = () => {}, status = () => {},
+  prepareRecord = null, prepareMutation = run => run(), commitMutation = run => run(),
 }) {
   let edits = null, unsubscribe = null;
   const targets = new Set(), compoundTargets = new Map();
@@ -92,9 +93,37 @@ export function createSceneMembershipOperations({
     return entry;
   }
 
-  async function restore(value) {
-    const {record, index, groups, selection} = value;
-    const entry = await reconstruct(record, value);
+  // The ordinary page can retain its existing asynchronous source adapter.
+  // A worker supplies detached construction and admits the complete live
+  // restoration synchronously, without making its frame callback asynchronous.
+  async function prepareReconstruction(record, context = {record}) {
+    if (scene.find(record.id)) throw Error(`Scene object "${record.id}" is already present`);
+    const generation = scene.generation, retained = scene.retained(record.id);
+    const prepared = retained ? null : await prepareRecord(record, context);
+    let committed = false;
+    return Object.freeze({
+      commit() {
+        if (committed) throw Error('Scene reconstruction is already committed');
+        if (generation !== scene.generation || scene.find(record.id)
+          || (retained && scene.retained(record.id) !== retained)) throw Error('Scene reconstruction is stale');
+        let object;
+        if (retained) {
+          object = retained.object;
+          admit(retained, {prepare:false});roots.attach(retained);
+          domain(retained).attach?.(retained, context);
+        } else object = prepared.commit();
+        const entry = scene.find(record.id);
+        if (!entry || entry.object !== object) throw Error(`Scene object "${record.id}" did not restore its retained identity`);
+        committed = true;
+        roots.restore(entry, record);domain(entry).restored?.(entry, context);
+        return entry;
+      },
+      dispose() { prepared?.dispose(); },
+    });
+  }
+
+  function finishRestore(entry, value) {
+    const {index, groups, selection} = value;
     scene.move(entry.id, index);
     restoreGroups(entry, groups);
     if (selection.groupId && scene.groups.some(group => group.id === selection.groupId)) {
@@ -108,6 +137,15 @@ export function createSceneMembershipOperations({
     return true;
   }
 
+  async function restore(value) {
+    if (!prepareRecord) return finishRestore(await reconstruct(value.record, value), value);
+    let prepared;
+    try {
+      await prepareMutation(async () => { prepared = await prepareReconstruction(value.record, value); });
+      return await commitMutation(() => finishRestore(prepared.commit(), value));
+    } finally { prepared?.dispose(); }
+  }
+
   function ensureTarget(id) {
     if (!edits) throw Error('Scene edit history is not installed');
     const editId = membershipEditTargetId(id);
@@ -116,7 +154,7 @@ export function createSceneMembershipOperations({
         allowMissing:true,
         read:() => snapshot(id), check:value => check(value, id),
         write:value => value == null
-          ? remove(id, {recordHistory:false, preserveForMembershipHistory:true})
+          ? commitMutation(() => remove(id, {recordHistory:false, preserveForMembershipHistory:true}))
           : restore(value),
       });
       targets.add(editId);
@@ -192,7 +230,7 @@ export function createSceneMembershipOperations({
   }
 
   return Object.freeze({
-    admit, reconstruct, snapshot, check, restore, restoreGroups, ensureTarget, recordInsertion,
+    admit, reconstruct, prepareReconstruction, snapshot, check, restore, restoreGroups, ensureTarget, recordInsertion,
     remove, removeOwned, releaseUnreferenced, hasHistory,
     retainForHistory(id, target) { compoundTargets.set(id, target); },
     attachHistory(history) {

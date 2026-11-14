@@ -8,7 +8,7 @@ export function createSceneGlbLoader({GLTFLoader,workingScene,readScene,readAsse
  prepareGLBGeometryArrival,disposeObjectTree,readPreviewGeneration=()=>undefined,readEnvironmentIntensity=()=>1,
  readMaxAnisotropy=()=>16,prepareArrivedMeshMaterials,applyAssetArrival,readArrivalLighting=()=>null,
  previewLoaded=()=>{},registerSceneObject,onActivate=()=>{},frameAssetArrival,syncArrivalLightingAndGI,setInfo=()=>{}}){
- return async function showGLB(file, options = {}) {
+ const showGLB = async function(file, options = {}) {
   let loadToken = workingScene.generation;
   const isBlob = typeof file !== 'string';
   const url = isBlob ? file.name : file;
@@ -23,7 +23,7 @@ export function createSceneGlbLoader({GLTFLoader,workingScene,readScene,readAsse
   }
   const assetFileName = assetMetadata.fileName ?? file?.name ?? (isBlob ? 'object.glb' : resolvedUrlName.split('/').pop());
   const telemetryLabel = assetMetadata.label || assetFileName;
-  sourceChanged({file,source:isBlob?file.name:file,type:'glb'});
+  if(!options.prepareOnly)sourceChanged({file,source:isBlob?file.name:file,type:'glb'});
   const telemetryOp = options.telemetryOp || (typeof loadingTelemetry !== 'undefined'
     ? loadingTelemetry.start('asset', { label: telemetryLabel, phase: 'reading-file' })
     : null);
@@ -40,6 +40,7 @@ export function createSceneGlbLoader({GLTFLoader,workingScene,readScene,readAsse
     await sceneLightingPreparation?.whenIdle();
     if(loadToken!==workingScene.generation||options.isCurrent?.()===false)throw Error('stale async GLB load ignored');
     cleared = shouldClearSceneForImport(options);
+    if(cleared&&options.prepareOnly)throw Error('Detached GLB preparation cannot replace the current scene');
     if(cleared&&!await clearScene()){readAbort.abort();loadingTelemetry?.cancel?.('asset',{token:telemetryOp?.token});return null;}
     loadToken=workingScene.generation;
   } catch(error) {
@@ -74,7 +75,6 @@ export function createSceneGlbLoader({GLTFLoader,workingScene,readScene,readAsse
       if (typeof loadingTelemetry !== 'undefined') {
         loadingTelemetry.progress('asset', { label: telemetryLabel, phase: 'preparing-materials',token:telemetryOp?.token });
       }
-	    sourceChanged({scene:gltf.scene});
 	    const model = gltf.scene;
       const stalePreviewLoad = options.register === false
         && options.previewGeneration !== undefined
@@ -85,6 +85,8 @@ export function createSceneGlbLoader({GLTFLoader,workingScene,readScene,readAsse
         reject(new Error('stale async GLB load ignored'));
         return;
       }
+      const publish=()=>{
+      sourceChanged({scene:model});
       const envIntensity = readEnvironmentIntensity();
       const maxAniso = readMaxAnisotropy();
       if (typeof prepareArrivedMeshMaterials === 'function') {
@@ -143,14 +145,29 @@ export function createSceneGlbLoader({GLTFLoader,workingScene,readScene,readAsse
       }
       if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.complete('asset',{token:telemetryOp?.token});
       setInfo('GLB Inspector — orbit to inspect | use toolbar to fix orientation');
-      resolve(options.returnAsset ? {
+      return options.returnAsset ? {
         id: registeredAsset?.id ?? null,
         root: model,
         clips: gltf.animations || [],
         source: assetSource,
         fileName: assetFileName,
         arrival,
-      } : model);
+      } : model;
+      };
+      // Decode/geometry preparation may await. Publication is a single local
+      // synchronous operation which the worker can admit on its existing host.
+      let state='prepared';
+      const prepared=Object.freeze({root:model,
+        commit(){
+          if(state!=='prepared')throw Error(`Prepared GLB is already ${state}`);
+          if(loadToken!==workingScene.generation||options.isCurrent?.()===false){prepared.dispose();throw Error('stale async GLB load ignored');}
+          state='committing';
+          try{const result=publish();state='committed';return result;}
+          catch(error){state=model.parent?'committed':'prepared';throw error;}
+        },
+        dispose(){if(state!=='prepared')return;state='disposed';disposeObjectTree(model);loadingTelemetry?.cancel?.('asset',{token:telemetryOp?.token});},
+      });
+      resolve(options.prepareOnly?prepared:prepared.commit());
     };
     const onError=err=>{
       heroSettled = true;
@@ -168,4 +185,6 @@ export function createSceneGlbLoader({GLTFLoader,workingScene,readScene,readAsse
     }).then(onLoad).catch(onError);
   });
 };
+ showGLB.prepare=(file,options={})=>showGLB(file,{...options,prepareOnly:true});
+ return showGLB;
 }
