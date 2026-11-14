@@ -4,7 +4,7 @@ export function checkedOpticalPacketIncident(field,source,limits,storageUsage){
  if(!source||field?.identity?.epoch!==source.epoch)throw Error('Packet incident field belongs to a different material epoch');
  const {identity,centers,radiance,receiverCount,grid,maxAgeSteps=1}=field;
  if(!u32(identity.step)||!u32(identity.frame,1)||identity.step>source.step||identity.frame>source.frame)throw Error('Packet incident field identity is invalid or in the future');
- if(!u32(maxAgeSteps)||!u32(receiverCount,1))throw Error('Invalid packet incident count or max age');
+ if(![0,1].includes(maxAgeSteps)||!u32(receiverCount,1))throw Error('Invalid packet incident count or max age');
  const limit=Math.min(limits.maxStorageBufferBindingSize,limits.maxBufferSize);
  for(const [name,buffer] of Object.entries({centers,radiance})){
   if(!buffer||!(buffer.usage&storageUsage)||buffer.size<16*receiverCount||16*receiverCount>limit)throw Error('Invalid packet incident '+name+' buffer');
@@ -81,7 +81,7 @@ export const PACKET_SCATTER_WGSL=/* wgsl */`
 fn packetScatter(p:Particle,u:Options,incoming:vec3<f32>)->vec3<f32>{
  let fade=select(1.0,particleLifeFade(p.motion.w,u.lifeControl.y),u.lifeControl.x>0);
  let sigmaS=particleLightExtinction(p,u)*u.material.z*u.material.w;
- return incoming*sigmaS*p.shape.w*fade*u.lighting.x*u.lighting.z;
+ return incoming*sigmaS*p.shape.w*fade*u.lighting.x;
 }
 fn packetIntrinsic(p:Particle,u:Options)->vec3<f32>{
  let fade=select(1.0,particleLifeFade(p.motion.w,u.lifeControl.y),u.lifeControl.x>0);
@@ -113,7 +113,7 @@ export function createPacketIncidentGather(device,particleWgsl,retire){
    device.queue.writeBuffer(uniform,0,data);
    const buffers=[particles,field.centers,field.radiance,heads,links,result,uniform];
    const run=(pipeline,bindings,count,label)=>{
-    const p=encoder.beginComputePass({label});p.setPipeline(pipeline);p.setBindGroup(0,device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:bindings.map(binding=>({binding,resource:{buffer:buffers[binding]}}))}));p.dispatchWorkgroups(Math.ceil(count/64));p.end();
+    const p=encoder.beginComputePass({label});p.setPipeline(pipeline);p.setBindGroup(0,device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:bindings.map(binding=>({binding,resource:{buffer:buffers[binding],...(binding===1||binding===2?{size:16*field.receiverCount}:{})}}))}));p.dispatchWorkgroups(Math.ceil(count/64));p.end();
    };
    encoder.clearBuffer(heads);run(index,[1,3,4,6],field.receiverCount,'index incident receiver support');
    run(gather,[0,1,2,3,4,5,6],slots,'reconstruct incident light on current optical particles');

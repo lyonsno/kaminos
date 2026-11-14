@@ -10,7 +10,7 @@ test('native packet lookup retains valid dark receivers, ignores inactive rows a
  await withKaminosGpu(async({device:d})=>{
   const owned=[],retired=[];
   const storage=rows=>{const b=d.createBuffer({size:rows.byteLength,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});owned.push(b);d.queue.writeBuffer(b,0,rows);return b;};
-  const centers=storage(new Float32Array([-.5,0,0,1.25, .5,0,0,1.25, 0,0,0,2]));
+  const centers=storage(new Float32Array([-.5,0,0,1.25, .5,0,0,1.25, 0,0,0,2, 0,0,0,100]));
   const radiance=storage(new Float32Array([6,2,0,1, 0,0,0,1, 100,100,100,0]));
   const rows=new Float32Array(4*24);
   rows.set([0,0,0,1],0);rows.set([-1.4,0,0,1],24);rows.set([0,0,0,0],48);rows.set([0,5,0,1],72);
@@ -42,7 +42,7 @@ test('packet light scatters once with current soot and albedo and keeps intrinsi
    inputs:[[2,.25],[0,.25],[2,0]],argTypes:['f32','f32'],returnType:'vec4<f32>',body:`
    var p:Particle;var u:Options;
    p.anchor.w=1; p.shape.w=.5; p.emission=vec4<f32>(3,2,1,1);p.source=vec4<f32>(500);p.state.z=arg0;
-   u.gain.x=2;u.material=vec4<f32>(2,4,arg1,1);u.lighting=vec4<f32>(1,0,1,0);
+   u.gain.x=2;u.material=vec4<f32>(2,4,arg1,1);u.lighting=vec4<f32>(1,0,0,0);
    return vec4<f32>(packetScatter(p,u,vec3<f32>(2,1,.5)),packetIntrinsic(p,u).x);`});
   assert.deepEqual(rows.map(row=>Array.from(row)),[[4,2,1,3],[0,0,0,3],[0,0,0,3]]);
  });

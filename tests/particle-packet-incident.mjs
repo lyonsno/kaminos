@@ -11,6 +11,7 @@ test('same-device packet fields describe complete Fine-local overlap lookup and 
   receiverCount:2,grid:{origin:[-1,-1,-1],dims:[2,2,2],pitch:1}};
  const bind=next=>particle.checkedOpticalPacketIncident(next,{epoch:2,step:9,frame:14},{maxStorageBufferBindingSize:1024,maxBufferSize:1024,maxComputeWorkgroupsPerDimension:64},128);
  assert.equal(bind(null),null);
+ assert.throws(()=>bind({...field,maxAgeSteps:2}),/max age/);
  const accepted=bind(field);
  assert.equal(accepted.centers,field.centers,'GPU buffers are borrowed, not copied');
  assert.deepEqual(accepted.identity,identity);

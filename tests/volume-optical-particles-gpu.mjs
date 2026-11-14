@@ -39,7 +39,7 @@ test('production particle update transports actual fine flow, preserves paused s
   const camera=new Float32Array(20);camera.set([1,0,0,0,0,1,0,0,0,0,1,0,0,1,1,0,0,0,1,0]);
   const source={buffer:births,uniform:sourceUniform,width:4,height:4,pixels:n,step:0,backtrace:1,viewProj:identity};
   async function draw(step,settings={}){source.step=step;let publish;const e=d.createCommandEncoder();const dp=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthClearValue:1,depthStoreOp:'store'}});dp.end();
-   owner.encode(e,{view:target.createView(),format:'rgba8unorm',source,fine,reactants,dims:[2,2,2],invViewProj:identity,settings:{enabled:true,refresh:0,exchangeStrength:0,stateLife:0,...settings},cameraValues:camera,depth,identity:'fixture',materialTransform:{scale:1.5,translate:[2,3,4]},afterMaterialSubmit:cb=>{publish=cb;}});assert.equal(owner.submitMaterialQuery(step,()=>assert.fail('not submitted')).available,false);d.queue.submit([e.finish()]);publish();await d.queue.onSubmittedWorkDone();return owner.sample();}
+   owner.encode(e,{view:target.createView(),format:'rgba8unorm',source,fine,reactants,dims:[2,2,2],invViewProj:identity,settings:{enabled:true,refresh:0,exchangeStrength:0,stateLife:0,...settings},cameraValues:camera,depth,identity:'fixture',material:{sharedIncidentEnabled:false},materialTransform:{scale:1.5,translate:[2,3,4]},afterMaterialSubmit:cb=>{publish=cb;}});assert.equal(owner.submitMaterialQuery(step,()=>assert.fail('not submitted')).available,false);d.queue.submit([e.finish()]);publish();await d.queue.onSubmittedWorkDone();return owner.sample();}
   try{
    const first=await draw(0);assert.equal(first.records[3],1);assert.equal(first.records[12],0);
    const code=PARTICLE_LIGHT_MATERIAL_WGSL+`
@@ -80,17 +80,29 @@ test('production particle update transports actual fine flow, preserves paused s
    const center=d.createBuffer({size:16,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
    const radiance=d.createBuffer({size:16,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
    d.queue.writeBuffer(center,0,new Float32Array([.1,.2,.3,1]));
-   d.queue.writeBuffer(radiance,0,new Float32Array([0,8,0,1]));
+   async function pixels(){
+    const b=d.createBuffer({size:1024,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+    try{const e=d.createCommandEncoder();e.copyTextureToBuffer({texture:target},{buffer:b,bytesPerRow:256},[4,4]);d.queue.submit([e.finish()]);await b.mapAsync(GPUMapMode.READ);
+     const raw=new Uint8Array(b.getMappedRange());return Uint8Array.from({length:64},(_,i)=>raw[Math.floor(i/16)*256+i%16]);
+    }finally{b.unmap();b.destroy();}
+   }
    try{
-    owner.setPacketIncident({identity:stamp,centers:center,radiance,receiverCount:1,grid:{origin:[-1,-1,-1],dims:[2,2,2],pitch:1}});
+    const field={identity:stamp,centers:center,radiance,receiverCount:1,grid:{origin:[-1,-1,-1],dims:[2,2,2],pitch:1}};
     for(const depthMode of [0,1]){
-     const lit=await withGpuErrorScopes(d,'native packet raster depth mode '+depthMode,()=>draw(1,{depthMode}));
-     assert.equal(lit.state.packetIncident.effective,'packet-incident-only');
-     assert.deepEqual(lit.records,paused.records,'incident feedback does not modify carried material or captured light');
+     const settings={depthMode,gain:0,profileMode:1,emissionFalloff:1,emissionEdgeSoftness:.1};
+     async function snapshot(green,overrides={}){
+      d.queue.writeBuffer(radiance,0,new Float32Array([0,green,0,1]));owner.setPacketIncident(field);
+      const lit=await withGpuErrorScopes(d,'native packet raster depth mode '+depthMode,()=>draw(1,{...settings,...overrides}));
+      assert.equal(lit.state.packetIncident.effective,'packet-incident-only');
+      assert.deepEqual(lit.records,paused.records,'incident feedback does not modify carried material or captured light');
+      return pixels();
+     }
+     const dark=await snapshot(0),lit=await snapshot(8);
+     assert.ok(lit.some((x,i)=>i%4===1&&x>dark[i]+5),'packet light remains visible with no compatible legacy field');
+     assert.deepEqual(await snapshot(8,{emissionFalloff:4,emissionEdgeSoftness:.9}),lit,'packet scatter is independent of intrinsic emission footprint');
     }
    }finally{owner.setPacketIncident(null);center.destroy();radiance.destroy();}
-
-   const b=d.createBuffer({size:1024,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});const e=d.createCommandEncoder();e.copyTextureToBuffer({texture:target},{buffer:b,bytesPerRow:256},[4,4]);d.queue.submit([e.finish()]);await b.mapAsync(GPUMapMode.READ);const pixels=new Uint8Array(b.getMappedRange());assert.ok(pixels.some((x,i)=>i%4!==3&&x>8),'actual particle rendering contributes light');b.unmap();b.destroy();owner.reset();assert.equal((await owner.sample()).available,false,'reset invalidates old readback immediately');
+   owner.reset();assert.equal((await owner.sample()).available,false,'reset invalidates old readback immediately');
   }finally{owner.dispose();births.destroy();sourceUniform.destroy();grid.dispose();target.destroy();depth.destroy();}
  });
 });
