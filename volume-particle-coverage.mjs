@@ -1,6 +1,13 @@
 const flat=Object.freeze([Object.freeze([0,1]),Object.freeze([1,1])]);
+const smokeDefaults=Object.freeze({radius:1,minExtinction:.5,maxEmission:10,ageStart:8,ageRamp:5,maxFootprint:10});
 export function particleCoverage(value={}){
- const {basis='lifetime',footprint=flat,opacity=flat}=value;
+ const {basis='lifetime',footprint=flat,opacity=flat,smoke={}}=value;
+ if(!smoke||typeof smoke!=='object'||Array.isArray(smoke))throw Error('Invalid smoke footprint controls');
+ for(const key of Object.keys(smoke))if(!Object.hasOwn(smokeDefaults,key))throw Error('Unknown smoke footprint control '+key);
+ const plume=Object.fromEntries(Object.entries({...smokeDefaults,...smoke}).map(([key,value])=>{
+  if(!Number.isFinite(value)||!Number.isFinite(Math.fround(value))||value<0||(key==='radius'&&value<1))throw Error('Invalid smoke footprint '+key);
+  return [key,Math.fround(value)];
+ }));
  if(basis!=='lifetime'&&basis!=='mixing')throw Error('Unknown particle coverage basis');
  const knots=(points)=>{
   if(!Array.isArray(points)||points.length<2)throw Error('Coverage needs both endpoints');
@@ -11,12 +18,24 @@ export function particleCoverage(value={}){
   if(result[0][0]!==0||result.at(-1)[0]!==1||result.some(([x],i)=>i&&x<=result[i-1][0]))throw Error('Coverage knots must be strictly ordered from zero to one');
   return result;
  };
- return {basis,footprint:knots(footprint),opacity:knots(opacity)};
+ return {basis,footprint:knots(footprint),opacity:knots(opacity),smoke:plume};
 }
 
 export const PARTICLE_COVERAGE_WGSL=/* wgsl */`
-struct CoverageCurves { counts:vec2<u32>, basis:u32, spare:u32, points:array<vec2<f32>> }
+struct CoverageCurves { counts:vec2<u32>, basis:u32, spare:u32, smokeOptics:vec4<f32>, smokeAge:vec4<f32>, points:array<vec2<f32>> }
 @group(0) @binding(10) var<storage,read> coverage:CoverageCurves;
+// Local material coefficients, independent of parcel weight, camera and draw gain.
+fn smokeFootprintWeight(p:Particle,u:Options)->f32{
+ if(u.acquisition.x!=2u||coverage.smokeOptics.x<=1.0||coverage.smokeOptics.z<=0.0){return 0.0;}
+ let sigma=max(0.0,p.state.z)*u.material.x*u.material.y*u.material.w;
+ if(sigma<=0.0){return 0.0;}
+ let j=max(p.emission.r,max(p.emission.g,p.emission.b));
+ var soot=1.0;if(coverage.smokeOptics.y>0.0){soot=clamp(sigma/coverage.smokeOptics.y-1.0,0.0,1.0);soot=soot*soot*(3.0-2.0*soot);}
+ let dim=1.0-smoothstep(.5,1.0,j/coverage.smokeOptics.z);
+ let age=max(0.0,p.anchor.w-1.0);
+ var mature=select(0.0,1.0,age>=coverage.smokeAge.x);if(coverage.smokeAge.y>0.0){mature=smoothstep(0.0,1.0,(age-coverage.smokeAge.x)/coverage.smokeAge.y);}
+ return soot*dim*mature;
+}
 fn coverageAt(t:f32,start:u32,count:u32)->f32{
  var low=start;var high=start+count-1u;
  while(high-low>1u){let mid=low+(high-low)/2u;if(t<coverage.points[mid].x){high=mid;}else{low=mid;}}
@@ -37,11 +56,12 @@ fn coverageStyle(p:Particle,u:Options)->vec2<f32>{
 }
 `;
 
-export function coverageBufferData({basis,footprint,opacity}){
+export function coverageBufferData({basis,footprint,opacity,smoke}){
  const active=points=>points.every(([,y])=>y===1)?[]:points;
- const f=active(footprint),o=active(opacity),data=new ArrayBuffer(16+8*(f.length+o.length));
+ const f=active(footprint),o=active(opacity),data=new ArrayBuffer(Math.max(64,48+8*(f.length+o.length)));
  new Uint32Array(data,0,4).set([f.length,o.length,Number(basis==='mixing'),0]);
- const xy=new Float32Array(data,16);let i=0;
+ new Float32Array(data,16,8).set([smoke.radius,smoke.minExtinction,smoke.maxEmission,smoke.maxFootprint,smoke.ageStart,smoke.ageRamp,0,0]);
+ const xy=new Float32Array(data,48);let i=0;
  for(const points of [f,o])for(const [x,y] of points){xy[i++]=x;xy[i++]=y;}
  return data;
 }

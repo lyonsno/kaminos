@@ -213,10 +213,10 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
     if (!targets.has(id)) throw new Error(`Scene edit target "${id}" is not registered`);
   }
 
-  function discard(predicate) {
+  function discard(predicate, { preserveUnrelatedActive = false } = {}) {
     assertAvailable();
     if (typeof predicate !== 'function') throw new Error('History discard requires an entry predicate');
-    if (active) cancel();
+    if (active && (!preserveUnrelatedActive || predicate(clone(active)))) cancel();
     past = past.filter(entry => !predicate(clone(entry)));
     future = future.filter(entry => !predicate(clone(entry)));
     notify();

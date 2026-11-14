@@ -96,7 +96,7 @@ test('untouched numeric controls preserve accepted precision and one edit publis
  }finally{await x.dispose();}
 });
 
-test('connected-field and cost gates share the live authoring path and preserve the population',async()=>{const x=await mounted();try{for(const key of ['exchangeEnabled','groupingEnabled','acquisitionEnabled','birthsEnabled','updateEnabled','reactionEnabled','transportEnabled','liveTimings','hud']){const input=x.field(key);assert.ok(input,key);assert.equal(input.type,'checkbox');input.checked=false;input.fire('change');await Promise.resolve();assert.equal(x.accepted()[key],false,key);}for(const [key,v] of [['exchangeHeat',20],['exchangeRate',100],['exchangeEvery',4],['acquisitionEvery',3],['exchangeSpacing',.125],['maxFootprint',1],['opticalCutoff',.001]]){const input=x.field(key);assert.ok(input,key);input.classList.add('scrubbing');input.value=String(v);input.fire('input');await Promise.resolve();assert.equal(x.accepted()[key],v,key);}assert.equal(x.trace.reset.length,0,'live work controls cannot clear material');}finally{await x.dispose();}});
+test('connected-field and cost gates share the live authoring path and preserve the population',async()=>{const x=await mounted();try{for(const key of ['exchangeEnabled','groupingEnabled','acquisitionEnabled','birthsEnabled','updateEnabled','reactionEnabled','transportEnabled','liveTimings','hud']){const input=x.field(key);assert.ok(input,key);assert.equal(input.type,'checkbox');input.checked=false;input.fire('change');await Promise.resolve();assert.equal(x.accepted()[key],false,key);}for(const [key,v] of [['exchangeHeat',20],['exchangeRate',100],['exchangeEvery',4],['acquisitionEvery',3],['exchangeSpacing',.125],['opticalCutoff',.001]]){const input=x.field(key);assert.ok(input,key);input.classList.add('scrubbing');input.value=String(v);input.fire('input');await Promise.resolve();assert.equal(x.accepted()[key],v,key);}assert.equal(x.trace.reset.length,0,'live work controls cannot clear material');}finally{await x.dispose();}});
 
 test('HUD visibility responds immediately to explicit controls inside the frame throttle window',async t=>{let clock=1000;t.mock.method(Date,'now',()=>clock);const x=await mounted({viewport:true});try{const hud=x.document.body.children[0];assert.equal(hud.style.display,'block');clock++;x.owner.operations.setOptions({hud:false});assert.equal(hud.style.display,'none');clock++;x.owner.operations.setOptions({hud:true});assert.equal(hud.style.display,'block');}finally{await x.dispose();}});
 
@@ -131,6 +131,27 @@ test('the transport toggle is unavailable when the entire retained update is hel
   assert.equal(x.accepted().transportEnabled,true,'holding the parent preserves the authored motion setting');
   x.owner.operations.setOptions({updateEnabled:true});
   assert.equal(x.field('transportEnabled').disabled,false);
+ }finally{await x.dispose();}
+});
+
+test('budget controls are adjacent and distinguish legacy, focused and emitter acquisition',async()=>{
+ const x=await mounted();try{
+  const fresh=x.field('acquisitionSamples'),slots=x.field('capacity'),replacement=x.field('refresh');
+  const rows=slots.parentNode.parentNode.children;
+  const position=input=>rows.indexOf(input.parentNode);
+  assert.equal(position(fresh),position(slots)+1);
+  assert.equal(position(replacement),position(fresh)+1);
+  assert.equal(fresh.disabled,false);assert.equal(replacement.disabled,false);
+  assert.equal(x.field('fineAcquisition').disabled,true);
+  x.owner.operations.setOptions({acquisitionMode:0,capacity:0});
+  assert.equal(fresh.disabled,true);assert.equal(replacement.disabled,false);
+  assert.equal(x.field('fineAcquisition').disabled,false);
+  assert.equal(x.field('followFraction').disabled,true,'legacy does not dispatch tracking');
+  x.owner.operations.setOptions({acquisitionMode:2,capacity:1024});
+  assert.equal(replacement.disabled,true);assert.equal(x.field('depthSupport').disabled,true);
+  assert.equal(x.field('emitterBirthsPerStep').disabled,false);
+  x.owner.operations.setOptions({projection:0,depthMode:0});
+  assert.equal(x.field('flowAlignment').disabled,true);assert.equal(x.field('depthSlices').disabled,true);
  }finally{await x.dispose();}
 });
 

@@ -269,17 +269,26 @@ struct Vertex {@builtin(position) clip:vec4<f32>,@location(0) local:vec2<f32>,@l
  var flowAxis=vec3<f32>(0,1,0);if(u.raster.z>0){let mixed=mix(flowAxis,particleDirectionDecode(p.shape.yz),u.raster.z);if(dot(mixed,mixed)>1e-10){flowAxis=normalize(mixed);}}
  var covariance:vec3<f32>;if(u.support.w<.5){covariance=particleLegacyCovariance(u.vp,p.anchor.xyz,radius,u.raster.xy);}else{covariance=particleProjectedCovariance(u.vp,p.anchor.xyz,radius,flowAxis,u.raster.xy);}cxx=covariance.x;cyy=covariance.y;cxy=covariance.z;
  var angle=0.0;if(abs(cxy)+abs(cxx-cyy)>1e-20){angle=.5*atan2(2.0*cxy,cxx-cyy);}let axis=vec2<f32>(cos(angle),sin(angle));let disc=sqrt((cxx-cyy)*(cxx-cyy)+4.0*cxy*cxy);
- var major=sqrt(max(u.raster.w*u.raster.w,(cxx+cyy+disc)*.5));var minor=sqrt(max(u.raster.w*u.raster.w,(cxx+cyy-disc)*.5));
- if(u.work.z>0){
-  let attenuation=1.0-u.workExtra.x*smoothstep(u.work.z*.5,u.work.z,major);
-  let clippedMajor=min(major,u.work.z);let clippedMinor=min(minor,u.work.z);
-  // Emitter births apportion a volume before projection. Preserve the
-  // authored kernel's integral when the screen budget trims its area.
-  // Ray-born records keep their observed footprint policy.
-  if(u.acquisition.x==2u&&major>0&&minor>0){optical*=(major/clippedMajor)*(minor/clippedMinor);}
-  optical*=attenuation;major=clippedMajor;minor=clippedMinor;
-  if(u.lifeControl.w==0&&max(max(optical.x,optical.y),max(optical.z,optical.w))<=u.work.w){out.clip=vec4<f32>(2,2,2,1);return out;}
+ let rawMajor=sqrt(max(0.0,(cxx+cyy+disc)*.5));let rawMinor=sqrt(max(0.0,(cxx+cyy-disc)*.5));
+ var major=max(u.raster.w,rawMajor);var minor=max(u.raster.w,rawMinor);
+ let baseMajor=major;let baseMinor=minor;var ceiling=u.work.z;
+ let smokeWeight=select(smokeFootprintWeight(p,u),0.0,u.lifeControl.w>0.0);
+ if(smokeWeight>0.0){
+  let spread=mix(1.0,coverage.smokeOptics.x,smokeWeight);
+  major=max(u.raster.w,rawMajor*spread);minor=max(u.raster.w,rawMinor*spread);
+  // The usual footprint is already in target pixels. This is the same
+  // display-diameter convention as the ordinary ceiling.
+  if(ceiling>0.0){ceiling=mix(ceiling,max(ceiling,coverage.smokeOptics.w*u.oxidation.z),smokeWeight);}
  }
+ if(u.work.z>0.0){
+  let attenuation=1.0-u.workExtra.x*smoothstep(u.work.z*.5,u.work.z,baseMajor);
+  optical*=attenuation;
+ }
+ if(ceiling>0.0){major=min(major,ceiling);minor=min(minor,ceiling);}
+ // Preserve the base projected weight while changing the area on which it
+ // is distributed; the same weight goes to depth deposition and the draw.
+ if(u.acquisition.x==2u&&major>0.0&&minor>0.0){optical*=(baseMajor/major)*(baseMinor/minor);}
+ if((ceiling>0.0||smokeWeight>0.0)&&u.lifeControl.w==0&&max(max(optical.x,optical.y),max(optical.z,optical.w))<=u.work.w){out.clip=vec4<f32>(2,2,2,1);return out;}
  var xy:vec2<f32>;
  if(PARTICLE_INDEXED_QUADS){let corners=array<vec2<f32>,4>(vec2<f32>(-1,-1),vec2<f32>(1,-1),vec2<f32>(1,1),vec2<f32>(-1,1));xy=corners[vertex]*2.5;}
  else{let corners=array<vec2<f32>,6>(vec2<f32>(-1,-1),vec2<f32>(1,-1),vec2<f32>(1,1),vec2<f32>(-1,-1),vec2<f32>(1,1),vec2<f32>(-1,1));xy=corners[vertex]*2.5;}
@@ -431,7 +440,7 @@ export function createOpticalParticles(device,{transparent=false,indexedQuads=tr
   const data=new ArrayBuffer(512),f=new Float32Array(data),u=new Uint32Array(data);f.set(source.viewProj);f.set(invViewProj,16);u.set([width,height,slots,frame],32);
   const floorWidth=s.acquisitionMode?(source.displayWidth??outputWidth):width,floorHeight=s.acquisitionMode?(source.displayHeight??outputHeight):height;
   f.set([dt,s.refresh,source.backtrace,s.smokeLife],36);f.set([s.burnTime,s.cooling,s.heatRelease,s.sootYield],40);f.set([s.radius,s.stretch,columns,rows],44);f.set([s.flow,s.rise,s.drag,s.expansion],48);f.set([...dims,source.reactionStepScale??1],52);f.set([s.gain,s.opacity,s.maxAge,depthZeroToOne?1:0],56);f.set([targetWidth,targetHeight,s.flowAlignment,s.pixelFloor*Math.min(targetWidth/floorWidth,targetHeight/floorHeight)],60);f.set([s.supportFloor,s.carriedSmokeGain,s.generatedSmokeGain,s.projection],64);u.set([s.acquisitionMode,source.samples??pixels,outputWidth,outputHeight],68);f.set([s.scatteredGain,s.scatteredLife,material.sharedIncidentEnabled===false?0:1,Number(material.captureDistributedScatter===true)],72);f.set([s.reactionSeedLength,s.reactionSupportCoupling,s.renewalDiagnostics?1:0,0],76);f.set([s.fillExtinction,s.extinctionSlack,s.extinctionView,0],80);
-  f.set([model.oxidizerRequirement,s.heatRelease,...model.ignitionBand],84);f.set([material.density??1,material.extinction??2,material.albedo??.35,material.smokeVisible??1],88);f.set([material.kelvinPerHeat??1600,material.thermalGain??1,material.cleanGain??.08,model.appearanceBurnReference??.01],92);f.set([s.lifeFuel,s.lifeHeat,s.lifeSmoke,s.lifeQuiet],96);f.set([s.stateLife,s.lifeFade,material.sootReference??1,s.debugView],100);f.set([s.profileMode?s.emissionFalloff:1,s.emissionEdgeSoftness,particleKernelNormalization(s.profileMode?s.emissionFalloff:1,s.emissionEdgeSoftness),fieldSettings(s,dims).cellSize],104);f.set([s.profileMode?s.extinctionFalloff:1,s.extinctionEdgeSoftness,particleKernelNormalization(s.profileMode?s.extinctionFalloff:1,s.extinctionEdgeSoftness),s.profileMode],108);f.set([material.sootBurnoutRate??0,material.sootBurnoutKelvin??1300,0,0],112);f.set([Number(s.reactionEnabled),Number(s.transportEnabled),s.maxFootprint>0?s.maxFootprint/5*Math.min(targetWidth/floorWidth,targetHeight/floorHeight):0,s.opticalCutoff],116);f.set([s.largeSupportFade,requestedDt,Number(s.birthsEnabled&&s.acquisitionEnabled&&(source.samples??pixels)>0),0],120);
+  f.set([model.oxidizerRequirement,s.heatRelease,...model.ignitionBand],84);f.set([material.density??1,material.extinction??2,material.albedo??.35,material.smokeVisible??1],88);f.set([material.kelvinPerHeat??1600,material.thermalGain??1,material.cleanGain??.08,model.appearanceBurnReference??.01],92);f.set([s.lifeFuel,s.lifeHeat,s.lifeSmoke,s.lifeQuiet],96);f.set([s.stateLife,s.lifeFade,material.sootReference??1,s.debugView],100);f.set([s.profileMode?s.emissionFalloff:1,s.emissionEdgeSoftness,particleKernelNormalization(s.profileMode?s.emissionFalloff:1,s.emissionEdgeSoftness),fieldSettings(s,dims).cellSize],104);f.set([s.profileMode?s.extinctionFalloff:1,s.extinctionEdgeSoftness,particleKernelNormalization(s.profileMode?s.extinctionFalloff:1,s.extinctionEdgeSoftness),s.profileMode],108);f.set([material.sootBurnoutRate??0,material.sootBurnoutKelvin??1300,Math.min(targetWidth/floorWidth,targetHeight/floorHeight)/5,0],112);f.set([Number(s.reactionEnabled),Number(s.transportEnabled),s.maxFootprint>0?s.maxFootprint/5*Math.min(targetWidth/floorWidth,targetHeight/floorHeight):0,s.opticalCutoff],116);f.set([s.largeSupportFade,requestedDt,Number(s.birthsEnabled&&s.acquisitionEnabled&&(source.samples??pixels)>0),0],120);
   const advancing=s.updateEnabled&&dt>0,birthsThisDraw=!emitterMode&&s.birthsEnabled&&s.acquisitionEnabled&&(source.samples??pixels)>0&&(requestedDt>0||frame===1),updatePass=advancing||(!s.acquisitionMode&&birthsThisDraw);
   statisticsResources={source,fine};
   if(!stagedAcquisition||stagedAcquisition.key!==key||stagedAcquisition.step!==step)exchangeState=exchange.encode(encoder,{particles,slots,dims,pitch:2/dims[0],stepDelta:requestedDt*(source.reactionStepScale??1),step,frame,...fieldSettings(s,dims),requireGrouping:false,profileWrites});
@@ -485,7 +494,7 @@ export function createOpticalParticles(device,{transparent=false,indexedQuads=tr
   if(!s.showParticles){if(!s.showRaymarch){const clear=encoder.beginRenderPass({label:'hidden particle display clear',...profileWrites('present'),colorAttachments:[{view,loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}]});clear.end();}if(retired.length){const old=retired.splice(0);queueMicrotask(()=>device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>old.forEach(x=>x.destroy())));}info=readState();return info;}
   const curveKey=JSON.stringify(s.coverage);
   if(curveKey!==coverageKey){
-   const data=coverageBufferData(s.coverage),bytes=Math.max(24,data.byteLength);
+   const data=coverageBufferData(s.coverage),bytes=data.byteLength;
    if(bytes>device.limits.maxStorageBufferBindingSize||bytes>device.limits.maxBufferSize)throw Error('Coverage curve exceeds the device storage limit');
    if(!coverageBuffer||coverageBuffer.size<bytes){
     if(coverageBuffer)retire([coverageBuffer]);

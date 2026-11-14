@@ -464,6 +464,25 @@ test('emitter births use admitted supply without a ray batch, and light refresh 
     assert.ok(Math.abs(stronger.tau/limited.tau-2)<.15,'the native material extinction knob increases held dark smoke optical depth');
 
    }
+   const darkMaterial={extinction:3};
+   const smokeImage=(cfg={},step=2,material=darkMaterial,gain=0)=>draw(step,{radius:.12,stretch:1,pixelFloor:0,maxFootprint:5,scatteredGain:0,gain,...cfg},null,material,true);
+   // Hold a dark emitter cohort. Widen without relying on light, remapping
+   // birth volume, or changing the general footprint ceiling.
+   const selectSmoke={radius:2,minExtinction:0.05,maxEmission:1e6,ageStart:.25,ageRamp:.5,maxFootprint:14};
+   for(const depthMode of [0,1,2]){
+    const opts={depthMode,depthSlices:4,depthScale:1};
+    const compact=await smokeImage(opts),baseline=measure(compact);
+    const widened=measure(await smokeImage({...opts,coverage:{smoke:selectSmoke}}));
+    assert.ok(widened.pixels>baseline.pixels*1.5,'selected smoke covers a larger area through its own footprint ceiling');
+    assert.ok(Math.abs(widened.tau/baseline.tau-1)<.18,`spreading must retain optical weight ${JSON.stringify({baseline,widened})}`);
+    for(const excluded of [{ageStart:2},{minExtinction:100},{maxEmission:1e-8}]){
+     const probe={...opts,coverage:{smoke:{...selectSmoke,...excluded}}};
+     // Initial carried heat emits with the ordinary material at birth. An
+     // emission threshold must ignore the presentation gain of zero.
+     const material='maxEmission' in excluded?{extinction:3}:darkMaterial;
+     assert.deepEqual(await smokeImage(probe,2,material),await smokeImage(opts,2,material));
+    }
+   }
    assert.deepEqual((await draw(2)).records,held.records,'redistributing draw support leaves the original parcels and reaction state unchanged');
    const refreshed=await draw(3,{lightRefreshEvery:1,emitterBirthsPerStep:2});
    assert.ok(cohort(refreshed).every(p=>p[3]===3&&Math.abs(p[4]-7)<1e-5),JSON.stringify(cohort(refreshed).map(p=>p.slice(3,8))));
