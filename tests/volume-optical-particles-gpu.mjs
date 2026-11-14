@@ -15,7 +15,7 @@ test('actual reactants burn stoichiometrically, release heat, make soot and free
  });
 });
 
-import {createOpticalParticles,opticalParticleSettings} from '../volume-optical-particles.mjs';
+import {createOpticalParticles,opticalParticleSettings,PARTICLE_LIGHT_MATERIAL_WGSL} from '../volume-optical-particles.mjs';
 test('reaction visibility defaults to all particles and rejects unknown modes',()=>{
  assert.equal(opticalParticleSettings().phaseFilter,0);
  assert.throws(()=>opticalParticleSettings({phaseFilter:8}),/reaction phase/i);
@@ -38,10 +38,40 @@ test('production particle update transports actual fine flow, preserves paused s
   const depth=d.createTexture({size:[1,1],format:'depth32float',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING});
   const camera=new Float32Array(20);camera.set([1,0,0,0,0,1,0,0,0,0,1,0,0,1,1,0,0,0,1,0]);
   const source={buffer:births,uniform:sourceUniform,width:4,height:4,pixels:n,step:0,backtrace:1,viewProj:identity};
-  async function draw(step,settings={}){source.step=step;const e=d.createCommandEncoder();const dp=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthClearValue:1,depthStoreOp:'store'}});dp.end();
-   owner.encode(e,{view:target.createView(),format:'rgba8unorm',source,fine,reactants,dims:[2,2,2],invViewProj:identity,settings:{enabled:true,refresh:0,exchangeStrength:0,stateLife:0,...settings},cameraValues:camera,depth,identity:'fixture'});d.queue.submit([e.finish()]);await d.queue.onSubmittedWorkDone();return owner.sample();}
+  async function draw(step,settings={}){source.step=step;let publish;const e=d.createCommandEncoder();const dp=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthClearValue:1,depthStoreOp:'store'}});dp.end();
+   owner.encode(e,{view:target.createView(),format:'rgba8unorm',source,fine,reactants,dims:[2,2,2],invViewProj:identity,settings:{enabled:true,refresh:0,exchangeStrength:0,stateLife:0,...settings},cameraValues:camera,depth,identity:'fixture',materialTransform:{scale:1.5,translate:[2,3,4]},afterMaterialSubmit:cb=>{publish=cb;}});assert.equal(owner.submitMaterialQuery(step,()=>assert.fail('not submitted')).available,false);d.queue.submit([e.finish()]);publish();await d.queue.onSubmittedWorkDone();return owner.sample();}
   try{
    const first=await draw(0);assert.equal(first.records[3],1);assert.equal(first.records[12],0);
+   const code=PARTICLE_LIGHT_MATERIAL_WGSL+`
+@group(0) @binding(0) var<storage,read> material:array<Particle>;
+@group(0) @binding(1) var<uniform> params:Options;
+@group(0) @binding(2) var<storage,read_write> out:array<vec4<f32>>;
+@compute @workgroup_size(1) fn probe(){
+ let p=material[0];
+ out[0]=vec4<f32>(particleLightIntrinsic(p),particleLightExtinction(p,params));
+ out[1]=vec4<f32>(particleLightBaseRadius(p,params),p.shape.w);
+ out[2]=p.source;
+}`;
+   const pipeline=d.createComputePipeline({layout:'auto',compute:{module:d.createShaderModule({code}),entryPoint:'probe'}});
+   const terms=d.createBuffer({size:48,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC});
+   const copy=d.createBuffer({size:48,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+   try{
+    const receipt=owner.submitMaterialQuery(0,(e,f,device)=>{
+     assert.equal(device,d);assert.equal(f.coverage.kind,'camera-acquired');assert.equal(f.fine,fine);
+     const pass=e.beginComputePass();pass.setPipeline(pipeline);
+     pass.setBindGroup(0,d.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:f.particles}},{binding:1,resource:{buffer:f.options}},{binding:2,resource:{buffer:terms}}]}));
+     pass.dispatchWorkgroups(1);pass.end();e.copyBufferToBuffer(terms,0,copy,0,48);
+    });
+    assert.equal(receipt.available,true);assert.equal(receipt.identity.step,0);
+    await copy.mapAsync(GPUMapMode.READ);
+    const actual=new Float32Array(copy.getMappedRange());
+    assert.deepEqual(Array.from(actual.slice(0,3)),Array.from(first.records.slice(8,11)),'intrinsic is the live carried value, without captured light');
+    assert.ok(Math.abs(actual[3]-2*first.records[22])<1e-6,'extinction follows carried soot');
+    assert.equal(actual[7],first.records[19],'the acquired interval is preserved independently of the support');
+    assert.ok(actual[8]>0,'fixture has captured light to distinguish from intrinsic emission');
+    assert.ok(actual[4]>0&&actual[5]>0&&actual[6]>0);
+   }finally{copy.unmap();copy.destroy();terms.destroy();}
+
    const moved=await draw(1);assert.ok(Math.abs(moved.records[0]-.1)<1e-5);assert.ok(Math.abs(moved.records[1]-.2)<1e-5);assert.ok(Math.abs(moved.records[2]-.3)<1e-5);assert.ok(moved.records[20]<1,'potential consumed');
    const paused=await draw(1,{refresh:1});assert.deepEqual(paused.records,moved.records,'paused material and flow do not evolve with presentation draws');
    const b=d.createBuffer({size:1024,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});const e=d.createCommandEncoder();e.copyTextureToBuffer({texture:target},{buffer:b,bytesPerRow:256},[4,4]);d.queue.submit([e.finish()]);await b.mapAsync(GPUMapMode.READ);const pixels=new Uint8Array(b.getMappedRange());assert.ok(pixels.some((x,i)=>i%4!==3&&x>8),'actual particle rendering contributes light');b.unmap();b.destroy();owner.reset();assert.equal((await owner.sample()).available,false,'reset invalidates old readback immediately');

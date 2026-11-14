@@ -143,3 +143,11 @@ Reference marching and the camera-grid extinction assist are suspended while
 the manual frame is active. Opaque scene clipping remains viewing-camera-only.
 The current optical pose is included in the experiment inputs and scene recipe;
 its arrow is an experiment-owned editor object.
+
+### Borrow the current material for packet lighting
+
+The native volume runtime exposes `submitOpticalParticleMaterial((encoder, frame, device) => …)`. A call queues a synchronously encoded consumer pass on the same device, after the material frame's renderer commands have been submitted. It returns the submitted source identity or an explicit unavailable reason. Bind the borrowed buffers read-only inside the callback; do not retain them or submit the callback's encoder yourself. The frame is the latest submitted Fine particle material for the current simulation step, including births from that draw. It is not a GPU completion receipt. The API performs no automatic lighting work, particle copy, or CPU readback.
+
+The shader preamble `PARTICLE_LIGHT_MATERIAL_WGSL` declares the production carrier/options layout and optical accessors. `particleLightIntrinsic` reads carried intrinsic emission; `particleLightExtinction` reads the unmasked soot extinction coefficient before display opacity and interval weighting. Captured or already received light is not an intrinsic source. `particleLightBaseRadius` provides the authored three-axis support proposal before camera coverage, floor, ceiling and fade. The carrier's `shape.w` remains the acquisition/assignment interval. This API supplies neither a world-volume weight nor a normalized 3D transfer model; the bundle consumer must declare its support and weighting approximation.
+
+The frame identifies the pool epoch, simulation step and particle frame, and describes Fine-local coordinates and their world transform. `fine` and `sourceOptions` are the current Fine storage and its production sampling parameters; the consumer can use them to derive coherent packet motion. A carrier slot can be overwritten within an epoch and is not a persistent identity. Coverage distinguishes emitter-born from camera-acquired material; in either mode unobserved material is unknown. Packet membership, temporal observation identity and light reconstruction belong to the bundle consumer.
