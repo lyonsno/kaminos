@@ -2,10 +2,10 @@ import {createPacketNetwork,packetNetworkSettings} from './volume-packet-network
 import {collectStaticSceneGeometry,staticSceneGeometryRevision} from './scene-light-geometry.mjs';
 
 export function createParticlePacketLighting({runtime,scene,onChange=()=>{},createNetwork=createPacketNetwork}){
- let settings=packetNetworkSettings(),enabled=false,owner=null,device=null,network=null,preparing=null,prepared=false,disposed=false,last=null,error=null,geometryKey=null,geometry=null,triangles=null,receipt=null,revision=0;
+ let settings=packetNetworkSettings(),enabled=false,owner=null,device=null,network=null,preparing=null,prepared=false,disposed=false,last=null,error=null,geometryKey=null,geometry=null,triangles=null,receipt=null,heldReceipt=null,revision=0;
  const retire=(buffer,ownDevice)=>{if(buffer)queueMicrotask(()=>ownDevice.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>buffer.destroy()));};
  const read=()=>({enabled,settings:{...settings},phase:disposed?'disposed':error?'failed':!enabled?'off':!network?'awaiting-current-material':!prepared?'preparing':last&&receipt?.available?'fresh-packet-network':'awaiting-current-material',error,receipt});
- function clear(){if(owner)owner.setOpticalParticleIncident(null);last=null;receipt=null;}
+ function clear(){if(owner)owner.setOpticalParticleIncident(null);last=null;receipt=null;heldReceipt=null;}
  function solids(frame){
   const transform=frame.domain.worldFromFine,key=JSON.stringify([staticSceneGeometryRevision(scene()),transform]);
   if(key===geometryKey)return;
@@ -24,11 +24,11 @@ export function createParticlePacketLighting({runtime,scene,onChange=()=>{},crea
     if(!network){device=currentDevice;network=createNetwork(device);const generation=revision;preparing=network.prepare().then(()=>{if(disposed||generation!==revision)return;prepared=true;error=null;onChange(read());}).catch(e=>{if(generation===revision){error=e.message;onChange(read());}});}
     if(!prepared)return;
     const identity=JSON.stringify([frame.identity.epoch,frame.identity.step,frame.identity.materialStamp??frame.identity.frame,settings,staticSceneGeometryRevision(scene()),frame.domain.worldFromFine]);
-    if(identity===last)return;
+    if(identity===last){receipt=heldReceipt;return;}
     solids(frame);result=network.encode(encoder,{material:frame,settings,triangles,triangleCount:geometry.triangles.length});last=identity;
    });
    if(!submitted.available){receipt={...receipt,available:false,reason:submitted.reason};return read();}
-   if(result){owner.setOpticalParticleIncident(result);receipt={available:true,...result.receipt,worldVisibilityRevision:geometry.revision,borrowedMaterial:submitted.identity};error=null;onChange(read());}
+   if(result){owner.setOpticalParticleIncident(result);receipt={available:true,...result.receipt,worldVisibilityRevision:geometry.revision,borrowedMaterial:submitted.identity};heldReceipt=receipt;error=null;onChange(read());}
   }catch(e){error=e.message;clear();onChange(read());}
   return read();
  }

@@ -20460,7 +20460,10 @@ function setSceneViewerPaused(paused){
   if(typeof paused!=='boolean')throw Error('Scene pause must be boolean');
   sceneViewerPaused=paused;
   const freeze=document.getElementById('volume-look-freeze');
-  if(freeze){freeze.value=paused?'1':'0';freeze.dispatchEvent(new Event('input',{bubbles:true}));freeze.dispatchEvent(new Event('change',{bubbles:true}));}
+  // Playback changes only playback. Re-reading the whole settings form here
+  // can recommit projected emitter controls and reset the held material.
+  if(freeze)freeze.value=paused?'1':'0';
+  volumePrototype?.setControls?.({lookFreeze:paused?1:0});
   if(waterFeature.host)window.kaminosPauseLocalLiquid(paused);
   sceneViewerPaused=paused;
   volumePrototype?.setSimulationPaused?.(paused);

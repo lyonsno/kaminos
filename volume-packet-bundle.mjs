@@ -94,7 +94,7 @@ struct Splat {@builtin(position) position:vec4<f32>,@location(0) local:vec2<f32>
  let b=bundles[in.bundle];let solidTile=vec2<u32>(in.bundle%plan.solid.x,in.bundle/plan.solid.x);
  let blocker=mix(b.origin.w,b.forward.w,textureLoad(solids,at+vec2<i32>(solidTile*plan.image.xy),0));
  let length=max(0.0,min(in.depth+in.interval*.5,min(b.forward.w,blocker))-max(in.depth-in.interval*.5,b.origin.w));
- let ke=particleFootprint(in.local,material.kernelE.xyz,material.kernelE.w);let kt=particleFootprint(in.local,material.kernelT.xyz,material.kernelE.w);
+ let ke=particleFootprint(in.local,material.kernelE.xyz,material.kernelT.w);let kt=particleFootprint(in.local,material.kernelT.xyz,material.kernelT.w);
  return in.optical*vec4<f32>(vec3<f32>(ke),kt)*length;
 }
 @vertex fn solid(@builtin(vertex_index) vertex:u32,@builtin(instance_index) bi:u32)->@builtin(position)vec4<f32>{

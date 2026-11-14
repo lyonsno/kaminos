@@ -38,6 +38,11 @@ test('native finite bundle integrates current intrinsic source and foreground ex
    r=await solve({membership,bundles:[b]});near(r.values[0],0);
    b.source=1;r=await solve({membership,bundles:[b]});near(r.values[0],.8);
    b.weight=.5;r=await solve({membership,bundles:[b,{...b}]});near(r.values[0],.8);
+   const offset=finitePacketBundle({origin:[.2,0,0],target:[.2,0,1],halfSize:[.5,.5],near:0,far:4,weight:1});
+   f[104]=2;f[107]=0;f[111]=1;d.queue.writeBuffer(options,0,f);
+   r=await solve({bundles:[offset]});near(r.values[0],.8*Math.exp(-.5*.5**4));
+   f[107]=2;d.queue.writeBuffer(options,0,f);const exchanged=await solve({bundles:[offset]});near(exchanged.values[0],r.values[0]);
+   f[111]=0;d.queue.writeBuffer(options,0,f);r=await solve({bundles:[offset]});near(r.values[0],.8*Math.exp(-.5*.5**2));
    data.set(row(1,[1e8,1e8,1e8]));r=await solve();assert.equal(r.values[3],0,'half-float saturation must invalidate the incident result');
    assert.throws(()=>transport.encode(d.createCommandEncoder(),{...request,triangleCount:1}),/triangle buffer/);
   }finally{transport.dispose();for(const b of owned)b.destroy();}
