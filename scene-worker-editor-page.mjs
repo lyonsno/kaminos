@@ -5,7 +5,7 @@ import {createSceneWorkerMaterialInspector} from './scene-worker-material-page.m
 
 // The existing editor DOM renders a worker projection. No Three roots, GPU
 // resources, file parsing or canonical document construction live on the page.
-export function mountSceneWorkerEditor({document,window,page,readCamera,readUi,report=()=>{}}){
+export function mountSceneWorkerEditor({document,window,page,readCamera,readUi,report=()=>{},requestFileName=promptForFileName}){
  const list=document.getElementById('scene-object-list'),empty=document.getElementById('scene-object-empty');
  const inspector=document.getElementById('transform-inspector'),fields=document.getElementById('transform-inspector-fields'),none=document.getElementById('transform-inspector-empty');
  const inputs=[...document.querySelectorAll('[data-transform-field]')],collapsed=new Set(),stops=[];
@@ -54,10 +54,12 @@ export function mountSceneWorkerEditor({document,window,page,readCamera,readUi,r
  for(const input of inputs)listen(input,'change',()=>{const id=readUi()?.selection?.activeId,value=input.value.trim()?Number(input.value):NaN;if(!id||!Number.isFinite(value)){report('Enter a finite transform value');return;}void run(()=>call('scene.transformComponent',{id,field:input.dataset.transformField,value:input.dataset.transformField.startsWith('rotation.')?value*Math.PI/180:value}));});
  async function save({result=false,saveAs=false,promptName=false,name=null}={}){
   try{
+   const intent=await call('scene.beginSave');
+   if(!intent?.saveIntent)throw Error('Scene worker did not return Save document identity');
    let stem=name===null?null:sanitizeFileStem(name,'.kaminos.json'),overwrite=false;
-   if(promptName){stem=await promptForFileName({title:'Save scene as',defaultStem:(readUi()?.document?.filename??'scene').replace(/\.kaminos\.json$/,''),extension:'.kaminos.json'});if(!stem)return result?{ok:false,canceled:true}:false;}
-   for(;;){const saved=await call('scene.save',{camera:readCamera(),saveAs,name:stem,overwrite});
-    if(saved.exists&&promptName){const next=await promptForFileName({title:'Save scene as',defaultStem:stem,extension:'.kaminos.json',message:saved.exists+' already exists. Save again to replace it, or choose another name.',confirmLabel:'Replace'});if(!next)return result?{ok:false,canceled:true}:false;overwrite=next===stem;stem=next;continue;}
+   if(promptName){stem=await requestFileName({title:'Save scene as',defaultStem:(intent.filename??'scene').replace(/\.kaminos\.json$/,''),extension:'.kaminos.json'});if(!stem)return result?{ok:false,canceled:true}:false;}
+   for(;;){const saved=await call('scene.save',{camera:readCamera(),saveAs,name:stem,overwrite,saveIntent:intent.saveIntent});
+    if(saved.exists&&promptName){const next=await requestFileName({title:'Save scene as',defaultStem:stem,extension:'.kaminos.json',message:saved.exists+' already exists. Save again to replace it, or choose another name.',confirmLabel:'Replace'});if(!next)return result?{ok:false,canceled:true}:false;overwrite=next===stem;stem=next;continue;}
     if(saved.ok){window.history.replaceState(window.history.state,'',saved.url);report('Saved: '+saved.filename);}else report('Save failed: '+saved.error);
     return result?saved:saved.ok;
    }

@@ -224,7 +224,8 @@ export function createSceneWorkerSceneResources(context){
       const result=await commandMap['scene.applyDocument']({document:data,sceneFile:filename,emptySettings:true},ctx);return {...result,filename,url:savedSceneLocation(payload.location.href,filename),dependencies:store?value.dependencies??[]:[]};
      },
      'scene.captureDocument'(input,ctx){current(ctx);return {document:captureDocument(input)};},
-     async 'scene.save'(input={},ctx){current(ctx);authoring.assertSettled();const data=captureDocument(input);const result=await document.session.save(data,input.saveAs?null:document.session.state().filename,{result:true,saveAsName:input.name??null,overwrite:input.overwrite===true});current(ctx);return {...result,ui:{document:document.session.state()}};},
+     'scene.beginSave'(_input,ctx){current(ctx);authoring.assertSettled();const intent=document.session.beginSave();intent.assertCurrent();return {saveIntent:intent.token,filename:intent.filename};},
+     async 'scene.save'(input={},ctx){current(ctx);authoring.assertSettled();const intent=document.session.beginSave(input.saveIntent);intent.assertCurrent();const data=captureDocument(input);const result=await document.session.save(data,input.saveAs?null:intent.filename,{result:true,saveAsName:input.name??null,overwrite:input.overwrite===true});current(ctx);return {...result,ui:{document:document.session.state()}};},
      async 'scene.applyDocument'(input,context){
      current(context);documentHolds++;const previousContext=activeContext;activeContext=context;
      try{await syncVolumeHold();current(context);const result=await document.commands['scene.applyDocument'](input,context);current(context);

@@ -83,3 +83,11 @@ Save, Save As and Open continue through the existing worker document session.
 They capture accepted records and source/material identity, preserve their
 invocation's document binding, and reconstruct using the installed domain
 services. Saved authored setup does not claim an evolved simulation checkpoint.
+
+The page obtains `scene.beginSave` before the filename dialog. It carries the
+returned `saveIntent` with `scene.save`, including overwrite retries. The
+document session validates that identity before capturing or sending bytes;
+opening another document while the dialog is open requires starting Save again.
+Direct agent calls to `scene.save` without an intent save the document current
+at command admission. The intent is document identity, not a lock on ordinary
+edits to that document.

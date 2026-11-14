@@ -377,6 +377,17 @@ test('selection and empty history never release the save hold left by failed doc
  fail=false;await f.shell.commands['scene.applyDocument']({document:saved()},f.ctx);assert.equal(f.shell.ordinary.document.session.state().blocked,false);
  }finally{await f.shell.retire(f.ctx);delete globalThis.self;}
 });
+
+test('worker Save refuses a dialog intent from the previous document before capture or HTTP write',async()=>{
+ globalThis.self=globalThis;let posts=0;const f=fixture({document:saved(),postSceneDocument:async()=>{posts++;return {ok:true,json:async()=>({saved:'wrong.kaminos.json'})};}});
+ try{await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},context:f.ctx});
+ assert.equal(typeof f.shell.commands['scene.beginSave'],'function','worker must bind Save intent before a page filename dialog');
+ const {saveIntent}=await f.shell.commands['scene.beginSave'](null,f.ctx);
+ assert.ok(saveIntent);await f.shell.commands['scene.applyDocument']({document:saved('replacement'),sceneFile:'replacement.kaminos.json'},f.ctx);
+ await assert.rejects(f.shell.commands['scene.save']({saveIntent,saveAs:true,name:'previous'},f.ctx),/Scene changed during Save/);
+ assert.equal(posts,0);assert.equal(f.shell.ordinary.document.session.state().filename,'replacement.kaminos.json');
+ }finally{await f.shell.retire(f.ctx);delete globalThis.self;}
+});
 test('serialized scene files are parsed and admitted by the actual worker before replacing roots',async()=>{
  globalThis.self=globalThis;const f=fixture({document:saved()});try{await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},context:f.ctx});
  assert.equal(typeof f.shell.commands['scene.loadFile'],'function','worker must own file parsing');const root=f.shell.ordinary.workingScene.find('mesh').object;
