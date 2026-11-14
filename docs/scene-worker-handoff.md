@@ -146,6 +146,26 @@ frames and in-flight controls drain before the next
 ordered mutation or retirement, including on failure. Existing worker-local
 frame drivers also remain local; the page need not send an RPC per render pass.
 
+An ordered scene command can prepare a detached resource without admitting later
+authored edits:
+
+```js
+const prepared = await context.withFrames(() => prepare(context), {foregroundEdits: false});
+return context.commitForeground((edit, service) => applyPrepared(prepared, edit, service));
+```
+
+Frames can continue against the previously applied scene. The preparation scope
+drains admitted frames before resolving. The ordered command stays at the head
+of the authored queue through commit settlement, and the commit uses the same
+GPU admission, synchronous callback guard and receipt as a registered foreground
+edit. The callback receives the restricted edit context, not authority to open
+another scope or replace epochs. The command should await/return the commit
+before projecting state or releasing its prepared resource. The host also drains
+forgotten commit promises before moving the queue. Model commands keep the existing
+default `withFrames(run)` behavior; an ordered scene command can wait behind an
+active inference command. The scene owner verifies document/scene identity and
+owns detached resource cleanup and history publication.
+
 ## Epoch and retirement semantics
 
 Epochs contain monotonically increasing `scene`, `load` and `device` integers.
