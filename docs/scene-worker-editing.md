@@ -50,6 +50,35 @@ which the page uses to reconcile a known applied failure. Unknown or partial
 application is not a completed edit and retains the host's existing hold and
 recovery behavior.
 
+## Materials
+
+The native inspector and worker share `scene-material-operations.mjs` for
+recipe creation, editing, assignment and make-unique behavior. The worker
+prepares material resources before admitting the write. Its material target
+uses the same history as transforms and membership; reconstruction retains
+source appearance separately from assigned material programs.
+
+The page exposes `kaminosSceneWorker.editor.materials`: `read()`,
+`create({objectId, slot, implementation, parameters})`, `edit(recipeId, patch)`,
+`assign({objectId, slot, recipeId})` and `makeUnique({objectId, slot})`. Await
+mutating methods. The corresponding commands are `scene.materialCreate`,
+`scene.materialEdit`, `scene.materialAssign` and `scene.materialUnique`.
+`scene.materialSources({implementation})` returns an implementation's available
+checkpoint catalogue when the implementation supplies one.
+
+Material controls use the existing slot/recipe inspector layout and shared
+number-drag interaction. Live parameter changes use a worker-owned gesture:
+`scene.materialBegin({recipeId, label})` returns `gestureId`; send that identity
+with `scene.materialPreview({gestureId, recipeId, patch})`, then
+`scene.materialCommit({gestureId})` or `scene.materialCancel({gestureId})`.
+The page serializes preview requests behind that identity and commits once.
+These synchronous foreground commands can use the host's existing cooperative
+opportunities. Checkpoint changes use the prepared material edit operation.
+Stale gesture identities reject rather than editing another recipe or document.
+
+Finish or cancel an active edit before ordinary Save. Observation capture
+remains separate and may retain the live state being inspected.
+
 Save, Save As and Open continue through the existing worker document session.
 They capture accepted records and source/material identity, preserve their
 invocation's document binding, and reconstruct using the installed domain

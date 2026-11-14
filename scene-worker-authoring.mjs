@@ -7,7 +7,7 @@ import {createSceneWorkerEditing} from './scene-worker-editing.mjs';
 
 // Authored state stays with the real worker registry. The page receives plain
 // records only, and these synchronous edits use the existing Kit boundaries.
-export function createSceneWorkerAuthoring({THREE,ordinary,fields=()=>[],checkTransform=()=>{},changed=()=>{},editing=false}){
+export function createSceneWorkerAuthoring({THREE,ordinary,fields=()=>[],checkTransform=()=>{},changed=()=>{},editing=false,materialDefinitions=[]}){
  const scene=ordinary.workingScene;
  let workflow=null;
  function entry(id){const row=scene.find(id);if(!row)throw Error('Scene object is absent: '+id);return row;}
@@ -20,10 +20,10 @@ export function createSceneWorkerAuthoring({THREE,ordinary,fields=()=>[],checkTr
   const snapshot=ordinary.authored.snapshot(),box=new THREE.Box3();
   const ids=new Set(snapshot.selection.ids.flatMap(id=>id.startsWith('@group:')?scene.groups.find(g=>g.id===id.slice(7))?.objectIds??[]:[id]));
   for(const row of scene.objects)if(ids.has(row.id))box.expandByObject(row.object);
-  return {...snapshot,fields:fields(),bounds:ordinary.readBounds(),selectionBounds:box.isEmpty()?null:{min:box.min.toArray(),max:box.max.toArray()},history:edits.state()};
+  return {...snapshot,fields:fields(),bounds:ordinary.readBounds(),selectionBounds:box.isEmpty()?null:{min:box.min.toArray(),max:box.max.toArray()},history:edits.state(),...(workflow?{materials:workflow.materialProjection()}:{})};
  }
  const reply=()=>({ui:projection()});
- if(editing){workflow=createSceneWorkerEditing({ordinary,edits,projection});ordinary.authored.membership.attachHistory(edits);}
+ if(editing){workflow=createSceneWorkerEditing({ordinary,edits,projection,materialDefinitions});ordinary.authored.membership.attachHistory(edits);}
  const commands={
   'scene.pick'(input,ctx){ctx.assertCurrent();if(typeof input?.extend!=='boolean')throw Error('Picking extension must be Boolean');const id=pickSceneWorkerObject({THREE,ordinary,input});
    const target=assemblySelection({ids:id?[id]:[],activeId:id},scene.groups).activeId;
@@ -36,7 +36,8 @@ export function createSceneWorkerAuthoring({THREE,ordinary,fields=()=>[],checkTr
   'scene.redo'(_input,ctx){ctx.assertCurrent();edits.redo();return reply();},
  };
  if(workflow){delete commands['scene.undo'];delete commands['scene.redo'];}
- return Object.freeze({projection,clear(){edits.clear();if(workflow)ordinary.authored.membership.clearHistoryTargets();},
+ return Object.freeze({projection,clear(){edits.clear();workflow?.clear();if(workflow)ordinary.authored.membership.clearHistoryTargets();},
+  assertSettled(){if(edits.state().active||edits.state().replaying)throw Error('Finish the active scene edit before saving');},
   prepare:run=>workflow.prepare(run),commit:run=>workflow.commit(run),constructionContext:()=>workflow.constructionContext(),
-  asyncCommands:workflow?.commands??{},commands:Object.freeze(commands)});
+  asyncCommands:workflow?.commands??{},commands:Object.freeze({...commands,...workflow?.foregroundCommands})});
 }

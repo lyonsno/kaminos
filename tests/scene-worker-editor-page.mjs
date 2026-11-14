@@ -29,3 +29,13 @@ test('an applied failure refreshes canonical editor state and still rejects with
   assert.deepEqual(calls,['scene.importAsset','scene.editorState']);assert.equal(f.editor.edits.state().pending,0);
  }finally{f.editor.dispose();}
 });
+test('material controls forward operations and worker gesture identity through the same page editor',async()=>{
+ const calls=[],f=fixture((name,input)=>{calls.push({name,input});return {completion:Promise.resolve({output:{recipeId:'recipe',gestureId:'gesture',ui:{}}})};});
+ try{
+  assert.equal(typeof f.editor.materials?.create,'function','page material controls must use the worker service');
+  const created=await f.editor.materials.create({objectId:'mesh',implementation:'standard-surface'});assert.equal(created.recipeId,'recipe');
+  const begun=await f.editor.materials.begin({recipeId:'recipe'});await f.editor.materials.preview({gestureId:begun.gestureId,recipeId:'recipe',patch:{parameters:{roughness:.3}}});await f.editor.materials.commit({gestureId:begun.gestureId});
+  assert.deepEqual(calls.map(row=>row.name),['scene.materialCreate','scene.materialBegin','scene.materialPreview','scene.materialCommit']);
+  assert.equal(calls[2].input.gestureId,'gesture');assert.equal(f.editor.edits.state().pending,0);
+ }finally{f.editor.dispose();}
+});

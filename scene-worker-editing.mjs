@@ -1,11 +1,12 @@
 import {checkedPose} from './scene-edit-session.mjs';
+import {createSceneMaterialOperations} from './scene-material-operations.mjs';
 
 // One ordered semantic operation may prepare resources asynchronously. Only
 // its live writes enter the existing synchronous foreground service. The page
 // and asset drawer consume the same commands and accepted scene projection.
-export function createSceneWorkerEditing({ordinary,edits,projection}) {
+export function createSceneWorkerEditing({ordinary,edits,projection,materialDefinitions=[]}) {
  const {workingScene:scene,authored}=ordinary;
- let context=null,lastReceipt=null;
+ let context=null,lastReceipt=null,insideCommit=false,materialGesture=null;
  const current=()=>{if(!context)throw Error('Scene editing requires its ordered operation context');context.assertCurrent();};
  async function prepare(run){
   current();
@@ -13,11 +14,48 @@ export function createSceneWorkerEditing({ordinary,edits,projection}) {
  }
  async function commit(run){
   current();
-  const receipt=await context.commitForeground(run);
+  const receipt=await context.commitForeground(()=>{
+   insideCommit=true;try{return run();}finally{insideCommit=false;}
+  });
   lastReceipt=receipt;
   return receipt.value;
  }
- const write=run=>context?commit(run):run();
+ const write=run=>context&&!insideCommit?commit(run):run();
+ const materialTarget='@scene-materials';
+ edits.register(materialTarget,{read:ordinary.materials.read,check:ordinary.materials.check,
+  write(value){
+   if(!context||insideCommit)return ordinary.materials.write(value);
+   return (async()=>{await prepare(()=>ordinary.materials.prepare(value));return commit(()=>ordinary.materials.write(value));})();
+  }});
+ const materialOperations=createSceneMaterialOperations({materials:ordinary.materials,definitions:materialDefinitions,
+  selected:id=>scene.find(id??scene.selection.activeId),assertAvailable:current,prepare,
+  apply:(value,label)=>commit(()=>{
+   try{return edits.apply(materialTarget,value,label);}
+   catch(error){if(edits.state().active?.id===materialTarget)edits.cancel();throw error;}
+  })});
+ const gesture=input=>{
+  if(!materialGesture||input?.gestureId!==materialGesture.id||scene.generation!==materialGesture.generation||edits.state().active?.id!==materialTarget)throw Error('Material gesture is stale or absent');
+  return materialGesture;
+ };
+ const foregroundCommands={
+  'scene.materialBegin'(input,ctx){
+   ctx.assertCurrent();if(!ordinary.materials.recipe(input.recipeId))throw Error('Material missing');
+   edits.begin(materialTarget,input.label??'Edit material');
+   materialGesture={id:crypto.randomUUID(),recipeId:input.recipeId,generation:scene.generation,requestId:ctx.requestId};
+   return {gestureId:materialGesture.id,ui:projection()};
+  },
+  'scene.materialPreview'(input,ctx){
+   ctx.assertCurrent();const active=gesture(input);if(input.recipeId!==active.recipeId)throw Error('Material gesture belongs to another recipe');
+   const next=ordinary.materials.read(),recipe=next.recipes.find(row=>row.id===active.recipeId),definition=materialDefinitions.find(row=>row.id===recipe.implementation);
+   const before=definition.resourceKey?.(recipe.parameters);
+   if(input.patch.name!==undefined)recipe.name=input.patch.name;
+   if(input.patch.parameters)recipe.parameters={...recipe.parameters,...input.patch.parameters};
+   if(before!==definition.resourceKey?.(recipe.parameters))throw Error('Material source changes require the prepared material edit operation');
+   edits.preview(next);return {ui:projection()};
+  },
+  'scene.materialCommit'(input,ctx){ctx.assertCurrent();gesture(input);edits.commit();materialGesture=null;return {ui:projection()};},
+  'scene.materialCancel'(input,ctx){ctx.assertCurrent();gesture(input);edits.cancel();materialGesture=null;return {ui:projection()};},
+ };
  async function operation(ctx,run){
   if(context)throw Error('Another ordered scene edit is active');
   ctx.assertCurrent();context=ctx;lastReceipt=null;
@@ -71,6 +109,21 @@ export function createSceneWorkerEditing({ordinary,edits,projection}) {
   'scene.undo':(_input,ctx)=>operation(ctx,async()=>({changed:await edits.undo()})),
   'scene.redo':(_input,ctx)=>operation(ctx,async()=>({changed:await edits.redo()})),
   'scene.editorState':(_input,ctx)=>operation(ctx,async()=>({})),
+  'scene.materialCreate':(input,ctx)=>operation(ctx,async()=>({recipeId:await materialOperations.create(input)})),
+  'scene.materialEdit':(input,ctx)=>operation(ctx,async()=>({changed:await materialOperations.edit(input.recipeId,input.patch)})),
+  'scene.materialAssign':(input,ctx)=>operation(ctx,async()=>({changed:await materialOperations.assign(input)})),
+  'scene.materialUnique':(input,ctx)=>operation(ctx,async()=>({recipeId:await materialOperations.makeUnique(input)})),
+  'scene.materialSources':(input,ctx)=>operation(ctx,async()=>{
+   const definition=materialDefinitions.find(row=>row.id===input.implementation);if(!definition?.sources)throw Error('Material checkpoint catalogue is unavailable');
+   return {sources:await prepare(()=>definition.sources())};
+  }),
  };
- return Object.freeze({prepare,commit,write,constructionContext:()=>{current();return context;},commands:Object.freeze(commands)});
+ function materialProjection(){
+  const entry=scene.find(scene.selection.activeId);
+  return {...ordinary.materials.document(),objectId:entry?.id??null,
+   gesture:materialGesture&&edits.state().active?.id===materialTarget?{gestureId:materialGesture.id,recipeId:materialGesture.recipeId,requestId:materialGesture.requestId}:null,
+   slots:ordinary.materials.slots(entry).map(({key,label,recipeId,base})=>({key,label,recipeId,nodeMaterial:base?.isNodeMaterial===true})),
+   definitions:materialDefinitions.map(({id,version,title,description,fields,sources})=>({id,version,title,description,fields:structuredClone(fields),hasSources:typeof sources==='function'}))};
+ }
+ return Object.freeze({prepare,commit,write,materialProjection,clear:()=>{materialGesture=null;},foregroundCommands:Object.freeze(foregroundCommands),constructionContext:()=>{current();return context;},commands:Object.freeze(commands)});
 }
