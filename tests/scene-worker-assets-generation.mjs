@@ -29,3 +29,9 @@ test('worker drawer retries storage without model replay and does not relabel a 
  f.mesh.retryPersistence=async()=>retained;assert.deepEqual(await f.controller.recover(),retained);assert.equal(f.runs.length,0);assert.equal(f.controller.read().results[0].kind,'surface');
  assert.equal(f.controller.stop(),true);assert.equal(f.controller.preparesInput(),true);
 });
+test('a successful retry clears the previous workflow error while retaining the original input',async()=>{
+ const f=fixture();await f.controller.select(f.selected);f.mesh.run=async()=>{throw Error('temporary storage failure');};
+ await assert.rejects(f.controller.generate(),/temporary storage failure/);assert.equal(f.controller.read().error,'temporary storage failure');
+ f.mesh.run=async()=>({name:'retry.glb',source:'/api/read?root=generated-meshes&path=retry.glb'});await f.controller.generate();
+ assert.equal(f.controller.read().error,null,'an older failed attempt must not remain the current successful outcome');assert.equal(f.controller.read().selected.source,f.selected.source);
+});

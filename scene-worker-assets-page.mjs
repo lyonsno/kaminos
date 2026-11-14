@@ -50,10 +50,11 @@ export function createSceneWorkerAssetsController({page,importAsset,mesh,changed
   async generate(){
    const selected=structuredClone(state.selected);if(selected?.kind!=='image')throw Error('Choose a source image first');if(assetWithheld(selected))throw Error(selected.visibility.reason||'Asset awaiting further review.');
    if(!mesh)throw Error('Mesh generation is not connected');
+   state={...state,error:null};notify();
    try{return keep(await mesh.run({...selected,source:selected.source||assetSource(selected.root??selected.root_id,selected.path)}));}
    catch(error){state={...state,error:error.message};throw error;}finally{notify();}
   },
-  async recover(){if(!mesh)throw Error('Mesh generation is not connected');try{return keep(await mesh.retryPersistence());}catch(error){state={...state,error:error.message};throw error;}finally{notify();}},
+  async recover(){if(!mesh)throw Error('Mesh generation is not connected');state={...state,error:null};notify();try{return keep(await mesh.retryPersistence());}catch(error){state={...state,error:error.message};throw error;}finally{notify();}},
   generation:()=>mesh?.read()??({status:'unavailable',error:'Mesh generation is not yet connected to this worker preview.'}),
   preparesInput:()=>mesh?.preparesInput===true,stop:()=>mesh?.stop()??false};
 }
