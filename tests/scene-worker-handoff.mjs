@@ -75,6 +75,29 @@ test('cancelled preparation never enters the local foreground commit',async t=>{
   await assert.rejects(add.completion,/Cancel detached preparation/);
   await move.completion;assert.deepEqual(order,['later edit']);
 });
+test('cancellation after a local commit preserves applied identity through ordered settlement',async t=>{
+  const applied=deferred(),finish=deferred();
+  let x=0;
+  const {client}=await harness(t,async()=>({
+    commands:{add:async(_,ctx)=>{
+      await ctx.commitForeground(()=>{x=1;return {x};});
+      applied.resolve();await finish.promise;return {x};
+    }},
+    requestMutation:async(_,__,_ctx,apply)=>({mutationApplied:true,value:apply({})}),
+    control:()=>true,
+  }));
+  t.after(()=>finish.resolve());
+  await client.initialize({}).completion;
+  const add=client.request('add');add.completion.catch(()=>{});
+  await applied.promise;
+  add.cancel('Cancel after application');
+  // A control sent after cancellation witnesses its observation by the host.
+  await assert.rejects(add.control('observe-cancel').completion,/Cancel after application/);
+  finish.resolve();
+  await assert.rejects(add.completion,error=>error.mutationApplied===true&&/Cancel after application/.test(error.message));
+  assert.equal(x,1);
+});
+
 test('an unawaited local commit keeps later ordered work behind its actual settlement',async t=>{
   const committing=deferred(),finish=deferred(),order=[];
   const {client}=await harness(t,async()=>({

@@ -272,8 +272,18 @@ export function installSceneWorkerHost({port=globalThis,createRuntime}={}){
         try{output=await runtime.commands[operation](payload,ctx);}
         finally{
           entry.acceptsCommits=false;
-          const operations=await Promise.allSettled([...(entry.frameScopes??[]),...(entry.commits??[])]);
-          const failed=operations.find(result=>result.status==='rejected');
+          const [scopes,commits]=await Promise.all([
+            Promise.allSettled(entry.frameScopes??[]),Promise.allSettled(entry.commits??[]),
+          ]);
+          // Cancellation or projection can fail after a local commit succeeded.
+          // Preserve application custody across the outer ordered command.
+          for(const result of commits){
+            const applied=(result.status==='fulfilled'?result.value:result.reason)?.mutationApplied;
+            if(applied===null)entry.mutationApplied=null;
+            else if(applied===true&&entry.mutationApplied!==null)entry.mutationApplied=true;
+            else if(applied===false&&entry.mutationApplied===undefined)entry.mutationApplied=false;
+          }
+          const failed=[...scopes,...commits].find(result=>result.status==='rejected');
           if(failed)throw failed.reason;
         }
       }
@@ -285,6 +295,9 @@ export function installSceneWorkerHost({port=globalThis,createRuntime}={}){
     try{await execute(entry);}
     catch(cause){
       lastError=errorRecord(cause);
+      if(entry.mutationApplied===null||lastError.mutationApplied===null)lastError.mutationApplied=null;
+      else if(entry.mutationApplied===true||lastError.mutationApplied===true)lastError.mutationApplied=true;
+      else if(entry.mutationApplied===false)lastError.mutationApplied=false;
       if(entry.data.operation==='retire'||entry.data.operation==='initialize'&&runtime)lastError.gpuRouteHeld=true;
       if(phase==='starting')phase='failed';
       send({kind:'result',requestId:entry.data.requestId,ok:false,error:lastError});
