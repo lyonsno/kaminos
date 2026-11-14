@@ -39,3 +39,16 @@ test('omitted browse payload uses the current collection; omitted selection has 
  const f=fixture();await f.controller.ensure();const result=await f.worker.commands['assets.browse'](null,context);assert.equal(result.state.root,'image-inbox');
  await assert.rejects(f.worker.commands['assets.select'](null,context),/Choose a 3D asset or source image/);
 });
+test('incomplete catalog state retains the usable projection and permits a later refresh',async()=>{
+ const f=fixture();await f.controller.ensure();await f.controller.select(entry);const valid=f.controller.read();let requests=0;
+ const packets=[{revision:1,state:valid},{revision:2,state:{entries:[]}},{revision:2,state:{...valid,selected:null}}];
+ const c=createSceneWorkerAssetsController({page:{request:()=>({completion:Promise.resolve({output:packets[requests++]})})},changed:state=>{state.roots.map(root=>root.id);state.results.map(result=>result.name);}});
+ await c.refresh();await assert.rejects(c.refresh(),/catalog state/);assert.equal(c.read().loading,false);assert.equal(c.read().selected.source,entry.source);assert.match(c.read().error,/catalog state/);
+ assert.equal(await c.refresh(),true);assert.equal(requests,3);assert.equal(c.read().selected,null);assert.equal(c.read().error,null);assert.equal(c.read().loading,false);
+});
+test('a failed presentation callback cannot prevent worker requests or strand loading',async()=>{
+ const f=fixture();await f.controller.ensure();const state=f.controller.read();let requests=0;
+ const c=createSceneWorkerAssetsController({page:{request:()=>{requests++;return{completion:Promise.resolve({output:{revision:requests,state}})};}},changed:()=>{throw Error('view unavailable');}});
+ for(let i=0;i<2;i++){await c.refresh();assert.equal(c.read().loading,false);assert.match(c.read().error,/view unavailable/);}
+ assert.equal(requests,2);
+});

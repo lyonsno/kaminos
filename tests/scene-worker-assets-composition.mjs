@@ -22,7 +22,7 @@ test('actual worker entry mounts the shared drawer before its header can use the
 
 function mountImageConsumer({requestFailure=false}={}){return readFile(new URL('../scene-worker-assets-page.mjs',import.meta.url),'utf8').then(source=>{
  let imageControls;const notices=[],entry={kind:'image',name:'new-basin.png',source:'/api/read?root=image-inbox&path=new-basin.png'};
- const state={roots:[],root:'image-inbox',path:'',entries:[],results:[],selected:null};
+ const state={roots:[],root:'image-inbox',path:'',entries:[],results:[],selected:null,loading:false,adding:false,error:null};
  const owner={editor:{edits:{}},read:()=>({ui:{objects:[]}}),image:{run:async()=>entry,retryOutput:async()=>entry,retryPersistence:async()=>entry,read:()=>({outputs:[]}),subscribe(){},busy:()=>false},
  page:{request:(operation,input)=>({completion:requestFailure?Promise.reject(Error('selection transport unavailable')):Promise.resolve({output:{revision:1,state:{...state,selected:input.entry}}})})}};
  const dependencies={installAuthoringAssets:()=>({render(){},state:()=>({open:false}),open(){},close(){}}),installKleinImageGeneration:({controller})=>{imageControls=controller;return {render(){}};},installGenerateLayout:()=>({render(){}}),installBrowseLayout:()=>({render(){}})};
