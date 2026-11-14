@@ -1,11 +1,11 @@
-import {installAuthoringAssets} from './authoring-assets.mjs';
+import {installAuthoringAssets,assetSource,assetWithheld} from './authoring-assets.mjs';
 import {installKleinImageGeneration} from './authoring-image-generation-ui.mjs';
 import {installBrowseLayout} from './authoring-browse-layout.mjs';
 import {installGenerateLayout} from './authoring-generate-layout.mjs';
 
-export function createSceneWorkerAssetsController({page,changed=()=>{},report=()=>{}}){
- let state={roots:[],root:'generated-meshes',path:'',entries:[],selected:null,preparation:null,loading:false,adding:false,error:null,results:[]},revision=-1,pending=0;
- const read=options=>options?.selectionOnly?{selected:state.selected}:{...state,loading:state.loading||pending>0};
+export function createSceneWorkerAssetsController({page,importAsset,changed=()=>{},report=()=>{}}){
+ let state={roots:[],root:'generated-meshes',path:'',entries:[],selected:null,preparation:null,loading:false,adding:false,error:null,results:[]},revision=-1,pending=0,adding=false,insertion=null;
+ const read=options=>options?.selectionOnly?{selected:state.selected}:{...state,loading:state.loading||pending>0,adding,insertion};
  const record=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
  const optionalString=value=>value==null||typeof value==='string';
  function validSelected(value){return value===null||(record(value)&&(value.generation==null||(record(value.generation)&&optionalString(value.generation.runId)&&optionalString(value.generation.route))));}
@@ -19,16 +19,32 @@ export function createSceneWorkerAssetsController({page,changed=()=>{},report=()
  }
  function notify(){try{changed(read());}catch(error){state={...state,error:'Asset drawer presentation failed: '+String(error?.message??error)};try{report(state.error);}catch{/* reporting cannot prevent recovery either */}}}
 
- async function call(operation,input){
+ async function call(operation,input,options,output=false){
   pending++;
-  try{notify();const reply=await page.request(operation,input).completion;const value=reply.output?.value??reply.output;
+  try{notify();const reply=await page.request(operation,input,options).completion;const value=reply.output?.value??reply.output;
    if(!Number.isInteger(value?.revision)||!validState(value.state))throw Error('Worker asset response did not contain its catalog state');
    if(value.revision>=revision){revision=value.revision;state=value.state;}
-   return !state.error;
+   return output?value:!state.error;
   }catch(error){state={...state,error:error.message};throw error;}
   finally{pending--;notify();}
  }
+ async function add(entry=state.selected){
+  if(adding)throw Error('An asset is already being added');
+  if(!['mesh','surface'].includes(entry?.kind))throw Error('Choose a 3D asset to add');
+  if(assetWithheld(entry))throw Error(entry.visibility.reason||'Asset awaiting further review.');
+  if(typeof importAsset!=='function')throw Error('Scene asset insertion is not yet connected');
+  const selected=structuredClone(entry),source=selected.source??assetSource(selected.root??selected.root_id,selected.path);
+  const assetOrigin={...(selected.assetOrigin??{}),...(selected.root_id?{root_id:selected.root_id}:{}),...(selected.sha256?{sha256:selected.sha256}:{}),...(selected.provenance?{provenance:selected.provenance}:{})};
+  adding=true;insertion={status:'pending',source};state={...state,error:null};notify();
+  try{const result=await importAsset({source,fileName:selected.name,label:selected.label??selected.name,generation:selected.generation,assetOrigin});
+   if(result?.mutationApplied!==true||typeof result.objectId!=='string'||!result.objectId)throw Object.assign(Error('Could not confirm scene insertion; inspect the scene before retrying Add'),{mutationApplied:null});
+   insertion={status:'applied',source,objectId:result.objectId};return result;
+  }catch(error){insertion={status:error.mutationApplied===true?'applied':error.mutationApplied===null?'unknown':'failed',source,error:error.message};state={...state,error:error.message};throw error;}
+  finally{adding=false;notify();}
+ }
  return {read,ensure:()=>call('assets.ensure'),refresh:()=>call('assets.refresh'),browse:(root,path='')=>call('assets.browse',{root,path}),select:entry=>call('assets.select',{entry}),
+  add,async upload(file){const bytes=await file.arrayBuffer(),value=await call('assets.upload',{file:{name:file.name,type:file.type,bytes}},{transfer:[bytes]},true);
+   if(value.entry?.kind==='mesh'&&state.selected?.source===value.entry.source)await add(value.entry);return value.entry;},
   generation:()=>({status:'unavailable',error:'Mesh generation is not yet connected to this worker preview.'}),
   preparesInput:()=>false,stop:()=>false};
 }
@@ -36,10 +52,11 @@ export function createSceneWorkerAssetsController({page,changed=()=>{},report=()
 export function installSceneWorkerAssetsDrawer({document,owner,report=()=>{}}){
  let ui,imageUi,layout,browse;
  const render=()=>{ui?.render(controller.read());imageUi?.render();layout?.render();browse?.render(controller.read());};
- const controller=createSceneWorkerAssetsController({page:owner.page,changed:render,report});
+ const canAdd=typeof owner.editor.importAsset==='function';
+ const controller=createSceneWorkerAssetsController({page:owner.page,importAsset:canAdd?input=>owner.editor.importAsset(input):undefined,changed:render,report});
  const reason='Mesh generation is not yet connected to this worker preview.';
  ui=installAuthoringAssets({document,controller,edits:owner.editor.edits,
-  capabilities:{add:false,upload:false,meshHistory:false,meshPreviews:false,meshUnavailableReason:reason}});
+  capabilities:{add:canAdd,upload:true,meshHistory:false,meshPreviews:false,meshUnavailableReason:reason}});
  const selectSaved=async entry=>{
   if(entry)try{await controller.select({...entry,kind:'image'});}catch(error){report('Image saved; selection unavailable: '+error.message);}
   return entry;
@@ -47,7 +64,7 @@ export function installSceneWorkerAssetsDrawer({document,owner,report=()=>{}}){
  const images={...owner.image,run:async input=>selectSaved(await owner.image.run(input)),retryOutput:async id=>selectSaved(await owner.image.retryOutput(id)),retryPersistence:async()=>selectSaved(await owner.image.retryPersistence())};
  imageUi=installKleinImageGeneration({document,controller:images,assets:controller,meshBusy:()=>false});
  layout=installGenerateLayout({document,selected:()=>controller.read({selectionOnly:true}).selected,imageState:()=>owner.image.read(),meshUnavailableReason:reason});
- browse=installBrowseLayout({document,controller,inScene:()=>new Set((owner.read().ui?.objects??[]).map(row=>row.source)),open:mode=>ui.open(mode),canAdd:false});
+ browse=installBrowseLayout({document,controller,inScene:()=>new Set((owner.read().ui?.objects??[]).map(row=>row.source)),open:mode=>ui.open(mode),canAdd});
  owner.image.subscribe(render);render();
  const open=mode=>{const result=ui.open(mode);Promise.resolve(result).catch(error=>report(error.message));return result;};
  return Object.freeze({...controller,open,close:()=>ui.close(),panel:()=>ui.state(),images});

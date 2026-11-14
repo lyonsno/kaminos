@@ -85,10 +85,14 @@ export function createAuthoringAssets({request, addMesh, uploadImage, prepareIma
       catch(error){state.error=error.message;throw error;}
       finally{state.adding=false;publish();}
     },
-    async upload(file) {
+    async upload(file,{assertCurrent=()=>{},signal}={}) {
+      assertCurrent();const ticket=preparationTicket;
       const kind=assetKind(file?.name || '');if(!kind)throw Error('Choose a GLB, PNG, JPEG or WebP');
       if(kind==='mesh')return this.add({kind,name:file.name,label:file.name,file});
-      const entry=await uploadImage(file);this.select({...entry,root:entry.root_id,kind:'image',label:entry.name});return entry;
+      const entry=await uploadImage(file,{assertCurrent,signal});assertCurrent();
+      // Storage is still useful if a newer input was selected while uploading.
+      // Do not replace that newer selection with this late completion.
+      if(ticket===preparationTicket)this.select({...entry,root:entry.root_id,kind:'image',label:entry.name});return entry;
     },
     preparesInput:()=>generator()?.preparesInput===true,
     history:()=>history?.read?.()??null,
