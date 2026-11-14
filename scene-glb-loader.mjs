@@ -10,6 +10,7 @@ export function createSceneGlbLoader({GLTFLoader,workingScene,readScene,readAsse
  previewLoaded=()=>{},registerSceneObject,onActivate=()=>{},frameAssetArrival,syncArrivalLightingAndGI,setInfo=()=>{}}){
  const showGLB = async function(file, options = {}) {
   let loadToken = workingScene.generation;
+  const sourceCurrent=()=>!options.signal?.aborted&&options.isCurrent?.()!==false;
   const isBlob = typeof file !== 'string';
   const url = isBlob ? file.name : file;
   const assetMetadata = {...(options.metadata || {})};
@@ -28,24 +29,28 @@ export function createSceneGlbLoader({GLTFLoader,workingScene,readScene,readAsse
     ? loadingTelemetry.start('asset', { label: telemetryLabel, phase: 'reading-file' })
     : null);
   const readAbort = new AbortController();
+  const abortRead=()=>readAbort.abort(options.signal.reason);
+  const detachAbort=()=>options.signal?.removeEventListener('abort',abortRead);
+  options.signal?.addEventListener('abort',abortRead,{once:true});
+  if(options.signal?.aborted)abortRead();
   const inputBytes = options.preparedAsset ? null : (options.inputBytes
     ? Promise.resolve(options.inputBytes)
     : readAssetBytes(file,{signal:readAbort.signal,progress:bytes=>{
-        if(loadToken===workingScene.generation&&options.isCurrent?.()!==false)loadingTelemetry?.progress('asset',{label:telemetryLabel,phase:'downloading',token:telemetryOp?.token,...bytes});
+        if(loadToken===workingScene.generation&&sourceCurrent())loadingTelemetry?.progress('asset',{label:telemetryLabel,phase:'downloading',token:telemetryOp?.token,...bytes});
       }}));
   // Observe read failures immediately even if renderer preparation is still pending.
   inputBytes?.catch(()=>{});
   let cleared=false;
   try {
     await sceneLightingPreparation?.whenIdle();
-    if(loadToken!==workingScene.generation||options.isCurrent?.()===false)throw Error('stale async GLB load ignored');
+    if(loadToken!==workingScene.generation||!sourceCurrent())throw Error('stale async GLB load ignored');
     cleared = shouldClearSceneForImport(options);
     if(cleared&&options.prepareOnly)throw Error('Detached GLB preparation cannot replace the current scene');
-    if(cleared&&!await clearScene()){readAbort.abort();loadingTelemetry?.cancel?.('asset',{token:telemetryOp?.token});return null;}
+    if(cleared&&!await clearScene()){detachAbort();readAbort.abort();loadingTelemetry?.cancel?.('asset',{token:telemetryOp?.token});return null;}
     loadToken=workingScene.generation;
   } catch(error) {
-    readAbort.abort();
-    if(loadToken!==workingScene.generation||options.isCurrent?.()===false)loadingTelemetry?.cancel?.('asset',{token:telemetryOp?.token});
+    detachAbort();readAbort.abort();
+    if(loadToken!==workingScene.generation||!sourceCurrent())loadingTelemetry?.cancel?.('asset',{token:telemetryOp?.token});
     else loadingTelemetry?.fail('asset',error,{token:telemetryOp?.token});
     throw error;
   }
@@ -58,7 +63,7 @@ export function createSceneGlbLoader({GLTFLoader,workingScene,readScene,readAsse
         isBlob,
         arrival,
         assetMetadata,
-        isCurrent: () => !heroSettled && loadToken === workingScene.generation && options.isCurrent?.() !== false && !(greenroomPreviewIsActive() && options.register !== false),
+        isCurrent: () => !heroSettled && loadToken === workingScene.generation && sourceCurrent() && !(greenroomPreviewIsActive() && options.register !== false),
       })
     : null;
 	return new Promise((resolve, reject) => {
@@ -66,7 +71,7 @@ export function createSceneGlbLoader({GLTFLoader,workingScene,readScene,readAsse
       let preparedGeometry=null;
       if(typeof prepareGLBGeometryArrival==='function'){
         loadingTelemetry?.progress('asset',{label:telemetryLabel,phase:'preparing-geometry',token:telemetryOp?.token});
-        try{preparedGeometry=await prepareGLBGeometryArrival(gltf.scene,arrival,()=>loadToken===workingScene.generation&&options.isCurrent?.()!==false,{activate:options.activate!==false});}
+        try{preparedGeometry=await prepareGLBGeometryArrival(gltf.scene,arrival,()=>loadToken===workingScene.generation&&sourceCurrent(),{activate:options.activate!==false});}
         catch(error){disposeObjectTree(gltf.scene);throw error;}
       }
       heroSettled = true;
@@ -79,7 +84,7 @@ export function createSceneGlbLoader({GLTFLoader,workingScene,readScene,readAsse
       const stalePreviewLoad = options.register === false
         && options.previewGeneration !== undefined
         && readPreviewGeneration() !== options.previewGeneration;
-      if (loadToken !== workingScene.generation || stalePreviewLoad || options.isCurrent?.()===false || (greenroomPreviewIsActive() && options.register !== false)) {
+      if (loadToken !== workingScene.generation || stalePreviewLoad || !sourceCurrent() || (greenroomPreviewIsActive() && options.register !== false)) {
         if (typeof loadingTelemetry !== 'undefined') loadingTelemetry.cancel?.('asset', { token: telemetryOp?.token });
         disposeObjectTree(model);
         reject(new Error('stale async GLB load ignored'));
@@ -160,7 +165,7 @@ export function createSceneGlbLoader({GLTFLoader,workingScene,readScene,readAsse
       const prepared=Object.freeze({root:model,
         commit(){
           if(state!=='prepared')throw Error(`Prepared GLB is already ${state}`);
-          if(loadToken!==workingScene.generation||options.isCurrent?.()===false){prepared.dispose();throw Error('stale async GLB load ignored');}
+          if(loadToken!==workingScene.generation||!sourceCurrent()){prepared.dispose();throw Error('stale async GLB load ignored');}
           state='committing';
           try{const result=publish();state='committed';return result;}
           catch(error){state=model.parent?'committed':'prepared';throw error;}
@@ -179,11 +184,11 @@ export function createSceneGlbLoader({GLTFLoader,workingScene,readScene,readAsse
     };
     if(options.preparedAsset)Promise.resolve(options.preparedAsset).then(onLoad).catch(onError);
     else inputBytes.then(bytes=>{
-      if(loadToken!==workingScene.generation||options.isCurrent?.()===false)throw Error('stale async GLB load ignored');
+      if(loadToken!==workingScene.generation||!sourceCurrent())throw Error('stale async GLB load ignored');
       loadingTelemetry?.progress('asset',{label:telemetryLabel,phase:'decoding',token:telemetryOp?.token});
       return loader.parseAsync(bytes,isBlob?'':url.slice(0,url.lastIndexOf('/')+1));
     }).then(onLoad).catch(onError);
-  });
+  }).finally(detachAbort);
 };
  showGLB.prepare=(file,options={})=>showGLB(file,{...options,prepareOnly:true});
  return showGLB;

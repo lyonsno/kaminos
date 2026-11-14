@@ -115,6 +115,18 @@ test('a failed asynchronous restore leaves the membership history available to r
   assert.deepEqual(edits.state(), { active: null, undoCount: 1, redoCount: 0, replaying: false });
 });
 
+test('a known applied write with failed presentation advances Undo and Redo once while preserving the failure',async()=>{
+ let member={id:'mesh'};
+ const edits=createSceneEdits({read:()=>null,write(){}});
+ edits.register('@applied',{allowMissing:true,read:()=>structuredClone(member),check:value=>value,
+  async write(value){member=structuredClone(value);throw Object.assign(Error('draw failed after mutation'),{mutationApplied:true});}});
+ edits.recordApplied('@applied',null,member,'Add mesh');
+ await assert.rejects(edits.undo(),error=>error.message==='draw failed after mutation'&&error.mutationApplied===true);
+ assert.equal(member,null);assert.deepEqual(edits.state(),{active:null,replaying:false,undoCount:0,redoCount:1});
+ await assert.rejects(edits.redo(),/draw failed/);assert.deepEqual(member,{id:'mesh'});
+ assert.deepEqual(edits.state(),{active:null,replaying:false,undoCount:1,redoCount:0});
+});
+
 test('membership removal can preflight history admission before mutating the scene', () => {
   const editId = '@scene-membership:kiln';
   const before = { id: 'kiln', source: '/api/ingest-mesh/kiln.glb', type: 'glb' };

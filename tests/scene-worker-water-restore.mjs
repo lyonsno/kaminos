@@ -12,7 +12,7 @@ const {createSceneWorkerFireResources}=await import('../scene-worker-fire-resour
 const source=(id,width,samplesPerUnit)=>createLocalLiquidEmitterSceneRecord({id,transform:{position:[0,1,0],rotation:[0,0,0],scale:[1,1,1]},settings:{schema:LOCAL_LIQUID_EMITTER_SCHEMA,mode:'finite_drop',drop:{width,samplesPerUnit}}});
 function fixture(data,domainOptions={}){
  const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(),retained=[];let domains;
- const ctx={signal:new AbortController().signal,assertCurrent(){},report(){}};
+ const ctx={signal:new AbortController().signal,assertCurrent(){},report(){}};ctx.withFrames=async run=>run();ctx.commitForeground=async run=>({mutationApplied:true,value:run(ctx,{})});
  const renderer={toneMappingExposure:1,capabilities:{getMaxAnisotropy:()=>8},isWebGPURenderer:true,hasFeature:()=>false,getDrawingBufferSize:v=>v.set(32,32),library:{fromMaterial:material=>material},backend:{get:()=>({texture:{}})}};
  const target=()=>({texture:new THREE.Texture(),dispose(){}});
  const renderResources={renderer,pmremGenerator:{fromScene:target,fromEquirectangular:target},lighting:null,
@@ -106,7 +106,7 @@ for(const reset of [false,true])test(`replacement host follows Undo to a previou
  const loader=hostLoader(),f=fixture(waterDocument([flow()]),loader);
  try{await initialize(f);f.domains.prepareFrame();if(reset)f.shell.foregroundCommands['water.reset'](null,f.ctx);
   f.shell.foregroundCommands['scene.transformComponent']({id:'flow',field:'position.x',value:.2},f.ctx);await f.shell.commands['water.release'](null,f.ctx);const mount=loader.mounts.at(-1);assert.equal(mount.records[0].transform.position[0],.2);
-  f.shell.foregroundCommands['scene.undo'](null,f.ctx);f.domains.prepareFrame();assert.equal(mount.records[0].transform.position[0],0,'replacement host must adopt the undone authored pose');
+  await f.shell.commands['scene.undo'](null,f.ctx);f.domains.prepareFrame();assert.equal(mount.records[0].transform.position[0],0,'replacement host must adopt the undone authored pose');
  }finally{await f.retire();}
 });
 

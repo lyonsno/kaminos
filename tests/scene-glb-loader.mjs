@@ -59,3 +59,12 @@ test('abandoned or stale prepared GLB releases only its detached root and cannot
   assert.throws(()=>prepared.commit(),/stale|disposed|settled/i);
  }
 });
+test('cancelling detached preparation aborts its byte read and never admits the root',async()=>{
+ const f=fixture(),bytes=deferred(),controller=new AbortController();let signal;
+ f.services.readAssetBytes=(_file,options)=>{signal=options.signal;return bytes.promise;};
+ const task=factory(f.services).prepare('/mesh.glb',{signal:controller.signal,isCurrent:()=>!controller.signal.aborted});task.catch(()=>{});f.lighting.resolve();
+ controller.abort(Error('preparation canceled'));
+ try{assert.equal(signal.aborted,true,'caller cancellation must reach the actual asset byte reader');}
+ finally{bytes.resolve(new ArrayBuffer(12));await task.then(value=>value.dispose(),()=>{});}
+ assert.equal(f.calls.some(row=>row[0]==='admit'),false);
+});
