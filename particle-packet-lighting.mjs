@@ -4,7 +4,7 @@ import {collectStaticSceneGeometry,staticSceneGeometryRevision} from './scene-li
 export function createParticlePacketLighting({runtime,scene,onChange=()=>{},createNetwork=createPacketNetwork}){
  let settings=packetNetworkSettings(),enabled=false,owner=null,device=null,network=null,preparing=null,prepared=false,disposed=false,last=null,error=null,geometryKey=null,geometry=null,triangles=null,receipt=null,revision=0;
  const retire=(buffer,ownDevice)=>{if(buffer)queueMicrotask(()=>ownDevice.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>buffer.destroy()));};
- const read=()=>({enabled,settings:{...settings},phase:disposed?'disposed':error?'failed':!enabled?'off':!network?'awaiting-current-material':!prepared?'preparing':last?'fresh-packet-network':'awaiting-current-material',error,receipt});
+ const read=()=>({enabled,settings:{...settings},phase:disposed?'disposed':error?'failed':!enabled?'off':!network?'awaiting-current-material':!prepared?'preparing':last&&receipt?.available?'fresh-packet-network':'awaiting-current-material',error,receipt});
  function clear(){if(owner)owner.setOpticalParticleIncident(null);last=null;receipt=null;}
  function solids(frame){
   const transform=frame.domain.worldFromFine,key=JSON.stringify([staticSceneGeometryRevision(scene()),transform]);
@@ -18,11 +18,12 @@ export function createParticlePacketLighting({runtime,scene,onChange=()=>{},crea
   if(disposed||!enabled)return read();
   try{
    const next=runtime();if(next!==owner){clear();network?.dispose();retire(triangles,device);owner=next;network=null;device=null;triangles=null;geometryKey=null;prepared=false;preparing=null;revision++;}
+   if(network&&!prepared)return read();
    let result=null;
    const submitted=owner.submitOpticalParticleMaterial((encoder,frame,currentDevice)=>{
     if(!network){device=currentDevice;network=createNetwork(device);const generation=revision;preparing=network.prepare().then(()=>{if(disposed||generation!==revision)return;prepared=true;error=null;onChange(read());}).catch(e=>{if(generation===revision){error=e.message;onChange(read());}});}
     if(!prepared)return;
-    const identity=JSON.stringify([frame.identity.epoch,frame.identity.step,frame.identity.coefficients??frame.identity.frame,settings,staticSceneGeometryRevision(scene()),frame.domain.worldFromFine]);
+    const identity=JSON.stringify([frame.identity.epoch,frame.identity.step,frame.identity.materialStamp??frame.identity.frame,settings,staticSceneGeometryRevision(scene()),frame.domain.worldFromFine]);
     if(identity===last)return;
     solids(frame);result=network.encode(encoder,{material:frame,settings,triangles,triangleCount:geometry.triangles.length});last=identity;
    });
