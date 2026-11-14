@@ -56,7 +56,7 @@ export async function startSceneWorkerPage({document=globalThis.document,window=
    initialMode:new URLSearchParams(location.hash.slice(1)).get('workspace')==='authoring'?'authoring':'workbench',openWorkbenchTab:setActiveTab});
   window.kaminosWorkspace=workspace;workspace.setWorkbenchInspector(true);window.kaminosFrameSelected=owner.frameSelected;
   window.selectSceneField=id=>owner.editor.select([id]).catch(error=>report(error.message));
-  for(const tab of document.querySelectorAll('.tab'))tab.addEventListener('click',()=>setActiveTab(tab.dataset.tab));
+  for(const tab of document.querySelectorAll('.tab'))tab.addEventListener('click',()=>tab.dataset.tab==='generate'?window.kaminosAssets.open('generate'):setActiveTab(tab.dataset.tab));
   for(const selector of ['#authoring-box','#authoring-duplicate','#authoring-delete','#authoring-group-selection','#authoring-presets button','#authoring-gizmo-slot button','#selection-orientation','#selection-pivot','#viewport-studio-look-select','#authoring-viewport-settings input','#authoring-object-tools button','#authoring-transform-slot button','#scene-add-menu button','#composition-capture','button[onclick="exportGLB()"]'])for(const control of document.querySelectorAll(selector)){control.disabled=true;control.title='Unavailable in this preview';}
   window.openSavedScene=async()=>{if(document.querySelector('.scene-load-picker'))return;
    try{const choice=await chooseSavedSceneFromLibrary({pickSavedScene,request:fetch,resolveDocument:false});if(choice==='browse'){document.getElementById('scene-file-input').click();return;}if(choice)await owner.editor.openSaved(choice);}catch(error){report(error.message);}};

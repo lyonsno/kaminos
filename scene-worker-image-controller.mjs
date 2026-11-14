@@ -41,7 +41,7 @@ export function createSceneWorkerImageController({page,changed=()=>{}}){
    const {entry,runId,origin}=reply.output??{};
    if(!entry)throw Error('Worker image completion did not contain its saved asset');
    const outputs=state.outputs.map(row=>({...row})),index=outputs.findIndex(row=>row.id===runId);
-   const saved={...(index<0?{}:outputs[index]),id:runId,entry,origin,status:'complete',pending:false};
+   const saved={...(index<0?{}:outputs[index]),id:runId,name:entry.name,prompt:outputs[index]?.prompt??entry.display?.title??entry.label??entry.name,entry,origin,status:'complete',pending:false};
    if(index<0)outputs.push(saved);else outputs[index]=saved;
    state={...state,outputs,status:'complete',canStop:false,canDecode:false,statusError:null};publish();
    // Persistence already completed. A later read may lose its epoch or

@@ -32,3 +32,7 @@ test('Stop and Decode now target the actual active worker operation, and saving 
  const error=Object.assign(Error('stopped after settlement'),{name:'AbortError'});f.done.reject(error);await assert.rejects(run,error);
  assert.equal(f.controller.read().status,'stopped');assert.equal(f.controller.busy(),false);
 });
+test('saved output keeps a readable name when the follow-up status read fails',async()=>{
+ const f=fixture(),run=f.controller.run({prompt:'a basin'});f.failRead();f.done.resolve({output:{entry:f.entry,runId:'run-1'}});await run;
+ assert.equal(f.controller.read().outputs[0].name,'result.png');assert.equal(f.controller.read().outputs[0].prompt,'result.png');
+});

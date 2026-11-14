@@ -12,7 +12,11 @@ export function createSceneWorkerAssets({request=async url=>{
   'assets.read':operation(()=>{}),
   'assets.refresh':operation(()=>controller.refresh()),
   'assets.ensure':operation(()=>controller.ensure()),
-  'assets.browse':operation(({root,path})=>controller.browse(root,path)),
-  'assets.select':operation(({entry})=>controller.select(entry)),
+  'assets.browse':operation(input=>{const {root,path}=input??{};return controller.browse(root,path);}),
+  'assets.select':operation(input=>{
+   const entry=input?.entry;if(!entry)return controller.select(entry);
+   const root=entry.root??entry.root_id,label=entry.label??entry.display?.title??entry.name;
+   return controller.select({...entry,...(root?{root}:{}),...(label?{label}:{})});
+  }),
  }};
 }

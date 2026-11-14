@@ -235,7 +235,7 @@ export function installAuthoringAssets({document,controller,edits,capabilities={
     runById('generation-header-status').textContent=generation.status==='stopping'?'Stopping…':`${generation.stage||'Generating'}${Number.isFinite(generation.percent)?' · '+Math.round(generation.percent)+'%':''}`;runById('generation-header-show').title=generation.error||generation.progress||'Show generation';
     runById('generation-header-stop').hidden=!generation.canStop&&generation.status!=='stopping';runById('generation-header-stop').disabled=!generation.canStop;
     byId('asset-run').disabled=withheld||selected?.kind!=='image'||(preparation?.status!=='complete'&&!controller.preparesInput?.())||!!generation.pending||['preparing','input','loading','running','stopping','saving','unavailable'].includes(generation.status);byId('asset-recover').hidden=!generation.pending;
-    byId('asset-generation').hidden=mode!=='generate'&&!active;
+    byId('asset-generation').hidden=!!capabilities.meshUnavailableReason||(mode!=='generate'&&!active);
     byId('asset-stop').hidden=!generation.canStop&&generation.status!=='stopping';byId('asset-stop').disabled=!generation.canStop;byId('asset-stop').textContent=generation.status==='stopping'?'Stopping…':'Stop';
     const bar=byId('asset-progress');if(Number.isFinite(generation.percent))bar.value=generation.percent;else bar.removeAttribute('value');
     bar.hidden=!['preparing','input','loading','running','stopping','saving','complete'].includes(generation.status);
@@ -243,7 +243,7 @@ export function installAuthoringAssets({document,controller,edits,capabilities={
     byId('asset-generation-status').textContent=generation.error || generation.progress || (selected?.kind==='image'?'Source selected; generate when you want.':'Choose a source image.');
     byId('asset-results').replaceChildren(...state.results.map(result=>{const button=document.createElement('button');button.type='button';button.className='asset-result';button.textContent=`Add ${result.name}`;button.disabled=state.adding;button.onclick=()=>action(()=>controller.add(result));return button;}));
     for(const [key,ids]of Object.entries({add:['asset-add'],upload:['asset-file-open'],meshHistory:['asset-history','asset-watch-history']}))if(capabilities[key]===false)for(const id of ids){byId(id).disabled=true;byId(id).title='Not yet connected to the scene worker';}
-    if(capabilities.meshUnavailableReason){byId('asset-run').disabled=true;byId('asset-run').title=capabilities.meshUnavailableReason;byId('asset-prepare').hidden=true;byId('asset-preparation-status').textContent=capabilities.meshUnavailableReason;}
+    if(capabilities.meshUnavailableReason){byId('asset-run').disabled=true;byId('asset-run').title=capabilities.meshUnavailableReason;byId('asset-prepare').hidden=true;byId('asset-preparation-status').textContent='';}
 
   }
   panel.querySelectorAll('[data-assets-mode]').forEach(button=>button.onclick=()=>setMode(button.dataset.assetsMode));

@@ -227,6 +227,7 @@ body[data-workspace=authoring].has-assets-panel #authoring-right,body[data-works
 /* The same Assets panel remains available in either workspace. */
 body.has-authoring-workspace[data-workspace=workbench].has-assets-panel{--asset-workbench-rows:0px;--asset-workbench-default:clamp(250px,32vh,370px);--asset-workbench-height:min(var(--authoring-assets-height,var(--asset-workbench-default)),max(160px,calc(100vh - 222px - var(--asset-workbench-rows))));grid-template-rows:42px minmax(0,1fr) var(--asset-workbench-height);}
 body[data-workspace=workbench] #authoring-assets{grid-column:1/-1;grid-row:3;}
+body.has-authoring-workspace[data-workspace=workbench].has-assets-panel:has(#asset-generate:not([hidden])){--asset-workbench-default:460px;}
 @media(max-width:800px){body.has-authoring-workspace.experiment-workspace[data-workspace=workbench].has-assets-panel{--asset-workbench-rows:190px;--asset-workbench-default:260px;grid-template-rows:42px minmax(0,1fr) minmax(0,190px) var(--asset-workbench-height);}body[data-workspace=workbench] #authoring-assets{grid-row:4;}}
 @media(max-width:540px){body.has-authoring-workspace.experiment-workspace[data-workspace=workbench].has-assets-panel{--asset-workbench-rows:50vh;grid-template-rows:42px minmax(0,1fr) minmax(0,25vh) minmax(0,25vh) var(--asset-workbench-height);}body[data-workspace=workbench] #authoring-assets{grid-row:5;}}
 .asset-browser-status{display:flex;align-items:center;gap:7px;flex:none;margin-top:8px;}

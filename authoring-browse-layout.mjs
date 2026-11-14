@@ -28,7 +28,7 @@ export function thumbnailDistance({size,fovDeg=35,aspect=1,margin=1.08}){
 
 const LABELS={'generated-meshes':'Saved assets','image-inbox':'Source images',greenroom:'Generator outputs','agent-work':'Agent work',pixal3d:'Pixal',trellis2mlx:'TRELLIS'};
 
-export function installBrowseLayout({document,controller,inScene=()=>new Set(),open=()=>{},openMasks=null}){
+export function installBrowseLayout({document,controller,inScene=()=>new Set(),open=()=>{},openMasks=null,canAdd=true}){
   const byId=id=>document.getElementById(id);
   const browse=byId('asset-browse');if(!browse)throw Error('Browse panel is missing');
   const header=document.createElement('div');header.id='asset-browse-header';
@@ -43,11 +43,13 @@ export function installBrowseLayout({document,controller,inScene=()=>new Set(),o
   byId('asset-use-image')?.before(masks);
   let chipKey=null;
   // Double-click: a mesh goes into the scene, an image goes to Generate.
-  byId('asset-entries').addEventListener('dblclick',event=>{
+  byId('asset-entries').addEventListener('dblclick',async event=>{
     const button=event.target.closest('.asset-entry');if(!button)return;
-    const selected=controller.read({selectionOnly:true}).selected;if(!selected||selected.visibility?.status==='withheld')return;
-    if(['mesh','surface'].includes(selected.kind))controller.add().catch(()=>{});
-    else if(selected.kind==='image')open('generate');
+    const selected=controller.read().entries.find(entry=>(entry.source||entry.path)===button.dataset.assetPath);if(!selected||selected.visibility?.status==='withheld')return;
+    try{await controller.select(selected);
+      if(['mesh','surface'].includes(selected.kind)){if(canAdd)await controller.add();}
+      else if(selected.kind==='image')open('generate');
+    }catch{/* the controller preserves its visible operation error */}
   });
   function render(state=controller.read()){
     const key=state.roots.map(r=>r.id).join('|')+'#'+state.root;

@@ -11,7 +11,7 @@ function fixture(){
 }
 test('shared drawer uses actual worker catalog and selected image, preserving unchanged selections on refresh',async()=>{
  const f=fixture();await f.controller.ensure();assert.deepEqual(f.requests,['/api/roots','/api/authoring-assets?collection=image-inbox']);
- assert.equal(f.controller.read().selected,null);await f.controller.select(entry);assert.deepEqual(f.controller.read({selectionOnly:true}).selected,entry);
+ assert.equal(f.controller.read().selected,null);await f.controller.select(entry);assert.equal(f.controller.read({selectionOnly:true}).selected.source,entry.source);
  await f.controller.refresh();assert.equal(f.controller.read().selected.source,entry.source);assert.equal(f.controller.read().loading,false);
 });
 test('asset replies from an expired worker context cannot become current drawer state',async()=>{
@@ -28,4 +28,14 @@ test('out of order projections do not roll selected image back',async()=>{
 test('missing catalog output fails visibly and releases the presentation loading state',async()=>{
  const c=createSceneWorkerAssetsController({page:{request:()=>({completion:Promise.resolve({output:{}})})}});
  await assert.rejects(c.refresh(),/catalog state/);assert.equal(c.read().loading,false);assert.match(c.read().error,/catalog state/);
+});
+test('saved image entries carry their actual inbox and human title into selection',async()=>{
+ const f=fixture(),saved={...entry,root_id:'image-inbox',display:{title:'A bronze basin'}};
+ await f.worker.commands['assets.select']({entry:saved},context);
+ const result=await f.worker.commands['assets.read'](null,context);
+ assert.equal(result.state.selected.root,'image-inbox');assert.equal(result.state.selected.label,'A bronze basin');
+});
+test('omitted browse payload uses the current collection; omitted selection has a domain error',async()=>{
+ const f=fixture();await f.controller.ensure();const result=await f.worker.commands['assets.browse'](null,context);assert.equal(result.state.root,'image-inbox');
+ await assert.rejects(f.worker.commands['assets.select'](null,context),/Choose a 3D asset or source image/);
 });
