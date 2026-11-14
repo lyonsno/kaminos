@@ -122,11 +122,16 @@ test('native carriers measure directional stretch from transport, distinguishing
    const settings={reactionEnabled:false,transportEnabled:true,flow:.5,opticalCutoff:0};
    await draw(0,settings);await draw(1,settings);
    assert.equal((await owner.sample()).records[14],0,'normal rendering collects no extra velocity samples');
-   await draw(2,{...settings,debugView:9});const record=(await owner.sample()).records;
+   await draw(2,{...settings,debugView:9});const sample=await owner.sample(),record=sample.records;
+   assert.deepEqual(sample.state.stretch,{status:'latest-update',fieldStep:2,fromStep:1,flow:.5,backtrace:2,referenceStepScale:1});
    assert.ok(Math.abs(record[14]-expected)<1e-5,`expected ${expected}, got ${record[14]}`);
-   await draw(2,{...settings,debugView:9});assert.deepEqual((await owner.sample()).records,record,'a paused view does not measure or advance transport');
+   await draw(2,{...settings,debugView:9,flow:.25});const held=await owner.sample();
+   assert.deepEqual(held.records,record,'a paused view does not measure or advance transport');
+   assert.deepEqual(held.state.stretch,{...sample.state.stretch,status:'held'},'the measurement retains its own flow and step after an edit');
    await draw(3,{...settings,debugView:9,transportEnabled:false});
-   assert.equal((await owner.sample()).records[14],0,'no measurement when transport is off');
+   const unavailable=await owner.sample();
+   assert.equal(unavailable.records[14],0,'no measurement when transport is off');
+   assert.deepEqual(unavailable.state.stretch,{status:'unmeasured'});
   },{state:[0,0,1,0],velocity,backtrace:2,stepScale:1});
  });
 });
@@ -142,6 +147,16 @@ test('Fine-flow stretch is a rate in reference time, not a finite displacement',
    assert.ok(Math.abs(state[0]-.185)<1e-5,'native center motion spans both elapsed steps, independently of reference scale');
   },{state:[0,0,1,0],velocity:([x,y])=>[.2*x,-.2*y,0],backtrace:3,stepScale:dtScale});
  });
+});
+test('Fine-flow stretch leaves a clamped velocity stencil unmeasured',async()=>{
+ await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw})=>{
+  const rows=new Float32Array(16*16);rows.set([1,0,0,1,0,.75,0,1,-.2,.2,0,.1,0,0,0,0]);seed(rows);
+  const settings={debugView:9,reactionEnabled:false,flow:1};
+  await draw(0,settings);await draw(1,settings);
+  const state=(await owner.sample()).records;
+  assert.equal(state[3],2,'carrier remains live beside the wall');
+  assert.equal(state[14],0,'rigid spin at a clamped face is not a material stretch observation');
+ },{state:[0,0,1,0],velocity:([x,y])=>[-.2*y,.2*x,0],backtrace:1}));
 });
 test('reaction creates soot extinction from actual fuel and oxygen when the initial grid has no soot',async()=>{
  await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw})=>{
