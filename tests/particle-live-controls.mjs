@@ -70,7 +70,7 @@ test('material controls expose exchange, survival, follow acquisition and normal
   for(const key of ['reactionSeedLength','reactionSupportCoupling','carriedSmokeGain','generatedSmokeGain'])assert.equal(x.field(key),undefined,'obsolete proxy/split control must not be exposed');
   for(const key of ['exchangeStrength','stateLife','lifeFade','followFraction','emissionEdgeSoftness','extinctionEdgeSoftness'])assert.equal(x.field(key).max,'1');
   for(const [key,value] of [['exchangeStrength',.25],['stateLife',.5],['followFraction',.8],['emissionFalloff',1.4]]){const input=x.field(key);input.classList.add('scrubbing');input.value=String(value);input.fire('input');await Promise.resolve();assert.equal(x.accepted()[key],value);input.classList.remove('scrubbing');}
-  const view=x.field('debugView');assert.equal(view.children.length,9);view.value='7';view.fire('change');await Promise.resolve();assert.equal(x.accepted().debugView,7);assert.equal(x.trace.reset.length,0);
+  const view=x.field('debugView');assert.ok(view.children.some(option=>option.value==='7'),'keep the grouping view available');assert.ok(view.children.some(option=>option.value==='9'&&option.textContent==='Fine-flow stretch'));view.value='9';view.fire('change');await Promise.resolve();assert.equal(x.accepted().debugView,9);assert.equal(x.field('showRaymarch').disabled,true);assert.equal(x.field('phaseFilter').disabled,false);assert.equal(x.trace.reset.length,0);
  }finally{await x.dispose();}
 });
 test('effective proposal shares expose normalized weights and an unassigned remainder',async()=>{

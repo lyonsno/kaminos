@@ -61,7 +61,7 @@ export function particleReactionFromSimulation(config){
  return {burnTime:e.mixingTimeSteps,cooling:e.coolingTimeSteps,heatRelease:e.model.heatOfCombustion,sootYield:e.model.sootYield,smokeLife:e.model.sootRetirementSteps};
 }
 const OPTIONS=/* wgsl */`
-// Motion: measured fuel burn per reference step (0 unmeasured, -1 measured zero), vertical rise, unused, survival.
+// Motion: measured fuel burn per reference step (0 unmeasured, -1 measured zero), vertical rise, optional Fine stretch rate (0 unmeasured, -1 measured no stretch), survival.
 struct Particle {anchor:vec4<f32>, source:vec4<f32>, emission:vec4<f32>, motion:vec4<f32>, shape:vec4<f32>, state:vec4<f32>}
 struct Options {vp:mat4x4<f32>, inverse:mat4x4<f32>, size:vec4<u32>, time:vec4<f32>, reaction:vec4<f32>, shape:vec4<f32>, transport:vec4<f32>, fine:vec4<f32>, gain:vec4<f32>, raster:vec4<f32>, support:vec4<f32>, acquisition:vec4<u32>, lighting:vec4<f32>, seed:vec4<f32>, visibility:vec4<f32>,chemistry:vec4<f32>,material:vec4<f32>,appearance:vec4<f32>,lives:vec4<f32>,lifeControl:vec4<f32>,kernelE:vec4<f32>,kernelT:vec4<f32>,oxidation:vec4<f32>,work:vec4<f32>,workExtra:vec4<f32>,reservedWork:vec4<f32>}
 struct SourceOptions {vp:mat4x4<f32>,size:vec4<u32>,policy:vec4<f32>,life:vec4<f32>,flow:vec4<f32>,worldLo:vec4<f32>,worldDims:vec4<f32>,worldMap:vec4<f32>,middleLo:vec4<f32>,middleDims:vec4<f32>,middleMap:vec4<f32>,arenaOffsets:vec4<u32>}
@@ -167,11 +167,47 @@ fn particleVelocity(p:vec3<f32>)->vec3<f32>{
  let middle=source.middleDims.w>.5&&all(q>=source.middleLo.xyz)&&all(q<source.middleLo.xyz+source.middleDims.xyz*source.middleLo.w);
  return coarseVelocity(p,middle);
 }
+// Differentiate the same trilinear Fine velocity interpolant as center transport.
+fn particleFineVelocityGradient(p:vec3<f32>)->mat3x3<f32>{
+ let dims=vec3<i32>(u.fine.xyz);
+ var gradient=mat3x3<f32>();
+ for(var component=0u;component<3u;component++){
+  var offset=vec3<f32>(.5);if(source.flow.w>.5){offset[component]=1.0;}
+  let raw=(p+vec3<f32>(1))/source.flow.z-offset;
+  let lo=vec3<f32>(0);let hi=vec3<f32>(dims)-1.001;
+  let cell=clamp(raw,lo,hi);let base=vec3<i32>(floor(cell));let f=fract(cell);
+  var row=vec3<f32>(0);
+  for(var z=0;z<2;z++){for(var y=0;y<2;y++){for(var x=0;x<2;x++){
+   let c=clamp(base+vec3<i32>(x,y,z),vec3<i32>(0),dims-1);
+   let index=u32(c.x+dims.x*(c.y+dims.y*c.z));
+   let upper=vec3<bool>(x==1,y==1,z==1);
+   let w=select(1.0-f,f,upper);let dw=select(vec3<f32>(-1),vec3<f32>(1),upper);
+   row+=fine[4u*index][component]*dw*vec3<f32>(w.y*w.z,w.x*w.z,w.x*w.y);
+  }}}
+  // World velocity multiplies by pitch and the spatial derivative divides by it.
+  row=select(vec3<f32>(0),row,(raw>=lo)&(raw<=hi));
+  gradient[0][component]=row.x;gradient[1][component]=row.y;gradient[2][component]=row.z;
+ }
+ return gradient;
+}
+fn particleLargestStretch(g:mat3x3<f32>)->f32{
+ // d(log length)/dt = n^T sym(grad(v)) n. Only the maximum is shown here;
+ // neither rigid spin nor translation contributes.
+ let a=(g+transpose(g))*.5;
+ let mean=(a[0].x+a[1].y+a[2].z)/3.0;
+ let diagonal=vec3<f32>(a[0].x,a[1].y,a[2].z)-mean;
+ let off=vec3<f32>(a[0].y,a[0].z,a[1].z);
+ let scale=sqrt((dot(diagonal,diagonal)+2.0*dot(off,off))/6.0);
+ if(scale<1e-15){return mean;}
+ let centered=mat3x3<f32>(vec3<f32>(diagonal.x,off.x,off.y),vec3<f32>(off.x,diagonal.y,off.z),vec3<f32>(off.y,off.z,diagonal.z))*(1.0/scale);
+ let angle=acos(clamp(determinant(centered)*.5,-1.0,1.0))/3.0;
+ return mean+2.0*scale*cos(angle);
+}
 @compute @workgroup_size(64) fn update(@builtin(global_invocation_id) id:vec3<u32>){
  let i=id.x;if(i>=u.size.z){return;}var p=particles[i];let steps=u.time.x;let dt=steps*u.fine.w;
  if(p.anchor.w>0&&dt>0&&particleOutsideSingleGrid(p.anchor.xyz)){p.anchor.w=0;if(u.seed.z>.5){atomicAdd(&pool.escaped,1u);}}
  if(p.anchor.w>0&&dt>0){
-  p.motion.x=0.0;
+  p.motion.x=0.0;p.motion.z=0.0;
   if(u.work.x>.5){let s=particleCompositionBurn(p.state,dt,u.chemistry,vec4<f32>(u.reaction.xy,u.reaction.w,u.time.w));let rate=s.burned/dt;
   p.motion.x=select(-1.0,rate,rate>0.0);
   p.state=s.state;p.state.z=particleSootBurnout(p.state,dt,u.oxidation.x,u.appearance.x,u.oxidation.y);p.emission=vec4<f32>(particleIntrinsic(p.state,rate),p.emission.w);}
@@ -179,6 +215,10 @@ fn particleVelocity(p:vec3<f32>)->vec3<f32>{
   if(u.work.y>.5){let damping=exp(-dt/u.transport.z);
   p.motion.y=p.motion.y*damping+u.transport.y*p.state.y*u.transport.z*(1.0-damping);p.motion.w=life.x;
   var flow=vec3<f32>(0);if(u.transport.x>0||u.raster.z>0){flow=particleVelocity(p.anchor.xyz);}
+  if(u.lifeControl.w==9.0&&u.transport.x>0.0&&particleInsideFine(p.anchor.xyz)){
+   let rate=particleLargestStretch(particleFineVelocityGradient(p.anchor.xyz))*u.transport.x*u.time.z/u.fine.w;
+   p.motion.z=select(-1.0,rate,rate>1e-7);
+  }
   if(u.raster.z>0&&dot(flow,flow)>1e-12){p.shape.yz=particleDirectionEncode(normalize(flow));}
   p.anchor=vec4<f32>(p.anchor.xyz+flow*steps*u.time.z*u.transport.x+vec3<f32>(0,p.motion.y*dt,0),p.anchor.w+dt);}else{p.motion.w=life.x;p.anchor.w+=dt;}
   if(particleOutsideSingleGrid(p.anchor.xyz)){p.anchor.w=0;if(u.seed.z>.5){atomicAdd(&pool.escaped,1u);}}
@@ -320,6 +360,11 @@ center.x+=offset.x*2.0/u.raster.x*center.w;center.y+=offset.y*2.0/u.raster.y*cen
   else if(viewMode==4u){color=vec3<f32>(.65,.8,1)*p.state.z;}
   else if(viewMode==5u){let t=clamp((p.anchor.w-1.0)/max(1.0,u.lives.y),0.0,1.0);color=vec3<f32>(t,.2,1.0-t);}
   else if(viewMode==6u){color=vec3<f32>(p.motion.w,1.0-p.motion.w,.1);}
+  else if(viewMode==9u){
+   let strength=1.0-exp(-max(0.0,p.motion.z));
+   color=mix(vec3<f32>(.05,.22,.55),vec3<f32>(1,.6,.07),strength);
+   if(p.motion.z==0.0){color=vec3<f32>(.08);}
+  }
   FIELD_VIEW_COLOR
   else{let c=floor((p.anchor.xyz+vec3<f32>(1))/(u.kernelE.w*2.0/u.fine.x));color=.3+.7*fract(sin(c*vec3<f32>(12.9898,78.233,39.425))*43758.5453);}
   optical=vec4<f32>(max(color,vec3<f32>(.02))*.2,.08);
@@ -414,7 +459,7 @@ export function createOpticalParticles(device,{transparent=false,indexedQuads=tr
   // Material diagnostics show every live carrier, including clear fuel/air,
   // without optical occlusion hiding the state being inspected.
   if(s.debugView>0)s={...s,depthMode:0,fillExtinction:0,extinctionView:0};
-  if(s.phaseFilter>0)s={...s,showRaymarch:false,fillExtinction:0,extinctionView:0};
+  if(s.phaseFilter>0||s.debugView===9)s={...s,showRaymarch:false,fillExtinction:0,extinctionView:0};
   const gridRequested=requested.fillExtinction>0||requested.extinctionView>0;let gridActive=gridRequested&&s.debugView===0&&s.phaseFilter===0,gridUnavailable=null;
   if(gridActive)try{validateParticleGridExtinction(gridExtinction,{viewProj:source.viewProj,dims});}catch(error){if(!allowUnavailableGridExtinction)throw error;gridUnavailable=error.message;gridActive=false;s={...s,fillExtinction:0,extinctionView:0};}
   const columns=s.populationWidth||Math.ceil(width/s.spacing),rows=s.populationHeight||Math.ceil(height/s.spacing),slots=s.capacity||columns*rows;
@@ -509,7 +554,7 @@ export function createOpticalParticles(device,{transparent=false,indexedQuads=tr
    refreshed:refreshThisDraw,initializesNewborns:initializeBirthLight||refreshThisDraw&&!!emitterPlan,lastStep:lastLightStep,generation:lastLightGeneration,appearanceEdit:lastLightAppearanceEdit};
   const readState=()=>({lightRefresh:lightState,emitter:emitterMode?{effective:emitter?'admitted-immersed-source':'unavailable',reason:emitter?null:source.emitterUnavailable??'no-admitted-immersed-source',birthStep:emitterPlan?.sourceStep??null,birthsRequested:emitterPlan?.count??0,uncapturedSteps:Math.max(0,requestedDt-(emitterPlan?1:0)),light:lightState,scratchBytes:emitterScratchBytes}:null,requested:true,effective:'world-optical-particles',width,height,slots,spacing:s.spacing,populationSize:s.capacity?[slots,1]:[columns,rows],sourcePixels:pixels,targetSize:[targetWidth,targetHeight],bytes:emitterScratchBytes+particles.size+textureBytes+(depthPlan?.bytes??0)+(quadIndices?.size??0)+(exchangeState?.bytes??0)+options.size+thermal.size+camera.size+pool.size+emptyField.size+(coverageBuffer?.size??0),sourceBytes:source.buffer.size,totalBytes:emitterScratchBytes+particles.size+textureBytes+source.buffer.size+(depthPlan?.bytes??0)+(quadIndices?.size??0)+(exchangeState?.bytes??0)+options.size+thermal.size+camera.size+pool.size+emptyField.size+(coverageBuffer?.size??0),memoryScope:"current pool, targets, grouping and uniforms; excludes in-flight retired resources and external fields",frames:frame,step,stepDelta:dt,requestedStepDelta:requestedDt,reactionStepDelta:dt*(source.reactionStepScale??1),renewal:lastRenewal?{...lastRenewal}:null,settings:requested,effectiveDepthMode:s.depthMode,
    presentation:directTransfer?'direct-optical-transfer':'resolved-image',resolvePass:!directTransfer,geometry:indexedQuads?'indexed-quad':'expanded-quad',geometryBytes:quadIndices?.size??0,uniqueVertexReferences:indexedQuads?4:6,outputSize:[outputWidth,outputHeight],freshSamples:source.samples??pixels,work:{updateSlots:advancing?slots:0,updatePassSlots:updatePass?slots:0,reactionEnabled:advancing&&s.reactionEnabled,transportEnabled:advancing&&s.transportEnabled,birthCapacityPerFrame:birthsThisDraw?Math.min(source.samples??pixels,slots):0,drawInstances:s.showParticles?slots:0,particlePixels:s.showParticles?targetWidth*targetHeight:0,exchange:exchangeState?.work,maxFootprint:s.maxFootprint,profileMode:s.profileMode,opticalCutoff:s.opticalCutoff},follow:followState,collection:s.acquisitionMode?'rotating world-space pool':'camera-stratified slots',screenSupportUnits:s.acquisitionMode?'display pixels':'source pixels',drawn:s.showParticles,raymarchVisible:s.showRaymarch,recordFloats:24,shapeEncoding:'birth pitch; octahedral flow direction XY; represented ray length',footprintTransfer:emitterMode?'emitter optical weight retained at footprint ceiling':'ray observation footprint',
-   clipDepth:depthZeroToOne?'zero-to-one':'minus-one-to-one',source:'native optical observation plus actual interpolated Fine fuel/heat/soot/oxidizer',flow:'current sampled Fine velocity plus authored heat-driven residual',reaction:'carried reactants; stoichiometric burn, thermal release, cooling and soot retirement',exchange:exchangeState?{bytes:exchangeState.bytes,cellDims:exchangeState.cellDims,cellCount:exchangeState.cellCount,planned:exchangeState.planned,residentGrouping:exchangeState.residentGrouping,fraction:exchangeState.effectiveFraction,fractions:exchangeState.fractions,grouping:exchangeState.grouping,mixing:exchangeState.mixing,field:exchangeState.field?{valid:exchangeState.field.valid,step:exchangeState.lastFieldStep,nodeDims:exchangeState.field.nodeDims,nodeCount:exchangeState.field.nodeCount,spacing:exchangeState.field.spacing,bytes:exchangeState.field.bytes}:null,work:exchangeState.work,counts:'pending explicit readback'}:null,lifetime:'state-weighted representation clock; independent advanced maximum age',view:s.debugView?'carried-material-diagnostic':'optical' ,gridAssist:{requested:gridRequested,effective:gridActive?'current-single-grid-extinction':gridUnavailable?'unavailable':'off',reason:gridUnavailable,strength:requested.fillExtinction,effectiveStrength:s.fillExtinction,slack:s.extinctionSlack,view:requested.extinctionView,frame:gridActive?gridExtinction.frame:null,generation:gridActive?gridExtinction.generation:null,dimensions:gridActive?gridExtinction.dimensions:null,coefficientSampling:gridActive?'prepared cell coefficients, exact cell traversal':'none'},depthField:depthPlan?{...depthPlan,mode:s.depthMode===1?'uniform-slice-mixture':'fractional-source-depth',range:'GPU retained positive camera-depth min/max',support:'one billboard center slice; piecewise-constant XY',cost:'bounds + one deposition + prefix + source raster'}:null,composition:s.depthMode?'depth-sliced particle extinction; ordered slices':'additive optical moments; approximate mixed-depth attenuation',generatedSmoke:'actual carried soot, updated by reaction and exchange; total visibility controlled by extinction gain',reset:resetNeeded});
+   clipDepth:depthZeroToOne?'zero-to-one':'minus-one-to-one',source:'native optical observation plus actual interpolated Fine fuel/heat/soot/oxidizer',flow:'current sampled Fine velocity plus authored heat-driven residual',reaction:'carried reactants; stoichiometric burn, thermal release, cooling and soot retirement',exchange:exchangeState?{bytes:exchangeState.bytes,cellDims:exchangeState.cellDims,cellCount:exchangeState.cellCount,planned:exchangeState.planned,residentGrouping:exchangeState.residentGrouping,fraction:exchangeState.effectiveFraction,fractions:exchangeState.fractions,grouping:exchangeState.grouping,mixing:exchangeState.mixing,field:exchangeState.field?{valid:exchangeState.field.valid,step:exchangeState.lastFieldStep,nodeDims:exchangeState.field.nodeDims,nodeCount:exchangeState.field.nodeCount,spacing:exchangeState.field.spacing,bytes:exchangeState.field.bytes}:null,work:exchangeState.work,counts:'pending explicit readback'}:null,lifetime:'state-weighted representation clock; independent advanced maximum age',view:s.debugView===9?'fine-flow-stretch':s.debugView?'carried-material-diagnostic':'optical' ,gridAssist:{requested:gridRequested,effective:gridActive?'current-single-grid-extinction':gridUnavailable?'unavailable':'off',reason:gridUnavailable,strength:requested.fillExtinction,effectiveStrength:s.fillExtinction,slack:s.extinctionSlack,view:requested.extinctionView,frame:gridActive?gridExtinction.frame:null,generation:gridActive?gridExtinction.generation:null,dimensions:gridActive?gridExtinction.dimensions:null,coefficientSampling:gridActive?'prepared cell coefficients, exact cell traversal':'none'},depthField:depthPlan?{...depthPlan,mode:s.depthMode===1?'uniform-slice-mixture':'fractional-source-depth',range:'GPU retained positive camera-depth min/max',support:'one billboard center slice; piecewise-constant XY',cost:'bounds + one deposition + prefix + source raster'}:null,composition:s.depthMode?'depth-sliced particle extinction; ordered slices':'additive optical moments; approximate mixed-depth attenuation',generatedSmoke:'actual carried soot, updated by reaction and exchange; total visibility controlled by extinction gain',reset:resetNeeded});
   if(!s.showParticles){if(!s.showRaymarch){const clear=encoder.beginRenderPass({label:'hidden particle display clear',...profileWrites('present'),colorAttachments:[{view,loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}]});clear.end();}if(retired.length){const old=retired.splice(0);queueMicrotask(()=>device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>old.forEach(x=>x.destroy())));}info=readState();return info;}
   const curveKey=JSON.stringify(s.coverage);
   if(curveKey!==coverageKey){

@@ -23,7 +23,7 @@ test('reaction visibility defaults to all particles and rejects unknown modes',(
 function actualGrid(d,{state=[1,1,.2,3],velocity=[0,0,0]}={}){
  const fine=d.createBuffer({size:8*64,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
  const reactants=d.createTexture({size:[2,2,2],dimension:'3d',format:'rg32float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});
- function upload(next=state){const material=new Float32Array(8*16),oxygen=new Float32Array(8*2);for(let i=0;i<8;i++){const s=typeof next==='function'?next([i%2,Math.floor(i/2)%2,Math.floor(i/4)].map(v=>v-.5)):next;material.set([...velocity,0],i*16);material.set([s[2],s[1],s[0],0],i*16+4);oxygen.set([s[3],.01],i*2);}d.queue.writeBuffer(fine,0,material);d.queue.writeTexture({texture:reactants},oxygen,{bytesPerRow:16,rowsPerImage:2},[2,2,2]);}
+ function upload(next=state){const material=new Float32Array(8*16),oxygen=new Float32Array(8*2);for(let i=0;i<8;i++){const s=typeof next==='function'?next([i%2,Math.floor(i/2)%2,Math.floor(i/4)].map(v=>v-.5)):next;material.set([...(typeof velocity==='function'?velocity([i%2,Math.floor(i/2)%2,Math.floor(i/4)].map(v=>v-.5)):velocity),0],i*16);material.set([s[2],s[1],s[0],0],i*16+4);oxygen.set([s[3],.01],i*2);}d.queue.writeBuffer(fine,0,material);d.queue.writeTexture({texture:reactants},oxygen,{bytesPerRow:16,rowsPerImage:2},[2,2,2]);}
  upload();return {fine,reactants,upload,dispose(){fine.destroy();reactants.destroy();}};
 }
 test('production particle update transports actual fine flow, preserves paused state and renders supported material',async()=>{
@@ -103,6 +103,32 @@ test('reaction-phase solo changes the held optical draw without changing its car
   assert.deepEqual(await draw(120,{...settings,phaseFilter:1}),blank);
   assert.deepEqual(await draw(120,settings),cold,'clearing solo restores the same held optical result');
  },{state:[1,1,1,3]}));
+});
+test('material stretch view is an opt-in diagnostic',()=>{
+ assert.equal(opticalParticleSettings({debugView:9}).debugView,9);
+ assert.throws(()=>opticalParticleSettings({debugView:10}),/Unknown particle material view/);
+});
+test('native carriers measure directional stretch from transport, distinguishing expansion, shear and rigid flow',async()=>{
+ await withKaminosGpu(async({device:d})=>{
+  for(const [velocity,expected] of [
+   [()=>[.03,.05,.02],-1],
+   [([x,y])=>[-.2*y,.2*x,0],-1],
+   [([x,y])=>[.2*x,-.2*y,0],.2],
+   [([,y])=>[.4*y,0,0],.2],
+   [([x,y,z])=>[.2*x,.2*y,.2*z],.2],
+   [([x,y,z])=>[-.2*x,-.2*y,-.2*z],-1],
+  ])await opticalFixture(d,async({owner,seed,draw})=>{
+   const rows=new Float32Array(16*16);rows.set([1,0,0,1,0,0,0,1,-.2,.2,0,.1,0,0,0,0]);seed(rows);
+   const settings={reactionEnabled:false,transportEnabled:true,flow:.5,opticalCutoff:0};
+   await draw(0,settings);await draw(1,settings);
+   assert.equal((await owner.sample()).records[14],0,'normal rendering collects no extra velocity samples');
+   await draw(2,{...settings,debugView:9});const record=(await owner.sample()).records;
+   assert.ok(Math.abs(record[14]-expected)<1e-5,`expected ${expected}, got ${record[14]}`);
+   await draw(2,{...settings,debugView:9});assert.deepEqual((await owner.sample()).records,record,'a paused view does not measure or advance transport');
+   await draw(3,{...settings,debugView:9,transportEnabled:false});
+   assert.equal((await owner.sample()).records[14],0,'no measurement when transport is off');
+  },{state:[0,0,1,0],velocity,backtrace:2,stepScale:1});
+ });
 });
 test('reaction creates soot extinction from actual fuel and oxygen when the initial grid has no soot',async()=>{
  await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw})=>{
