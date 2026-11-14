@@ -87,3 +87,15 @@ test('depth field budgets use real atlas capacity and reject invalid drafts befo
  assert.equal(opticalParticleSettings({carriedSmokeGain:.3}).scatteredGain,.3,'legacy light gain survives normalization');
  assert.equal(opticalParticleSettings({carriedSmokeGain:0,scatteredGain:1}).scatteredGain,1,'light and inherited extinction can be independent');
 });
+
+
+test('cockpit pause uses shared scene playback and leaves material/view controls independent',async()=>{
+ let settings=opticalParticleSettings(),paused=false,writes=[];
+ const runtime={opticalParticleSettings:()=>settings,setOpticalParticles:s=>settings=opticalParticleSettings({...settings,...s}),splitIntegralSettings:()=>({mode:'off'}),setSplitIntegral(){},opticalParticleState:()=>({simulationReaction:null}),debugState:()=>({simulationPaused:paused})};
+ const win={__kaminosVolumePrototype:runtime,kaminosScenePlayback:{read:()=>({paused}),setPaused:value=>{paused=value;writes.push(value);}}};
+ const ex=await definition.create({host:{controls:{document:{defaultView:win,getElementById:()=>null}},scene:{open:async()=>({onFrame:()=>()=>{},redraw(){},async dispose(){}})}},inputs:{},record(){},updateInputs(){}});
+ assert.equal(ex.operations.setPaused(true).playback.paused,true);
+ ex.operations.setOptions({lockIntegrationView:true});assert.equal(paused,true);assert.equal(settings.updateEnabled,true);
+ assert.equal(ex.operations.setPaused(false).playback.paused,false);assert.equal(settings.lockIntegrationView,true);
+ assert.deepEqual(writes,[true,false]);await ex.dispose();
+});

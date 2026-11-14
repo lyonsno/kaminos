@@ -23,3 +23,15 @@ test('only controls that affect the selected comparison view remain enabled',asy
  syncReconstructionFilterAvailability(document,'temporal',{reconstructionWindow:1,reconstructionRadius:1,reconstructionEdges:'image'});
  assert.equal(fields['volume-reconstruction-window'].disabled,false);assert.equal(fields['volume-reconstruction-response'].disabled,true);assert.equal(fields['volume-reconstruction-edges'].disabled,true);
 });
+
+test('viewport playback changes preserve particle observations while real source edits still invalidate them',()=>{
+ const before={lookFreeze:0,raySteps:8,radius:1,resolution:8,renderScale:.5};
+ const options={consumer:'particles',acquisitionMode:1};
+ assert.deepEqual(reconstructionSourceChanges(before,{...before,lookFreeze:1},options),[],
+  'Pause must preserve the particle population instead of changing its source generation');
+ assert.deepEqual(reconstructionSourceChanges({...before,lookFreeze:1},before,options),[],'Play preserves the held population');
+ assert.deepEqual(reconstructionSourceChanges(before,{...before,lookFreeze:1,resolution:12},options),['resolution']);
+ assert.deepEqual(reconstructionSourceChanges(before,{...before,raySteps:24},options),[]);
+ assert.deepEqual(reconstructionSourceChanges(before,{...before,renderScale:.75},options),[]);
+ assert.deepEqual(reconstructionSourceChanges(before,{...before,lookFreeze:1}),['lookFreeze'],'ordinary reconstruction keeps its own source policy');
+});

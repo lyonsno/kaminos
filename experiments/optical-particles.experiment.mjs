@@ -22,7 +22,7 @@ function inactiveControls(settings){
     ...(!settings.depthMode||!settings.fillExtinction&&!settings.extinctionView?['extinctionSlack']:[]),
     ...(settings.enabled&&!settings.showRaymarch?['sourceRaySteps']:[]),
     ...(!settings.showRaymarch||!settings.showParticles?['referenceEmission']:[]),
-    ...(settings.phaseFilter||settings.debugView===9?['showRaymarch','referenceEmission','fillExtinction','extinctionView','extinctionSlack']:[]),
+    ...(settings.phaseFilter||settings.debugView===9||settings.lockIntegrationView?['showRaymarch','referenceEmission','fillExtinction','extinctionView','extinctionSlack']:[]),
     ...(!settings.phaseFilter?['phaseBurnThreshold','phaseGlowThreshold']:[]),
     ...(!settings.projection?['flowAlignment']:[]),
     ...(!settings.profileMode?['emissionFalloff','extinctionFalloff']:[]),
@@ -45,7 +45,7 @@ export default {
   let sourceSettings={...inputs.source},lightingSettings=sharedLighting??(legacyShared?lighting:null),lightingOwner=null,lightingRestoreError=null,popups=null;
   let reactionOverrides={...Object.fromEntries(Object.entries(inputs.particles??{}).filter(([key])=>(inputs.particles?.materialStateVersion===1?REACTION_KEYS:["burnTime","cooling","heatRelease"]).includes(key))),...inputs.simulationReaction};
   await host.volume?.ready;const session=await host.scene.open(),win=host.controls.document.defaultView;
-  let current=null,previous=null,panel,notice,error=null,measurement=null,proposalLabel,renewalLabel,population=null,reading=false,lastPopulationRead=0,disposed=false,workPopulation=null,workReading=false,lastWorkRead=0,hud=null,hudTop=null,hudBottom=null,lastHud=0,frameMs=null,hadTiming=false;const drags=[],fields=new Map(),stats=new Map();
+  let current=null,previous=null,panel,notice,error=null,measurement=null,proposalLabel,renewalLabel,population=null,reading=false,lastPopulationRead=0,disposed=false,workPopulation=null,workReading=false,lastWorkRead=0,hud=null,hudTop=null,hudBottom=null,lastHud=0,frameMs=null,hadTiming=false,pauseButton=null;const drags=[],fields=new Map(),stats=new Map();
   function source(){const next=win.__kaminosVolumePrototype;if(!next?.opticalParticleState)throw Error('This revision does not supply the particle controls');
    if(next!==current){if(current)try{current.setOpticalParticles(previous.particles);current.setSplitIntegral(previous.split);}catch{}current=next;previous={particles:next.opticalParticleSettings(),split:next.splitIntegralSettings()};next.setOpticalParticles(settings);if(Object.keys(sourceSettings).length)applySource(next,sourceSettings);if(Object.keys(reactionOverrides).length&&next.opticalParticleState().simulationReaction)next.setParticleSimulationReaction(reactionOverrides);const shared=next.opticalParticleState().simulationReaction;if(shared){settings=opticalParticleSettings({...settings,...shared});next.setOpticalParticles(settings);}projectReaction(shared);if(Object.keys(boundaryOverrides).length)applyBoundary(next,boundaryOverrides);}return current;
   }
@@ -97,12 +97,14 @@ export default {
     }finally{ownCoverageGesture=false;}
    },
   };
-  const read=()=>({settings,ambientBoundary:source().ambientBoundaryState?.()??null,effective:source().opticalParticleState(),proposal:{...particleProposalShares(settings),conditionalOn:settings.acquisitionMode===2?null:'no-accepted-tracking',trackingAttemptFraction:settings.acquisitionMode===2?null:settings.followFraction,acceptedTrackingFraction:null},population,workPopulation,error,measurement});
+  const playback=()=>win.kaminosScenePlayback?.read?.()??{paused:source().debugState?.().simulationPaused===true};
+  const read=()=>({settings,playback:playback(),ambientBoundary:source().ambientBoundaryState?.()??null,effective:source().opticalParticleState(),proposal:{...particleProposalShares(settings),conditionalOn:settings.acquisitionMode===2?null:'no-accepted-tracking',trackingAttemptFraction:settings.acquisitionMode===2?null:settings.followFraction,acceptedTrackingFraction:null},population,workPopulation,error,measurement});
   const value=(key,e,boundary)=>key in BOUNDARY_FIELDS?(key==='ambientWidthWorld'?boundary?.effective.widthWorld:boundary?.settings[BOUNDARY_FIELDS[key]]):key==='sourceRenderScale'?e.sourceRenderScale:key==='sourceRaySteps'?e.sourceRaySteps:key==='verticalRadius'?settings.radius*settings.stretch:key==='radius'?settings.radius:e.simulationReaction&&REACTION_KEYS.includes(key)?e.simulationReaction[key]:settings[key];
   const text=(el,next)=>{if(el.textContent!==next)el.textContent=next;};
   let controlPolicy,unavailable,stretchLegend;
   function sync(force=false){if(!panel)return;let e;try{e=read().effective;}catch(err){error=err.message;e={};}
    projectReaction(e.simulationReaction);
+   if(pauseButton){const held=playback().paused;pauseButton.textContent=held?'Resume simulation and particles':'Pause simulation and particles';pauseButton.setAttribute('aria-pressed',String(held));}
    syncHud(e,force);
    if(stretchLegend){
     stretchLegend.hidden=settings.debugView!==9;
@@ -111,7 +113,7 @@ export default {
      `${m.status==='held'?'Held · ':''}Fine field at step ${m.fieldStep} offered to carriers at step ${m.fromStep}. Only non-gray carriers were measured. Flow ${m.flow}, backtrace ${m.backtrace}, reference time scale ${m.referenceStepScale}.`;
     text(stretchLegend,`Gray: unmeasured · Blue: no widening · Warm: widening. ${source}`);
    }
-   text(notice,error??(settings.debugView===8&&!e.exchange?.field?.valid?'Exchange field has not been built. Advance with connected exchange enabled to inspect its neighborhood heat.':e.gridAssist?.effective==='unavailable'?'Extinction assist unavailable: '+e.gridAssist.reason:e.effective==='world-optical-particles'?(e.simulationReaction?'':'This basin’s Reactant law is inactive; carried material uses the authored particle reaction values.'):e.reason??'Waiting for the fire volume.'));
+   text(notice,error??(settings.lockIntegrationView?'Optical view locked: orbit to inspect the fixed splat planes and attenuation direction. Scene solids clip the viewing camera; the reference march and extinction assist are suspended.':settings.debugView===8&&!e.exchange?.field?.valid?'Exchange field has not been built. Advance with connected exchange enabled to inspect its neighborhood heat.':e.gridAssist?.effective==='unavailable'?'Extinction assist unavailable: '+e.gridAssist.reason:e.effective==='world-optical-particles'?(e.simulationReaction?'':'This basin’s Reactant law is inactive; carried material uses the authored particle reaction values.'):e.reason??'Waiting for the fire volume.'));
    const rows={particleTarget:e.targetSize?e.targetSize.map(x=>x.toFixed(0)).join(' × '):'—',population:e.populationSize?e.populationSize.map(x=>x.toFixed(0)).join(' × '):'—',target:e.width?`${e.width.toFixed(0)} × ${e.height.toFixed(0)}`:'—',slots:e.slots?.toFixed(0)??'—',memory:e.totalBytes?`${(e.totalBytes/1048576).toFixed(1)} MiB`:'—',step:e.step?.toFixed(0)??'—',fresh:e.freshSamples?.toFixed(0)??'—',output:e.outputSize?e.outputSize.map(x=>x.toFixed(0)).join(' × '):'—',depth:e.depthField?[e.depthField.width,e.depthField.height,e.depthField.slices].map(x=>x.toFixed(0)).join(' × '):'Off'};
    for(const [key,el] of stats)text(el,rows[key]);
    if(proposalLabel){if(settings.acquisitionMode===2){
@@ -180,7 +182,15 @@ export default {
    applyBoundary(source(),patch);boundaryOverrides={...boundaryOverrides,...patch};
    persist();record({kind:'simulation.ambient-boundary',values:patch});session.redraw();sync(true);return read();
   }
-  const operations={setAmbientBoundary,setOptions,setReaction,setSource,setCoverage,setLighting,samplePopulation,async measure(options={}){measurement=await source().measureOpticalParticleFrame(options);sync();return measurement;},reset(){source().resetOpticalParticles();session.redraw();sync(true);return read();},
+  function setPaused(paused){
+   if(typeof paused!=='boolean')throw Error('Particle playback pause must be boolean');
+   const runtime=source();
+   if(win.kaminosScenePlayback?.setPaused)win.kaminosScenePlayback.setPaused(paused);
+   else if(runtime.setSimulationPaused)runtime.setSimulationPaused(paused);
+   else throw Error('This renderer does not expose simulation playback');
+   record({kind:'particle.playback',paused});session.redraw();sync(true);return read();
+  }
+  const operations={setPaused,setAmbientBoundary,setOptions,setReaction,setSource,setCoverage,setLighting,samplePopulation,async measure(options={}){measurement=await source().measureOpticalParticleFrame(options);sync();return measurement;},reset(){source().resetOpticalParticles();session.redraw();sync(true);return read();},
    setRadius({axis,value:v}){if(!['horizontal','vertical'].includes(axis))throw Error('Unknown radius axis');if(!Number.isFinite(v)||v<=0)throw Error('Radius must be positive');const vertical=settings.radius*settings.stretch;return axis==='vertical'?setOptions({stretch:v/settings.radius}):setOptions({radius:v,stretch:vertical/v});}
   };
   function syncHud(e,force=false){if(!hud)return;hud.style.display=settings.hud?'block':'none';if(!settings.hud)return;const firstTiming=e.timings?.ok&&!hadTiming;hadTiming=!!e.timings?.ok;if(!force&&!firstTiming&&Date.now()-lastHud<250)return;lastHud=Date.now();const rect=current?.opticalParticleViewport?.()?.getBoundingClientRect?.();if(rect){hud.style.left=rect.left+'px';hud.style.top=rect.top+'px';hud.style.width=rect.width+'px';hud.style.height=rect.height+'px';const bars=['authoring-viewport-tools','experiment-toolbar','transform-bar','info-bar'].map(id=>host.controls.document.getElementById(id)).map(el=>el?.getBoundingClientRect?.()).filter(b=>b&&b.width>0&&b.height>0&&b.left<rect.right&&b.right>rect.left);const top=bars.filter(b=>b.top<rect.top+rect.height/2).reduce((v,b)=>Math.max(v,b.bottom),rect.top),bottom=bars.filter(b=>b.top>=rect.top+rect.height/2).reduce((v,b)=>Math.min(v,b.top),rect.bottom);hudTop.style.top=Math.max(2,top-rect.top+4)+'px';hudBottom.style.bottom=Math.max(2,rect.bottom-bottom+4)+'px';}
@@ -211,6 +221,9 @@ export default {
     if(input.type==='number')drags.push(bindParticleNumber({input,read:()=>value(key,read().effective),apply,onAccepted:accepted,onError:failed}));
     else input.addEventListener('change',()=>apply(input.checked).then(accepted).catch(e=>{input.checked=!!value(key,read().effective);failed(e);}));
     row.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) 9rem;gap:10px;align-items:center;margin:8px 0';input.style.cssText='width:100%;min-width:0;font-variant-numeric:tabular-nums';row.append(grip,input);controlRoot.append(row);}
+   section('Hold and inspect');
+   pauseButton=document.createElement('button');pauseButton.type='button';pauseButton.setAttribute('aria-label','Pause or resume simulation and particles');pauseButton.title='Hold simulation, carried composition, motion, births, survival and light refresh while keeping camera navigation and rendering live.';pauseButton.addEventListener('click',()=>invoke('setPaused',!playback().paused).catch(e=>{error=e.message;sync();}));controlRoot.append(pauseButton);
+   control('Lock optical view','lockIntegrationView','Pin the current splat planes and particle attenuation direction in world space while the viewing camera moves. Unlock to integrate from the viewing camera again. This inspection mode suspends the reference march and grid extinction assist.');
    section('Particle and ray budget');
    const modeRow=document.createElement('label'),mode=document.createElement('select'),modeLabel=document.createElement('span');modeLabel.textContent='Particle births';mode.dataset.particle='acquisitionMode';mode.setAttribute('aria-label','Particle births');mode.title='Legacy image preserves the earlier camera-stratified collector. Source-focused uses an independent fresh sample batch, moving film-plane samples and a rotating world-space pool. From emitter uses the simulator’s admitted supply and refreshes incident light separately. Changing mode clears retained observations.';modeLabel.title=mode.title;for(const [v,label] of [[0,'Legacy image'],[1,'Source-focused rays'],[2,'From emitter']]){const o=document.createElement('option');o.value=String(v);o.textContent=label;mode.append(o);}fields.set('acquisitionMode',{input:mode,digits:0});mode.addEventListener('change',()=>{
     const next=Number(mode.value);

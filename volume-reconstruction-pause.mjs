@@ -4,8 +4,9 @@ export const RECONSTRUCTION_FILTER_CONTROLS=Object.freeze({
  reconstructionWindow:'volume-reconstruction-window',reconstructionResponse:'volume-reconstruction-response',
  reconstructionEdge:'volume-reconstruction-edge',reconstructionImageEdge:'volume-reconstruction-image-edge',reconstructionEdges:'volume-reconstruction-edges',
 });
-export function reconstructionSourceChanges(before,after){
- return [...new Set([...Object.keys(before),...Object.keys(after)])].filter(k=>!Object.hasOwn(RECONSTRUCTION_FILTER_CONTROLS,k)&&JSON.stringify(before[k])!==JSON.stringify(after[k]));
+export function reconstructionSourceChanges(before,after,{consumer='reconstruction',acquisitionMode=0}={}){
+ const particleIgnored=consumer==='particles'?new Set(['lookFreeze','raySteps','runtimeQualityReceipt','integralReconstruction','reconstructionFresh','reactantMixingTime','reactantCoolingTime','reactantSootYield','reactantModelOverrides','ambientBoundaryWidth','ambientBoundaryExchangeTime','ambientBoundaryVelocityDamping',...(acquisitionMode?['renderScale']:[])]):null;
+ return [...new Set([...Object.keys(before),...Object.keys(after)])].filter(k=>!Object.hasOwn(RECONSTRUCTION_FILTER_CONTROLS,k)&&!particleIgnored?.has(k)&&JSON.stringify(before[k])!==JSON.stringify(after[k]));
 }
 export function createReconstructionControlLock(document){
  const saved=new Map(),allowed=new Set([...Object.values(RECONSTRUCTION_FILTER_CONTROLS),'volume-reconstruction-pause','integral-guide-view','integral-guide-gain']);

@@ -20435,7 +20435,7 @@ function syncPhysicsAppearanceCockpit(physics) {
 }
 function sceneViewerPlaybackState(s=volumePrototype?.debugState?.()) {
   const fire=!!s?.active,water=!!waterFeature.host,units=[...authoredFireUnits.values()].some(unit=>unit.owner.runtime.isActive());
-  const firePaused=Number(document.getElementById('volume-look-freeze')?.value)>=0.5||s?.integralEvaluation?.active===true;
+  const firePaused=s?.simulationPaused===true||Number(document.getElementById('volume-look-freeze')?.value)>=0.5||s?.integralEvaluation?.active===true;
   return {present:fire||water||units,paused:!(fire&&!firePaused||units&&sceneViewerPaused!==true||water&&!waterFeature.paused)};
 }
 function syncVolumeViewerPlay(s) {
@@ -20454,6 +20454,7 @@ function setSceneViewerPaused(paused){
   if(freeze){freeze.value=paused?'1':'0';freeze.dispatchEvent(new Event('input',{bubbles:true}));freeze.dispatchEvent(new Event('change',{bubbles:true}));}
   if(waterFeature.host)window.kaminosPauseLocalLiquid(paused);
   sceneViewerPaused=paused;
+  volumePrototype?.setSimulationPaused?.(paused);
   for(const unit of authoredFireUnits.values())unit.owner.runtime.setSimulationPaused(paused);
   syncVolumeViewerPlay();window._kaminosDirty?.();return sceneViewerPlaybackState();
 }

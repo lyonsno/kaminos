@@ -10,7 +10,7 @@ for(const fire of [true,false])for(const water of [true,false]) {
  const button={hidden:true,dataset:{},setAttribute(k,v){this[k]=v;},querySelector(k){return k==='.pause-glyph'?pauseGlyph:playGlyph;},addEventListener(k,fn){listeners[k]=fn;}};
  const freeze={value:'0',dispatchEvent(){}};
  const context={authoredFireUnits:new Map(),document:{getElementById:id=>id==='volume-viewer-play'?button:id==='volume-look-freeze'?freeze:id==='kaminos-volume-canvas'?{classList:{contains:()=>fire}}:null},
-  Event:class{},volumePrototype:{isActive:()=>fire,debugState:()=>({active:fire})},localLiquidHost:water?{}:null,localLiquidPaused:false,sceneViewerPaused:null,window:{}};
+  Event:class{},volumePrototype:{isActive:()=>fire,debugState:()=>({active:fire,simulationPaused:context.primaryPaused}),setSimulationPaused:value=>{context.primaryPaused=value;}},localLiquidHost:water?{}:null,localLiquidPaused:false,sceneViewerPaused:null,window:{}};
  context.window.kaminosPauseLocalLiquid=value=>{context.localLiquidPaused=value;};
  context.waterFeature={get host(){return context.localLiquidHost;},get paused(){return context.localLiquidPaused;}};
  runInNewContext(source.slice(start,end),context);
@@ -19,6 +19,7 @@ for(const fire of [true,false])for(const water of [true,false]) {
  if(!fire&&!water)continue;
  listeners.click();
  assert.equal(freeze.value,'1','viewport Pause holds fire');
+ assert.equal(context.primaryPaused,true,'viewport Pause must explicitly hold the primary simulator as well as its look');
  if(water)assert.equal(context.localLiquidPaused,true,'viewport Pause must also hold the water');
  context.syncVolumeViewerPlay({active:fire});assert.equal(button.dataset.state,'paused');
  listeners.click();assert.equal(freeze.value,'0');if(water)assert.equal(context.localLiquidPaused,false);

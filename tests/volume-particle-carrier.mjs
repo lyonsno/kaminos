@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {withKaminosGpu} from '../tools/shader-herder.mjs';
 import {createOpticalParticles} from '../volume-optical-particles.mjs';
+import {Matrix4} from 'three';
 
 async function fixture(d,run){
  const owner=createOpticalParticles(d,{transparent:true}),matrix=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
@@ -13,7 +14,7 @@ async function fixture(d,run){
  const target=d.createTexture({size:[8,8],format:'rgba8unorm',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC}),depth=d.createTexture({size:[1,1],format:'depth32float',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING});
  const camera=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,1,1,0,0,0,1,0]);
  function seed(state,q=[4,2,1,.4]){const material=new Float32Array(8*16),oxygen=new Float32Array(8*2);for(let i=0;i<8;i++){material.set([state[2],state[1],state[0],0],i*16+4);oxygen.set([state[3],.01],i*2);}d.queue.writeBuffer(fine,0,material);d.queue.writeTexture({texture:reactants},oxygen,{bytesPerRow:16,rowsPerImage:2},[2,2,2]);d.queue.writeBuffer(buffer,0,new Float32Array([...q,0,0,0,1,-.25,.25,1,1,...q.slice(0,3),0]));owner.reset();}
- async function draw(step,settings={}){source.step=step;const e=d.createCommandEncoder();const p=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthStoreOp:'store',depthClearValue:1}});p.end();const passNames=[];owner.encode(e,{profileWrites:name=>{passNames.push(name);return{};},view:target.createView(),format:'rgba8unorm',source,fine,reactants,dims:[2,2,2],invViewProj:matrix,settings:{enabled:true,acquisitionMode:1,capacity:1,refresh:0,flow:0,...settings},cameraValues:camera,depth,identity:'actual-composition-fixture'});d.queue.submit([e.finish()]);await d.queue.onSubmittedWorkDone();return {...await owner.sample(),passNames};}
+ async function draw(step,settings={},held=false,projection=matrix){source.step=step;source.held=held;source.viewProj=projection;const e=d.createCommandEncoder();const p=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthStoreOp:'store',depthClearValue:1}});p.end();const passNames=[];owner.encode(e,{profileWrites:name=>{passNames.push(name);return{};},view:target.createView(),format:'rgba8unorm',source,fine,reactants,dims:[2,2,2],invViewProj:new Matrix4().fromArray(projection).invert().elements,settings:{enabled:true,acquisitionMode:1,capacity:1,refresh:0,flow:0,...settings},cameraValues:camera,depth,identity:'actual-composition-fixture'});d.queue.submit([e.finish()]);await d.queue.onSubmittedWorkDone();return {...await owner.sample(),passNames};}
  async function propose(step,settings={}){source.step=step;const read=d.createBuffer({size:64,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ}),e=d.createCommandEncoder();owner.prepareAcquisition?.(e,{source,fine,dims:[2,2,2],settings:{enabled:true,acquisitionMode:1,capacity:1,refresh:0,flow:0,followFraction:1,followFuel:1,followHeat:0,followSmoke:0,followJitter:0,...settings},identity:'actual-composition-fixture'});e.copyBufferToBuffer(buffer,0,read,0,64);d.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);const rows=new Float32Array(read.getMappedRange().slice(0));read.unmap();read.destroy();return rows;}
  async function pixels(){const e=d.createCommandEncoder(),read=d.createBuffer({size:8*256,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});e.copyTextureToBuffer({texture:target},{buffer:read,bytesPerRow:256},[8,8]);d.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);const data=new Uint8Array(read.getMappedRange().slice(0));read.unmap();read.destroy();return data;}
  try{await run({owner,seed,draw,propose,pixels});}finally{owner.dispose();for(const r of [buffer,uniform,fine,reactants,target,depth])r.destroy();}
@@ -53,3 +54,28 @@ test('exchange-neighborhood heat is an actual field diagnostic and preserves hel
 test('tracking predicts residual transport even while carried reaction is disabled',async()=>withKaminosGpu(async({device:d})=>fixture(d,async({seed,draw,propose})=>{seed([1,1,0,3]);await draw(0);const q=await propose(1,{reactionEnabled:false,transportEnabled:true,rise:.1,drag:4});assert.equal(q[7],-1);assert.ok(q[5]>.05,'tracking must predict the transport clock independently from the reaction clock');})));
 
 test('paused population preserves records and encodes neither no-op update nor dropped births',async()=>withKaminosGpu(async({device:d})=>fixture(d,async({seed,draw})=>{seed([1,.8,.2,3]);const a=await draw(0);const b=await draw(0,{exchangeStrength:1});assert.deepEqual(b.records,a.records);assert.equal(b.passNames.includes('update'),false);assert.equal(b.passNames.includes('births'),false);assert.equal(b.state.work.updateSlots,0);assert.equal(b.state.work.birthCapacityPerFrame,0);})));
+
+
+test('held observation skips all material mutation and resumes without catching up held steps',async()=>withKaminosGpu(async({device:d})=>fixture(d,async({seed,draw})=>{
+ seed([1,.8,.2,3]);await draw(0);const a=await draw(1,{renewalDiagnostics:true});
+ const b=await draw(4,{renewalDiagnostics:true,exchangeEnabled:true},true);
+ assert.deepEqual(b.records,a.records,'holding must preserve position, composition, age, optical state and survival');
+ for(const pass of ['update','births','exchangeField','exchangeGather','follow','lightRefresh'])assert.equal(b.passNames.includes(pass),false,pass+' must be absent while held');
+ assert.equal(b.state.materialHeld,true);assert.equal(b.state.work.updateSlots,0);
+ const c=await draw(5,{exchangeEnabled:false});assert.equal(c.state.stepDelta,1,'held simulation time is not replayed on resume');
+ assert.ok(c.records[3]>b.records[3]);
+})));
+
+test('locked optical planes keep their frame while actual viewing pixels change',async()=>withKaminosGpu(async({device:d})=>fixture(d,async({seed,draw,pixels})=>{
+ seed([1,.8,.2,3]);const settings={depthMode:2,depthScale:1,depthSlices:8,flow:0,exchangeEnabled:false,birthsEnabled:false};
+ await draw(0,{...settings,birthsEnabled:true});const front=await pixels();
+ const side=new Matrix4().makeRotationY(Math.PI*.4).elements;
+ const locked=await draw(0,{...settings,lockIntegrationView:true},true,side);const sideLocked=await pixels();
+ assert.equal(locked.state.opticalView.locked,true);
+ assert.deepEqual(locked.state.opticalView.viewProj,[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],'the integration frame must remain the front frame');
+ assert.notDeepEqual(sideLocked,front,'the live viewer must move relative to the fixed optical planes');
+ const live=await draw(0,settings,true,side);const sideLive=await pixels();
+ assert.equal(live.state.opticalView.locked,false);
+ assert.notDeepEqual(sideLive,sideLocked,'unlocking must resume camera-facing integration rather than keep showing frozen geometry');
+ assert.deepEqual(live.records,locked.records,'view controls cannot reacquire or mutate the held material');
+})));
