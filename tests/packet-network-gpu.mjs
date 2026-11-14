@@ -15,10 +15,10 @@ test('network settings keep material density, ray coverage and reconstruction su
 test('network endpoints preserve long acquired intervals independently from small transverse support',async()=>{
  await withKaminosGpu(async({device:d})=>{
   const owned=[],make=(size,usage)=>{const b=d.createBuffer({size,usage});owned.push(b);return b;};
-  const particles=make(192,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST),options=make(592,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST);
+  const particles=make(192,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST),options=make(592,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),birthGenerations=make(8,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST);d.queue.writeBuffer(birthGenerations,0,new Uint32Array([1,1]));
   const records=new Float32Array(48);records.set([0,0,0,1]);records.set([1e-6,0,0,0],8);records.set([.01,0,0,.01],16);records.set([0,0,1,1],24);records.set([4,2,1,0],32);records.set([.01,0,0,1],40);
   const f=new Float32Array(148);f.set([1,1],44);f.set([1,1],56);f.set([1,1,1,1],88);f.set([1,0,1,0],104);f.set([1,0,1,0],108);d.queue.writeBuffer(options,0,f);d.queue.writeBuffer(particles,0,records);
-  const material={particles,options,slots:2,identity:{epoch:4,step:9,frame:13},domain:{origin:[-1,-1,-1],dims:[4,4,4],pitch:.5},coverage:{kind:'fixture',unsampled:'unknown'}};
+  const material={particles,options,birthGenerations,slots:2,identity:{epoch:4,step:9,frame:13},domain:{origin:[-1,-1,-1],dims:[4,4,4],pitch:.5},coverage:{kind:'fixture',unsampled:'unknown'}};
   const network=createPacketNetwork(d),reference=createPacketBundleTransport(d);
   async function read(encode){d.pushErrorScope('validation');const e=d.createCommandEncoder(),buffers=encode(e),reads=buffers.map(b=>make(b.size,GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ));buffers.forEach((b,i)=>e.copyBufferToBuffer(b,0,reads[i],0,b.size));d.queue.submit([e.finish()]);const error=await d.popErrorScope();assert.equal(error,null,error?.message);const values=[];for(const b of reads){await b.mapAsync(GPUMapMode.READ);values.push(new Float32Array(b.getMappedRange().slice(0)));b.unmap();}return values;}
   try{
@@ -33,11 +33,11 @@ test('network endpoints preserve long acquired intervals independently from smal
 test('native network reduces current source membership, keeps every contributor and returns incident on material receivers',async()=>{
  await withKaminosGpu(async({device:d})=>{
   const owned=[],make=(size,usage)=>{const b=d.createBuffer({size,usage});owned.push(b);return b;};
-  const particles=make(4*96,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST),options=make(592,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST);
+  const particles=make(4*96,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST),options=make(592,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),birthGenerations=make(16,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST);const generations=new Uint32Array([1,1,1,1]);d.queue.writeBuffer(birthGenerations,0,generations);
   const records=new Float32Array(96);
   for(let i=0;i<4;i++){const at=i*24;records.set([i<2?-.5:.5,(i%2)*.1,0,1],at);records.set([2,1,.5,0],at+8);records.set([.03,0,0,.15],at+16);records[at+22]=.1;}
   const f=new Float32Array(148);f.set([1,1],44);f.set([1,1],56);f.set([1,1,1,1],88);f.set([1,0,1,0],104);f.set([1,0,1,0],108);d.queue.writeBuffer(options,0,f);d.queue.writeBuffer(particles,0,records);
-  const material={particles,options,slots:4,identity:{epoch:4,step:9,frame:13},domain:{origin:[-1,-1,-1],dims:[4,4,4],pitch:.5},coverage:{kind:'fixture',unsampled:'unknown'}};
+  const material={particles,options,birthGenerations,slots:4,identity:{epoch:4,step:9,frame:13},domain:{origin:[-1,-1,-1],dims:[4,4,4],pitch:.5},coverage:{kind:'fixture',unsampled:'unknown'}};
   const network=createPacketNetwork(d);d.pushErrorScope('validation');
   try{
    const e=d.createCommandEncoder(),result=network.encode(e,{material,settings:{sources:2,receivers:2,width:3,sections:16,receiverRadius:.3}});
@@ -50,6 +50,16 @@ test('native network reduces current source membership, keeps every contributor 
    const incoming=new Float32Array(read[3].getMappedRange());assert.ok(incoming[0]>0&&incoming[4]>0,'both actual material receivers see the current sources');assert.equal(incoming[3],1);assert.equal(incoming[7],1);
    assert.equal(result.identity.epoch,4);assert.equal(result.receipt.temporalReuse,false);assert.equal(result.receipt.work.depositedInstances,4*2*2*6);
    for(const b of read)b.unmap();
+   async function selection(){
+    d.queue.writeBuffer(particles,0,records);d.queue.writeBuffer(birthGenerations,0,generations);material.identity.step++;
+    d.pushErrorScope('validation');const e=d.createCommandEncoder();const result=network.encode(e,{material,settings:{sources:2,receivers:2,width:3,sections:16,receiverRadius:.3}});
+    const inputs=[result.centers,network.buffers.receiverKeys],outputs=inputs.map(b=>make(b.size,GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ));inputs.forEach((b,i)=>e.copyBufferToBuffer(b,0,outputs[i],0,b.size));d.queue.submit([e.finish()]);const error=await d.popErrorScope();assert.equal(error,null,error?.message);
+    for(const b of outputs)await b.mapAsync(GPUMapMode.READ);const resultData={centers:new Float32Array(outputs[0].getMappedRange().slice(0)),keys:new Uint32Array(outputs[1].getMappedRange().slice(0))};for(const b of outputs)b.unmap();return resultData;
+   }
+   records[1]=-.2;records.set([100,50,25],32);let selected=await selection();
+   assert.ok(Math.abs(selected.centers[1]+.2)<1e-6,'surviving receiver follows its primary carrier instead of jumping to a newly brighter neighbor');assert.deepEqual([...selected.keys.slice(0,2)],[0,1]);
+   generations[0]=2;records[1]=.7;selected=await selection();assert.ok(Math.abs(selected.centers[1]-.1)<1e-6,'a replacement cannot inherit the old receiver association');assert.deepEqual([...selected.keys.slice(0,2)],[1,1]);
+   material.identity.epoch++;records[1]=-.4;records.set([500,250,125],8);selected=await selection();assert.ok(Math.abs(selected.centers[1]+.4)<1e-6,'new pool epoch clears even matching slot-generation pairs');assert.deepEqual([...selected.keys.slice(0,2)],[0,2]);
   }finally{network.dispose();owned.forEach(b=>b.destroy());}
  },{wgslSources:[{label:'native current material packet network',code:PACKET_NETWORK_WGSL,entryPoint:'buildBundles'}]});
 });

@@ -10,9 +10,9 @@ export function packetNetworkSettings(input={}){
  if(!(s.gain>=0&&Number.isFinite(Math.fround(s.gain))))throw Error('Invalid packet network gain');return s;
 }
 
-// These fresh partitions are reductions of the current primary medium. Slot
-// strata seed queries, not persistent packet identities. No temporal validity
-// is inferred from a reused index or a slowly moving centroid.
+// Source partitions reduce the current medium. Their query anchors survive
+// only while the primary carrier's epoch/slot/birth identity is still live.
+// This anchors motion; it does not certify a retained light observation.
 export const PACKET_NETWORK_WGSL=/* wgsl */`${PARTICLE_LIGHT_MATERIAL_WGSL}${PARTICLE_STATE_WGSL}${PACKET_BUNDLE_STRUCT_WGSL}
 struct PacketGroup {center:vec4<f32>,lo:vec4<f32>,hi:vec4<f32>}
 struct Network {counts:vec4<u32>,quality:vec4<f32>}
@@ -24,10 +24,17 @@ struct Network {counts:vec4<u32>,quality:vec4<f32>}
 @group(0) @binding(5) var<storage,read_write> groups:array<PacketGroup>;
 @group(0) @binding(6) var<storage,read_write> receivers:array<vec4<f32>>;
 @group(0) @binding(7) var<storage,read_write> bundles:array<Bundle>;
+@group(0) @binding(8) var<storage,read> birthGenerations:array<u32>;
+@group(0) @binding(9) var<storage,read_write> sourceKeys:array<vec2<u32>>;
+@group(0) @binding(10) var<storage,read_write> receiverKeys:array<vec2<u32>>;
 var<workgroup> sums:array<vec4<f32>,64>;
 var<workgroup> lower:array<vec3<f32>,64>;
 var<workgroup> upper:array<vec3<f32>,64>;
 var<workgroup> intervals:array<f32,64>;
+var<workgroup> selected:array<u32,64>;
+fn packetKeyLive(key:vec2<u32>)->bool{
+ return key.x<net.counts.x&&key.y>0u&&key.y<0xffffffffu&&birthGenerations[key.x]==key.y&&particles[key.x].anchor.w>0;
+}
 fn packetPower(p:Particle)->f32{
  if(p.anchor.w<=0){return 0.0;}let radius=particleLightBaseRadius(p,optical);
  let fade=select(1.0,particleLifeFade(p.motion.w,optical.lifeControl.y),optical.lifeControl.x>0);
@@ -35,10 +42,11 @@ fn packetPower(p:Particle)->f32{
  return max(0.0,dot(particleLightIntrinsic(p),vec3<f32>(.2126,.7152,.0722)))*p.shape.w*radius.x*radius.y*fade;
 }
 @compute @workgroup_size(64) fn sourceSeeds(@builtin(workgroup_id) id:vec3<u32>,@builtin(local_invocation_index) tid:u32){
- let group=id.x;let first=group*net.counts.x/net.counts.z;let end=(group+1u)*net.counts.x/net.counts.z;var sum=vec4<f32>(0);
- for(var i=first+tid;i<end;i+=64u){let p=particles[i];let w=packetPower(p);sum+=vec4<f32>(p.anchor.xyz*w,w);}
- sums[tid]=sum;workgroupBarrier();for(var stride=32u;stride>0u;stride/=2u){if(tid<stride){sums[tid]+=sums[tid+stride];}workgroupBarrier();}
- if(tid==0u){var center=vec3<f32>(0);if(sums[0].w>0){center=sums[0].xyz/sums[0].w;}seeds[group]=vec4<f32>(center,sums[0].w);}
+ let group=id.x;let first=group*net.counts.x/net.counts.z;let end=(group+1u)*net.counts.x/net.counts.z;var chosen=vec4<f32>(0);var slot=0u;
+ let old=sourceKeys[group];let keep=packetKeyLive(old);
+ if(!keep){for(var i=first+tid;i<end;i+=64u){let p=particles[i];let w=packetPower(p);let generation=birthGenerations[i];if(w>chosen.w&&generation>0u&&generation<0xffffffffu){chosen=vec4<f32>(p.anchor.xyz,w);slot=i;}}}
+ sums[tid]=chosen;selected[tid]=slot;workgroupBarrier();for(var stride=32u;stride>0u;stride/=2u){if(tid<stride&&sums[tid+stride].w>sums[tid].w){sums[tid]=sums[tid+stride];selected[tid]=selected[tid+stride];}workgroupBarrier();}
+ if(tid==0u){if(keep){seeds[group]=vec4<f32>(particles[old.x].anchor.xyz,1);}else{var key=vec2<u32>(0);if(sums[0].w>0){key=vec2<u32>(selected[0],birthGenerations[selected[0]]);}sourceKeys[group]=key;seeds[group]=vec4<f32>(sums[0].xyz,select(0.0,1.0,key.y>0u));}}
 }
 @compute @workgroup_size(64) fn assignSources(@builtin(global_invocation_id) id:vec3<u32>){
  let i=id.x;if(i>=net.counts.x){return;}let p=particles[i];var selected=0xffffffffu;var nearest=3.402823e38;
@@ -55,11 +63,12 @@ fn packetPower(p:Particle)->f32{
  if(tid==0u){var g:PacketGroup;if(sums[0].w>0){g.center=vec4<f32>(sums[0].xyz/sums[0].w,sums[0].w);g.lo=vec4<f32>(lower[0],1);g.hi=vec4<f32>(upper[0],intervals[0]);}groups[group]=g;}
 }
 @compute @workgroup_size(64) fn receiverSeeds(@builtin(workgroup_id) id:vec3<u32>,@builtin(local_invocation_index) tid:u32){
- let group=id.x;let first=group*net.counts.x/net.counts.y;let end=(group+1u)*net.counts.x/net.counts.y;var chosen=vec4<f32>(0);
- for(var i=first+tid;i<end;i+=64u){let p=particles[i];if(p.anchor.w<=0){continue;}let importance=packetPower(p)+particleLightExtinction(p,optical)*p.shape.w;
-  if(importance>chosen.w){chosen=vec4<f32>(p.anchor.xyz,importance);}}
- sums[tid]=chosen;workgroupBarrier();for(var stride=32u;stride>0u;stride/=2u){if(tid<stride&&sums[tid+stride].w>sums[tid].w){sums[tid]=sums[tid+stride];}workgroupBarrier();}
- if(tid==0u){receivers[group]=vec4<f32>(sums[0].xyz,select(0.0,net.quality.x,sums[0].w>0));}
+ let group=id.x;let first=group*net.counts.x/net.counts.y;let end=(group+1u)*net.counts.x/net.counts.y;var chosen=vec4<f32>(0);var slot=0u;
+ let old=receiverKeys[group];var keep=packetKeyLive(old);if(keep){let p=particles[old.x];keep=packetPower(p)+particleLightExtinction(p,optical)*p.shape.w>0;}
+ if(!keep){for(var i=first+tid;i<end;i+=64u){let p=particles[i];let generation=birthGenerations[i];if(p.anchor.w<=0||generation==0u||generation==0xffffffffu){continue;}let importance=packetPower(p)+particleLightExtinction(p,optical)*p.shape.w;
+  if(importance>chosen.w){chosen=vec4<f32>(p.anchor.xyz,importance);slot=i;}}}
+ sums[tid]=chosen;selected[tid]=slot;workgroupBarrier();for(var stride=32u;stride>0u;stride/=2u){if(tid<stride&&sums[tid+stride].w>sums[tid].w){sums[tid]=sums[tid+stride];selected[tid]=selected[tid+stride];}workgroupBarrier();}
+ if(tid==0u){if(keep){receivers[group]=vec4<f32>(particles[old.x].anchor.xyz,net.quality.x);}else{var key=vec2<u32>(0);if(sums[0].w>0){key=vec2<u32>(selected[0],birthGenerations[selected[0]]);}receiverKeys[group]=key;receivers[group]=vec4<f32>(sums[0].xyz,select(0.0,net.quality.x,key.y>0u));}}
 }
 @compute @workgroup_size(64) fn buildBundles(@builtin(global_invocation_id) id:vec3<u32>){
  let i=id.x;if(i>=net.counts.y*net.counts.z*6u){return;}
@@ -86,23 +95,25 @@ fn packetPower(p:Particle)->f32{
 
 export function createPacketNetwork(device){
  const module=device.createShaderModule({label:'current material packet network',code:PACKET_NETWORK_WGSL}),transport=createPacketBundleTransport(device),pipelines={};
- let resources=null,key=null,latest=null;const retire=items=>queueMicrotask(()=>device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>items.forEach(b=>b.destroy())));
+ let resources=null,key=null,latest=null,epoch=null;const retire=items=>queueMicrotask(()=>device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>items.forEach(b=>b.destroy())));
  let preparing=null;
  return {
   prepare(){return preparing??=Promise.all([transport.prepare(),...['sourceSeeds','assignSources','refitSources','receiverSeeds','buildBundles'].map(async entry=>{pipelines[entry]=await device.createComputePipelineAsync({label:'packet network '+entry,layout:'auto',compute:{module,entryPoint:entry}});})]);},
   encode(encoder,{material,settings,triangles=null,triangleCount=0}){
+   if(!material.birthGenerations||material.birthGenerations.size<material.slots*4)throw Error('Packet anchors require current primary birth generations');
    const s=packetNetworkSettings(settings),count=s.receivers*s.sources*6;
    const plan=packetBundlePlan(device.limits,{width:s.width,height:s.width,sections:s.sections,bundles:count,slots:material.slots,receivers:s.receivers});
    if(Math.max(s.sources,s.receivers)>device.limits.maxComputeWorkgroupsPerDimension)throw Error('Packet network exceeds effective reduction dispatch');
    const next=JSON.stringify([material.slots,s.receivers,s.sources]);
    if(next!==key){if(resources)retire(Object.values(resources));const storage=GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC;
-    resources={params:device.createBuffer({size:32,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST}),seeds:device.createBuffer({size:s.sources*16,usage:storage}),membership:device.createBuffer({size:material.slots*4,usage:storage}),groups:device.createBuffer({size:s.sources*48,usage:storage}),centers:device.createBuffer({size:s.receivers*16,usage:storage}),bundles:device.createBuffer({size:count*96,usage:storage})};key=next;}
+    resources={params:device.createBuffer({size:32,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST}),seeds:device.createBuffer({size:s.sources*16,usage:storage}),membership:device.createBuffer({size:material.slots*4,usage:storage}),groups:device.createBuffer({size:s.sources*48,usage:storage}),centers:device.createBuffer({size:s.receivers*16,usage:storage}),bundles:device.createBuffer({size:count*96,usage:storage}),sourceKeys:device.createBuffer({size:s.sources*8,usage:storage}),receiverKeys:device.createBuffer({size:s.receivers*8,usage:storage})};key=next;epoch=null;}
+   if(epoch!==material.identity.epoch){encoder.clearBuffer(resources.sourceKeys);encoder.clearBuffer(resources.receiverKeys);epoch=material.identity.epoch;}
    const r=resources,data=new ArrayBuffer(32);new Uint32Array(data).set([material.slots,s.receivers,s.sources,0]);new Float32Array(data).set([s.receiverRadius,s.nearRatio,material.domain.pitch,s.gain],4);device.queue.writeBuffer(r.params,0,data);
    for(const [entry,entries,groups] of [
-    ['sourceSeeds',[[0,material.particles],[1,material.options],[2,r.params],[3,r.seeds]],s.sources],
+    ['sourceSeeds',[[0,material.particles],[1,material.options],[2,r.params],[3,r.seeds],[8,material.birthGenerations],[9,r.sourceKeys]],s.sources],
     ['assignSources',[[0,material.particles],[1,material.options],[2,r.params],[3,r.seeds],[4,r.membership]],Math.ceil(material.slots/64)],
     ['refitSources',[[0,material.particles],[1,material.options],[2,r.params],[4,r.membership],[5,r.groups]],s.sources],
-    ['receiverSeeds',[[0,material.particles],[1,material.options],[2,r.params],[6,r.centers]],s.receivers],
+    ['receiverSeeds',[[0,material.particles],[1,material.options],[2,r.params],[6,r.centers],[8,material.birthGenerations],[10,r.receiverKeys]],s.receivers],
     ['buildBundles',[[2,r.params],[5,r.groups],[6,r.centers],[7,r.bundles]],Math.ceil(count/64)]]){
     const p=pipelines[entry]??=device.createComputePipeline({label:'packet network '+entry,layout:'auto',compute:{module,entryPoint:entry}});
     const bind=device.createBindGroup({layout:p.getBindGroupLayout(0),entries:entries.map(([binding,buffer])=>({binding,resource:{buffer}}))});
@@ -110,11 +121,11 @@ export function createPacketNetwork(device){
    }
    const result=transport.encode(encoder,{material,bundles:{buffer:r.bundles,count},membership:r.membership,width:s.width,height:s.width,sections:s.sections,receivers:s.receivers,triangles,triangleCount});
    const domain=material.domain,extent=domain.dims.map(n=>n*domain.pitch),pitch=s.receiverRadius;
-   latest={...result.receipt,settings:s,sourcePartition:'fresh nearest-seed disjoint membership; every source member retained',receivers:'current material slot-stratum representatives; not persistent identities',near:'six-axis spherical quadrature inside broad source support',far:'orthographic source footprint; finite rectangular solid angle',sourceCoverage:'current admitted optical particles only',temporalReuse:false,bytes:plan.bytes+Object.values(r).reduce((sum,b)=>sum+b.size,0)};
+   latest={...result.receipt,settings:s,sourcePartition:'current disjoint membership around surviving primary anchors; every source member retained',receivers:'primary epoch/slot/birth anchors; reseeded on replacement or loss',near:'six-axis spherical quadrature inside broad source support',far:'orthographic source footprint; finite rectangular solid angle',sourceCoverage:'current admitted optical particles only',temporalReuse:false,persistentAnchors:true,bytes:plan.bytes+Object.values(r).reduce((sum,b)=>sum+b.size,0)};
    return {identity:result.identity,centers:r.centers,radiance:result.buffer,receiverCount:s.receivers,grid:{origin:[...domain.origin],dims:extent.map(n=>Math.ceil(n/pitch)),pitch},maxAgeSteps:1,receipt:latest};
   },
   read:()=>latest,
   get buffers(){return {...resources,...(transport.buffers?{transport:transport.buffers}:{})};},
-  dispose(){transport.dispose();if(resources)retire(Object.values(resources));resources=null;key=null;latest=null;},
+  dispose(){transport.dispose();if(resources)retire(Object.values(resources));resources=null;key=null;latest=null;epoch=null;},
  };
 }
