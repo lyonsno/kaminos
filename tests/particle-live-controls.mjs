@@ -4,8 +4,9 @@ import assert from 'node:assert/strict';
 import definition from '../experiments/optical-particles.experiment.mjs';
 import {bindParticleNumber} from "../particle-number-control.mjs";
 import {opticalParticleSettings} from '../volume-optical-particles.mjs';
+import {createSceneEdits} from '../scene-edit-session.mjs';
 
-async function mounted({shared=false,inputs={},viewport=false}={}){
+async function mounted({shared=false,inputs={},viewport=false,edits}={}){
  const document=new EventTarget();document.activeElement=null;
  class Element extends EventTarget{
   constructor(tag){super();this.tagName=tag.toUpperCase();this.children=[];this.dataset={};this.style={};this.value='';this.min='';this.max='';const classes=new Set();this.classList={add:v=>classes.add(v),remove:v=>classes.delete(v),contains:v=>classes.has(v)};}
@@ -21,7 +22,7 @@ async function mounted({shared=false,inputs={},viewport=false}={}){
  for(const [key,id] of [['burnTime','volume-reactant-mixing-time'],['cooling','volume-reactant-cooling-time'],['sootYield','volume-reactant-soot-yield']]){
   const input=new Element('input'),label=new Element('span');input.value=String(reaction?.[key]??accepted[key]);input.addEventListener('input',()=>{trace.nativeEvents.push(key);runtime.setParticleSimulationReaction({[key]:Number(input.value)});});native.set(id,input);native.set(id+'-val',label);
  }
- document.defaultView={__kaminosVolumePrototype:runtime,Event};
+ document.defaultView={__kaminosVolumePrototype:runtime,Event,crypto:globalThis.crypto,kaminosSceneEdits:edits};
  const owner=await definition.create({host:{controls:{document,installNumberDrag:()=>({dispose(){}})},scene:{open:async()=>({onFrame:()=>()=>{},redraw(){trace.redraw.push(true);},dispose(){}})}},inputs:{...inputs,particles:{acquisitionMode:1,...inputs.particles}},record:r=>trace.records.push(r),updateInputs:s=>writes.push(s)});
  const root=new Element('div');owner.mount({root,document,invoke:async(op,v)=>owner.operations[op](v)});
  const all=el=>[el,...el.children.flatMap(all)];const field=key=>all(root).find(el=>el.dataset.particle===key);
@@ -153,6 +154,30 @@ test('budget controls are adjacent and distinguish legacy, focused and emitter a
   x.owner.operations.setOptions({projection:0,depthMode:0});
   assert.equal(x.field('flowAlignment').disabled,true);assert.equal(x.field('depthSlices').disabled,true);
  }finally{await x.dispose();}
+});
+
+test('programmatic coverage, pixel support and scene edits share chronological undo',async()=>{
+ const edits=createSceneEdits({read:()=>null,write:()=>{}});
+ const x=await mounted({edits});
+ let sceneValue=0;
+ edits.register('@other',{read:()=>({v:sceneValue}),check:v=>v,write:v=>{sceneValue=v.v;}});
+ try{
+  const first=x.accepted().coverage;
+  x.owner.operations.setCoverage({...first,footprint:[[0,1],[1,2]]});
+  const curve=x.accepted().coverage;
+  edits.apply('@other',{v:1},'Scene edit');
+  x.owner.operations.setOptions({coverage:{...curve,smoke:{...curve.smoke,radius:3}},pixelFloor:.25,gain:3});
+  assert.equal(edits.state().undoCount,3);
+  edits.undo();
+  assert.deepEqual(x.accepted().coverage,curve);assert.equal(x.accepted().pixelFloor,.5);assert.equal(x.accepted().gain,3);
+  assert.deepEqual(x.writes.at(-1).particles.coverage,curve,'undo persists the accepted settings');
+  edits.undo();assert.equal(sceneValue,0);
+  edits.undo();assert.deepEqual(x.accepted().coverage,first);
+  edits.redo();assert.deepEqual(x.accepted().coverage,curve);
+  edits.begin('@other','In-progress scene edit');edits.preview({v:2});
+ }finally{await x.dispose();}
+ assert.equal(edits.state().active?.id,'@other','closing Workbench cannot cancel an unrelated scene gesture');
+ assert.equal(sceneValue,2);edits.cancel();
 });
 
 test('keeps Beaming lighting settings opaque across shared lighting edits and scene restoration',async()=>{

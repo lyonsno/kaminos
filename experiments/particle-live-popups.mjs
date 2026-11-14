@@ -3,7 +3,7 @@ import {bindParticleNumber} from '../particle-number-control.mjs';
 const SVG='http://www.w3.org/2000/svg';
 const clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
 
-export function mountParticleLivePopups({document,root,controls,readCoverage,setCoverage,saveCoverage,readSupport,setSupport,readSmokeAvailable,readLighting,setLighting}){
+export function mountParticleLivePopups({document,root,controls,readCoverage,coverageHistory,readSupport,readSmokeAvailable,readLighting,setLighting}){
  const win=document.defaultView;
  const create=(tag,text)=>{const e=document.createElement(tag);if(text)e.textContent=text;return e;};
  const cleanups=[];
@@ -40,6 +40,7 @@ export function mountParticleLivePopups({document,root,controls,readCoverage,set
   if(event.key==='Escape'){
    const active=[cover,light].find(item=>!item.panel.hidden&&item.panel.contains(document.activeElement))
     ??[cover,light].find(item=>!item.panel.hidden);
+   if(active?.panel.contains(event.target)&&event.target?.closest?.('input,textarea'))return;
    if(active){event.preventDefault();event.stopPropagation();if(active!==cover||!finishCurve(false))active.toggle();}
    return;
   }
@@ -92,37 +93,19 @@ export function mountParticleLivePopups({document,root,controls,readCoverage,set
  smokeStatus.style.cssText='color:#b4cddd;margin:.5em 0';smokeStatus.setAttribute('role','status');
  smokeFields.append(create('legend','Drifting smoke footprint'),smokeStatus);
  cover.panel.append(smokeFields,curveError,basisRow.label,basisNote,create('p','Grab a point to move it, or click the graph to add one. Use Delete or Remove point to remove a selected interior point. 1× keeps the existing value.'));
- const supportFields=[];
- for(const [key,name,step] of [['pixelFloor','Pixel floor',.05],['maxFootprint','Footprint ceiling (px)',.25]]){
-  const input=create('input');input.type='number';input.min='0';input.step=String(step);
-  const {label,caption}=row(name,input);cover.panel.append(label);supportFields.push({key,input});
-  const binding=bindParticleNumber({input,read:()=>readSupport()[key],apply:v=>{setSupport({[key]:v});sync(true);},onError:e=>{curveError.textContent=e.message;curveError.hidden=false;},onAccepted:()=>{curveError.hidden=true;}});
-  const drag=controls.installNumberDrag?.({input,grip:caption,step});cleanups.push(()=>{binding.dispose();drag?.dispose?.();});
- }
- const supportNote=create('p','If the footprint stops growing, raise the ceiling. Zero removes the ceiling.');supportNote.style.cssText='color:#b4cddd';cover.panel.append(supportNote);
- const edits=win.kaminosSceneEdits,curveTarget=edits?'@particle-coverage:'+win.crypto.randomUUID():null;
- const curvePart=({basis,footprint,opacity})=>({basis,footprint,opacity});
+ const edits=win.kaminosSceneEdits;
  let draft=null,pending=0,gesture=null;
  const curveFailed=e=>{curveError.textContent=e.message;curveError.hidden=false;};
- if(edits)edits.register(curveTarget,{
-  read:()=>curvePart(readCoverage()),
-  check:value=>curvePart(value),
-  write:value=>{
-   setCoverage({...readCoverage(),...value},{preview:edits.state().active?.id===curveTarget});
-   redraw();
-  },
- });
  function beginCurve(label){
   if(gesture)return false;
-  try{edits?.begin(curveTarget,label);gesture={before:curvePart(readCoverage())};curveError.hidden=true;return true;}
+  try{gesture={before:coverageHistory.begin(label)};curveError.hidden=true;return true;}
   catch(e){curveFailed(e);return false;}
  }
  function flushCurve(){
   if(pending)win.cancelAnimationFrame(pending);pending=0;
   if(!draft)return;
   const next=draft;draft=null;
-  if(edits){if(edits.state().active?.id!==curveTarget)throw Error('The scene cancelled this curve edit');edits.preview(curvePart(next));}
-  else setCoverage(next,{preview:true});
+  coverageHistory.preview({coverage:next});
  }
  function finishCurve(accept){
   if(!gesture)return false;
@@ -130,15 +113,13 @@ export function mountParticleLivePopups({document,root,controls,readCoverage,set
   try{
    if(accept){
     flushCurve();
-    edits?.commit();
-    if(JSON.stringify(before)!==JSON.stringify(curvePart(readCoverage())))saveCoverage();
+    coverageHistory.finish(true,before);
    }else{
     if(pending)win.cancelAnimationFrame(pending);pending=0;draft=null;
-    if(edits){if(edits.state().active?.id===curveTarget)edits.cancel();}
-    else setCoverage({...readCoverage(),...before},{preview:true});
+    coverageHistory.finish(false,before);
    }
   }catch(e){
-   if(edits?.state().active?.id===curveTarget)edits.cancel();
+   coverageHistory.finish(false,before);
    curveFailed(e);
   }
   redraw();return true;
@@ -157,6 +138,37 @@ export function mountParticleLivePopups({document,root,controls,readCoverage,set
  };
  win.addEventListener('keydown',historyKey,true);
  const current=()=>draft??readCoverage();
+ function bindCoverageNumber(input,caption,step,read,patch,label){
+  let scrub=null;
+  const cancel=()=>{if(scrub){const before=scrub;scrub=null;coverageHistory.finish(false,before);}};
+  const binding=bindParticleNumber({input,read,apply:v=>{
+   if(gesture)finishCurve(true);
+   if(input.classList.contains('scrubbing')){
+    scrub??=coverageHistory.begin('Edit '+label.toLowerCase());
+    try{coverageHistory.preview(patch(v));}catch(e){cancel();throw e;}
+   }else{
+    const before=coverageHistory.begin('Edit '+label.toLowerCase());
+    try{coverageHistory.preview(patch(v));coverageHistory.finish(true,before);}
+    catch(e){coverageHistory.finish(false,before);throw e;}
+   }
+   sync(true);
+  },onError:curveFailed,onAccepted:()=>{curveError.hidden=true;}});
+  input.addEventListener('pointercancel',cancel);
+  const seatHistoryFocus=e=>{if(e.key==='Enter')cover.panel.focus({preventScroll:true});};
+  input.addEventListener('keydown',seatHistoryFocus);
+  const drag=controls.installNumberDrag?.({input,grip:caption,step,onEnd:()=>{
+   if(scrub){const before=scrub;scrub=null;try{coverageHistory.finish(true,before);}catch(e){coverageHistory.finish(false,before);curveFailed(e);}}
+   sync(true);
+  }});
+  cleanups.push(()=>{cancel();input.removeEventListener('pointercancel',cancel);input.removeEventListener('keydown',seatHistoryFocus);binding.dispose();drag?.dispose?.();});
+ }
+ const supportFields=[];
+ for(const [key,name,step] of [['pixelFloor','Pixel floor',.05],['maxFootprint','Footprint ceiling (px)',.25]]){
+  const input=create('input');input.type='number';input.min='0';input.step=String(step);
+  const {label,caption}=row(name,input);cover.panel.append(label);supportFields.push({key,input});
+  bindCoverageNumber(input,caption,step,()=>readSupport()[key],v=>({[key]:v}),name);
+ }
+ const supportNote=create('p','If the footprint stops growing, raise the ceiling. Zero removes the ceiling.');supportNote.style.cssText='color:#b4cddd';cover.panel.append(supportNote);
  for(const [key,name,min,step,title] of [
   ['radius','Smoke radius multiplier',1,.1,'1× off. A larger footprint spreads the same optical weight.'],
   ['minExtinction','Minimum extinction',0,.05,'Local extinction before parcel weight. Growth eases in between this value and twice it.'],
@@ -167,11 +179,7 @@ export function mountParticleLivePopups({document,root,controls,readCoverage,set
  ]){
   const input=create('input');input.type='number';input.min=String(min);input.step=String(step);input.title=title;
   const {label,caption}=row(name,input);caption.title=title;smokeFields.append(label);smokeInputs.push({key,input});
-  const binding=bindParticleNumber({input,read:()=>current().smoke[key],apply:value=>{
-   if(gesture)finishCurve(true);
-   const coverage=readCoverage();setCoverage({...coverage,smoke:{...coverage.smoke,[key]:value}});sync(true);
-  },onError:e=>{curveError.textContent=e.message;curveError.hidden=false;},onAccepted:()=>{curveError.hidden=true;}});
-  const drag=controls.installNumberDrag?.({input,grip:caption,step});cleanups.push(()=>{binding.dispose();drag?.dispose?.();});
+  bindCoverageNumber(input,caption,step,()=>current().smoke[key],value=>{const coverage=readCoverage();return {coverage:{...coverage,smoke:{...coverage.smoke,[key]:value}}};},name);
  }
  const editors=[];
  for(const [kind,title,note,color] of [['footprint','Footprint','Multiplies radius before pixel floor and footprint ceiling. Zero hides the carrier.','#f9b167'],['opacity','Opacity','Multiplies optical depth. Direct emission stays independent.','#8bd8f3']]){
@@ -291,9 +299,8 @@ export function mountParticleLivePopups({document,root,controls,readCoverage,set
   if(lightStatus.textContent!==status)lightStatus.textContent=status;
  }
  redraw();
- return {sync,async dispose(){
+ return {sync,dispose(){
   finishCurve(false);document.removeEventListener('keydown',keyHandler,true);win.removeEventListener('keydown',historyKey,true);
   cleanups.forEach(fn=>fn());light.panel.remove();cover.panel.remove();style.remove();
-  if(edits){await edits.waitForReplay();if(edits.hasHistoryEntry(curveTarget))edits.discard(entry=>entry.id===curveTarget,{preserveUnrelatedActive:true});edits.unregister(curveTarget);}
  }};
 }

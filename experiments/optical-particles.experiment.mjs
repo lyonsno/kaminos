@@ -72,6 +72,29 @@ export default {
    runtime.setControls(patch);
   }
   try{source();}catch(error){await session.dispose();throw error;}
+  const edits=win.kaminosSceneEdits,coverageTarget=edits?'@particle-coverage:'+win.crypto.randomUUID():null;
+  const coverageSlice=({coverage,pixelFloor,maxFootprint})=>({coverage,pixelFloor,maxFootprint});
+  let ownCoverageGesture=false;
+  if(edits)edits.register(coverageTarget,{
+   read:()=>coverageSlice(settings),
+   check:value=>coverageSlice(opticalParticleSettings({...settings,...value})),
+   write:value=>applyCoverageSettings(value,{preview:ownCoverageGesture}),
+  });
+  const coverageHistory={
+   begin(label){const before=coverageSlice(settings);edits?.begin(coverageTarget,label);ownCoverageGesture=true;return before;},
+   preview(patch){
+    if(edits){if(edits.state().active?.id!==coverageTarget)throw Error('The scene cancelled this coverage edit');edits.preview(patch);}
+    else applyCoverageSettings(patch,{preview:true});
+   },
+   finish(accept,before){
+    try{
+     if(edits){if(edits.state().active?.id!==coverageTarget)return false;accept?edits.commit():edits.cancel();}
+     else if(!accept)applyCoverageSettings(before,{preview:true});
+     if(accept&&JSON.stringify(before)!==JSON.stringify(coverageSlice(settings)))saveCoverage();
+     return true;
+    }finally{ownCoverageGesture=false;}
+   },
+  };
   const read=()=>({settings,ambientBoundary:source().ambientBoundaryState?.()??null,effective:source().opticalParticleState(),proposal:{...particleProposalShares(settings),conditionalOn:settings.acquisitionMode===2?null:'no-accepted-tracking',trackingAttemptFraction:settings.acquisitionMode===2?null:settings.followFraction,acceptedTrackingFraction:null},population,workPopulation,error,measurement});
   const value=(key,e,boundary)=>key in BOUNDARY_FIELDS?(key==='ambientWidthWorld'?boundary?.effective.widthWorld:boundary?.settings[BOUNDARY_FIELDS[key]]):key==='sourceRenderScale'?e.sourceRenderScale:key==='sourceRaySteps'?e.sourceRaySteps:key==='verticalRadius'?settings.radius*settings.stretch:key==='radius'?settings.radius:e.simulationReaction&&REACTION_KEYS.includes(key)?e.simulationReaction[key]:settings[key];
   const text=(el,next)=>{if(el.textContent!==next)el.textContent=next;};
@@ -109,19 +132,29 @@ export default {
    persist();record({kind:'particle.distributed-lighting',settings:lightingSettings});session.redraw();
    return owner.liveLightingState();
   }
-  function setCoverage(coverage,{preview=false}={}){
-   const next=opticalParticleSettings({...settings,coverage});
+  function applyCoverageSettings(patch,{preview=false}={}){
+   const next=opticalParticleSettings({...settings,...patch});
    source().setOpticalParticles(next);settings=next;
    if(!preview)saveCoverage();session.redraw();
+   return settings.coverage;
+  }
+  function setCoverage(coverage){
+   if(!edits)return applyCoverageSettings({coverage});
+   const before=coverageHistory.begin('Edit particle coverage');
+   try{coverageHistory.preview({coverage});coverageHistory.finish(true,before);}
+   catch(e){coverageHistory.finish(false,before);throw e;}
    return settings.coverage;
   }
   function saveCoverage(){persist();record({kind:'particle.coverage',coverage:settings.coverage});}
   function commitOptions(patch,reactionOnly=false){
    const next=opticalParticleSettings({...settings,...patch}),reaction=Object.fromEntries(Object.entries(patch).filter(([key])=>REACTION_KEYS.includes(key)));
+   const coverageEdit=edits&&['coverage','pixelFloor','maxFootprint'].some(key=>Object.hasOwn(patch,key)),before=coverageEdit?coverageSlice(settings):null;
+   if(coverageEdit)edits.assertCanRecordApplied(coverageTarget);
    const runtime=source(),shared=!!runtime.opticalParticleState().simulationReaction;
    runtime.validateOpticalParticleBudget?.(next);runtime.setOpticalParticles(next);
    if(shared&&Object.keys(reaction).length)runtime.setParticleSimulationReaction(reaction);
    settings=next;reactionOverrides={...reactionOverrides,...reaction};
+   if(coverageEdit)edits.recordApplied(coverageTarget,before,coverageSlice(settings),'Edit particle coverage');
    persist();
    record(reactionOnly?{kind:shared?'simulation.reaction':'particle.reaction-fallback',values:reaction}:{kind:'optical-particles.settings',settings,simulationReaction:reactionOverrides});session.redraw();sync(true);return read();
   }
@@ -154,7 +187,7 @@ export default {
    function section(label){const fieldset=document.createElement('fieldset'),legend=document.createElement('legend');legend.textContent=label;fieldset.style.cssText='min-width:0;border:1px solid #555;border-radius:6px;padding:8px;margin:12px 0';fieldset.append(legend);root.append(fieldset);controlRoot=fieldset;}
 
    if(document.body&&current?.opticalParticleViewport){hud=document.createElement('div');hud.setAttribute('aria-label','Live particle work');hud.style.cssText='position:fixed;pointer-events:none;z-index:90;color:#fff;font:11px ui-monospace,monospace;text-shadow:0 1px 2px #000;overflow:hidden';hudTop=document.createElement('div');hudBottom=document.createElement('div');hudTop.style.cssText='position:absolute;top:2px;left:6px;right:6px;background:#101820aa;padding:3px 5px';hudBottom.style.cssText='position:absolute;bottom:2px;left:6px;right:6px;background:#101820aa;padding:3px 5px;white-space:pre-wrap';hud.append(hudTop,hudBottom);document.body.append(hud);}
-   if(document.body&&document.createElementNS)popups=mountParticleLivePopups({document,root,controls:host.controls,readCoverage:()=>settings.coverage,setCoverage,saveCoverage,readSupport:()=>({pixelFloor:settings.pixelFloor,maxFootprint:settings.maxFootprint}),setSupport:setOptions,readSmokeAvailable:()=>settings.acquisitionMode===2&&!settings.debugView,readLighting:()=>{const state=lightingRoute()?.liveLightingState();return state&&{...state,restoreError:lightingRestoreError};},setLighting});
+   if(document.body&&document.createElementNS)popups=mountParticleLivePopups({document,root,controls:host.controls,readCoverage:()=>settings.coverage,coverageHistory,readSupport:()=>({pixelFloor:settings.pixelFloor,maxFootprint:settings.maxFootprint}),readSmokeAvailable:()=>settings.acquisitionMode===2&&!settings.debugView,readLighting:()=>{const state=lightingRoute()?.liveLightingState();return state&&{...state,restoreError:lightingRestoreError};},setLighting});
    const diagnostics=document.createElement('details'),diagnosticsTitle=document.createElement('summary');diagnosticsTitle.textContent='Allocation and GPU diagnostics';diagnostics.append(diagnosticsTitle);
    const status=document.createElement('div');status.setAttribute('aria-label','Particle allocation');status.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:4px 12px;font-variant-numeric:tabular-nums;margin:12px 0';
    for(const [key,label] of [['target','Acquisition batch (px)'],['fresh','Fresh sample budget'],['output','Fire output (px)'],['particleTarget','Particle target (px)'],['depth','Depth field (px × slices)'],['population','Population grid'],['slots','Particle slots'],['memory','Optical buffers'],['step','Simulation step']]){const name=document.createElement('span'),v=document.createElement('span');name.textContent=label;v.dataset.particleStat=key;v.style.cssText='white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;font-family:monospace;min-width:0';status.append(name,v);stats.set(key,v);}diagnostics.append(status);
@@ -284,6 +317,6 @@ export default {
    control('Reaction support expansion','expansion','Fractional growth of both radii as a carrier consumes its initial fuel. 0 holds size; 1 permits doubling after that fuel is spent. It changes the footprint without pushing the grid.');
    const reset=document.createElement('button');reset.textContent='Clear particle observations';reset.title='Clear the retained particle pool and begin collecting fresh observations. The simulation is preserved.';reset.addEventListener('click',()=>invoke('reset'));root.append(reset);
    const note=document.createElement('p');note.textContent='Carried reaction, exchange, transport and survival use simulation reference time and hold while paused. Radius, normalized profile and visibility edits can be compared on that held material. Camera movement preserves particles. Source-focused collection also preserves them through output and batch resizing; capacity and acquisition-mode changes clear the pool. Tracking and sampling edits affect subsequent updates. Soot follows its carried composition; captured illumination retains its birth lighting and fades separately. Internal depth ordering remains approximate.';root.append(note);sync();
-  },async dispose(){disposed=true;stop();try{await popups?.dispose();}finally{if(lightingOwner===win.__kaminosSceneRadiance)lightingOwner?.configureLiveLighting(null);hud?.remove();drags.forEach(x=>x?.dispose?.());try{if(current){current.setOpticalParticles(previous.particles);current.setSplitIntegral(previous.split);}}finally{await session.dispose();}}}};
+  },async dispose(){disposed=true;stop();try{popups?.dispose();if(edits){await edits.waitForReplay();if(edits.hasHistoryEntry(coverageTarget))edits.discard(entry=>entry.id===coverageTarget,{preserveUnrelatedActive:true});edits.unregister(coverageTarget);}}finally{if(lightingOwner===win.__kaminosSceneRadiance)lightingOwner?.configureLiveLighting(null);hud?.remove();drags.forEach(x=>x?.dispose?.());try{if(current){current.setOpticalParticles(previous.particles);current.setSplitIntegral(previous.split);}}finally{await session.dispose();}}}};
  }
 };

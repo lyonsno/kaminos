@@ -27,7 +27,10 @@ pacer.clear();
 assert.equal(pacer.due(999),true);
 
 const flat=opticalParticleSettings().coverage;
-assert.deepEqual(flat,{basis:'lifetime',footprint:[[0,1],[1,1]],opacity:[[0,1],[1,1]]});
+assert.deepEqual(flat.footprint,[[0,1],[1,1]]);
+assert.deepEqual(flat.opacity,[[0,1],[1,1]]);
+assert.equal(flat.basis,'lifetime');
+assert.equal(flat.smoke.radius,1,'opening a previous preset does not spread smoke');
 assert.throws(()=>opticalParticleSettings({coverage:{footprint:[[0,1],[.5,2],[.5,0],[1,1]]}}),/ordered/);
 assert.throws(()=>opticalParticleSettings({coverage:{opacity:[[0,1],[1,-1]]}}),/nonnegative/);
 const footprint=[[0,1],[.25,0],[1,2]];

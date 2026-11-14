@@ -1,5 +1,5 @@
 const flat=Object.freeze([Object.freeze([0,1]),Object.freeze([1,1])]);
-const smokeDefaults=Object.freeze({radius:1,minExtinction:.5,maxEmission:10,ageStart:8,ageRamp:5,maxFootprint:10});
+const smokeDefaults=Object.freeze({radius:1,minExtinction:.35,maxEmission:160,ageStart:5,ageRamp:5,maxFootprint:18});
 export function particleCoverage(value={}){
  const {basis='lifetime',footprint=flat,opacity=flat,smoke={}}=value;
  if(!smoke||typeof smoke!=='object'||Array.isArray(smoke))throw Error('Invalid smoke footprint controls');
