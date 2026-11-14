@@ -6,7 +6,7 @@ import {bindParticleNumber} from "../particle-number-control.mjs";
 import {opticalParticleSettings} from '../volume-optical-particles.mjs';
 import {createSceneEdits} from '../scene-edit-session.mjs';
 
-async function mounted({shared=false,inputs={},viewport=false,edits}={}){
+async function mounted({shared=false,inputs={},viewport=false,edits,preview=false}={}){
  const document=new EventTarget();document.activeElement=null;
  class Element extends EventTarget{
   constructor(tag){super();this.tagName=tag.toUpperCase();this.children=[];this.dataset={};this.style={};this.value='';this.min='';this.max='';const classes=new Set();this.classList={add:v=>classes.add(v),remove:v=>classes.delete(v),contains:v=>classes.has(v)};}
@@ -19,7 +19,7 @@ async function mounted({shared=false,inputs={},viewport=false,edits}={}){
  let accepted=opticalParticleSettings(),reaction=shared?{burnTime:3,cooling:50,heatRelease:6,sootYield:.1,smokeLife:90}:null,writes=[];
  let sourceControls={renderScale:1,raySteps:8};
  const trace={settings:[],reaction:[],records:[],redraw:[],nativeEvents:[],reset:[]};
- const runtime={...(viewport?{opticalParticleViewport:()=>({getBoundingClientRect:()=>({left:0,top:0,right:800,bottom:600,width:800,height:600})})}:{}),opticalParticleSettings:()=>accepted,setOpticalParticles:s=>{trace.settings.push(s);accepted=opticalParticleSettings(s);},setControls:patch=>{sourceControls={...sourceControls,...patch};},splitIntegralSettings:()=>({mode:'off'}),setSplitIntegral(){},opticalParticleState:()=>({effective:'world-optical-particles',settings:accepted,simulationReaction:reaction,sourceRenderScale:sourceControls.renderScale,sourceRaySteps:sourceControls.raySteps}),setParticleSimulationReaction:p=>{trace.reaction.push(p);reaction={...reaction,...p};return reaction;},resetOpticalParticles(){trace.reset.push(true);}};
+ const runtime={...(viewport?{opticalParticleViewport:()=>({getBoundingClientRect:()=>({left:0,top:0,right:800,bottom:600,width:800,height:600})})}:{}),opticalParticleSettings:()=>accepted,setOpticalParticles:s=>{trace.settings.push(s);accepted=opticalParticleSettings(s);},setControls:patch=>{sourceControls={...sourceControls,...patch};},splitIntegralSettings:()=>({mode:'off'}),setSplitIntegral(){},opticalParticleState:()=>({effective:'world-optical-particles',settings:accepted,simulationReaction:reaction,sourceRenderScale:preview?.5:sourceControls.renderScale,sourceRaySteps:preview?12:sourceControls.raySteps}),setParticleSimulationReaction:p=>{trace.reaction.push(p);reaction={...reaction,...p};return reaction;},resetOpticalParticles(){trace.reset.push(true);}};
  for(const [key,id] of [['burnTime','volume-reactant-mixing-time'],['cooling','volume-reactant-cooling-time'],['sootYield','volume-reactant-soot-yield']]){
   const input=new Element('input'),label=new Element('span');input.value=String(reaction?.[key]??accepted[key]);input.addEventListener('input',()=>{trace.nativeEvents.push(key);runtime.setParticleSimulationReaction({[key]:Number(input.value)});});native.set(id,input);native.set(id+'-val',label);
  }
@@ -226,7 +226,7 @@ test('transactional numeric entry keeps typed drafts out of history until commit
 });
 
 test('scene snapshot includes accepted optical settings and the shared reaction even without another edit',async()=>{
- const x=await mounted({shared:true,inputs:{particles:{capacity:62000,expansion:1.7,phaseFilter:3,lightRefreshEvery:7},source:{renderScale:.6,raySteps:11},sharedLighting:{mode:'paced',intervalMs:90}}});
+ const x=await mounted({shared:true,preview:true,inputs:{particles:{capacity:62000,expansion:1.7,phaseFilter:3,lightRefreshEvery:7},source:{renderScale:.6,raySteps:11},sharedLighting:{mode:'paced',intervalMs:90}}});
  try {
   x.owner.operations.setOptions({maxFootprint:44,coverage:{basis:'mixing',footprint:[[0,1],[.61,.75],[1,1.3]]}});
   x.native.get('volume-reactant-cooling-time').value='17.25';
@@ -236,7 +236,7 @@ test('scene snapshot includes accepted optical settings and the shared reaction 
   assert.equal(saved.particles.expansion,1.7);assert.equal(saved.particles.lightRefreshEvery,7);
   assert.equal(saved.particles.maxFootprint,44);assert.equal(saved.particles.phaseFilter,3);
   assert.deepEqual(saved.particles.coverage.footprint,x.accepted().coverage.footprint,'save the accepted curve points at their actual precision');
-  assert.deepEqual(saved.source,{renderScale:.6,raySteps:11});
+  assert.deepEqual(saved.source,{renderScale:.6,raySteps:11},'do not save temporary viewport Preview limits over authored source controls');
   assert.deepEqual(saved.sharedLighting,{mode:'paced',intervalMs:90},'unavailable lighting still preserves authored choices');
   const y=await mounted({shared:true,inputs:saved});
   try{assert.deepEqual(y.accepted().coverage,saved.particles.coverage);assert.equal(y.owner.read().effective.simulationReaction.cooling,17.25);assert.equal(y.accepted().capacity,62000);}

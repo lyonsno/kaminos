@@ -3465,6 +3465,7 @@ let authoringWorkspace = null;
 let cameraViews=null,cameraViewsPanel=null;
 let sceneCameras=null,cameraAuthoring=null,cameraProjectionBase=null,viewPie=null;
 let sharedWorkbench=null,ownerExperimentEntry=null,workbenchSceneHost=null,sceneOwnerControls=null;
+let restoredOpticalParticleSetup=null;
 let resolveWorkbenchViewerReady,rejectWorkbenchViewerReady;
 const workbenchViewerReady=new Promise((resolve,reject)=>{resolveWorkbenchViewerReady=resolve;rejectWorkbenchViewerReady=reject;});
 workbenchViewerReady.catch(()=>{});
@@ -12979,6 +12980,7 @@ function clearSceneTransient(registeredObjects){
   }
 }
 function projectClearedScene(){
+  restoredOpticalParticleSetup=null;
   sceneDocument.sceneCleared();
   currentMesh = null;
   glbSourceScene = null;
@@ -25880,7 +25882,7 @@ function buildSceneData(capture = null) {
     provenance,
     composition: activeSceneComposition,
     fireSettings: activeSceneComposition ? readVolumeSettingsValues() : null,
-    opticalParticleSetup: ownerExperimentEntry?.snapshotOpticalParticleSetup()??null,
+    opticalParticleSetup: ownerExperimentEntry?.snapshotOpticalParticleSetup()??restoredOpticalParticleSetup,
     localLiquid: waterFeature.setup,
     capture,
     cameraViews:cameraViews?.read(),
@@ -27946,6 +27948,9 @@ async function applySceneDocument(data, restorePlan, {requestId:loadRequestId, s
   } else {
     setInfo(waterFeature.failure ? `Scene loaded; water host unavailable: ${waterFeature.failure}` : 'Volume scene loaded');
   }
+  // Owner discovery and activation follow scene admission. Retain the saved
+  // tune even if the owner has not mounted yet or this runtime refuses it.
+  restoredOpticalParticleSetup=restorePlan.opticalParticleSetup??null;
   if (sceneTelemetryOp && typeof loadingTelemetry !== 'undefined') loadingTelemetry.complete('scene');
   return true;
   } finally {

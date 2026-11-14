@@ -128,7 +128,10 @@ export default {
   function snapshotInputs(){
    const runtime=source(),effective=runtime.opticalParticleState(),reaction=effective.simulationReaction??reactionOverrides;
    const sourceControls={...sourceSettings};
-   for(const [key,value] of [['renderScale',effective.sourceRenderScale],['raySteps',effective.sourceRaySteps]])if(Number.isFinite(value)&&value>0)sourceControls[key]=value;
+   for(const [key,id] of [['renderScale','volume-render-scale'],['raySteps','volume-steps']]){
+    const node=host.controls.document.getElementById(id),value=Number(node?.value);
+    if(Number.isFinite(value)&&value>0)sourceControls[key]=value;
+   }
    const boundary=runtime.ambientBoundaryState?.()?.settings??boundaryOverrides;
    return structuredClone({...forwarded,particles:opticalParticleSettings({...runtime.opticalParticleSettings(),...reaction}),simulationReaction:reaction,source:sourceControls,
     ...(Object.keys(boundary).length?{ambientBoundary:boundary}:{}),...(lightingSettings?{sharedLighting:lightingSettings}:{})});
