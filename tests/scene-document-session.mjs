@@ -119,6 +119,19 @@ test('preview snapshots cannot overwrite a newer document binding',async()=>{
  assert.equal(f.session.resume(snapshot),false);assert.equal(f.session.state().filename,'new.kaminos.json');
 });
 
+test('Save intent crosses the worker boundary but cannot follow a replacement document or session',async()=>{
+ const f=fixture(),intent=f.session.beginSave();
+ assert.ok(intent.token,'the document session must supply serializable Save identity');
+ const token=structuredClone(intent.token);
+ assert.equal(f.session.beginSave(token).filename,'existing.kaminos.json');
+ f.session.beginSave(token).assertCurrent();
+ assert.throws(()=>fixture().session.beginSave(token).assertCurrent(),/Scene changed during Save/);
+ await f.session.restore(file(document()),{sceneFile:'replacement.kaminos.json'});
+ assert.throws(()=>f.session.beginSave(token).assertCurrent(),/Scene changed during Save/);
+ assert.throws(()=>intent.assertCurrent(),/Scene changed during Save/);
+ assert.deepEqual(f.posts,[]);
+});
+
 test('navigation stages a certified document without claiming the current page; failed staging preserves it',async()=>{
  const f=fixture({requiresNavigation:()=>true});const result=await f.session.restore(file(document()));
  assert.equal(result.navigating,true);assert.equal(f.posts.length,1);assert.equal(f.navigations.length,1);assert.equal(f.applied.length,0);assert.deepEqual(f.bindings,[]);

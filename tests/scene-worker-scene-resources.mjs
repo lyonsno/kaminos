@@ -117,6 +117,32 @@ test('actual common factory draws dormant ordinary scene through the real Kit fo
  assert.equal(receipt.status,'completed');assert.equal(receipt.result.sceneDrawn,true);assert.equal(receipt.result.flameDrawn,false);
  await runtime.retire(f.ctx);assert(f.events.indexOf('domain.retire')<f.events.indexOf('volume.dispose'));assert.equal(f.events.at(-1),'device.destroy');
 });
+test('actual worker host and Kit admit retained mesh and material history through their real ordered contexts',async()=>{
+ globalThis.self=globalThis;
+ const {MessageChannel}=await import('node:worker_threads');
+ const {createSceneWorkerClient,installSceneWorkerHost}=await import('../scene-worker-handoff.mjs');
+ const {createSceneWorkerRuntimeFactory}=await import('../scene-worker-runtime.mjs');const kit=await import('../webgpu-inference-kit/src/core.js');
+ const f=fixture({document:saved(),domainOverrides:{initialVolumeActive:false}}),shared=f.shell.ordinary.sharedGpu;
+ const volume={setActive:async()=>{},setSceneLightingRebuildPending(){},foregroundGpuContext:()=>({active:false,device:null,queue:null,renderer:'ordinary-volume',productFrameOwner:'prototype'}),renderSharedFrame:()=>({flameDrawn:false}),dispose(){}};
+ const factory=createSceneWorkerRuntimeFactory({THREE,createSceneResources:()=>f.shell,
+  services:{kit,requestDevice:async()=>shared,createRenderObjects:()=>({scene:f.scene,camera:f.camera}),createRenderResources:()=>f.renderResources,createVolume:()=>volume}});
+ const {port1,port2}=new MessageChannel();
+ const host=installSceneWorkerHost({port:port2,createRuntime:({lifecycle})=>factory({payload:{...f.payload,sceneCanvas:{},volumeCanvas:{getContext(){}}},lifecycle})});
+ const client=createSceneWorkerClient({port:port1,sessionId:'actual-editing'});
+ const call=async(name,input)=>(await client.request(name,input).completion).output;
+ try{
+  await client.initialize({}).completion;
+  const add=await call('scene.importAsset',{source,fileName:'real-channel.glb'});assert.equal(add.mutationApplied,true);assert.equal(add.ui.history.undoCount,1);
+  const mat=await call('scene.materialCreate',{objectId:add.objectId,implementation:'standard-surface'});assert.ok(mat.recipeId);assert.equal(mat.ui.history.undoCount,2);
+  const begin=client.request('scene.materialBegin',{recipeId:mat.recipeId});const begun=(await begin.completion).output.value;
+  assert.equal(begun.ui.materials.gesture.requestId,begin.requestId);assert.equal(begun.ui.materials.gesture.gestureId,begun.gestureId);
+  await call('scene.materialCancel',{gestureId:begun.gestureId});
+  assert.equal((await call('scene.undo')).ui.history.undoCount,1);
+  assert.equal((await call('scene.undo')).ui.objects.some(row=>row.id===add.objectId),false);
+  const redone=await call('scene.redo');assert.equal(redone.ui.objects.some(row=>row.id===add.objectId),true);
+  assert.equal(host.read().phase,'active');await call('retire');
+ }finally{client.disconnect();host.disconnect();port1.close();port2.close();delete globalThis.self;}
+});
 
 test('selected startup preferences reach actual ordinary bloom and GI before initialization markers',async()=>{
  const f=fixture();f.payload.preferences={schema:'kaminos.preferences.v1',sceneDefaults:{environment:{name:'neutral',exposure:1.7,intensity:.8,showBackground:true},postprocessing:{sceneGI:{gain:4},bloom:{enabled:true,radius:.2,strength:.3,threshold:.4,composeFlame:true}}}};
@@ -272,6 +298,50 @@ test('cancellation after detached preparation preserves the current root, select
   const current=await f.shell.commands['scene.editorState'](null,f.ctx);assert.equal(current.ui.objects.length,1);assert.equal(current.ui.history.undoCount,0);
  }finally{await f.shell.retire(f.ctx);delete globalThis.self;}
 });
+test('worker material creation, mesh restoration and transforms use one history and preserve source appearance',async()=>{
+ globalThis.self=globalThis;const f=fixture({document:saved()});
+ try{
+  await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},context:f.ctx});
+  assert.equal(typeof f.shell.commands['scene.materialCreate'],'function','worker editor must consume the shared material operations');
+  let entry=f.shell.ordinary.workingScene.find('mesh'),slot=f.shell.ordinary.materials.slots(entry).at(-1);const slotKey=slot.key;const originalColor=slot.base.color.getHexString();
+  const created=await f.shell.commands['scene.materialCreate']({objectId:'mesh',slot:slot.key,implementation:'standard-surface',parameters:{color:'#ff0000',roughness:.2,metalness:.1}},f.ctx);
+  assert.ok(created.recipeId);assert.equal(created.ui.history.undoCount,1);assert.equal(f.shell.ordinary.materials.slots(entry).find(row=>row.key===slotKey).material.color.getHexString(),'ff0000');
+  f.shell.foregroundCommands['scene.transformComponent']({id:'mesh',field:'position.x',value:5},f.ctx);
+  await f.shell.commands['scene.remove']({id:'mesh'},f.ctx);await f.shell.commands['scene.undo'](null,f.ctx);
+  entry=f.shell.ordinary.workingScene.find('mesh');assert.equal(f.shell.ordinary.materials.slots(entry).find(row=>row.key===slotKey).material.color.getHexString(),'ff0000');
+  await f.shell.commands['scene.undo'](null,f.ctx);assert.equal(entry.object.position.x,1);
+  await f.shell.commands['scene.undo'](null,f.ctx);slot=f.shell.ordinary.materials.slots(entry).find(row=>row.key===slotKey);
+  assert.equal(slot.material.color.getHexString(),originalColor);assert.equal(slot.material.opacity,.6);assert.equal(slot.material.transparent,true);
+  await f.shell.commands['scene.redo'](null,f.ctx);assert.equal(f.shell.ordinary.materials.slots(entry).find(row=>row.key===slotKey).material.color.getHexString(),'ff0000');
+  const camera={position:[3,4,5],target:[0,1,0],up:[0,1,0],near:.02,far:80,fov:43};
+  const captured=await f.shell.commands['scene.captureDocument']({camera},f.ctx);assert.equal(captured.document.materialLibrary.bindings.length,1);
+  assert.equal(captured.document.objects[0].materials.opacity,.6,'record captures the retained base while the library owns the program');
+  await f.shell.commands['scene.applyDocument']({document:captured.document},f.ctx);
+  entry=f.shell.ordinary.workingScene.find('mesh');assert.equal(f.shell.ordinary.materials.slots(entry).find(row=>row.key===slotKey).material.color.getHexString(),'ff0000');
+ }finally{await f.shell.retire(f.ctx);delete globalThis.self;}
+});
+test('live worker material gestures preview, cancel and commit once in the shared history',async()=>{
+ globalThis.self=globalThis;let posts=0;const f=fixture({document:saved(),postSceneDocument:async()=>{posts++;return {ok:true,json:async()=>({saved:'draft.kaminos.json'})};}});
+ try{
+  await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},context:f.ctx});
+  const created=await f.shell.commands['scene.materialCreate']({objectId:'mesh',implementation:'standard-surface',parameters:{color:'#ff0000',roughness:.2,metalness:.1}},f.ctx);
+  assert.equal(typeof f.shell.foregroundCommands['scene.materialBegin'],'function','material tuning needs the shared live gesture boundary');
+  const recipeId=created.recipeId;
+  const first=f.shell.foregroundCommands['scene.materialBegin']({recipeId,label:'Edit roughness'},f.ctx);
+  f.shell.foregroundCommands['scene.materialPreview']({recipeId,gestureId:first.gestureId,patch:{parameters:{roughness:.4}}},f.ctx);
+  f.shell.foregroundCommands['scene.materialPreview']({recipeId,gestureId:first.gestureId,patch:{parameters:{roughness:.6}}},f.ctx);
+  assert.equal(f.shell.ordinary.materials.recipe(recipeId).parameters.roughness,.6);
+  const camera={position:[3,4,5],target:[0,1,0],up:[0,1,0],near:.02,far:80,fov:43};
+  await assert.rejects(f.shell.commands['scene.save']({camera},f.ctx),/active scene edit|finish.*edit/i);assert.equal(posts,0);
+  assert.equal((await f.shell.commands['scene.captureDocument']({camera},f.ctx)).document.materialLibrary.recipes[0].parameters.roughness,.6,'observation can retain live tuning independently of ordinary Save');
+  const cancelled=f.shell.foregroundCommands['scene.materialCancel']({gestureId:first.gestureId},f.ctx);assert.equal(cancelled.ui.history.undoCount,1);assert.equal(f.shell.ordinary.materials.recipe(recipeId).parameters.roughness,.2);
+  const second=f.shell.foregroundCommands['scene.materialBegin']({recipeId,label:'Edit roughness'},f.ctx);
+  assert.throws(()=>f.shell.foregroundCommands['scene.materialPreview']({recipeId,gestureId:first.gestureId,patch:{parameters:{roughness:1}}},f.ctx),/stale/);
+  f.shell.foregroundCommands['scene.materialPreview']({recipeId,gestureId:second.gestureId,patch:{parameters:{roughness:.7}}},f.ctx);
+  f.shell.foregroundCommands['scene.materialCommit']({gestureId:second.gestureId},f.ctx);assert.equal((await f.shell.commands['scene.editorState'](null,f.ctx)).ui.history.undoCount,2);
+  await f.shell.commands['scene.undo'](null,f.ctx);assert.equal(f.shell.ordinary.materials.recipe(recipeId).parameters.roughness,.2);
+ }finally{await f.shell.retire(f.ctx);delete globalThis.self;}
+});
 test('worker capture uses edited roots, current selection, actual appearance and the caller camera',async()=>{
  globalThis.self=globalThis;const f=fixture({document:saved()});try{
  await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},context:f.ctx});
@@ -305,6 +375,17 @@ test('selection and empty history never release the save hold left by failed doc
  assert.equal(f.shell.ordinary.document.session.state().blocked,true,'projection/history cannot certify a partial scene');
  await assert.rejects(f.shell.commands['scene.save']({camera:{position:[3,4,5],target:[0,0,0],up:[0,1,0],near:.01,far:100,fov:40}},f.ctx),/save blocked/);assert.equal(posts,0);
  fail=false;await f.shell.commands['scene.applyDocument']({document:saved()},f.ctx);assert.equal(f.shell.ordinary.document.session.state().blocked,false);
+ }finally{await f.shell.retire(f.ctx);delete globalThis.self;}
+});
+
+test('worker Save refuses a dialog intent from the previous document before capture or HTTP write',async()=>{
+ globalThis.self=globalThis;let posts=0;const f=fixture({document:saved(),postSceneDocument:async()=>{posts++;return {ok:true,json:async()=>({saved:'wrong.kaminos.json'})};}});
+ try{await f.shell.initialize(f.ctx);await f.shell.attachVolume({volume:{},context:f.ctx});
+ assert.equal(typeof f.shell.commands['scene.beginSave'],'function','worker must bind Save intent before a page filename dialog');
+ const {saveIntent}=await f.shell.commands['scene.beginSave'](null,f.ctx);
+ assert.ok(saveIntent);await f.shell.commands['scene.applyDocument']({document:saved('replacement'),sceneFile:'replacement.kaminos.json'},f.ctx);
+ await assert.rejects(f.shell.commands['scene.save']({saveIntent,saveAs:true,name:'previous'},f.ctx),/Scene changed during Save/);
+ assert.equal(posts,0);assert.equal(f.shell.ordinary.document.session.state().filename,'replacement.kaminos.json');
  }finally{await f.shell.retire(f.ctx);delete globalThis.self;}
 });
 test('serialized scene files are parsed and admitted by the actual worker before replacing roots',async()=>{

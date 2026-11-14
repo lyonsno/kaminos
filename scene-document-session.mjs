@@ -8,6 +8,7 @@ export function createSceneDocumentSession({
 }) {
   let filename = initialFilename, blocked = initialBlocked, phase = 'idle';
   let revision = 0, restoring = null;
+  const saveScope = globalThis.crypto.randomUUID();
   const state = () => Object.freeze({filename, blocked: blocked || phase !== 'idle', phase});
   const current = id => restoring?.id === id && requests.isCurrent(id);
   function certify(document, options) {
@@ -108,12 +109,18 @@ export function createSceneDocumentSession({
     if (restoring && requests.isCurrent(restoring.id)) return;
     restoring = null; phase = 'idle'; blocked = false; revision++;
   }
-  function beginSave() {
-    const startRevision = revision, loadGeneration = requests.current(), target = filename;
-    return Object.freeze({filename:target, assertCurrent() {
-      if (revision !== startRevision || requests.current() !== loadGeneration || state().blocked) {
+  function beginSave(existingToken = null) {
+    // Plain identity crosses the worker boundary; the session retains the
+    // authority to validate it after a name/overwrite dialog has awaited.
+    const {scope, revision:startRevision, loadGeneration, filename:target} = existingToken ?? {
+      scope:saveScope, revision, loadGeneration:requests.current(), filename,
+    };
+    const token = Object.freeze({scope, revision:startRevision, loadGeneration, filename:target});
+    return Object.freeze({filename:target, token, assertCurrent() {
+      if (scope !== saveScope || revision !== startRevision || requests.current() !== loadGeneration || filename !== target) {
         throw Error('Scene changed during Save; start Save again for the current document');
       }
+      if (state().blocked) throw Error('Scene save blocked until a scene loads successfully');
     }});
   }
   function snapshot() { return Object.freeze({filename, blocked, revision}); }
