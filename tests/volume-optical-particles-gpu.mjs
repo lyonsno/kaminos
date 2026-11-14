@@ -51,16 +51,17 @@ test('production particle update transports actual fine flow, preserves paused s
  out[0]=vec4<f32>(particleLightIntrinsic(p),particleLightExtinction(p,params));
  out[1]=vec4<f32>(particleLightBaseRadius(p,params),p.shape.w);
  out[2]=p.source;
+ var retired=p;retired.anchor.w=0.0;out[3]=vec4<f32>(particleLightIntrinsic(retired),particleLightExtinction(retired,params));
 }`;
    const pipeline=d.createComputePipeline({layout:'auto',compute:{module:d.createShaderModule({code}),entryPoint:'probe'}});
-   const terms=d.createBuffer({size:48,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC});
-   const copy=d.createBuffer({size:48,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+   const terms=d.createBuffer({size:64,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC});
+   const copy=d.createBuffer({size:64,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
    try{
     const receipt=owner.submitMaterialQuery(0,(e,f,device)=>{
      assert.equal(device,d);assert.equal(f.coverage.kind,'camera-acquired');assert.equal(f.fine,fine);
      const pass=e.beginComputePass();pass.setPipeline(pipeline);
      pass.setBindGroup(0,d.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:f.particles}},{binding:1,resource:{buffer:f.options}},{binding:2,resource:{buffer:terms}}]}));
-     pass.dispatchWorkgroups(1);pass.end();e.copyBufferToBuffer(terms,0,copy,0,48);
+     pass.dispatchWorkgroups(1);pass.end();e.copyBufferToBuffer(terms,0,copy,0,64);
     });
     assert.equal(receipt.available,true);assert.equal(receipt.identity.step,0);
     await copy.mapAsync(GPUMapMode.READ);
@@ -70,6 +71,7 @@ test('production particle update transports actual fine flow, preserves paused s
     assert.equal(actual[7],first.records[19],'the acquired interval is preserved independently of the support');
     assert.ok(actual[8]>0,'fixture has captured light to distinguish from intrinsic emission');
     assert.ok(actual[4]>0&&actual[5]>0&&actual[6]>0);
+    assert.deepEqual(Array.from(actual.slice(12,16)),[0,0,0,0],'retired row does not emit or extinguish light');
    }finally{copy.unmap();copy.destroy();terms.destroy();}
 
    const moved=await draw(1);assert.ok(Math.abs(moved.records[0]-.1)<1e-5);assert.ok(Math.abs(moved.records[1]-.2)<1e-5);assert.ok(Math.abs(moved.records[2]-.3)<1e-5);assert.ok(moved.records[20]<1,'potential consumed');

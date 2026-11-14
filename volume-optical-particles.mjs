@@ -68,8 +68,9 @@ struct Options {vp:mat4x4<f32>, inverse:mat4x4<f32>, size:vec4<u32>, time:vec4<f
 struct SourceOptions {vp:mat4x4<f32>,size:vec4<u32>,policy:vec4<f32>,life:vec4<f32>,flow:vec4<f32>,worldLo:vec4<f32>,worldDims:vec4<f32>,worldMap:vec4<f32>,middleLo:vec4<f32>,middleDims:vec4<f32>,middleMap:vec4<f32>,arenaOffsets:vec4<u32>}
 `;
 const PARTICLE_LIGHT_TERMS_WGSL=/* wgsl */`
-fn particleLightIntrinsic(p:Particle)->vec3<f32>{return p.emission.xyz;}
-fn particleLightExtinction(p:Particle,u:Options)->f32{return max(0.0,p.state.z)*u.material.x*u.material.y;}
+fn particleLightIsActive(p:Particle)->bool{return p.anchor.w>0.0;}
+fn particleLightIntrinsic(p:Particle)->vec3<f32>{return select(vec3<f32>(0),p.emission.xyz,particleLightIsActive(p));}
+fn particleLightExtinction(p:Particle,u:Options)->f32{return select(0.0,max(0.0,p.state.z)*u.material.x*u.material.y,particleLightIsActive(p));}
 fn particleLightBaseRadius(p:Particle,u:Options)->vec3<f32>{
  let growth=1.0+u.transport.w*select(0.0,max(0.0,1.0-p.state.x/max(p.emission.w,1e-20)),p.emission.w>0);
  return vec3<f32>(max(p.shape.x,u.support.x))*u.shape.x*vec3<f32>(1,u.shape.y,1)*growth;
@@ -120,14 +121,15 @@ fn particleDirectionDecode(v:vec2<f32>)->vec3<f32>{
 export const PARTICLE_LIGHT_MATERIAL_WGSL=OPTIONS+PARTICLE_LIGHT_TERMS_WGSL+PARTICLE_PROJECTION_WGSL;
 let nextMaterialEpoch=0;
 export function createParticleMaterialHandoff(device){
- let active=null,epoch;
+ let active=null,epoch,sourceIsCurrent=null;
  let revision=0;
  return {
   invalidate(){active=null;return ++revision;},
   reset(){active=null;epoch=undefined;return ++revision;},
-  publish({step,frame,slots,dims,transform,particles,options,fine,sourceOptions,acquisitionMode},encodedRevision=revision){
+  publish({step,frame,slots,dims,transform,particles,options,fine,sourceOptions,acquisitionMode,isCurrent},encodedRevision=revision){
    if(encodedRevision!==revision)return;
    if(!transform){active=null;return;}
+   sourceIsCurrent=isCurrent??null;
    epoch??=++nextMaterialEpoch;
    active=Object.freeze({particles,options,fine,sourceOptions,slots,
     identity:Object.freeze({epoch,step,frame}),
@@ -138,12 +140,12 @@ export function createParticleMaterialHandoff(device){
    });
   },
   submit(step,encode){
-   if(!active||active.identity.step!==step)return {available:false,reason:'No current particle material for this simulation step'};
+   if(!active||active.identity.step!==step||sourceIsCurrent?.()===false)return {available:false,reason:'No current particle material for this simulation step'};
    if(typeof encode!=='function'||encode.constructor?.name==='AsyncFunction')throw new TypeError('Particle material query must encode synchronously');
    const frame=active,encoder=device.createCommandEncoder({label:'query current optical particle material'});
    const result=encode(encoder,frame,device);
    if(result!=null&&typeof result.then==='function'){void Promise.resolve(result).catch(()=>{});throw new TypeError('Particle material query must encode synchronously');}
-   if(frame!==active)return {available:false,reason:'Particle material changed during query encoding'};
+   if(frame!==active||sourceIsCurrent?.()===false)return {available:false,reason:'Particle material changed during query encoding'};
    device.queue.submit([encoder.finish()]);
    return {available:true,identity:frame.identity};
   },
@@ -503,7 +505,7 @@ export function createOpticalParticles(device,{transparent=false,indexedQuads=tr
   followState=follow.encode(encoder,{particles,source,fine,grouping:exchangeState,dims,settings:s,model,stepDelta,reactionDelta,staggered,profileWrites});
   stagedAcquisition={key,step:source.step};return followState;
  }
- function encode(encoder,{view,format,source,fine,reactants,model=REACTANT_MODEL,material={},dims,invViewProj,settings,cameraValues,depth,identity,depthZeroToOne=false,profileWrites=()=>({}),gridExtinction=null,allowUnavailableGridExtinction=false,emitter=null,incident=null,opticalView:inspectionView=null,materialTransform=null,afterMaterialSubmit=null}){
+ function encode(encoder,{view,format,source,fine,reactants,model=REACTANT_MODEL,material={},dims,invViewProj,settings,cameraValues,depth,identity,depthZeroToOne=false,profileWrites=()=>({}),gridExtinction=null,allowUnavailableGridExtinction=false,emitter=null,incident=null,opticalView:inspectionView=null,materialTransform=null,afterMaterialSubmit=null,materialSourceIsCurrent=null}){
   let materialRevision=materialHandoff.invalidate();
   if(!reactants)throw Error('Actual particle composition requires the current grid oxidizer texture');
   if(source.world||source.middle)throw Error('Carried-composition candidate currently requires a single Fine grid');
@@ -619,7 +621,7 @@ export function createOpticalParticles(device,{transparent=false,indexedQuads=tr
    presentation:directTransfer?'direct-optical-transfer':'resolved-image',resolvePass:!directTransfer,geometry:indexedQuads?'indexed-quad':'expanded-quad',geometryBytes:quadIndices?.size??0,uniqueVertexReferences:indexedQuads?4:6,outputSize:[outputWidth,outputHeight],freshSamples:source.samples??pixels,work:{updateSlots:advancing?slots:0,updatePassSlots:updatePass?slots:0,reactionEnabled:advancing&&s.reactionEnabled,transportEnabled:advancing&&s.transportEnabled,birthCapacityPerFrame:birthsThisDraw?Math.min(source.samples??pixels,slots):0,drawInstances:s.showParticles?slots:0,particlePixels:s.showParticles?targetWidth*targetHeight:0,exchange:exchangeState?.work,maxFootprint:s.maxFootprint,profileMode:s.profileMode,opticalCutoff:s.opticalCutoff},follow:followState,collection:s.acquisitionMode?'rotating world-space pool':'camera-stratified slots',screenSupportUnits:s.acquisitionMode?'display pixels':'source pixels',drawn:s.showParticles,raymarchVisible:s.showRaymarch,recordFloats:24,shapeEncoding:'birth pitch; octahedral flow direction XY; represented ray length',footprintTransfer:emitterMode?'emitter optical weight retained at footprint ceiling':'ray observation footprint',
    clipDepth:depthZeroToOne?'zero-to-one':'minus-one-to-one',source:'native optical observation plus actual interpolated Fine fuel/heat/soot/oxidizer',flow:'current sampled Fine velocity plus authored heat-driven residual',reaction:'carried reactants; stoichiometric burn, thermal release, cooling and soot retirement',exchange:exchangeState?{bytes:exchangeState.bytes,cellDims:exchangeState.cellDims,cellCount:exchangeState.cellCount,planned:exchangeState.planned,residentGrouping:exchangeState.residentGrouping,fraction:exchangeState.effectiveFraction,fractions:exchangeState.fractions,grouping:exchangeState.grouping,mixing:exchangeState.mixing,field:exchangeState.field?{valid:exchangeState.field.valid,step:exchangeState.lastFieldStep,nodeDims:exchangeState.field.nodeDims,nodeCount:exchangeState.field.nodeCount,spacing:exchangeState.field.spacing,bytes:exchangeState.field.bytes}:null,work:exchangeState.work,counts:'pending explicit readback'}:null,lifetime:'state-weighted representation clock; independent advanced maximum age',view:s.debugView===9?'fine-flow-stretch':s.debugView?'carried-material-diagnostic':'optical' ,gridAssist:{requested:gridRequested,effective:gridActive?'current-single-grid-extinction':gridUnavailable?'unavailable':'off',reason:gridUnavailable,strength:requested.fillExtinction,effectiveStrength:s.fillExtinction,slack:s.extinctionSlack,view:requested.extinctionView,frame:gridActive?gridExtinction.frame:null,generation:gridActive?gridExtinction.generation:null,dimensions:gridActive?gridExtinction.dimensions:null,coefficientSampling:gridActive?'prepared cell coefficients, exact cell traversal':'none'},depthField:depthPlan?{...depthPlan,mode:s.depthMode===1?'uniform-slice-mixture':'fractional-source-depth',range:'GPU retained positive camera-depth min/max',support:'one billboard center slice; piecewise-constant XY',cost:'bounds + one deposition + prefix + source raster'}:null,composition:s.depthMode?'depth-sliced particle extinction; ordered slices':'additive optical moments; approximate mixed-depth attenuation',generatedSmoke:'actual carried soot, updated by reaction and exchange; total visibility controlled by extinction gain',reset:resetNeeded});
   if(afterMaterialSubmit&&materialTransform){
-   const snapshot={step,frame,slots,dims:[...dims],transform:{scale:materialTransform.scale,translate:[...materialTransform.translate]},particles,options,fine,sourceOptions:source.uniform,acquisitionMode:s.acquisitionMode};
+   const snapshot={step,frame,slots,dims:[...dims],transform:{scale:materialTransform.scale,translate:[...materialTransform.translate]},particles,options,fine,sourceOptions:source.uniform,acquisitionMode:s.acquisitionMode,isCurrent:materialSourceIsCurrent};
    afterMaterialSubmit(()=>materialHandoff.publish(snapshot,materialRevision));
   }
   if(!s.showParticles){if(!s.showRaymarch){const clear=encoder.beginRenderPass({label:'hidden particle display clear',...profileWrites('present'),colorAttachments:[{view,loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}]});clear.end();}if(retired.length){const old=retired.splice(0);queueMicrotask(()=>device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>old.forEach(x=>x.destroy())));}info=readState();return info;}

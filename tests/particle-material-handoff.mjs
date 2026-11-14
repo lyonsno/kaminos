@@ -8,7 +8,8 @@ test('material queries borrow the live buffers, refuse a stale step, and replace
  const handoff=particle.createParticleMaterialHandoff(device);
  const particles={label:'actual particles'},options={},fine={},sourceOptions={};
  const transform={scale:2,translate:[1,3,5]};
- const frame={step:18,frame:23,slots:130,dims:[4,5,4],transform,particles,options,fine,sourceOptions,acquisitionMode:1};
+ let current=true;
+ const frame={isCurrent:()=>current,step:18,frame:23,slots:130,dims:[4,5,4],transform,particles,options,fine,sourceOptions,acquisitionMode:1};
  assert.equal(handoff.submit(18,()=>assert.fail('absent frame')).available,false);
  handoff.publish(frame);
  transform.translate[0]=99;
@@ -26,6 +27,9 @@ test('material queries borrow the live buffers, refuse a stale step, and replace
  });
  assert.equal(first.available,true);
  assert.deepEqual(submitted,[[finish]]);
+ current=false;
+ assert.equal(handoff.submit(18,()=>assert.fail('changed same-step source')).available,false);
+ current=true;
  assert.throws(()=>handoff.submit(18,async()=>{}),/synchronous/);
  assert.equal(submitted.length,1);
  handoff.publish({...frame,step:19,frame:24});
