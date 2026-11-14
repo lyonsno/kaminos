@@ -3,9 +3,9 @@ import {PARTICLE_STATE_WGSL} from './volume-particle-state.mjs';
 import {PACKET_BUNDLE_STRUCT_WGSL,packetBundlePlan,createPacketBundleTransport} from './volume-packet-bundle.mjs';
 
 export function packetNetworkSettings(input={}){
- const s={receivers:8,sources:2,width:8,sections:16,receiverRadius:.6,nearRatio:.75,gain:1,...input};
- for(const key of Object.keys(s))if(!['receivers','sources','width','sections','receiverRadius','nearRatio','gain'].includes(key))throw Error('Unknown packet network setting '+key);
- for(const key of ['receivers','sources','width','sections'])if(!Number.isSafeInteger(s[key])||s[key]<1||s[key]>0xffffffff)throw Error('Invalid packet network '+key);
+ const s={receivers:8,sources:2,width:8,sections:16,nearDirections:6,receiverRadius:.6,nearRatio:.75,gain:1,...input};
+ for(const key of Object.keys(s))if(!['receivers','sources','width','sections','nearDirections','receiverRadius','nearRatio','gain'].includes(key))throw Error('Unknown packet network setting '+key);
+ for(const key of ['receivers','sources','width','sections','nearDirections'])if(!Number.isSafeInteger(s[key])||s[key]<1||s[key]>0xffffffff)throw Error('Invalid packet network '+key);
  for(const key of ['receiverRadius','nearRatio'])if(!(s[key]>0&&Number.isFinite(Math.fround(s[key]))))throw Error('Invalid packet network '+key);
  if(!(s.gain>=0&&Number.isFinite(Math.fround(s.gain))))throw Error('Invalid packet network gain');return s;
 }
@@ -71,15 +71,16 @@ fn packetPower(p:Particle)->f32{
  if(tid==0u){if(keep){receivers[group]=vec4<f32>(particles[old.x].anchor.xyz,net.quality.x);}else{var key=vec2<u32>(0);if(sums[0].w>0){key=vec2<u32>(selected[0],birthGenerations[selected[0]]);}receiverKeys[group]=key;receivers[group]=vec4<f32>(sums[0].xyz,select(0.0,net.quality.x,key.y>0u));}}
 }
 @compute @workgroup_size(64) fn buildBundles(@builtin(global_invocation_id) id:vec3<u32>){
- let i=id.x;if(i>=net.counts.y*net.counts.z*6u){return;}
- let pair=i/6u;let face=i%6u;let receiver=pair/net.counts.z;let source=pair%net.counts.z;let r=receivers[receiver];let g=groups[source];
+ let i=id.x;if(i>=net.counts.y*net.counts.z*net.counts.w){return;}
+ let pair=i/net.counts.w;let face=i%net.counts.w;let receiver=pair/net.counts.z;let source=pair%net.counts.z;let r=receivers[receiver];let g=groups[source];
  var b:Bundle;b.ids=vec4<u32>(receiver,source,face,0);b.origin=vec4<f32>(r.xyz,0);b.forward=vec4<f32>(0,0,1,1);b.right=vec4<f32>(1,0,0,1);b.up=vec4<f32>(0,1,0,1);
  if(r.w<=0||g.center.w<=0){bundles[i]=b;return;}
  let delta=g.center.xyz-r.xyz;let distance=length(delta);let extent=(g.hi.xyz-g.lo.xyz)*.5;let middle=(g.hi.xyz+g.lo.xyz)*.5-r.xyz;
  let ratio=(length(extent)+g.hi.w)/max(distance,1e-20);let close=ratio>net.quality.y;
  if(!close&&face>0u){bundles[i]=b;return;}
  var forward=vec3<f32>(0,0,1);if(distance>0){forward=delta/distance;}
- if(close){let directions=array<vec3<f32>,6>(vec3<f32>(1,0,0),vec3<f32>(-1,0,0),vec3<f32>(0,1,0),vec3<f32>(0,-1,0),vec3<f32>(0,0,1),vec3<f32>(0,0,-1));forward=directions[face];}
+ if(close){if(net.counts.w==6u){let directions=array<vec3<f32>,6>(vec3<f32>(1,0,0),vec3<f32>(-1,0,0),vec3<f32>(0,1,0),vec3<f32>(0,-1,0),vec3<f32>(0,0,1),vec3<f32>(0,0,-1));forward=directions[face];}
+  else{let z=1.0-2.0*(f32(face)+.5)/f32(net.counts.w);let phi=f32(face)*2.399963229728653;let r=sqrt(max(0.0,1.0-z*z));forward=vec3<f32>(r*cos(phi),r*sin(phi),z);}}
  let seed=select(vec3<f32>(0,1,0),vec3<f32>(1,0,0),abs(forward.y)>.9);let right=normalize(cross(seed,forward));let up=cross(forward,right);
  // The directional interval is independent of transverse support. Extend
  // only axial reach; do not turn the acquired length into transverse area.
@@ -88,7 +89,7 @@ fn packetPower(p:Particle)->f32{
  var halfSize=max(vec2<f32>(net.quality.z),vec2<f32>(abs(dot(middle,right))+dot(extent,abs(right)),abs(dot(middle,up))+dot(extent,abs(up))));
  if(close){halfSize=vec2<f32>(r.w);}
  var weight=atan2(halfSize.x*halfSize.y,max(distance,1e-20)*sqrt(distance*distance+dot(halfSize,halfSize)))/3.141592653589793;
- if(close){weight=1.0/6.0;}
+ if(close){weight=1.0/f32(net.counts.w);}
  b.forward=vec4<f32>(forward,far);b.right=vec4<f32>(right,halfSize.x);b.up=vec4<f32>(up,halfSize.y);b.weight=vec4<f32>(weight*net.quality.w,ratio,select(0.0,1.0,close),0);bundles[i]=b;
 }
 `;
@@ -101,14 +102,15 @@ export function createPacketNetwork(device){
   prepare(){return preparing??=Promise.all([transport.prepare(),...['sourceSeeds','assignSources','refitSources','receiverSeeds','buildBundles'].map(async entry=>{pipelines[entry]=await device.createComputePipelineAsync({label:'packet network '+entry,layout:'auto',compute:{module,entryPoint:entry}});})]);},
   encode(encoder,{material,settings,triangles=null,triangleCount=0}){
    if(!material.birthGenerations||material.birthGenerations.size<material.slots*4)throw Error('Packet anchors require current primary birth generations');
-   const s=packetNetworkSettings(settings),count=s.receivers*s.sources*6;
+   const s=packetNetworkSettings(settings),count=s.receivers*s.sources*s.nearDirections;
    const plan=packetBundlePlan(device.limits,{width:s.width,height:s.width,sections:s.sections,bundles:count,slots:material.slots,receivers:s.receivers});
    if(Math.max(s.sources,s.receivers)>device.limits.maxComputeWorkgroupsPerDimension)throw Error('Packet network exceeds effective reduction dispatch');
    const next=JSON.stringify([material.slots,s.receivers,s.sources]);
    if(next!==key){if(resources)retire(Object.values(resources));const storage=GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC;
     resources={params:device.createBuffer({size:32,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST}),seeds:device.createBuffer({size:s.sources*16,usage:storage}),membership:device.createBuffer({size:material.slots*4,usage:storage}),groups:device.createBuffer({size:s.sources*48,usage:storage}),centers:device.createBuffer({size:s.receivers*16,usage:storage}),bundles:device.createBuffer({size:count*96,usage:storage}),sourceKeys:device.createBuffer({size:s.sources*8,usage:storage}),receiverKeys:device.createBuffer({size:s.receivers*8,usage:storage})};key=next;epoch=null;}
    if(epoch!==material.identity.epoch){encoder.clearBuffer(resources.sourceKeys);encoder.clearBuffer(resources.receiverKeys);epoch=material.identity.epoch;}
-   const r=resources,data=new ArrayBuffer(32);new Uint32Array(data).set([material.slots,s.receivers,s.sources,0]);new Float32Array(data).set([s.receiverRadius,s.nearRatio,material.domain.pitch,s.gain],4);device.queue.writeBuffer(r.params,0,data);
+   if(resources.bundles.size!==count*96){retire([resources.bundles]);resources.bundles=device.createBuffer({size:count*96,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC});}
+   const r=resources,data=new ArrayBuffer(32);new Uint32Array(data).set([material.slots,s.receivers,s.sources,s.nearDirections]);new Float32Array(data).set([s.receiverRadius,s.nearRatio,material.domain.pitch,s.gain],4);device.queue.writeBuffer(r.params,0,data);
    for(const [entry,entries,groups] of [
     ['sourceSeeds',[[0,material.particles],[1,material.options],[2,r.params],[3,r.seeds],[8,material.birthGenerations],[9,r.sourceKeys]],s.sources],
     ['assignSources',[[0,material.particles],[1,material.options],[2,r.params],[3,r.seeds],[4,r.membership]],Math.ceil(material.slots/64)],
@@ -121,7 +123,7 @@ export function createPacketNetwork(device){
    }
    const result=transport.encode(encoder,{material,bundles:{buffer:r.bundles,count},membership:r.membership,width:s.width,height:s.width,sections:s.sections,receivers:s.receivers,triangles,triangleCount});
    const domain=material.domain,extent=domain.dims.map(n=>n*domain.pitch),pitch=s.receiverRadius;
-   latest={...result.receipt,settings:s,sourcePartition:'current disjoint membership around surviving primary anchors; every source member retained',receivers:'primary epoch/slot/birth anchors; reseeded on replacement or loss',near:'six-axis spherical quadrature inside broad source support',far:'orthographic source footprint; finite rectangular solid angle',sourceCoverage:'current admitted optical particles only',temporalReuse:false,persistentAnchors:true,bytes:plan.bytes+Object.values(r).reduce((sum,b)=>sum+b.size,0)};
+   latest={...result.receipt,settings:s,sourcePartition:'current disjoint membership around surviving primary anchors; every source member retained',receivers:'primary epoch/slot/birth anchors; reseeded on replacement or loss',near:s.nearDirections===6?'six-axis spherical quadrature inside broad source support':'fixed spherical Fibonacci quadrature inside broad source support',far:'orthographic source footprint; finite rectangular solid angle',sourceCoverage:'current admitted optical particles only',temporalReuse:false,persistentAnchors:true,bytes:plan.bytes+Object.values(r).reduce((sum,b)=>sum+b.size,0)};
    return {identity:result.identity,centers:r.centers,radiance:result.buffer,receiverCount:s.receivers,grid:{origin:[...domain.origin],dims:extent.map(n=>Math.ceil(n/pitch)),pitch},maxAgeSteps:1,receipt:latest};
   },
   read:()=>latest,

@@ -175,7 +175,7 @@ export function createPacketBundleTransport(device){
     ['gather',[[2,bundleBuffer],[4,r.plan],[8,r.means],[9,r.incident]],Math.ceil(receivers/64)]]){
     const p=pipeline(entry);pass=encoder.beginComputePass({label:'packet bundle '+entry});pass.setPipeline(p);pass.setBindGroup(0,bind(p,entries));pass.dispatchWorkgroups(groups);pass.end();
    }
-   receipt={...plan,identity:{...material.identity},coverage:{...material.coverage},measure:'projected-base-support-with-acquired-axial-interval',visibility:triangleCount?'current-finite-triangle-depth':'empty-solid-scene',history:'fresh-only',source:'intrinsic-emission-only',quantity:'spherical-mean-incoming-radiance',depth:'explicit-axial-distance; center-slice mixture',work:{depositedInstances:plan.instances,subrays:plan.rays,sectionReads:plan.rays*sections,solidTriangles:triangleCount*bundleCount}};
+   receipt={...plan,identity:{...material.identity},coverage:{...material.coverage},measure:'projected-base-support-with-acquired-axial-interval',visibility:triangleCount?'current-finite-triangle-depth':'empty-solid-scene',history:'fresh-only',source:'intrinsic-emission-only',quantity:'spherical-mean-incoming-radiance',depth:'explicit-axial-distance; center-slice mixture',work:{submittedInstances:plan.instances,subrays:plan.rays,sectionReads:plan.rays*sections,solidTriangles:triangleCount*bundleCount}};
    return {buffer:r.incident,count:receivers,identity:{...material.identity},receipt};
   },
   read:()=>receipt,

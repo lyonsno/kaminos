@@ -6,8 +6,8 @@ import {createPacketNetwork,packetNetworkSettings,PACKET_NETWORK_WGSL} from '../
 import {createPacketBundleTransport,finitePacketBundle} from '../volume-packet-bundle.mjs';
 
 test('network settings keep material density, ray coverage and reconstruction support independent',()=>{
- const s=packetNetworkSettings({sources:4,receivers:50,width:12,sections:24,receiverRadius:.2});
- assert.equal(s.receivers,50);assert.equal(s.sources,4);assert.equal(s.width,12);assert.equal(s.sections,24);assert.equal(s.receiverRadius,.2);
+ const s=packetNetworkSettings({sources:4,receivers:50,width:12,sections:24,nearDirections:8,receiverRadius:.2});
+ assert.equal(s.receivers,50);assert.equal(s.sources,4);assert.equal(s.width,12);assert.equal(s.sections,24);assert.equal(s.nearDirections,8);assert.equal(s.receiverRadius,.2);
  assert.throws(()=>packetNetworkSettings({sources:0}),/sources/);assert.throws(()=>packetNetworkSettings({receiverRadius:0}),/receiverRadius/);
  assert.throws(()=>packetNetworkSettings({hiddenCap:4}),/Unknown/);
 });
@@ -48,18 +48,20 @@ test('native network reduces current source membership, keeps every contributor 
    assert.deepEqual([...new Uint32Array(read[0].getMappedRange())],[0,0,1,1],'source domains are disjoint while retaining all four members');
    const centers=new Float32Array(read[2].getMappedRange());assert.ok(Math.abs(centers[0]+.5)<1e-6);assert.ok(Math.abs(centers[4]-.5)<1e-6);
    const incoming=new Float32Array(read[3].getMappedRange());assert.ok(incoming[0]>0&&incoming[4]>0,'both actual material receivers see the current sources');assert.equal(incoming[3],1);assert.equal(incoming[7],1);
-   assert.equal(result.identity.epoch,4);assert.equal(result.receipt.temporalReuse,false);assert.equal(result.receipt.work.depositedInstances,4*2*2*6);
+   assert.equal(result.identity.epoch,4);assert.equal(result.receipt.temporalReuse,false);assert.equal(result.receipt.work.submittedInstances,4*2*2*6);
    for(const b of read)b.unmap();
-   async function selection(){
+   async function selection(nearDirections=6){
     d.queue.writeBuffer(particles,0,records);d.queue.writeBuffer(birthGenerations,0,generations);material.identity.step++;
-    d.pushErrorScope('validation');const e=d.createCommandEncoder();const result=network.encode(e,{material,settings:{sources:2,receivers:2,width:3,sections:16,receiverRadius:.3}});
-    const inputs=[result.centers,network.buffers.receiverKeys],outputs=inputs.map(b=>make(b.size,GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ));inputs.forEach((b,i)=>e.copyBufferToBuffer(b,0,outputs[i],0,b.size));d.queue.submit([e.finish()]);const error=await d.popErrorScope();assert.equal(error,null,error?.message);
-    for(const b of outputs)await b.mapAsync(GPUMapMode.READ);const resultData={centers:new Float32Array(outputs[0].getMappedRange().slice(0)),keys:new Uint32Array(outputs[1].getMappedRange().slice(0))};for(const b of outputs)b.unmap();return resultData;
+    d.pushErrorScope('validation');const e=d.createCommandEncoder();const result=network.encode(e,{material,settings:{sources:2,receivers:2,width:3,sections:16,nearDirections,receiverRadius:.3}});
+    const inputs=[result.centers,network.buffers.receiverKeys,network.buffers.bundles],outputs=inputs.map(b=>make(b.size,GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ));inputs.forEach((b,i)=>e.copyBufferToBuffer(b,0,outputs[i],0,b.size));d.queue.submit([e.finish()]);const error=await d.popErrorScope();assert.equal(error,null,error?.message);
+    for(const b of outputs)await b.mapAsync(GPUMapMode.READ);const resultData={centers:new Float32Array(outputs[0].getMappedRange().slice(0)),keys:new Uint32Array(outputs[1].getMappedRange().slice(0)),bundles:new Float32Array(outputs[2].getMappedRange().slice(0)),receipt:result.receipt};for(const b of outputs)b.unmap();return resultData;
    }
    records[1]=-.2;records.set([100,50,25],32);let selected=await selection();
    assert.ok(Math.abs(selected.centers[1]+.2)<1e-6,'surviving receiver follows its primary carrier instead of jumping to a newly brighter neighbor');assert.deepEqual([...selected.keys.slice(0,2)],[0,1]);
    generations[0]=2;records[1]=.7;selected=await selection();assert.ok(Math.abs(selected.centers[1]-.1)<1e-6,'a replacement cannot inherit the old receiver association');assert.deepEqual([...selected.keys.slice(0,2)],[1,1]);
    material.identity.epoch++;records[1]=-.4;records.set([500,250,125],8);selected=await selection();assert.ok(Math.abs(selected.centers[1]+.4)<1e-6,'new pool epoch clears even matching slot-generation pairs');assert.deepEqual([...selected.keys.slice(0,2)],[0,2]);
+   records.set([1000,500,250],32);selected=await selection(8);assert.deepEqual([...selected.keys.slice(0,2)],[0,2],'angular quality edits preserve surviving primary anchors');assert.equal(selected.receipt.bundles,2*2*8);
+   let weight=0;for(let i=0;i<8;i++){const b=selected.bundles.subarray(i*24,(i+1)*24);assert.ok(Math.abs(Math.hypot(...b.subarray(4,7))-1)<1e-6);weight+=b[16];}assert.ok(Math.abs(weight-1)<1e-6,'broad-source angular weights retain the spherical mean when count changes');
   }finally{network.dispose();owned.forEach(b=>b.destroy());}
  },{wgslSources:[{label:'native current material packet network',code:PACKET_NETWORK_WGSL,entryPoint:'buildBundles'}]});
 });
