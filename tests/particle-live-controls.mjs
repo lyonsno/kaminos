@@ -17,8 +17,9 @@ async function mounted({shared=false,inputs={},viewport=false,edits}={}){
  }
  document.createElement=t=>new Element(t);if(viewport)document.body=new Element('body');const native=new Map();document.getElementById=id=>native.get(id)??null;
  let accepted=opticalParticleSettings(),reaction=shared?{burnTime:3,cooling:50,heatRelease:6,sootYield:.1,smokeLife:90}:null,writes=[];
+ let sourceControls={renderScale:1,raySteps:8};
  const trace={settings:[],reaction:[],records:[],redraw:[],nativeEvents:[],reset:[]};
- const runtime={...(viewport?{opticalParticleViewport:()=>({getBoundingClientRect:()=>({left:0,top:0,right:800,bottom:600,width:800,height:600})})}:{}),opticalParticleSettings:()=>accepted,setOpticalParticles:s=>{trace.settings.push(s);accepted=opticalParticleSettings(s);},splitIntegralSettings:()=>({mode:'off'}),setSplitIntegral(){},opticalParticleState:()=>({effective:'world-optical-particles',settings:accepted,simulationReaction:reaction,sourceRenderScale:1,sourceRaySteps:8}),setParticleSimulationReaction:p=>{trace.reaction.push(p);reaction={...reaction,...p};return reaction;},resetOpticalParticles(){trace.reset.push(true);}};
+ const runtime={...(viewport?{opticalParticleViewport:()=>({getBoundingClientRect:()=>({left:0,top:0,right:800,bottom:600,width:800,height:600})})}:{}),opticalParticleSettings:()=>accepted,setOpticalParticles:s=>{trace.settings.push(s);accepted=opticalParticleSettings(s);},setControls:patch=>{sourceControls={...sourceControls,...patch};},splitIntegralSettings:()=>({mode:'off'}),setSplitIntegral(){},opticalParticleState:()=>({effective:'world-optical-particles',settings:accepted,simulationReaction:reaction,sourceRenderScale:sourceControls.renderScale,sourceRaySteps:sourceControls.raySteps}),setParticleSimulationReaction:p=>{trace.reaction.push(p);reaction={...reaction,...p};return reaction;},resetOpticalParticles(){trace.reset.push(true);}};
  for(const [key,id] of [['burnTime','volume-reactant-mixing-time'],['cooling','volume-reactant-cooling-time'],['sootYield','volume-reactant-soot-yield']]){
   const input=new Element('input'),label=new Element('span');input.value=String(reaction?.[key]??accepted[key]);input.addEventListener('input',()=>{trace.nativeEvents.push(key);runtime.setParticleSimulationReaction({[key]:Number(input.value)});});native.set(id,input);native.set(id+'-val',label);
  }
@@ -222,4 +223,23 @@ test('transactional numeric entry keeps typed drafts out of history until commit
   input.value='2.5';input.dispatchEvent(new Event('input'));input.dispatchEvent(new Event('change'));
   assert.deepEqual(commits,[2.5]);assert.equal(binding.discardPending(),false);
  }finally{binding.dispose();}
+});
+
+test('scene snapshot includes accepted optical settings and the shared reaction even without another edit',async()=>{
+ const x=await mounted({shared:true,inputs:{particles:{capacity:62000,expansion:1.7,phaseFilter:3,lightRefreshEvery:7},source:{renderScale:.6,raySteps:11},sharedLighting:{mode:'paced',intervalMs:90}}});
+ try {
+  x.owner.operations.setOptions({maxFootprint:44,coverage:{basis:'mixing',footprint:[[0,1],[.61,.75],[1,1.3]]}});
+  x.native.get('volume-reactant-cooling-time').value='17.25';
+  x.native.get('volume-reactant-cooling-time').fire('input');
+  const saved=JSON.parse(JSON.stringify(x.owner.snapshotInputs()));
+  assert.equal(saved.simulationReaction.cooling,17.25);
+  assert.equal(saved.particles.expansion,1.7);assert.equal(saved.particles.lightRefreshEvery,7);
+  assert.equal(saved.particles.maxFootprint,44);assert.equal(saved.particles.phaseFilter,3);
+  assert.deepEqual(saved.particles.coverage.footprint,x.accepted().coverage.footprint,'save the accepted curve points at their actual precision');
+  assert.deepEqual(saved.source,{renderScale:.6,raySteps:11});
+  assert.deepEqual(saved.sharedLighting,{mode:'paced',intervalMs:90},'unavailable lighting still preserves authored choices');
+  const y=await mounted({shared:true,inputs:saved});
+  try{assert.deepEqual(y.accepted().coverage,saved.particles.coverage);assert.equal(y.owner.read().effective.simulationReaction.cooling,17.25);assert.equal(y.accepted().capacity,62000);}
+  finally{await y.dispose();}
+ }finally{await x.dispose();}
 });

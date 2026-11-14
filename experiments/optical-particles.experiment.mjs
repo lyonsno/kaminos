@@ -125,6 +125,14 @@ export default {
    if(controlPolicy!==settings){controlPolicy=settings;unavailable=inactiveControls(settings);}
    for(const [key,{input,digits}] of fields){const disabled=(key in BOUNDARY_FIELDS&&!boundary)||unavailable.has(key);if(input.disabled!==disabled){input.disabled=disabled;input.style.opacity=disabled?'.4':'1';}if(key==='targetScale'&&e.budgets)input.max=String(e.budgets.maxTargetScale);if(key==='capacity'&&e.budgets)input.max=String(e.budgets.maxCapacity);if(host.controls.document.activeElement===input||input.classList.contains('scrubbing'))continue;const v=value(key,e,boundary);if(input.type==='checkbox'){input.checked=!!v;continue;}const next=Number.isFinite(v)?(key==='fillExtinction'&&v>0&&v<10**-digits?String(v):v.toFixed(digits)):'';if(input.value!==next)input.value=next;}
   }
+  function snapshotInputs(){
+   const runtime=source(),effective=runtime.opticalParticleState(),reaction=effective.simulationReaction??reactionOverrides;
+   const sourceControls={...sourceSettings};
+   for(const [key,value] of [['renderScale',effective.sourceRenderScale],['raySteps',effective.sourceRaySteps]])if(Number.isFinite(value)&&value>0)sourceControls[key]=value;
+   const boundary=runtime.ambientBoundaryState?.()?.settings??boundaryOverrides;
+   return structuredClone({...forwarded,particles:opticalParticleSettings({...runtime.opticalParticleSettings(),...reaction}),simulationReaction:reaction,source:sourceControls,
+    ...(Object.keys(boundary).length?{ambientBoundary:boundary}:{}),...(lightingSettings?{sharedLighting:lightingSettings}:{})});
+  }
   const persist=()=>updateInputs({...forwarded,particles:settings,simulationReaction:reactionOverrides,source:sourceSettings,...(Object.keys(boundaryOverrides).length?{ambientBoundary:boundaryOverrides}:{}),...(lightingSettings?{sharedLighting:lightingSettings}:{})});
   function lightingRoute(){
    const owner=win.__kaminosSceneRadiance;
@@ -192,7 +200,7 @@ export default {
   const stop=session.onFrame(({deltaSeconds}={})=>{if(Number.isFinite(deltaSeconds)&&deltaSeconds>0)frameMs=frameMs===null?deltaSeconds*1000:frameMs*.9+deltaSeconds*100;
    if(lightingSettings&&win.__kaminosSceneRadiance!==lightingOwner)lightingRoute();popups?.sync();
    sync();if(settings.hud&&current?.sampleOpticalParticleWork&&!workReading&&Date.now()-lastWorkRead>=1000){lastWorkRead=Date.now();workReading=true;void current.sampleOpticalParticleWork().then(r=>{if(!disposed){workPopulation=r;sync(true);}}).catch(e=>{error=e.message;}).finally(()=>{workReading=false;});}if(settings.renewalDiagnostics&&!reading&&Date.now()-lastPopulationRead>=1000)void samplePopulation().catch(e=>{error=e.message;sync();});});
-  return {read,operations,mount({root,document,invoke}){panel=root;let controlRoot=root;
+  return {read,operations,snapshotInputs,mount({root,document,invoke}){panel=root;let controlRoot=root;
    function section(label){const fieldset=document.createElement('fieldset'),legend=document.createElement('legend');legend.textContent=label;fieldset.style.cssText='min-width:0;border:1px solid #555;border-radius:6px;padding:8px;margin:12px 0';fieldset.append(legend);root.append(fieldset);controlRoot=fieldset;}
 
    if(document.body&&current?.opticalParticleViewport){hud=document.createElement('div');hud.setAttribute('aria-label','Live particle work');hud.style.cssText='position:fixed;pointer-events:none;z-index:90;color:#fff;font:11px ui-monospace,monospace;text-shadow:0 1px 2px #000;overflow:hidden';hudTop=document.createElement('div');hudBottom=document.createElement('div');hudTop.style.cssText='position:absolute;top:2px;left:6px;right:6px;background:#101820aa;padding:3px 5px';hudBottom.style.cssText='position:absolute;bottom:2px;left:6px;right:6px;background:#101820aa;padding:3px 5px;white-space:pre-wrap';hud.append(hudTop,hudBottom);document.body.append(hud);}

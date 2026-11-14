@@ -8,6 +8,13 @@ export function readOwnerExperimentAddress({search='',hash=''}={}) {
  return {id:params.get('experiment'),inputsText:params.get('experiment_inputs')??'{}'};
 }
 
+// A named scene owns the saved optical tune. Another explicitly selected
+// experiment still owns its own inputs (for example the kiln-study route).
+export function sceneOwnerExperimentAddress(opticalParticleSetup,address) {
+ if(opticalParticleSetup==null||(address?.id&&address.id!=='optical-particles'))return address;
+ return {id:'optical-particles',inputsText:JSON.stringify(opticalParticleSetup)};
+}
+
 // A saved-basin page's query is a strict settings-preset recipe that admission
 // validates exactly, so its owner setup lives in the hash; ordinary pages keep
 // a shareable query.
@@ -58,6 +65,7 @@ export async function installOwnerExperimentEntry({document,root,host,discover,o
    try{await onOpen(definition,inputs);current=await openExperiment(definition,{host,inputs,onInputsChange:value=>onChange({id,inputs:value,moduleUrl:definition.moduleUrl})});selected=id;currentModuleUrl=definition.moduleUrl;await current.mount({root:content,document});select.value=id;status.textContent=definition.title;onChange({id,inputs,moduleUrl:definition.moduleUrl});return current.read();}
    catch(error){await close();select.value='';onChange({id:null,inputs:null});fail(error);throw error;}
   });},
+  snapshotOpticalParticleSetup:()=>current?.id==='optical-particles'?current.snapshotInputs():null,
   read:()=>{if(!current)throw Error('No experiment open');return current.read();},
   invoke:(name,input)=>serial(async()=>{if(!current)throw Error('No experiment open');return current.invoke(name,input);}),
   close:()=>serial(async()=>{await close();select.value='';status.textContent='';onChange({id:null,inputs:null});}),

@@ -24,6 +24,16 @@ function cloneJson(value) {
   return value === null ? null : JSON.parse(JSON.stringify(value));
 }
 
+function checkedOpticalParticleSetup(value){
+  if(value==null)return null;
+  if(typeof value!=='object'||Array.isArray(value)||!value.particles||
+    typeof value.particles!=='object'||Array.isArray(value.particles))throw Error('Invalid saved optical particle setup');
+  for(const name of ['source','simulationReaction','ambientBoundary','sharedLighting']){
+    if(value[name]!=null&&(typeof value[name]!=='object'||Array.isArray(value[name])))throw Error('Invalid saved optical particle '+name);
+  }
+  return cloneJson(value);
+}
+
 function normalizeSceneGroupRecord(record) {
   if (!record || typeof record !== 'object') throw new Error('Scene group record must be an object');
   const id = String(record.id || record.label || 'group');
@@ -153,6 +163,7 @@ export function planSceneRestore(data, { allowEmpty = false } = {}) {
   const activeObjectId = requestedActiveId || (Array.isArray(data.selectionIds)?null:objects.at(-1)?.id || null);
   return {
     schema: data.schema || null,
+    ...(data.opticalParticleSetup==null?{}:{opticalParticleSetup:checkedOpticalParticleSetup(data.opticalParticleSetup)}),
     materialLibrary,
     reflections:data.postprocessing?.reflections==null?null:resolveReflectionSettings(data.postprocessing.reflections),
     cameraViews: normalizeCameraViews(data.cameraViews),
@@ -187,6 +198,7 @@ export function buildSceneDocument({
   provenance = null,
   composition = null,
   fireSettings = null,
+  opticalParticleSetup = null,
   flameDomainTranslation = undefined,
   flameDomainScale = 1,
   flameDomainFollowSource = true,
@@ -226,6 +238,7 @@ export function buildSceneDocument({
     schema: SCENE_SCHEMA,
     version: materialLibrary?12:sceneObjects.some(o=>o.repetition)||sceneGroups.some(g=>g.repetition)?SCENE_VERSION:fireSettings?10:8,
     timestamp,
+    ...(opticalParticleSetup==null?{}:{opticalParticleSetup:checkedOpticalParticleSetup(opticalParticleSetup)}),
     ...(materialLibrary?{materialLibrary:checkedMaterialDocument(materialLibrary)}:{}),
     objects: fireSettings ? authorFireObjects(sceneObjects,fireSettings,{translation:authoredFlameDomain,scale:flameDomainScale,followSource:flameDomainFollowSource,worldFrame:flameWorldFrame,collision:composition?.route?.volume_collision==='kiln'}) : sceneObjects,
     ...(fireSettings?{fireRendering:fireRenderingSettings(fireSettings)}:{}),

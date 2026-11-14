@@ -3420,7 +3420,7 @@ import {installViewPie} from './view-navigation-pie.mjs';
 import {installExperimentWorkspace} from './experiment-workspace.mjs';
 import {createSceneEnvironmentState} from './scene-environment-state.mjs';
 import {ENVIRONMENT_CONTROL_FIELDS,environmentLegacySettings,bindSceneEnvironmentControls} from './scene-environment-controls.mjs';
-import {installOwnerExperimentEntry,readOwnerExperimentAddress,writeOwnerExperimentAddress} from './owner-experiment-entry.mjs';
+import {installOwnerExperimentEntry,readOwnerExperimentAddress,sceneOwnerExperimentAddress,writeOwnerExperimentAddress} from './owner-experiment-entry.mjs';
 import {createInvestigationEntry} from './investigation-entry.mjs';
 import {createWorkbenchFrameService,createWorkbenchSceneHost,disposeOwnedSceneTree} from './workbench-scene-host.mjs';
 import { checkedSceneLightRecord } from './scene-spot-light.mjs';
@@ -4308,7 +4308,10 @@ function createPageSceneDocumentSession(options = {}) {
     requests:sceneLoadRequests, records:sceneRecords, planRestore:(...args)=>planSceneRestore(...args),
     post:body=>fetch('/api/save-scene',{method:'POST',headers:{'Content-Type':'application/json'},body}),
     readAddress:()=>({origin:location.origin,workspace:authoringWorkspace?.state().mode??null,owner:readOwnerExperimentAddress(location)}),
-    restoreUrl:(data,filename,address)=>compositionRestoreUrl(data.composition,filename,address.origin,address.workspace,address.owner),
+    restoreUrl:(data,filename,address)=>{
+      const owner=sceneOwnerExperimentAddress(data.opticalParticleSetup,address.owner);
+      return compositionRestoreUrl(data.composition,filename,address.origin,address.workspace??(data.opticalParticleSetup?'workbench':null),owner);
+    },
     apply:async(...args)=>{
       sceneDocumentFrameHolds++;
       let complete=false;
@@ -4324,7 +4327,7 @@ function createPageSceneDocumentSession(options = {}) {
         window._kaminosDirty?.();
       }
     },
-    requiresNavigation:(plan,{mounted})=>(plan.composition||isCompositionAuthoring())&&!mounted,
+    requiresNavigation:(plan,{mounted})=>(plan.composition||plan.opticalParticleSetup||isCompositionAuthoring())&&!mounted,
     navigate:url=>location.assign(url),
     assertSupported:plan=>{if(plan.objects.filter(record=>record.type===FLAME_EMITTER_TYPE).length>1&&volumePrototype&&typeof volumePrototype.setImmersedSources!=='function')throw Error('This flame runtime does not yet support multiple authored sources');},
     bound:filename=>{
@@ -25877,6 +25880,7 @@ function buildSceneData(capture = null) {
     provenance,
     composition: activeSceneComposition,
     fireSettings: activeSceneComposition ? readVolumeSettingsValues() : null,
+    opticalParticleSetup: ownerExperimentEntry?.snapshotOpticalParticleSetup()??null,
     localLiquid: waterFeature.setup,
     capture,
     cameraViews:cameraViews?.read(),
@@ -28033,17 +28037,24 @@ initKaminosFingerJuiceHostRoute();
     sceneDocument.holdRestore();
     window.kaminosStartup?.phase('Checking saved scene');
     const plan = planSceneRestore(data);
+    const owner=plan.opticalParticleSetup?sceneOwnerExperimentAddress(plan.opticalParticleSetup,readOwnerExperimentAddress(location)):null;
+    const workspace=new URLSearchParams(location.search).get('workspace')??hash.get('workspace')??(plan.opticalParticleSetup?'workbench':null);
     if (plan.composition) {
       const preset = new URLSearchParams(location.search).get('settings_preset');
       if(preset!==plan.composition.flame.presetId){
         setInfo('Opening the saved flame recipe…');
-        location.replace(compositionRestoreUrl(plan.composition,sceneFile,location.origin,new URLSearchParams(location.search).get('workspace') ?? hash.get('workspace'),readOwnerExperimentAddress(location),
+        location.replace(compositionRestoreUrl(plan.composition,sceneFile,location.origin,workspace,owner??readOwnerExperimentAddress(location),
           {note:new URLSearchParams(location.search).get('note') ?? hash.get('note')}));
         return startupSceneRedirect;
       }
       const url=new URL(location.href),nextHash=new URLSearchParams(url.hash.slice(1));
       for(const [key,entry] of Object.entries(plan.composition.route))if(!nextHash.has(key))nextHash.set(key,entry);
       url.hash=nextHash.toString();history.replaceState(history.state,'',url);
+    }
+    if(owner?.id==='optical-particles'){
+      const url=new URL(writeOwnerExperimentAddress(location.href,{id:owner.id,inputs:JSON.parse(owner.inputsText)}));
+      if(workspace&&!url.searchParams.has('workspace')&&!new URLSearchParams(url.hash.slice(1)).has('workspace')){const fragment=new URLSearchParams(url.hash.slice(1));fragment.set('workspace',workspace);url.hash=fragment.toString();}
+      history.replaceState(history.state,'',url);
     }
     return {data, plan};
   });
