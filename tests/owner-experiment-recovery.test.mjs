@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {compositionRestoreUrl,forwardCompositionHash} from '../scene-authoring.mjs';
+import {buildSceneDocument,planSceneRestore} from '../scene-persistence-core.js';
 import * as ownerAddress from '../owner-experiment-entry.mjs';
 import {fireAtBoot} from '../fire-boot.mjs';
 import {createSceneOwnerControls} from '../scene-owner-controls.mjs';
@@ -22,14 +23,15 @@ const inputs={size:2,label:'water & flame / Δ',nested:{step:1/240},samples:Arra
 const inputsText=JSON.stringify(inputs);
 const incoming=new URL('http://localhost/index.html?workspace=workbench&experiment=fixture%2Fowner&experiment_inputs='+encodeURIComponent(inputsText)+'&settings_preset='+wrong+'#workspace=workbench&scene=tuned.kaminos.json');
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
-async function startup(url,{matching=false,restoreError=null}={}){
+async function startup(url,{matching=false,restoreError=null,documentData=null}={}){
  let redirects=[],loads=0,admissions=0,owners=0,rejection=null,info=[];
  const location={href:url.href,search:url.search,hash:url.hash,origin:url.origin,replace:value=>redirects.push(value)};
- const c={URL,URLSearchParams,Promise,Symbol,File:class{},compositionRestoreUrl,forwardCompositionHash,resolveStartupSceneDefaults,...ownerAddress,grInit(){},initScene:()=>Promise.resolve(),settleStartupVeil:(_document,promise)=>promise,document:{body:{classList:{add(){}}},getElementById:()=>({value:'0.6'})},startupPreferences:null,startupPreferencesLoaded:Promise.resolve(),factorySceneDocument:null,preferencesUI:null,buildSceneData:()=>({environment:{}}),environmentDefaults:()=>({}),installUserPreferences:()=>({}),installRelativeNumberDrag(){},userPreferences:{state:()=>({receipt:{revision:null}})},window:{location},location,console:{error(){}},sceneSaveBlockedByFailedRestore:false,
+ const history={state:null,replaceState(_state,_title,value){const u=new URL(String(value));Object.assign(location,{href:u.href,search:u.search,hash:u.hash});}};
+ const c={URL,URLSearchParams,Promise,Symbol,File:class{},compositionRestoreUrl,forwardCompositionHash,resolveStartupSceneDefaults,...ownerAddress,grInit(){},initScene:()=>Promise.resolve(),settleStartupVeil:(_document,promise)=>promise,document:{body:{classList:{add(){}}},getElementById:()=>({value:'0.6'})},startupPreferences:null,startupPreferencesLoaded:Promise.resolve(),factorySceneDocument:null,preferencesUI:null,buildSceneData:()=>({environment:{}}),environmentDefaults:()=>({}),installUserPreferences:()=>({}),installRelativeNumberDrag(){},userPreferences:{state:()=>({receipt:{revision:null}})},window:{location},location,history,console:{error(){}},sceneSaveBlockedByFailedRestore:false,
  initEnvButtons(){},loadDemoButtons(){},restoreSettings(){return 'studio';},loadEnvironment:()=>Promise.resolve(),kaminosMeshAssetRouteFromSearch:()=>null,kaminosSplatAssetRouteFromSearch:()=>null,kaminosImageAssetRouteFromSearch:()=>null,
- fireAtBoot,initKaminosVolumeRoute:()=>Promise.resolve(),reportKaminosVolumeRouteInitFailure(){},initKaminosMotionAgencyRoute(){},initWorldChambersRoute(){},initKaminosFingerFluidBenchRoute(){},initKaminosFingerJuiceHostRoute(){},initKaminosFingerJuiceTabRoute(){},setActiveTab(){},compositionStatus(){},setInfo(text){info.push(text);},planSceneRestore:()=>({composition}),fetch:async()=>({ok:true,text:async()=>'{}'}),
+ fireAtBoot,initKaminosVolumeRoute:()=>Promise.resolve(),reportKaminosVolumeRouteInitFailure(){},initKaminosMotionAgencyRoute(){},initWorldChambersRoute(){},initKaminosFingerFluidBenchRoute(){},initKaminosFingerJuiceHostRoute(){},initKaminosFingerJuiceTabRoute(){},setActiveTab(){},compositionStatus(){},setInfo(text){info.push(text);},planSceneRestore:()=>documentData?planSceneRestore(documentData):({composition}),fetch:async()=>({ok:true,text:async()=>JSON.stringify(documentData??{})}),
  async loadSceneFile(){loads++;if(restoreError)return {ok:false,error:restoreError};c.sceneDocument.authoringChanged();return {ok:true};},resolveWorkbenchViewerReady(){admissions++;},rejectWorkbenchViewerReady(error){rejection=error.message;},async installOwnerWorkbenchEntry(){owners++;},};
- sceneContext(c);vm.runInContext(tail,c);for(let i=0;i<5;i++)await flush();return {redirects,loads,admissions,owners,rejection,info,experimentError:c.window.kaminosWorkbenchExperimentError,sceneError:c.window.kaminosSceneRestoreError,blocked:c.sceneDocument.state().blocked};
+ sceneContext(c);vm.runInContext(tail,c);for(let i=0;i<5;i++)await flush();return {redirects,loads,admissions,owners,rejection,info,location,experimentError:c.window.kaminosWorkbenchExperimentError,sceneError:c.window.kaminosSceneRestoreError,blocked:c.sceneDocument.state().blocked};
 }
 function destination(recovery){const url=new URL(recovery),target='http://localhost/index.html?settings_preset='+preset;return new URL(vm.runInNewContext(forwardedExpression,{forwardCompositionHash,target,location:{hash:url.hash,search:url.search}}));}
 async function openActualEntry(url){
@@ -63,4 +65,29 @@ test('ordinary query inputs override stale recovered inputs as one coherent pair
 for(const restoreError of ['Ash shape exceeds effective GPU capacity: annular plate (165 cubed)','Checkpoint scene geometry or poses differ; restore the scene first'])test('scene restoration preserves its actual refusal: '+restoreError,async()=>{
  const recovery=await startup(incoming),target=destination(recovery.redirects[0]);const result=await startup(target,{restoreError});
  assert.equal(result.loads,1);assert.equal(result.admissions,0);assert.equal(result.owners,0);assert.equal(result.blocked,true);assert.equal(result.rejection,restoreError);assert.equal(result.sceneError,restoreError);assert.equal(result.experimentError,undefined);assert.equal(result.info.at(-1),'Composition restore failed: '+restoreError);
+});
+
+test('saved optical settings restore from scene bytes without the original Workbench URL',async()=>{
+ const opticalParticleSetup={particles:{expansion:1.74,depthMode:2,lightRefreshEvery:9,coverage:{basis:'mixing',opacity:[[0,.7],[1,1.35]]}},source:{raySteps:11,renderScale:.64},simulationReaction:{cooling:17.25},ambientBoundary:{widthWorld:0},sharedLighting:{intervalMs:95}};
+ const documentData=JSON.parse(JSON.stringify(buildSceneDocument({composition,opticalParticleSetup})));
+ assert.deepEqual(documentData.opticalParticleSetup,opticalParticleSetup);
+ const url=new URL('http://localhost/index.html#scene=tuned.kaminos.json');
+ const first=await startup(url,{documentData});assert.equal(first.redirects.length,1);
+ const target=destination(first.redirects[0]);assert.deepEqual((await openActualEntry(target)).opened,{id:'optical-particles',inputs:opticalParticleSetup});
+ assert.equal(new URLSearchParams(target.hash.slice(1)).get('workspace'),'workbench');
+ const direct=new URL('http://localhost/index.html?settings_preset='+preset+'#scene=tuned.kaminos.json&experiment=optical-particles&experiment_inputs=%7B%22stale%22%3Atrue%7D');
+ const matched=await startup(direct,{documentData});
+ assert.equal(matched.loads,1);assert.equal(matched.owners,1);
+ assert.deepEqual((await openActualEntry(new URL(matched.location.href))).opened,{id:'optical-particles',inputs:opticalParticleSetup});
+ const override=new URL(incoming);const other=await startup(override,{documentData});
+ assert.deepEqual((await openActualEntry(destination(other.redirects[0]))).opened,{id:'fixture/owner',inputs});
+});
+
+test('File Open chooses the incoming scene tune over the owner of the departing page',()=>{
+ const start=html.indexOf('    restoreUrl:(data,filename,address)=>{'),end=html.indexOf('    apply:async',start);
+ const restoreUrl=vm.runInNewContext('({'+html.slice(start,end)+'}).restoreUrl',{compositionRestoreUrl,...ownerAddress});
+ const address={origin:'http://localhost',workspace:'workbench',owner:{id:'old-experiment',inputsText:'{"discard":true}'}};
+ const data={composition,opticalParticleSetup:{particles:{expansion:1.73}}};
+ assert.deepEqual(ownerAddress.readOwnerExperimentAddress(new URL(restoreUrl(data,'incoming.kaminos.json',address))),{id:'optical-particles',inputsText:'{"particles":{"expansion":1.73}}'});
+ assert.deepEqual(ownerAddress.readOwnerExperimentAddress(new URL(restoreUrl({composition},'older.kaminos.json',address))),address.owner);
 });

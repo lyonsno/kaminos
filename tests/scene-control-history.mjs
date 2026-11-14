@@ -202,13 +202,17 @@ test('number body drags from its starting value, while a click enters typing',as
  f.control.value='1';f.control.focus=()=>{document.activeElement=f.control;f.control.fire('focusin');};f.control.select=()=>{f.control.selected=true;};f.control.blur=()=>{document.activeElement=null;f.control.fire('blur');};
  f.control.addEventListener('input',()=>{f.value.flow=Number(f.control.value);});
  try {
+  const attributes=new Set();f.control.setAttribute=name=>attributes.add(name);f.control.removeAttribute=name=>attributes.delete(name);
   installRelativeNumberDrag({grip,input:f.control,step:.1});
   f.control.fire('pointerdown',{button:0,pointerId:1,clientX:200});
   assert.equal(f.control.value,'1','press position must not change the value');
+  assert.ok(attributes.has('data-number-drag-active'),'keyboard ownership starts on press');
   f.control.fire('pointermove',{pointerId:1,clientX:210});f.control.fire('pointerup',{pointerId:1});f.control.fire('click');
+  assert.ok(!attributes.has('data-number-drag-active'),'release clears keyboard ownership');
   assert.equal(f.value.flow,2);assert.equal(f.edits.state().undoCount,1);assert.equal(f.edits.state().active,null);
   f.edits.undo();assert.equal(f.value.flow,.8);
   f.control.fire('pointerdown',{button:0,pointerId:2,clientX:203});f.control.fire('pointerup',{pointerId:2});f.control.fire('click');
+  assert.ok(!attributes.has('data-number-drag-active'),'click-to-type also releases drag ownership');
   assert.equal(f.control.selected,true);assert.equal(f.control.readOnly,false);assert.equal(document.activeElement,f.control);
  } finally{delete globalThis.window;delete globalThis.document;}
 });

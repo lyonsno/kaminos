@@ -48,7 +48,7 @@ export async function openExperiment(definition, {host,inputs={},record=operatio
     for(const [name,operation] of Object.entries(instance.operations)) {
       if(typeof operation !== 'function')throw Error(`${definition.id}: operation ${name} must be a function`);
     }
-    for(const name of ['mount','dispose']) {
+    for(const name of ['mount','dispose','snapshotInputs']) {
       if(instance[name] !== undefined && typeof instance[name] !== 'function')throw Error(`${definition.id}: ${name} must be a function`);
     }
   } catch(error) {
@@ -63,6 +63,7 @@ export async function openExperiment(definition, {host,inputs={},record=operatio
     id:definition.id,
     title:definition.title,
     operationNames:Object.freeze(Object.keys(instance.operations)),
+    ...(instance.snapshotInputs?{snapshotInputs:()=>{active();return instance.snapshotInputs();}}:{}),
     async read() {active();return instance.read();},
     async invoke(name,input) {
       active();
