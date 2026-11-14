@@ -76,6 +76,20 @@ test('production particle update transports actual fine flow, preserves paused s
 
    const moved=await draw(1);assert.ok(Math.abs(moved.records[0]-.1)<1e-5);assert.ok(Math.abs(moved.records[1]-.2)<1e-5);assert.ok(Math.abs(moved.records[2]-.3)<1e-5);assert.ok(moved.records[20]<1,'potential consumed');
    const paused=await draw(1,{refresh:1});assert.deepEqual(paused.records,moved.records,'paused material and flow do not evolve with presentation draws');
+   let stamp;owner.submitMaterialQuery(1,(_,frame)=>{stamp=frame.identity;});
+   const center=d.createBuffer({size:16,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
+   const radiance=d.createBuffer({size:16,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
+   d.queue.writeBuffer(center,0,new Float32Array([.1,.2,.3,1]));
+   d.queue.writeBuffer(radiance,0,new Float32Array([0,8,0,1]));
+   try{
+    owner.setPacketIncident({identity:stamp,centers:center,radiance,receiverCount:1,grid:{origin:[-1,-1,-1],dims:[2,2,2],pitch:1}});
+    for(const depthMode of [0,1]){
+     const lit=await draw(1,{depthMode});
+     assert.equal(lit.state.packetIncident.effective,'packet-incident-only');
+     assert.deepEqual(lit.records,paused.records,'incident feedback does not modify carried material or captured light');
+    }
+   }finally{owner.setPacketIncident(null);center.destroy();radiance.destroy();}
+
    const b=d.createBuffer({size:1024,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});const e=d.createCommandEncoder();e.copyTextureToBuffer({texture:target},{buffer:b,bytesPerRow:256},[4,4]);d.queue.submit([e.finish()]);await b.mapAsync(GPUMapMode.READ);const pixels=new Uint8Array(b.getMappedRange());assert.ok(pixels.some((x,i)=>i%4!==3&&x>8),'actual particle rendering contributes light');b.unmap();b.destroy();owner.reset();assert.equal((await owner.sample()).available,false,'reset invalidates old readback immediately');
   }finally{owner.dispose();births.destroy();sourceUniform.destroy();grid.dispose();target.destroy();depth.destroy();}
  });

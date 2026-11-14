@@ -18506,6 +18506,11 @@ export function createKaminosVolumePrototype({
       return particleReactionFromSimulation(state.reactantCombustion);
     },
     resetOpticalParticles(){particleCaptureClock.reset();opticalParticles?.reset();state.opticalParticles=opticalParticles?.read()??{effective:'off',reason:'reset'};},
+    setOpticalParticleIncident(field) {
+      if(field!==null&&(!state.active||deviceRetired||!particleSettings.enabled||state.opticalParticles?.effective!=='world-optical-particles'||!opticalParticles))
+        throw Error('Cannot install incident light without an active particle source');
+      return opticalParticles?.setPacketIncident(field);
+    },
     submitOpticalParticleMaterial(encode) {
       if(!state.active||deviceRetired||!particleSettings.enabled||state.opticalParticles?.effective!=='world-optical-particles'||!opticalParticles)
         return {available:false,reason:'Optical particle material is inactive'};
