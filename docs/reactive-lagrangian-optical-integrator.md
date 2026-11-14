@@ -76,6 +76,12 @@ For stronger reaction-driven motion, begin by distinguishing the existing heat-d
 
 ## Source map
 
+### Held material support handoff reference
+
+`volume-particle-support-quadrature.mjs` integrates a finite ellipsoidal Gaussian along a world-space ray segment using its endpoints in the support's local sigma frame. The held binary split clips the same coefficient field at a plane in that frame. It composes emission and transmission in receiver-to-far order with the existing optical step functions. The two restricted fields partition the original support. They are a reference for replacement, not two independently resized billboards.
+
+The reference keeps support and path length separate from the camera footprint. It does not add fresh observations, deform the live particle pool, or treat the current billboard raster as a full three-dimensional Gaussian integral. To promote a split into the live sampler, the eventual child representation must pass the held parent/child transfer comparison and then preserve coverage as the material moves.
+
 - [Carrier state, reaction, motion and rendering](../volume-optical-particles.mjs)
 - [Acquisition and source-region proposal](../volume-particle-acquisition.mjs)
 - [Cell grouping and composition exchange](../volume-particle-exchange.mjs)
