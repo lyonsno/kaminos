@@ -22,6 +22,7 @@ function inactiveControls(settings){
     ...(!settings.depthMode||!settings.fillExtinction&&!settings.extinctionView?['extinctionSlack']:[]),
     ...(settings.enabled&&!settings.showRaymarch?['sourceRaySteps']:[]),
     ...(!settings.showRaymarch||!settings.showParticles?['referenceEmission']:[]),
+    ...(settings.phaseFilter?['showRaymarch','referenceEmission','fillExtinction','extinctionView','extinctionSlack']:['phaseBurnThreshold','phaseGlowThreshold']),
     ...(!settings.projection?['flowAlignment']:[]),
     ...(!settings.profileMode?['emissionFalloff','extinctionFalloff']:[]),
     ...(!settings.maxFootprint?['largeSupportFade']:[]),
@@ -222,6 +223,16 @@ export default {
    control('Particle spacing (source px)','spacing','1 keeps one particle slot per fire-target pixel. 2 keeps one per 2 × 2 block: about one quarter of the particle storage/update/draw work. Each update selects a source within its block. The one-evaluation source image stays full size. This affects automatic population dimensions; changing their size clears the pool. Explicit dimensions override spacing. Lower density can change brightness.',{step:1,digits:0,min:1});
    diagnostics.append(measure,timing);root.append(diagnostics);
    section('Display and output');
+   const phaseRow=document.createElement('label'),phase=document.createElement('select'),phaseLabel=document.createElement('span');
+   phaseLabel.textContent='Reaction phase';phase.dataset.particle='phaseFilter';phase.setAttribute('aria-label','Reaction phase');
+   phase.title='Solo particles by their last measured burn rate and their own emission. Changes display only; the grid underlay and grid extinction fill are suspended during a solo.';
+   phaseLabel.title=phase.title;
+   for(const [v,label] of [[0,'All phases'],[1,'Actively burning'],[2,'Afterglow'],[3,'Quiet soot'],[4,'Burn not measured']]){const option=document.createElement('option');option.value=String(v);option.textContent=label;phase.append(option);}
+   fields.set('phaseFilter',{input:phase,digits:0});
+   phase.addEventListener('change',()=>invoke('setOptions',{phaseFilter:Number(phase.value)}).then(()=>{error=null;sync();}).catch(e=>{error=e.message;phase.value=String(settings.phaseFilter);sync();}));
+   phaseRow.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) 9rem;gap:10px;align-items:center;margin:8px 0';phase.style.width='100%';phaseRow.append(phaseLabel,phase);controlRoot.append(phaseRow);
+   control('Active burn threshold','phaseBurnThreshold','Measured fuel burned per reference step, as a multiple of the reaction’s reference burn rate. Below this cutoff, intrinsic emission distinguishes Afterglow from Quiet soot.',{step:.01,digits:3});
+   control('Afterglow threshold','phaseGlowThreshold','Intrinsic emission luminance before Exposure and Emission gain. Excludes captured and distributed illumination. Raise it to put more weakly glowing particles into Quiet soot.',{step:.01,digits:3});
    control('Enable particle collection','enabled','Run observation acquisition and the particle pool. Turning this off clears the population and restores the ordinary marcher. Use the display toggles to compare while keeping the pool.');
    control('Display particles','showParticles','Draw the retained population. Turning display off keeps collection, reaction and motion running so the same population can be compared again. This removes particle draw/resolve/presentation work, not update work.');
    control('Display grid march','showRaymarch','With particles visible, the grid march is an underlay with independent intrinsic emission. With particles hidden it becomes the full reference. Uses Reference ray steps.');

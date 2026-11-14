@@ -15,7 +15,11 @@ test('actual reactants burn stoichiometrically, release heat, make soot and free
  });
 });
 
-import {createOpticalParticles} from '../volume-optical-particles.mjs';
+import {createOpticalParticles,opticalParticleSettings} from '../volume-optical-particles.mjs';
+test('reaction visibility defaults to all particles and rejects unknown modes',()=>{
+ assert.equal(opticalParticleSettings().phaseFilter,0);
+ assert.throws(()=>opticalParticleSettings({phaseFilter:8}),/reaction phase/i);
+});
 function actualGrid(d,{state=[1,1,.2,3],velocity=[0,0,0]}={}){
  const fine=d.createBuffer({size:8*64,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
  const reactants=d.createTexture({size:[2,2,2],dimension:'3d',format:'rg32float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});
@@ -80,6 +84,25 @@ test('optically negligible carriers cannot dilute an overlapping live carrier',a
   rows.set([0,0,0,1e-12,0,0,0,1,-.5,.5,1,1,0,0,0,0],16);seed(rows);const together=await draw();
   for(let y=0;y<4;y++)for(let x=0;x<16;x++)assert.ok(Math.abs(together[256*y+x]-alone[256*y+x])<=1,'near-empty optical state must not erase existing light or extinction');
  },{state:[1,1,0,3]}));
+});
+test('reaction-phase solo changes the held optical draw without changing its carrier records',async()=>{
+ await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw,upload})=>{
+  const rows=new Float32Array(16*16);rows.set([4,2,1,1,0,0,0,1,-.5,.5,1,1,4,2,1,0]);seed(rows);
+  const settings={depthMode:2,depthScale:1,depthSlices:4,burnTime:1,cooling:4,heatRelease:0,smokeLife:10000,phaseBurnThreshold:.5,phaseGlowThreshold:.05};
+  const blank=await draw(0,{...settings,phaseFilter:1});
+  assert.ok(blank.every(v=>v===0),'a fresh optical birth has no measured burn yet');
+  upload(new Float32Array(16*16));
+  const all=await draw(1,settings);const active=await draw(1,{...settings,phaseFilter:1});const held=(await owner.sample()).records;
+  assert.ok(all.some(v=>v>0));assert.deepEqual(active,all);
+  assert.deepEqual(await draw(1,{...settings,phaseFilter:2}),blank);
+  assert.deepEqual(await draw(1,{...settings,phaseFilter:3}),blank);
+  assert.deepEqual((await owner.sample()).records,held);
+  const cold=await draw(120,settings);
+  assert.ok(cold.some(v=>v>0),'the cooled carrier still blocks light');
+  assert.deepEqual(await draw(120,{...settings,phaseFilter:3}),cold);
+  assert.deepEqual(await draw(120,{...settings,phaseFilter:1}),blank);
+  assert.deepEqual(await draw(120,settings),cold,'clearing solo restores the same held optical result');
+ },{state:[1,1,1,3]}));
 });
 test('reaction creates soot extinction from actual fuel and oxygen when the initial grid has no soot',async()=>{
  await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw})=>{
