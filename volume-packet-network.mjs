@@ -27,6 +27,7 @@ struct Network {counts:vec4<u32>,quality:vec4<f32>}
 var<workgroup> sums:array<vec4<f32>,64>;
 var<workgroup> lower:array<vec3<f32>,64>;
 var<workgroup> upper:array<vec3<f32>,64>;
+var<workgroup> intervals:array<f32,64>;
 fn packetPower(p:Particle)->f32{
  if(p.anchor.w<=0){return 0.0;}let radius=particleLightBaseRadius(p,optical);
  let fade=select(1.0,particleLifeFade(p.motion.w,optical.lifeControl.y),optical.lifeControl.x>0);
@@ -45,13 +46,13 @@ fn packetPower(p:Particle)->f32{
  membership[i]=selected;
 }
 @compute @workgroup_size(64) fn refitSources(@builtin(workgroup_id) id:vec3<u32>,@builtin(local_invocation_index) tid:u32){
- let group=id.x;var sum=vec4<f32>(0);var lo=vec3<f32>(3.402823e38);var hi=-lo;
+ let group=id.x;var sum=vec4<f32>(0);var lo=vec3<f32>(3.402823e38);var hi=-lo;var halfInterval=0.0;
  for(var i=tid;i<net.counts.x;i+=64u){if(membership[i]!=group){continue;}let p=particles[i];let w=packetPower(p);sum+=vec4<f32>(p.anchor.xyz*w,w);
   // Conservative envelope for all rotated projected base supports.
-  let r=2.5*length(particleLightBaseRadius(p,optical));lo=min(lo,p.anchor.xyz-vec3<f32>(r));hi=max(hi,p.anchor.xyz+vec3<f32>(r));}
- sums[tid]=sum;lower[tid]=lo;upper[tid]=hi;workgroupBarrier();
- for(var stride=32u;stride>0u;stride/=2u){if(tid<stride){sums[tid]+=sums[tid+stride];lower[tid]=min(lower[tid],lower[tid+stride]);upper[tid]=max(upper[tid],upper[tid+stride]);}workgroupBarrier();}
- if(tid==0u){var g:PacketGroup;if(sums[0].w>0){g.center=vec4<f32>(sums[0].xyz/sums[0].w,sums[0].w);g.lo=vec4<f32>(lower[0],1);g.hi=vec4<f32>(upper[0],1);}groups[group]=g;}
+  let r=2.5*length(particleLightBaseRadius(p,optical));lo=min(lo,p.anchor.xyz-vec3<f32>(r));hi=max(hi,p.anchor.xyz+vec3<f32>(r));halfInterval=max(halfInterval,p.shape.w*.5);}
+ sums[tid]=sum;lower[tid]=lo;upper[tid]=hi;intervals[tid]=halfInterval;workgroupBarrier();
+ for(var stride=32u;stride>0u;stride/=2u){if(tid<stride){sums[tid]+=sums[tid+stride];lower[tid]=min(lower[tid],lower[tid+stride]);upper[tid]=max(upper[tid],upper[tid+stride]);intervals[tid]=max(intervals[tid],intervals[tid+stride]);}workgroupBarrier();}
+ if(tid==0u){var g:PacketGroup;if(sums[0].w>0){g.center=vec4<f32>(sums[0].xyz/sums[0].w,sums[0].w);g.lo=vec4<f32>(lower[0],1);g.hi=vec4<f32>(upper[0],intervals[0]);}groups[group]=g;}
 }
 @compute @workgroup_size(64) fn receiverSeeds(@builtin(workgroup_id) id:vec3<u32>,@builtin(local_invocation_index) tid:u32){
  let group=id.x;let first=group*net.counts.x/net.counts.y;let end=(group+1u)*net.counts.x/net.counts.y;var chosen=vec4<f32>(0);
@@ -66,12 +67,14 @@ fn packetPower(p:Particle)->f32{
  var b:Bundle;b.ids=vec4<u32>(receiver,source,face,0);b.origin=vec4<f32>(r.xyz,0);b.forward=vec4<f32>(0,0,1,1);b.right=vec4<f32>(1,0,0,1);b.up=vec4<f32>(0,1,0,1);
  if(r.w<=0||g.center.w<=0){bundles[i]=b;return;}
  let delta=g.center.xyz-r.xyz;let distance=length(delta);let extent=(g.hi.xyz-g.lo.xyz)*.5;let middle=(g.hi.xyz+g.lo.xyz)*.5-r.xyz;
- let ratio=length(extent)/max(distance,1e-20);let close=ratio>net.quality.y;
+ let ratio=(length(extent)+g.hi.w)/max(distance,1e-20);let close=ratio>net.quality.y;
  if(!close&&face>0u){bundles[i]=b;return;}
  var forward=vec3<f32>(0,0,1);if(distance>0){forward=delta/distance;}
  if(close){let directions=array<vec3<f32>,6>(vec3<f32>(1,0,0),vec3<f32>(-1,0,0),vec3<f32>(0,1,0),vec3<f32>(0,-1,0),vec3<f32>(0,0,1),vec3<f32>(0,0,-1));forward=directions[face];}
  let seed=select(vec3<f32>(0,1,0),vec3<f32>(1,0,0),abs(forward.y)>.9);let right=normalize(cross(seed,forward));let up=cross(forward,right);
- let far=dot(middle,forward)+dot(extent,abs(forward));
+ // The directional interval is independent of transverse support. Extend
+ // only axial reach; do not turn the acquired length into transverse area.
+ let far=dot(middle,forward)+dot(extent,abs(forward))+g.hi.w;
  if(far<=0){bundles[i]=b;return;}
  var halfSize=max(vec2<f32>(net.quality.z),vec2<f32>(abs(dot(middle,right))+dot(extent,abs(right)),abs(dot(middle,up))+dot(extent,abs(up))));
  if(close){halfSize=vec2<f32>(r.w);}

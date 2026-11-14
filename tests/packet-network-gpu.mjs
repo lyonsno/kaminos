@@ -3,12 +3,32 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {withKaminosGpu} from '../tools/shader-herder.mjs';
 import {createPacketNetwork,packetNetworkSettings,PACKET_NETWORK_WGSL} from '../volume-packet-network.mjs';
+import {createPacketBundleTransport,finitePacketBundle} from '../volume-packet-bundle.mjs';
 
 test('network settings keep material density, ray coverage and reconstruction support independent',()=>{
  const s=packetNetworkSettings({sources:4,receivers:50,width:12,sections:24,receiverRadius:.2});
  assert.equal(s.receivers,50);assert.equal(s.sources,4);assert.equal(s.width,12);assert.equal(s.sections,24);assert.equal(s.receiverRadius,.2);
  assert.throws(()=>packetNetworkSettings({sources:0}),/sources/);assert.throws(()=>packetNetworkSettings({receiverRadius:0}),/receiverRadius/);
  assert.throws(()=>packetNetworkSettings({hiddenCap:4}),/Unknown/);
+});
+
+test('network endpoints preserve long acquired intervals independently from small transverse support',async()=>{
+ await withKaminosGpu(async({device:d})=>{
+  const owned=[],make=(size,usage)=>{const b=d.createBuffer({size,usage});owned.push(b);return b;};
+  const particles=make(192,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST),options=make(592,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST);
+  const records=new Float32Array(48);records.set([0,0,0,1]);records.set([1e-6,0,0,0],8);records.set([.01,0,0,.01],16);records.set([0,0,1,1],24);records.set([4,2,1,0],32);records.set([.01,0,0,1],40);
+  const f=new Float32Array(148);f.set([1,1],44);f.set([1,1],56);f.set([1,1,1,1],88);f.set([1,0,1,0],104);f.set([1,0,1,0],108);d.queue.writeBuffer(options,0,f);d.queue.writeBuffer(particles,0,records);
+  const material={particles,options,slots:2,identity:{epoch:4,step:9,frame:13},domain:{origin:[-1,-1,-1],dims:[4,4,4],pitch:.5},coverage:{kind:'fixture',unsampled:'unknown'}};
+  const network=createPacketNetwork(d),reference=createPacketBundleTransport(d);
+  async function read(encode){d.pushErrorScope('validation');const e=d.createCommandEncoder(),buffers=encode(e),reads=buffers.map(b=>make(b.size,GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ));buffers.forEach((b,i)=>e.copyBufferToBuffer(b,0,reads[i],0,b.size));d.queue.submit([e.finish()]);const error=await d.popErrorScope();assert.equal(error,null,error?.message);const values=[];for(const b of reads){await b.mapAsync(GPUMapMode.READ);values.push(new Float32Array(b.getMappedRange().slice(0)));b.unmap();}return values;}
+  try{
+   const [incoming,bundles]=await read(e=>{const r=network.encode(e,{material,settings:{sources:1,receivers:2,width:1,sections:16,receiverRadius:.2,nearRatio:1e6}});return [r.radiance,network.buffers.bundles];});
+   assert.ok(bundles[7]>=1.5,'source interval ends at depth 1.5 even though transverse support is .01');
+   const b=finitePacketBundle({origin:[0,0,0],target:[0,0,1],halfSize:[bundles[11],bundles[15]],near:0,far:2,weight:bundles[16]});
+   const [extended]=await read(e=>[reference.encode(e,{material,width:1,height:1,sections:16,receivers:1,bundles:[b]}).buffer]);
+   assert.ok(extended[0]>0);assert.ok(Math.abs(incoming[0]-extended[0])<1e-5*extended[0],`${incoming[0]} versus complete interval ${extended[0]}`);
+  }finally{network.dispose();reference.dispose();owned.forEach(b=>b.destroy());}
+ },{wgslSources:[{label:'packet source endpoint production',code:PACKET_NETWORK_WGSL,entryPoint:'buildBundles'}]});
 });
 test('native network reduces current source membership, keeps every contributor and returns incident on material receivers',async()=>{
  await withKaminosGpu(async({device:d})=>{
