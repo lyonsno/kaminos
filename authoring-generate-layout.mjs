@@ -20,7 +20,7 @@ export function generationComparisonView({selected,comparison,preparedSource=nul
   right:generationImageView({selected,preparedSource,showSegmented:prepared,preview}),label:prepared?'Segmented images':'Original images'};
 }
 
-export function installGenerateLayout({document,trellisSettings=()=>null,queueLine=()=>'',openMasks=null,selected=()=>null,imageState=()=>null,createFlame=null,history=null,kiln=null}){
+export function installGenerateLayout({document,trellisSettings=()=>null,queueLine=()=>'',openMasks=null,selected=()=>null,imageState=()=>null,createFlame=null,history=null,kiln=null,meshUnavailableReason=null}){
 
   const pane=document.getElementById('asset-generate');if(!pane)throw Error('Generate panel is missing');
   const byId=id=>document.getElementById(id);
@@ -37,7 +37,7 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   const preview=document.createElement('img');preview.id='asset-step-source';preview.alt='Generated or selected image';preview.hidden=true;
   const canvas=document.createElement('canvas');canvas.id='asset-step-preview';canvas.hidden=true;canvas.setAttribute('role','img');
   const frame=document.createElement('div');frame.className='asset-image-view asset-compare-current';frame.append(preview,canvas);
-  const kilnPanel=document.createElement('section');kilnPanel.className='generation-kiln';
+  const kilnPanel=document.createElement('section');kilnPanel.className='generation-kiln';kilnPanel.hidden=!kiln&&!createFlame;
   const kilnView=document.createElement('div');kilnView.className='generation-kiln-view';
   const kilnTools=document.createElement('div');kilnTools.className='generation-kiln-tools';
   const kilnLabel=document.createElement('span');kilnLabel.textContent='Inference Kiln';
@@ -124,7 +124,7 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
     sourceName.textContent=view.preview?'':selected()?.visibility?.status==='withheld'?'Hostile to eyesight. Awaiting further review.':showing?byId('asset-name')?.textContent||'':'No image yet. Generate one in step 1 or pick one in Browse.';
     preview.title=showing?sourceName.textContent:'';
     const model=byId('asset-mesh-model')?.value,t=trellisSettings();
-    settings.textContent=model==='trellis'?(t?`${t} · set on the server for now`:'Settings are set on the server for now'):model==='trellis-page'?'Settings come from the mounted checkpoint package · f16 decoders · 200k faces · Stop ends it at the next GPU step.':'Stable Fast 3D runs on this page beside the kiln, in about a minute.';
+    settings.textContent=meshUnavailableReason||(model==='trellis'?(t?`${t} · set on the server for now`:'Settings are set on the server for now'):model==='trellis-page'?'Settings come from the mounted checkpoint package · f16 decoders · 200k faces · Stop ends it at the next GPU step.':'Stable Fast 3D runs on this page beside the kiln, in about a minute.');
     masks.hidden=!openMasks||selected()?.kind!=='image'||selected()?.visibility?.status==='withheld';
     const line=queueLine();queue.textContent=line;queue.hidden=!line;
     empty.hidden=resultList.children.length>0;

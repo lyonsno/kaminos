@@ -129,7 +129,7 @@ export function usedInputStatusFor(preview,selectedSource){
   return 'This model prepares the image in this page; the cutout it uses appears here.';
 }
 
-export function installAuthoringAssets({document,controller,edits}) {
+export function installAuthoringAssets({document,controller,edits,capabilities={}}) {
   const panel=document.createElement('aside');panel.id='authoring-assets';panel.hidden=true;panel.setAttribute('aria-label','Asset browser and generation');
   panel.innerHTML=`<div id="asset-resize" role="separator" aria-label="Asset browser height" aria-orientation="horizontal" tabindex="0"></div><header><strong>Assets</strong><button type="button" id="asset-close" aria-label="Close assets">×</button></header>
     <nav><button type="button" data-assets-mode="browse">Browse</button><button type="button" data-assets-mode="generate">Generate</button></nav>
@@ -143,7 +143,7 @@ export function installAuthoringAssets({document,controller,edits}) {
   document.body.append(panel);installAssetPaneResize({document,panel});const byId=id=>document.getElementById(id);let mode='browse',listKey=null,rootsKey=null,searchKey=null,entries=[],searchRows=[];const cards=new Map(),agentGroups=new Map();const expandedAgents=new Set();let agentRows=[];
   const runHeader=document.createElement('div');runHeader.id='authoring-generation-header';runHeader.hidden=true;runHeader.innerHTML='<button type="button" id="generation-header-show" title="Show generation"><span id="generation-header-status"></span></button><button type="button" id="generation-header-stop">Stop</button>';byId('authoring-header')?.append(runHeader);const runById=id=>runHeader.querySelector('#'+id);
   const previews=new Map();let previewModule;const observer=new document.defaultView.IntersectionObserver(rows=>{for(const row of rows){if(!row.isIntersecting)continue;observer.unobserve(row.target);const entry=previews.get(row.target);if(!entry)continue;row.target.dataset.previewState='loading';(previewModule ||= import('./authoring-asset-previews.mjs')).then(module=>module.meshThumbnail(entry,()=>row.target.isConnected&&!panel.hidden&&mode==='browse'&&!assetAdding)).then(source=>{if(!source){row.target.dataset.previewState='skipped';if(row.target.isConnected)armPreviews();return;}const img=document.createElement('img');img.src=source;img.alt=entry.label || entry.name;row.target.prepend(img);row.target.dataset.previewState='rendered';}).catch(()=>{row.target.dataset.previewState='unavailable';row.target.title+=' · Mesh preview unavailable';});}}, {root:panel});
-  function armPreviews(){if(panel.hidden||mode!=='browse')return;for(const [button] of previews)if(!['loading','rendered','unavailable'].includes(button.dataset.previewState))observer.observe(button);}
+  function armPreviews(){if(capabilities.meshPreviews===false||panel.hidden||mode!=='browse')return;for(const [button] of previews)if(!['loading','rendered','unavailable'].includes(button.dataset.previewState))observer.observe(button);}
   const labels={'generated-meshes':'Saved assets',trellis2mlx:'Trellis outputs',pixal3d:'Pixal outputs','image-inbox':'Source images',greenroom:'Generator outputs','agent-work':'Agent work',assets:'Assets',scratch:'Scratch'};
   const action=fn=>Promise.resolve().then(fn).catch(error=>{byId('asset-status').textContent=error.message;});
   function close(){if(previewDialog.open)previewDialog.close();if(panel.contains(document.activeElement))document.activeElement.blur();panel.hidden=true;document.body.classList.remove('has-assets-panel');render(controller.read());}
@@ -217,7 +217,7 @@ export function installAuthoringAssets({document,controller,edits}) {
       image.onload=()=>{if(ticket===detailTicket){previewStatus.textContent='';if(selected?.kind==='image'&&image.naturalWidth)byId('asset-facts').textContent=assetFacts(selected)+` · ${image.naturalWidth} × ${image.naturalHeight}`;}};
       image.onerror=()=>{if(ticket===detailTicket){image.hidden=true;byId('asset-preview-enlarge').hidden=true;previewStatus.textContent='Preview unavailable';}};
       if(source){image.src=source;image.alt=usedInput?'The input this generation is using (prepared in this page)':selected.label||selected.name||'Selected asset';}
-      else if(selected?.kind==='mesh'&&!withheld&&!panel.hidden&&mode==='browse'){
+      else if(capabilities.meshPreviews!==false&&selected?.kind==='mesh'&&!withheld&&!panel.hidden&&mode==='browse'){
         previewStatus.textContent='Preparing preview…';
         (previewModule ||= import('./authoring-asset-previews.mjs')).then(module=>(module.meshPreview||module.meshThumbnail)(selected,()=>ticket===detailTicket&&!panel.hidden))
           .then(source=>{if(ticket!==detailTicket)return;if(source){image.src=source;image.alt=selected.label||selected.name;image.hidden=false;byId('asset-preview-enlarge').hidden=false;previewStatus.textContent='';}else previewStatus.textContent='Preview unavailable';})
@@ -242,13 +242,16 @@ export function installAuthoringAssets({document,controller,edits}) {
     byId('asset-percent').textContent=Number.isFinite(generation.percent)?`${generation.stage || 'Stage'} · ${Math.round(generation.percent)}%`:'';
     byId('asset-generation-status').textContent=generation.error || generation.progress || (selected?.kind==='image'?'Source selected; generate when you want.':'Choose a source image.');
     byId('asset-results').replaceChildren(...state.results.map(result=>{const button=document.createElement('button');button.type='button';button.className='asset-result';button.textContent=`Add ${result.name}`;button.disabled=state.adding;button.onclick=()=>action(()=>controller.add(result));return button;}));
+    for(const [key,ids]of Object.entries({add:['asset-add'],upload:['asset-file-open'],meshHistory:['asset-history','asset-watch-history']}))if(capabilities[key]===false)for(const id of ids){byId(id).disabled=true;byId(id).title='Not yet connected to the scene worker';}
+    if(capabilities.meshUnavailableReason){byId('asset-run').disabled=true;byId('asset-run').title=capabilities.meshUnavailableReason;byId('asset-prepare').hidden=true;byId('asset-preparation-status').textContent=capabilities.meshUnavailableReason;}
+
   }
   panel.querySelectorAll('[data-assets-mode]').forEach(button=>button.onclick=()=>setMode(button.dataset.assetsMode));
   byId('asset-preview-close').onclick=()=>previewDialog.close();
   byId('asset-preview-enlarge').onclick=()=>{const image=byId('asset-image');if(image.hidden||!image.src)return;byId('asset-preview-full').src=image.src;byId('asset-preview-full').alt=image.alt;byId('asset-preview-title').textContent=byId('asset-name').textContent;byId('asset-preview-facts').textContent=byId('asset-facts').textContent;previewDialog.showModal();};
   byId('asset-close').onclick=close;byId('asset-root').onchange=event=>action(()=>controller.browse(event.target.value));byId('asset-up').onclick=()=>action(()=>{const s=controller.read();return controller.browse(s.root,s.path.split('/').slice(0,-1).join('/'));});
   byId('asset-refresh').onclick=()=>action(()=>controller.refresh());byId('asset-filter').oninput=()=>render(controller.read());
-  byId('asset-add').onclick=()=>action(async()=>{await controller.add();document.activeElement?.blur();});byId('asset-use-image').onclick=()=>{setMode('generate');if(!controller.preparesInput?.())action(()=>controller.prepare());};byId('asset-prepare').onclick=()=>action(()=>controller.prepare());byId('asset-run').onclick=()=>action(()=>controller.generate());
+  byId('asset-add').onclick=()=>action(async()=>{await controller.add();document.activeElement?.blur();});byId('asset-use-image').onclick=()=>{setMode('generate');if(!capabilities.meshUnavailableReason&&!controller.preparesInput?.())action(()=>controller.prepare());};byId('asset-prepare').onclick=()=>action(()=>controller.prepare());byId('asset-run').onclick=()=>action(()=>controller.generate());
   byId('asset-history').onclick=()=>action(()=>controller.openHistory());byId('asset-watch-history').onclick=()=>action(()=>controller.watchHistory());
   byId('asset-stop').onclick=()=>controller.stop();runById('generation-header-stop').onclick=()=>controller.stop();
   runById('generation-header-show').onclick=()=>{panel.hidden=false;document.body.classList.add('has-assets-panel');setMode('generate');};

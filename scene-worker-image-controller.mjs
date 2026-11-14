@@ -2,6 +2,7 @@
 // handles are real scene-worker operations; models and persistence stay there.
 export function createSceneWorkerImageController({page,changed=()=>{}}){
  let active=null,state={status:'idle',outputs:[],preview:null,pending:null,canStop:false,canDecode:false,timing:null};
+ const listeners=new Set();
  const clone=value=>structuredClone(value);
  function presentation(value){
   if(!value)return value;
@@ -13,7 +14,7 @@ export function createSceneWorkerImageController({page,changed=()=>{}}){
   });
   return next;
  }
- const publish=()=>{try{changed(read());}catch(error){state={...state,presentationError:String(error?.message??error)};}};
+ const publish=()=>{try{changed(read());for(const listener of listeners)listener(read());}catch(error){state={...state,presentationError:String(error?.message??error)};}};
  function read(){return {...state,outputs:state.outputs.map(value=>({...value}))};}
  async function refresh(){
   const reply=await page.request('image.read').completion;
@@ -51,7 +52,7 @@ export function createSceneWorkerImageController({page,changed=()=>{}}){
    state={...state,status:error.name==='AbortError'?'stopped':'failed',error:error.message,canStop:false,canDecode:false};publish();throw error;
   }finally{active=null;publish();}
  }
- return Object.freeze({preparesInput:true,read,refresh,run:input=>execute('image.generate',input),
+ return Object.freeze({preparesInput:true,read,refresh,subscribe(listener){listeners.add(listener);return()=>listeners.delete(listener);},run:input=>execute('image.generate',input),
   busy:()=>active!==null,timing:()=>state.timing??null,
   stop(){if(!active||state.canStop!==true)return false;const requested=active.cancel('Operator Stop');if(requested){state={...state,status:'stopping',canStop:false};publish();}return requested;},
   async decodeNow(){if(!active||state.canDecode!==true)return false;const reply=await active.control('decodeNow').completion;return reply.output?.accepted===true;},

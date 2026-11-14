@@ -6,6 +6,7 @@ import {createAppGpuHost} from './app-gpu-host.mjs';
 import {createVolumeWorkerFrameBinding} from './volume-worker-frame-binding.mjs';
 import {createSceneWorkerMutationBinding} from './scene-worker-mutation-binding.mjs';
 import {createKleinSceneWorkerAdapter} from './authoring-image-worker-adapter.mjs';
+import {createSceneWorkerAssets} from './scene-worker-assets.mjs';
 import {sharedDeviceHostRequirements} from './authoring-image-operation.mjs';
 
 const reserved=new Set(['initialize','retire','frame']);
@@ -24,10 +25,10 @@ function register(...maps){
 // createSceneResources returns its cleanup-capable shell before allocating;
 // its initialize/attachVolume methods construct the actual local domain graph.
 // There is deliberately no basic-renderer or alternate-device fallback.
-export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imageOptions=null,samRequirements=null,services={}}={}){
+export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imageOptions=null,assetOptions=null,samRequirements=null,services={}}={}){
  if(!THREE||typeof createSceneResources!=='function')throw Error('scene worker needs its Three namespace and actual scene resource constructor');
  return ({payload,lifecycle})=>{
-  let shared=null,renderResources=null,view=null,sceneResources=null,volume=null,appHost=null,frames=null,mutations=null,image=null;
+  let shared=null,renderResources=null,view=null,sceneResources=null,volume=null,appHost=null,frames=null,mutations=null,image=null,assets=null;
   let commands=null,foregroundCommands=null,started=false,queueSettled=false,appRetired=false;
   let appliedViewport={...payload.viewport},appliedControls=structuredClone(payload.flameControls);
   const surfaceState={active:false,transparent:false};
@@ -92,7 +93,8 @@ export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imag
     if(typeof sceneResources.attachVolume!=='function')throw Error('scene worker requires actual scene/flame source and transport attachment');
     await sceneResources.attachVolume({volume,appHost,context:ctx});ctx.assertCurrent();
     if(imageOptions)image=createKleinSceneWorkerAdapter({...imageOptions,context:()=>({sharedGpu:shared,prototype:volume,host:sceneFrames}),appHost:()=>appHost,kit:()=>kit});
-    commands=register(sceneResources.commands,image?.commands);
+    if(assetOptions)assets=createSceneWorkerAssets(assetOptions);
+    commands=register(sceneResources.commands,image?.commands,assets?.commands);
     foregroundCommands=register({'flame.controls':applyFlameControls},sceneResources.foregroundCommands);
     for(const name of Object.keys(foregroundCommands))if(Object.hasOwn(commands,name))throw Error(`scene worker command collision: ${name}`);
     ctx.assertCurrent();
@@ -126,7 +128,7 @@ export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imag
     if(volume){await volume.dispose();volume=null;}
     if(renderResources){await renderResources.retire();renderResources=null;}
     if(shared){shared.device.destroy();shared=null;}
-    appHost=null;frames=null;mutations=null;view=null;commands=null;foregroundCommands=null;
+    appHost=null;frames=null;mutations=null;view=null;commands=null;foregroundCommands=null;assets=null;
     return {retired:true};
    },
   };
