@@ -20,7 +20,7 @@ export function generationComparisonView({selected,comparison,preparedSource=nul
   right:generationImageView({selected,preparedSource,showSegmented:prepared,preview}),label:prepared?'Segmented images':'Original images'};
 }
 
-export function installGenerateLayout({document,trellisSettings=()=>null,queueLine=()=>'',openMasks=null,selected=()=>null,imageState=()=>null,createFlame=null,history=null,kiln=null,meshUnavailableReason=null}){
+export function installGenerateLayout({document,trellisSettings=()=>null,queueLine=()=>'',openMasks=null,selected=()=>null,imageState=()=>null,createFlame=null,history=null,kiln=null,meshModel=null,meshUnavailableReason=null}){
 
   const pane=document.getElementById('asset-generate');if(!pane)throw Error('Generate panel is missing');
   const byId=id=>document.getElementById(id);
@@ -123,7 +123,7 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
     expand.disabled=!showing;
     sourceName.textContent=view.preview?'':selected()?.visibility?.status==='withheld'?'Hostile to eyesight. Awaiting further review.':showing?byId('asset-name')?.textContent||'':'No image yet. Generate one in step 1 or pick one in Browse.';
     preview.title=showing?sourceName.textContent:'';
-    const model=byId('asset-mesh-model')?.value,t=trellisSettings();
+    const model=meshModel?.()??byId('asset-mesh-model')?.value,t=trellisSettings();
     settings.textContent=meshUnavailableReason||(model==='trellis'?(t?`${t} · set on the server for now`:'Settings are set on the server for now'):model==='trellis-page'?'Settings come from the mounted checkpoint package · f16 decoders · 200k faces · Stop ends it at the next GPU step.':'Stable Fast 3D runs on this page beside the kiln, in about a minute.');
     masks.hidden=!openMasks||selected()?.kind!=='image'||selected()?.visibility?.status==='withheld';
     const line=queueLine();queue.textContent=line;queue.hidden=!line;

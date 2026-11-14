@@ -1,6 +1,7 @@
 import {createSceneWorkerPage,captureSceneWorkerCamera,applySceneWorkerSurfaces,mergeSceneWorkerUi} from './scene-worker-page.mjs';
 import {mountSceneWorkerEditor} from './scene-worker-editor-page.mjs';
 import {createSceneWorkerImageController} from './scene-worker-image-controller.mjs';
+import {createSceneWorkerMeshController} from './scene-worker-mesh-controller.mjs';
 import {checkedCameraView} from './scene-camera-views.mjs';
 import {resolveSceneWorkerStartupInput} from './scene-worker-startup-input.mjs';
 import {mountSceneWorkerWaterControls} from './scene-worker-water-controls.mjs';
@@ -85,10 +86,11 @@ export function mountSceneWorkerPage({document,window,THREE,createControls,insta
  waterControls=mountSceneWorkerWaterControls({document,page,readUi:()=>ui,report});
  pointerSelection=installSceneWorkerPointerSelection({canvases,page,readCamera:()=>captureSceneWorkerCamera(camera,controls.target),report});
  const image=createSceneWorkerImageController({page});
+ const mesh=createSceneWorkerMeshController({page});
  function detach(){if(closed)return;closed=true;pointerSelection?.dispose();waterControls?.dispose();editor?.dispose();navigation.dispose();controls.dispose();navigationInput.removeEventListener('change',navigationChanged);}
  const pagehide=()=>{page.holdFrames('Page leaving; resource retirement requested');void page.retire().then(detach,error=>report(`Worker cleanup held: ${error.message}`));};
  window.addEventListener('pagehide',pagehide,{once:true});
- return Object.freeze({page,image,editor,frameSelected:()=>boundsFrame(ui?.selectionBounds),camera,controls,navigation,canvases,
+ return Object.freeze({page,image,mesh,editor,frameSelected:()=>boundsFrame(ui?.selectionBounds),camera,controls,navigation,canvases,
   start:()=>page.start(),
   async retire(){const result=await page.retire();detach();window.removeEventListener('pagehide',pagehide);for(const canvas of Object.values(canvases))canvas.remove();return result;},
   read:()=>({worker:page.read(),ui,navigation:navigation.state()}),

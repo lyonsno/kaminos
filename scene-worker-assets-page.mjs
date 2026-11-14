@@ -3,9 +3,11 @@ import {installKleinImageGeneration} from './authoring-image-generation-ui.mjs';
 import {installBrowseLayout} from './authoring-browse-layout.mjs';
 import {installGenerateLayout} from './authoring-generate-layout.mjs';
 
-export function createSceneWorkerAssetsController({page,importAsset,changed=()=>{},report=()=>{}}){
+export function createSceneWorkerAssetsController({page,importAsset,mesh,changed=()=>{},report=()=>{}}){
  let state={roots:[],root:'generated-meshes',path:'',entries:[],selected:null,preparation:null,loading:false,adding:false,error:null,results:[]},revision=-1,pending=0,adding=false,insertion=null;
- const read=options=>options?.selectionOnly?{selected:state.selected}:{...state,loading:state.loading||pending>0,adding,insertion};
+ const retained=new Map();
+ const keep=entry=>{if(entry?.source)retained.set(entry.source,{...entry,kind:entry.kind??'mesh',label:entry.label??entry.name});return entry;};
+ const read=options=>{for(const entry of mesh?.read().results??[])keep(entry);return options?.selectionOnly?{selected:state.selected}:{...state,results:[...new Map([...state.results,...retained.values()].map(entry=>[entry.source,entry])).values()],loading:state.loading||pending>0,adding,insertion};};
  const record=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
  const optionalString=value=>value==null||typeof value==='string';
  function validSelected(value){return value===null||(record(value)&&(value.generation==null||(record(value.generation)&&optionalString(value.generation.runId)&&optionalString(value.generation.route))));}
@@ -45,16 +47,23 @@ export function createSceneWorkerAssetsController({page,importAsset,changed=()=>
  return {read,ensure:()=>call('assets.ensure'),refresh:()=>call('assets.refresh'),browse:(root,path='')=>call('assets.browse',{root,path}),select:entry=>call('assets.select',{entry}),
   add,async upload(file){const bytes=await file.arrayBuffer(),value=await call('assets.upload',{file:{name:file.name,type:file.type,bytes}},{transfer:[bytes]},true);
    if(value.entry?.kind==='mesh'&&state.selected?.source===value.entry.source)await add(value.entry);return value.entry;},
-  generation:()=>({status:'unavailable',error:'Mesh generation is not yet connected to this worker preview.'}),
-  preparesInput:()=>false,stop:()=>false};
+  async generate(){
+   const selected=structuredClone(state.selected);if(selected?.kind!=='image')throw Error('Choose a source image first');if(assetWithheld(selected))throw Error(selected.visibility.reason||'Asset awaiting further review.');
+   if(!mesh)throw Error('Mesh generation is not connected');
+   try{return keep(await mesh.run({...selected,source:selected.source||assetSource(selected.root??selected.root_id,selected.path)}));}
+   catch(error){state={...state,error:error.message};throw error;}finally{notify();}
+  },
+  async recover(){if(!mesh)throw Error('Mesh generation is not connected');try{return keep(await mesh.retryPersistence());}catch(error){state={...state,error:error.message};throw error;}finally{notify();}},
+  generation:()=>mesh?.read()??({status:'unavailable',error:'Mesh generation is not yet connected to this worker preview.'}),
+  preparesInput:()=>mesh?.preparesInput===true,stop:()=>mesh?.stop()??false};
 }
 
 export function installSceneWorkerAssetsDrawer({document,owner,report=()=>{}}){
  let ui,imageUi,layout,browse;
  const render=()=>{ui?.render(controller.read());imageUi?.render();layout?.render();browse?.render(controller.read());};
  const canAdd=typeof owner.editor.importAsset==='function';
- const controller=createSceneWorkerAssetsController({page:owner.page,importAsset:canAdd?input=>owner.editor.importAsset(input):undefined,changed:render,report});
- const reason='Mesh generation is not yet connected to this worker preview.';
+ const controller=createSceneWorkerAssetsController({page:owner.page,mesh:owner.mesh,importAsset:canAdd?input=>owner.editor.importAsset(input):undefined,changed:render,report});
+ const reason=owner.mesh?null:'Mesh generation is not yet connected to this worker preview.';
  ui=installAuthoringAssets({document,controller,edits:owner.editor.edits,
   capabilities:{add:canAdd,upload:true,meshHistory:false,meshPreviews:false,meshUnavailableReason:reason}});
  const selectSaved=async entry=>{
@@ -62,10 +71,10 @@ export function installSceneWorkerAssetsDrawer({document,owner,report=()=>{}}){
   return entry;
  };
  const images={...owner.image,run:async input=>selectSaved(await owner.image.run(input)),retryOutput:async id=>selectSaved(await owner.image.retryOutput(id)),retryPersistence:async()=>selectSaved(await owner.image.retryPersistence())};
- imageUi=installKleinImageGeneration({document,controller:images,assets:controller,meshBusy:()=>false});
- layout=installGenerateLayout({document,selected:()=>controller.read({selectionOnly:true}).selected,imageState:()=>owner.image.read(),meshUnavailableReason:reason});
+ imageUi=installKleinImageGeneration({document,controller:images,assets:controller,meshBusy:()=>owner.mesh?.busy()??false});
+ layout=installGenerateLayout({document,selected:()=>controller.read({selectionOnly:true}).selected,imageState:()=>owner.image.read(),meshModel:owner.mesh?()=>'trellis-page':undefined,meshUnavailableReason:reason});
  browse=installBrowseLayout({document,controller,inScene:()=>new Set((owner.read().ui?.objects??[]).map(row=>row.source)),open:mode=>ui.open(mode),canAdd});
- owner.image.subscribe(render);render();
+ owner.image.subscribe(render);owner.mesh?.subscribe(render);render();
  const open=mode=>{const result=ui.open(mode);Promise.resolve(result).catch(error=>report(error.message));return result;};
  return Object.freeze({...controller,open,close:()=>ui.close(),panel:()=>ui.state(),images});
 }

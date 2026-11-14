@@ -64,7 +64,8 @@ export async function startSceneWorkerPage({document=globalThis.document,window=
   window.addEventListener('keydown',event=>{if(event.target?.closest?.('input,textarea,select,[contenteditable="true"]')||!(event.metaKey||event.ctrlKey))return;
    if(event.key.toLowerCase()==='s'){event.preventDefault();void(event.shiftKey?owner.editor.save({saveAs:true,promptName:true}):owner.editor.save());}
    if(event.key.toLowerCase()==='o'){event.preventDefault();void window.openSavedScene();}});
-  await owner.start();void owner.image.refresh().catch(error=>report('Image status unavailable: '+error.message));return owner;
+  await owner.start();void owner.image.refresh().catch(error=>report('Image status unavailable: '+error.message));
+  if(owner.mesh)void owner.mesh.refresh().catch(error=>report('Mesh status unavailable: '+error.message));return owner;
  })();
  try{return await settleStartupVeil(document,initialization);}catch(error){report('Scene worker startup failed: '+error.message);throw error;}
 }

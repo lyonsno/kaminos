@@ -164,3 +164,14 @@ test('actual domain constructor receives a live shared-device reader that clears
  assert.equal(typeof input.readSharedGpu,'function','presentation recovery needs the current owner rather than the initial device snapshot');assert.equal(input.readSharedGpu().device,f.device);
  const read=input.readSharedGpu;await runtime.retire(f.context);assert.equal(read(),null);
 });
+
+test('worker composition registers TRELLIS on the same host and retains its owner after failed retirement',async()=>{
+ const f=fixture();let failures=1,retirements=0;
+ f.options.meshOptions={availability:async()=>({status:'available'}),operation:{run:async()=>{},async retire(){retirements++;if(failures-- >0)throw Error('model retirement held');}},persistence:{persist:async()=>{},retire:async()=>{}},lease:async()=>{throw Error('no model execution in composition check');}};
+ const runtime=factory(f.options)({payload:f.payload,lifecycle:{}});await runtime.initialize(f.context);
+ try{assert.equal(typeof runtime.commands['mesh.generate'],'function','actual worker entry must register its model producer');
+  const status=await runtime.commands['mesh.read']({},f.context);assert.equal(status.model,'trellis-page');assert.equal(status.state.status,'idle');
+  await assert.rejects(runtime.retire(f.context),/model retirement held/);assert.equal(f.calls.includes('device.dispose'),false,'failed retirement retains the shared host/device');
+  await runtime.retire(f.context);assert.equal(retirements,2);assert.equal(f.calls.filter(x=>x==='device.dispose').length,1);
+ }finally{if(!f.calls.includes('device.dispose'))await runtime.retire(f.context);}
+});
