@@ -76,7 +76,7 @@ test('production particle update transports actual fine flow, preserves paused s
 
    const moved=await draw(1);assert.ok(Math.abs(moved.records[0]-.1)<1e-5);assert.ok(Math.abs(moved.records[1]-.2)<1e-5);assert.ok(Math.abs(moved.records[2]-.3)<1e-5);assert.ok(moved.records[20]<1,'potential consumed');
    const paused=await draw(1,{refresh:1});assert.deepEqual(paused.records,moved.records,'paused material and flow do not evolve with presentation draws');
-   let stamp;owner.submitMaterialQuery(1,(_,frame)=>{stamp=frame.identity;});
+   let stamp;
    const center=d.createBuffer({size:16,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
    const radiance=d.createBuffer({size:16,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
    d.queue.writeBuffer(center,0,new Float32Array([.1,.2,.3,1]));
@@ -87,12 +87,17 @@ test('production particle update transports actual fine flow, preserves paused s
     }finally{b.unmap();b.destroy();}
    }
    try{
-    const field={identity:stamp,centers:center,radiance,receiverCount:1,grid:{origin:[-1,-1,-1],dims:[2,2,2],pitch:1}};
+    const field={centers:center,radiance,receiverCount:1,grid:{origin:[-1,-1,-1],dims:[2,2,2],pitch:1}};
     for(const depthMode of [0,1]){
      const settings={depthMode,gain:0,profileMode:1,emissionFalloff:1,emissionEdgeSoftness:.1};
      async function snapshot(green,overrides={}){
-      d.queue.writeBuffer(radiance,0,new Float32Array([0,green,0,1]));owner.setPacketIncident(field);
-      const lit=await withGpuErrorScopes(d,'native packet raster depth mode '+depthMode,()=>draw(1,{...settings,...overrides}));
+      const current={...settings,...overrides};
+      const before=stamp;
+      const held=await draw(1,current);
+      owner.submitMaterialQuery(1,(_,frame)=>{stamp=frame.identity;});
+      if(before&&before.materialStamp!==stamp.materialStamp)assert.equal(held.state.packetIncident.effective,'legacy-light','same-step coefficient edit invalidates an older result');
+      d.queue.writeBuffer(radiance,0,new Float32Array([0,green,0,1]));owner.setPacketIncident({...field,identity:stamp});
+      const lit=await withGpuErrorScopes(d,'native packet raster depth mode '+depthMode,()=>draw(1,current));
       assert.equal(lit.state.packetIncident.effective,'packet-incident-only');
       assert.deepEqual(lit.records,paused.records,'incident feedback does not modify carried material or captured light');
       return pixels();

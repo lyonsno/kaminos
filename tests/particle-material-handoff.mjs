@@ -42,3 +42,15 @@ test('material queries borrow the live buffers, refuse a stale step, and replace
  const next=handoff.submit(18,(_,input)=>assert.equal(input.coverage.kind,'emitter-born'));
  assert.notEqual(next.identity.epoch,first.identity.epoch);
 });
+
+test('native optical source stamp changes for a paused material edit, but not a camera or viewport edit',()=>{
+ const stamp=(patch={},materials={})=>particle.particleLightMaterialStamp(
+  particle.opticalParticleSettings({profileMode:1,...patch}),materials);
+ const initial=stamp();
+ assert.equal(stamp({targetScale:.5,pixelFloor:3,maxFootprint:5,lockIntegrationView:true}),initial);
+ for(const changed of [{radius:.6},{stretch:4},{flowAlignment:.8},{expansion:2},{gain:2},{emissionFalloff:4},{extinctionEdgeSoftness:.9},{lifeFade:.7}])
+  assert.notEqual(stamp(changed),initial,JSON.stringify(changed));
+ assert.notEqual(stamp({},{density:2}),initial);
+ assert.notEqual(stamp({},{extinction:3}),initial);
+ assert.equal(stamp({},{density:1,extinction:2}),initial);
+});

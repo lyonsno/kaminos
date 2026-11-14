@@ -2,6 +2,7 @@ const u32=(value,min=0)=>Number.isSafeInteger(value)&&value>=min&&value<=0xfffff
 export function checkedOpticalPacketIncident(field,source,limits,storageUsage){
  if(field===null)return null;
  if(!source||field?.identity?.epoch!==source.epoch)throw Error('Packet incident field belongs to a different material epoch');
+ if(field.identity.materialStamp!==source.materialStamp)throw Error("Packet incident field material stamp is obsolete");
  const {identity,centers,radiance,receiverCount,grid,maxAgeSteps=1}=field;
  if(!u32(identity.step)||!u32(identity.frame,1)||identity.step>source.step||identity.frame>source.frame)throw Error('Packet incident field identity is invalid or in the future');
  if(![0,1].includes(maxAgeSteps)||!u32(receiverCount,1))throw Error('Invalid packet incident count or max age');
@@ -18,10 +19,10 @@ export function checkedOpticalPacketIncident(field,source,limits,storageUsage){
  return {identity:{...identity},centers,radiance,receiverCount,maxAgeSteps,cells,grid:{origin:[...grid.origin],dims:[...grid.dims],pitch:grid.pitch}};
 }
 
-export function opticalPacketIncidentFreshness(field,epoch,step){
+export function opticalPacketIncidentFreshness(field,epoch,step,materialStamp){
  if(!field)return {effective:'legacy-light'};
  const receipt={source:field.identity,ageSteps:step-field.identity.step,maxAgeSteps:field.maxAgeSteps,receivers:field.receiverCount};
- return field.identity.epoch===epoch&&receipt.ageSteps>=0&&receipt.ageSteps<=field.maxAgeSteps
+ return field.identity.epoch===epoch&&field.identity.materialStamp===materialStamp&&receipt.ageSteps>=0&&receipt.ageSteps<=field.maxAgeSteps
   ?{effective:'packet-incident-only',...receipt}
   :{effective:'legacy-light',reason:'packet-source-expired',...receipt};
 }
@@ -93,8 +94,8 @@ export function createPacketIncidentGather(device,particleWgsl,retire){
  let field=null,heads=null,links=null,result=null,index=null,gather=null,uniform=null;
  return {
   set(next,source){field=checkedOpticalPacketIncident(next,source,device.limits,GPUBufferUsage.STORAGE);},
-  encode(encoder,{identity,step,particles,slots}){
-   const receipt=opticalPacketIncidentFreshness(field,identity,step);
+  encode(encoder,{identity,step,materialStamp,particles,slots}){
+   const receipt=opticalPacketIncidentFreshness(field,identity,step,materialStamp);
    if(receipt.effective!=='packet-incident-only')return receipt;
    if(!index){
     const module=device.createShaderModule({label:'particle packet incident overlap lookup',code:particleWgsl+PACKET_INCIDENT_LOOKUP_WGSL});
