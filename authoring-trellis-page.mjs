@@ -202,32 +202,41 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
       return view;
     },
     stop(){if(!active||!abort||abort.signal.aborted)return false;abort.abort(new DOMException('TRELLIS stopped','AbortError'));set({status:'stopping',canStop:false,progress:'Stopping at the next GPU step…'});return true;},
+    discardPending(reason='TRELLIS output belongs to an obsolete command'){
+      if(active)throw Error('Generation is already running');
+      state.pending=null;set({status:'stopped',error:String(reason),stage:null,canStop:false});
+    },
     async retryPersistence(){
       if(active)throw Error('Generation is already running');if(!state.pending)throw Error('No generated output needs saving');
       active=true;try{return await storePending();}catch(error){set({status:'failed',error:`persistence: ${error.message}`});throw error;}finally{active=false;publish();}
     },
     async run(input){
+      const commandSignal=input?.signal;commandSignal?.throwIfAborted();
       if(active)throw Error('Generation is already running');
       if(state.pending)throw Error('Save the retained generated output before another run');
       // The selected image itself: the page prepares it (alpha, or browser U2Net for a photo).
       const cutout=input?.source;if(!cutout)throw Error('Choose a source image');
       const reason=unavailable();if(reason)throw Error(reason);
       active=true;abort=new AbortController();started=now();let phase='inference';
+      const cancelCommand=()=>abort.abort(commandSignal.reason);
+      commandSignal?.addEventListener('abort',cancelCommand,{once:true});if(commandSignal?.aborted)cancelCommand();
       set({status:'running',error:null,inputPreview:null,stage:'Reading the image',canStop:true,progress:'Starting TRELLIS in this page…'});
       const label=(input.label||input.name||'Generated').replace(/\.[^.]+$/,'');
       try{
         const out=await runPage({image:{source:cutout},label,signal:abort.signal,onInput:used=>set({inputPreview:{...used,input:input.source}}),onPhase:event=>{
           const stage=trellisPageStage(event?.phase);set({stage,progress:`${stage} · ${elapsed()}`});}});
+        commandSignal?.throwIfAborted();
         state.pending={glb:out.glb,generation:{...out.generation,input:{...out.generation?.input,source:input.source}},label:out.label||label,surfelGlb:out.surfelGlb??null,surfels:out.surfels??null,levelInputs:out.levelInputs??null};
         phase='persistence';return await storePending();
       }catch(error){
         // A clean stop is the cancellation itself; a release or settlement failure met while
         // stopping is still a failure (the run may hold resources).
         const cancelled=error===abort.signal.reason||error?.name==='AbortError';
+        if(commandSignal?.aborted)state.pending=null;
         if(abort.signal.aborted&&cancelled&&phase!=='persistence'){set({status:'stopped',error:null,stage:null,progress:'TRELLIS stopped. Your scene is unchanged.'});return null;}
         // Decoding succeeded and mesh finishing failed: keep the surfels built before cleanup, saved
         // through the same pending/retry path, with the mesh failure as the run's outcome.
-        const kept=phase==='inference'&&!cancelled?error?.trellisSurfelsRun:null;
+        const kept=phase==='inference'&&!cancelled&&!commandSignal?.aborted?error?.trellisSurfelsRun:null;
         if(kept?.surfelGlb||kept?.levelInputs){
           const message=error?.message||String(error);
           state.pending={glb:null,generation:{...kept.generation,input:{...kept.generation?.input,source:input.source}},label:kept.label||label,
@@ -236,7 +245,7 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
           throw error;
         }
         set({status:'failed',error:`${phase}: ${error?.message||error}`,stage:null});throw error;
-      }finally{active=false;abort=null;state.canStop=false;publish();}
+      }finally{commandSignal?.removeEventListener('abort',cancelCommand);active=false;abort=null;state.canStop=false;publish();}
     },
   };
 }

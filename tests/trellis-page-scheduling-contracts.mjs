@@ -1,7 +1,8 @@
 // kaminos-test: node
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';import {webcrypto}from 'node:crypto';
+import {createTrellisAuthoringOperation} from '../authoring-trellis-operation.mjs';
 test('the actual page caller uses native-style finishing by default and forwards scheduling and atlas size',async()=>{
- const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8'),a=html.indexOf('  const trellisPageRunInner=async('),b=html.indexOf('  // Page TRELLIS is reserved',a);
+ const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8'),a=html.indexOf('  const trellisOperation='),b=html.indexOf('  // Page TRELLIS is reserved',a);
  assert.ok(a>0&&b>a);let received,finishing,unwrapOptions;const histories=[],captures=[],finishes=[];
  const device={identity:'actual-app-device'};
  const context={crypto:webcrypto,URLSearchParams,console,Uint8Array,Float32Array,ArrayBuffer,Error,Worker:class{},fetch:async()=>({ok:true,json:async()=>({trellisPage:{mounted:true}})}),appGpuHost:async()=>({}),
@@ -11,7 +12,9 @@ test('the actual page caller uses native-style finishing by default and forwards
    runTrellisInPage:async options=>{received=options;options.onPreview?.({runId:options.runId});return {runId:options.runId,previewDelivery:{status:'expired'},glb:new ArrayBuffer(12),route:'trellis2.image-generation.webgpu.v0',timing:{scheduling:{kind:'per-duty-fence-task',gpuDrains:95}}};}
   }:path.includes('mesh-cleanup')?{createBrowserMeshPostprocess:options=>{finishing=options;return async m=>m;}}:{createWasmXatlasUnwrapper:options=>{unwrapOptions=options;return async m=>m;}}};
  context.appGpuHost=async()=>({device});
- vm.runInNewContext(html.slice(a,b).replaceAll('import(','loadModule(')+'\nthis.run=trellisPageRunInner;',context);
+ context.window={};
+ context.createTrellisAuthoringOperation=options=>createTrellisAuthoringOperation({...options,request:context.fetch,loadModule:context.loadModule,WorkerClass:context.Worker});
+ vm.runInNewContext(html.slice(a,b)+'\nthis.run=trellisPageRunInner;',context);
  let previewRunId;const onPreview=p=>{previewRunId=p.runId;};
  const result=await context.run({pixels:new Float32Array(512*512*3),scheduling:'per-duty-fence-task',textureSize:4096,onPreview});
  assert.equal(typeof received.onPreview,'function');assert.equal(captures.length,1,'actual caller sends the real event to the product history before forwarding it');
