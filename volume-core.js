@@ -13681,6 +13681,8 @@ export function createKaminosVolumePrototype({
   function opticalParticleMaterialContext() {
     return [state.active,deviceRetired,state.particleSourceGeneration,state.thermalFluidAllocationId,state.fluidStateResetCount,
       fluidBuffers[currentFluid],reactantTextures[currentFluid],controlsSnapshot,particleSettings,
+      sceneTransportConsumer,productFrameOwner,volumePresentationModeEffective,debugRaymarchShaderSpecialization,
+      uniforms[368],state.reactantCombustion?.effective?.model,state.worldSmoke?.effective,state.joinedBoundary?.admitted,
       productTransform.scale,...productTransform.translate];
   }
   function distributedFrameIsUsable(source=sceneVolumeSource?.describe()){
