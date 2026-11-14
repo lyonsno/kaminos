@@ -1,7 +1,7 @@
 // kaminos-test: node
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {withKaminosGpu,evalWgslBatch} from '../tools/shader-herder.mjs';
+import {withKaminosGpu,evalWgslBatch,withGpuErrorScopes} from '../tools/shader-herder.mjs';
 import {PARTICLE_STATE_WGSL} from '../volume-particle-state.mjs';
 test('actual reactants burn stoichiometrically, release heat, make soot and freeze at zero simulation time',async()=>{
  await withKaminosGpu(async ctx=>{
@@ -32,7 +32,7 @@ test('production particle update transports actual fine flow, preserves paused s
   const births=d.createBuffer({size:n*64,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
   const sourceUniform=d.createBuffer({size:240,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
   const grid=actualGrid(d,{velocity:[.1,.2,.3]}),{fine,reactants}=grid;
-  const rows=new Float32Array(n*16);rows.set([4,2,1,1,0,0,0,1,-.5,.5,1,1,4,2,1,0]);d.queue.writeBuffer(births,0,rows);
+  const rows=new Float32Array(n*16);rows.set([5,2,1,1,0,0,0,1,-.5,.5,1,1,4,2,1,0]);d.queue.writeBuffer(births,0,rows);
   const identity=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];const sf=new Float32Array(60);sf.set(identity);sf.set([0,2,1,0],28);d.queue.writeBuffer(sourceUniform,0,sf);
   const target=d.createTexture({size:[4,4],format:'rgba8unorm',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC});
   const depth=d.createTexture({size:[1,1],format:'depth32float',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING});
@@ -84,7 +84,7 @@ test('production particle update transports actual fine flow, preserves paused s
    try{
     owner.setPacketIncident({identity:stamp,centers:center,radiance,receiverCount:1,grid:{origin:[-1,-1,-1],dims:[2,2,2],pitch:1}});
     for(const depthMode of [0,1]){
-     const lit=await draw(1,{depthMode});
+     const lit=await withGpuErrorScopes(d,'native packet raster depth mode '+depthMode,()=>draw(1,{depthMode}));
      assert.equal(lit.state.packetIncident.effective,'packet-incident-only');
      assert.deepEqual(lit.records,paused.records,'incident feedback does not modify carried material or captured light');
     }
