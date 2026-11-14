@@ -4309,7 +4309,7 @@ function createPageSceneDocumentSession(options = {}) {
     post:body=>fetch('/api/save-scene',{method:'POST',headers:{'Content-Type':'application/json'},body}),
     readAddress:()=>({origin:location.origin,workspace:authoringWorkspace?.state().mode??null,owner:readOwnerExperimentAddress(location)}),
     restoreUrl:(data,filename,address)=>{
-      const owner=sceneOwnerExperimentAddress(data.opticalParticleSetup,address.owner);
+      const owner=sceneOwnerExperimentAddress(data.opticalParticleSetup,data.opticalParticleSetup?null:address.owner);
       return compositionRestoreUrl(data.composition,filename,address.origin,address.workspace??(data.opticalParticleSetup?'workbench':null),owner);
     },
     apply:async(...args)=>{

@@ -82,3 +82,12 @@ test('saved optical settings restore from scene bytes without the original Workb
  const override=new URL(incoming);const other=await startup(override,{documentData});
  assert.deepEqual((await openActualEntry(destination(other.redirects[0]))).opened,{id:'fixture/owner',inputs});
 });
+
+test('File Open chooses the incoming scene tune over the owner of the departing page',()=>{
+ const start=html.indexOf('    restoreUrl:(data,filename,address)=>{'),end=html.indexOf('    apply:async',start);
+ const restoreUrl=vm.runInNewContext('({'+html.slice(start,end)+'}).restoreUrl',{compositionRestoreUrl,...ownerAddress});
+ const address={origin:'http://localhost',workspace:'workbench',owner:{id:'old-experiment',inputsText:'{"discard":true}'}};
+ const data={composition,opticalParticleSetup:{particles:{expansion:1.73}}};
+ assert.deepEqual(ownerAddress.readOwnerExperimentAddress(new URL(restoreUrl(data,'incoming.kaminos.json',address))),{id:'optical-particles',inputsText:'{"particles":{"expansion":1.73}}'});
+ assert.deepEqual(ownerAddress.readOwnerExperimentAddress(new URL(restoreUrl({composition},'older.kaminos.json',address))),address.owner);
+});
