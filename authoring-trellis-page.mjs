@@ -167,7 +167,7 @@ export async function createTrellisPageCheckpoints({config,fetch=globalThis.fetc
 
 // The Generate drawer's service for TRELLIS in this page: same read/run/stop/retryPersistence
 // shape as the SF3D and queued TRELLIS services. The input is the selected image.
-const STAGES=[[/^(dinov3|load-dinov3|checkpoint-loading)/,'Reading the image'],[/^sparse-structure|^occupancy/,'Shape structure'],
+const STAGES=[[/^waiting-for-gpu$/,'Waiting for GPU'],[/^(dinov3|load-dinov3|checkpoint-loading)/,'Reading the image'],[/^sparse-structure|^occupancy/,'Shape structure'],
   [/^low-resolution-shape|^high-resolution-shape|learned-geometry/,'Shape detail'],[/texture-sampling|material-decoding/,'Texture'],
   [/^post-model-(mesh-extraction|material-readback|mesh-postprocess)/,'Cleaning the mesh'],[/^post-model-uv/,'Unwrapping UVs'],[/^post-model-(texture-bake|pbr-glb)/,'Baking textures']];
 export function trellisPageStage(phase){return STAGES.find(([pattern])=>pattern.test(String(phase||'')))?.[1]??'Generating';}

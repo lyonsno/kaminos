@@ -9,17 +9,22 @@ const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {
 const glb=new Uint8Array([103,108,84,70,2,0,0,0,12,0,0,0]).buffer;
 function fixture({run,save}={}){
  assert.equal(typeof module.createTrellisSceneWorkerAdapter,'function','TRELLIS needs a real worker command consumer');
- let runs=0,saves=0,disposed=0;const progress=[];
+ let runs=0,saves=0,disposed=0;const progress=[],leases=[];
  const adapter=module.createTrellisSceneWorkerAdapter({appHost:async()=>({unsettledRuns:()=>[]}),
   availability:async()=>({status:'available'}),
   operation:{async run(options){runs++;await run?.(options);return {glb,label:options.label,generation:{runId:'model-run',input:{source:options.image.source}}};},async retire(){disposed++;}},
   persistence:{async persist(out,context){saves++;context.assertCurrent();await save?.(out);return {source:'/stored.glb',name:out.label,generation:out.generation};},async retire(){}},
-  lease:async(_options,work)=>({result:await work(),lease:{status:'unconfigured'}})});
+  lease:async(options,work)=>{leases.push(options);options.onWait?.({status:'waiting',queueHeld:true});return {result:await work(),lease:{status:'unconfigured'}};}});
  const ctx=(epoch={scene:0})=>{const controller=new AbortController();return {requestId:crypto.randomUUID(),signal:controller.signal,controller,
   epoch:()=>epoch,assertCurrent(){controller.signal.throwIfAborted();},report:value=>progress.push(value),withFrames:work=>work()};};
- return {adapter,ctx,progress,runs:()=>runs,saves:()=>saves,disposed:()=>disposed};
+ return {adapter,ctx,progress,leases,runs:()=>runs,saves:()=>saves,disposed:()=>disposed};
 }
 const input={source:'/api/read?root=image-inbox&path=a.png',name:'a.png'};
+test('ordinary worker generation selects existing queued page-lease admission and reports waiting truthfully',async()=>{
+ const h=fixture();await h.adapter.commands['mesh.generate'](input,h.ctx());
+ assert.equal(h.leases[0].admission,'queue','automated page generation must join FIFO instead of claiming around waiting jobs');
+ assert(h.progress.some(row=>/Waiting for GPU/i.test(row.stage??'')),'waiting for admission is not model execution');await h.adapter.retire();
+});
 test('actual authoring service accepts external cancellation before input and after completed producer bytes',async()=>{
  for(const pre of [true,false]){
   let runs=0,saves=0;const controller=new AbortController();

@@ -25,7 +25,7 @@ export function createTrellisSceneWorkerAdapter({appHost,request=globalThis.fetc
    const post=async body=>{const response=await request('/api/gpu-lease',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const value=await response.json();if(!response.ok)throw Error(value.error||`GPU lease HTTP ${response.status}`);return value;};
    let outcome;
-   try{outcome=await lease({post,runId:crypto.randomUUID(),route:'trellis2.image-generation.webgpu.v0',signal:options.signal,
+   try{outcome=await lease({post,runId:crypto.randomUUID(),route:'trellis2.image-generation.webgpu.v0',signal:options.signal,admission:'queue',
     unsettledWork:()=>app.unsettledRuns(),onWait:wait=>options.onPhase?.({phase:'waiting-for-gpu',heldBy:wait.heldBy})},
     ()=>operation.run({...options,assertCurrent:()=>ctx.assertCurrent()}));}
    catch(error){if(error?.gpuRouteHeld||['kept-blocking','release-failed','withdrawal-failed'].includes(error?.greenroomHandback?.state))held=error;throw error;}
