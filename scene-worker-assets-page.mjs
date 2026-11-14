@@ -7,10 +7,13 @@ export function createSceneWorkerAssetsController({page,changed=()=>{},report=()
  let state={roots:[],root:'generated-meshes',path:'',entries:[],selected:null,preparation:null,loading:false,adding:false,error:null,results:[]},revision=-1,pending=0;
  const read=options=>options?.selectionOnly?{selected:state.selected}:{...state,loading:state.loading||pending>0};
  const record=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
+ const optionalString=value=>value==null||typeof value==='string';
+ function validSelected(value){return value===null||(record(value)&&(value.generation==null||(record(value.generation)&&optionalString(value.generation.runId)&&optionalString(value.generation.route))));}
+ function validPreparation(value){return value==null||(record(value)&&(value.status!=='complete'||(record(value.value)&&record(value.value.prepared)&&typeof value.value.prepared.source==='string')));}
  function validState(value){
   return record(value)&&Array.isArray(value.roots)&&value.roots.every(root=>record(root)&&typeof root.id==='string')
    &&Array.isArray(value.entries)&&value.entries.every(entry=>record(entry)&&(value.root!=='agent-work'||(record(entry.agent)&&typeof entry.agent.id==='string')))
-   &&Array.isArray(value.results)&&value.results.every(record)&&(value.selected===null||record(value.selected))
+   &&Array.isArray(value.results)&&value.results.every(record)&&validSelected(value.selected)&&validPreparation(value.preparation)
    &&typeof value.root==='string'&&typeof value.path==='string'&&typeof value.loading==='boolean'&&typeof value.adding==='boolean'
    &&(value.error===null||typeof value.error==='string');
  }

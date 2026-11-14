@@ -52,3 +52,16 @@ test('a failed presentation callback cannot prevent worker requests or strand lo
  for(let i=0;i<2;i++){await c.refresh();assert.equal(c.read().loading,false);assert.match(c.read().error,/view unavailable/);}
  assert.equal(requests,2);
 });
+test('selected generation metadata is checked before rendering or replacing a usable selection',async()=>{
+ let reply;const c=createSceneWorkerAssetsController({page:{request:()=>({completion:Promise.resolve({output:reply})})},changed:state=>{const selected=state.selected;void(!selected?.generation?.runId||!selected.generation.route?.startsWith('trellis'));}});
+ const good={...c.read(),selected:{kind:'image',name:'good.png',source:'/good.png'}};reply={revision:1,state:good};await c.refresh();
+ reply={revision:2,state:{...good,selected:{kind:'image',name:'bad.png',source:'/bad.png',generation:{runId:'run',route:42}}}};
+ await assert.rejects(c.refresh(),/catalog state/);assert.equal(c.read().selected.source,'/good.png');assert.equal(c.read().loading,false);
+ reply={revision:2,state:{...good,selected:{...good.selected,generation:{runId:'run',route:'trellis-test',futureHint:{value:1}}},futureStatus:{value:2}}};
+ assert.equal(await c.refresh(),true);assert.equal(c.read().selected.generation.futureHint.value,1);assert.equal(c.read().futureStatus.value,2);
+});
+test('complete preparation must include the source the drawer renders',async()=>{
+ let reply;const c=createSceneWorkerAssetsController({page:{request:()=>({completion:Promise.resolve({output:reply})})}});const good=c.read();
+ reply={revision:1,state:{...good,preparation:{status:'complete',value:{}}}};await assert.rejects(c.refresh(),/catalog state/);assert.equal(c.read().loading,false);
+ reply={revision:1,state:{...good,preparation:{status:'complete',value:{prepared:{source:'/cutout.png'}}}}};assert.equal(await c.refresh(),true);
+});
