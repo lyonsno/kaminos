@@ -26,6 +26,20 @@ function actualGrid(d,{state=[1,1,.2,3],velocity=[0,0,0]}={}){
  function upload(next=state){const material=new Float32Array(8*16),oxygen=new Float32Array(8*2);for(let i=0;i<8;i++){const s=typeof next==='function'?next([i%2,Math.floor(i/2)%2,Math.floor(i/4)].map(v=>v-.5)):next;material.set([...(typeof velocity==='function'?velocity([i%2,Math.floor(i/2)%2,Math.floor(i/4)].map(v=>v-.5)):velocity),0],i*16);material.set([s[2],s[1],s[0],0],i*16+4);oxygen.set([s[3],.01],i*2);}d.queue.writeBuffer(fine,0,material);d.queue.writeTexture({texture:reactants},oxygen,{bytesPerRow:16,rowsPerImage:2},[2,2,2]);}
  upload();return {fine,reactants,upload,dispose(){fine.destroy();reactants.destroy();}};
 }
+async function readBirthGenerations(device,owner,step){
+ let read;
+ try{
+  const receipt=owner.submitMaterialQuery(step,(encoder,frame)=>{
+   assert.ok(frame.birthGenerations,'current material exposes the GPU birth-generation buffer');
+   assert.equal(frame.birthGenerations.size,frame.slots*4);
+   read=device.createBuffer({size:frame.slots*4,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});
+   encoder.copyBufferToBuffer(frame.birthGenerations,0,read,0,read.size);
+  });
+  assert.equal(receipt.available,true);
+  await read.mapAsync(GPUMapMode.READ);
+  return {epoch:receipt.identity.epoch,values:Array.from(new Uint32Array(read.getMappedRange()))};
+ }finally{if(read){read.unmap();read.destroy();}}
+}
 test('production particle update transports actual fine flow, preserves paused state and renders supported material',async()=>{
  await withKaminosGpu(async({device:d})=>{
   const owner=createOpticalParticles(d),n=16;
@@ -114,6 +128,42 @@ test('production particle update transports actual fine flow, preserves paused s
 
 import {createSplitIntegral,SPLIT_OPTICAL_WGSL} from '../volume-split-integral.mjs';
 import {particleAcquisitionData} from '../volume-particle-acquisition.mjs';
+test('native birth-generation distinguishes legacy and ring replacement from held updates and reset',async()=>{
+ await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw,upload})=>{
+  const rows=new Float32Array(16*16);
+  rows.set([5,2,1,1,0,0,0,1,-.5,.5,1,1,4,2,1,0]);
+  for(const acquisitionMode of [0,1]){
+   const cfg={capacity:1,acquisitionMode,refresh:1};
+   seed(rows);
+   await draw(0,cfg);
+   const first=await readBirthGenerations(d,owner,0);
+   assert.deepEqual(first.values,[1]);
+   assert.equal((await owner.sample()).records[3],1);
+   await draw(0,cfg);
+   assert.deepEqual(await readBirthGenerations(d,owner,0),first,'held draw does not replace a carrier');
+   await draw(1,{...cfg,birthsEnabled:false});
+   assert.deepEqual(await readBirthGenerations(d,owner,1),first,'advection and reaction preserve birth identity');
+   assert.ok((await owner.sample()).records[3]>1,'carrier really advanced');
+   upload(new Float32Array(rows.length));
+   await draw(2,cfg);
+   assert.deepEqual(await readBirthGenerations(d,owner,2),first,'rejected acquisition cannot change identity');
+   upload(rows);
+   await draw(3,cfg);
+   assert.deepEqual(await readBirthGenerations(d,owner,3),{epoch:first.epoch,values:[2]});
+   assert.equal((await owner.sample()).records[3],1,'replacement really wrote the same live slot');
+   await draw(4,{...cfg,birthsEnabled:false,maxAge:1});
+   assert.equal((await owner.sample()).records[3],0,'slot is retired');
+   assert.deepEqual(await readBirthGenerations(d,owner,4),{epoch:first.epoch,values:[2]},'retirement retains the counter, live flag controls admission');
+   owner.reset();
+   assert.equal(owner.submitMaterialQuery(4,()=>assert.fail('old frame after reset')).available,false);
+   await draw(4,{...cfg,birthsEnabled:false});
+   const cleared=await readBirthGenerations(d,owner,4);
+   assert.notEqual(cleared.epoch,first.epoch);
+   assert.deepEqual(cleared.values,[0],'same allocation is cleared under a new epoch');
+  }
+ },{materialQuery:true}));
+});
+
 test('native source-only producer retains intrinsic emission separately and clears uncovered pixels',async()=>{
  await withKaminosGpu(async({device:d})=>{
   const owner=createSplitIntegral(d),arenaLayout=d.createBindGroupLayout({entries:[{binding:39,visibility:GPUShaderStage.FRAGMENT,buffer:{type:'storage'}}]});
@@ -138,7 +188,7 @@ async function opticalFixture(d,run,view={}){
  const target=d.createTexture({size:[4,4],format:'rgba8unorm',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC});const depth=d.createTexture({size:[1,1],format:'depth32float',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING});
  const camera=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,1,1,0,0,0,1,0]);const source={buffer:births,uniform,width:4,height:4,pixels:n,step:0,backtrace:view.backtrace??0,reactionStepScale:view.stepScale??1,viewProj:view.vp??identity};
  const seed=rows=>{d.queue.writeBuffer(births,0,rows);owner.reset();};
- const draw=async(step=0,settings={})=>{source.step=step;const e=d.createCommandEncoder();const dp=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthClearValue:view.depth??1,depthStoreOp:'store'}});dp.end();const measured=view.trace||view.passTrace?new Proxy(e,{get(target,key){if(key==='beginRenderPass')return desc=>{view.passTrace?.push(desc.label);const pass=target.beginRenderPass(desc);return desc.label==='spatial material support'?new Proxy(pass,{get(p,k){const value=p[k];return typeof value==='function'?function(...args){if(k==='draw'||k==='drawIndexed')view.trace?.push({method:k,args});return value.apply(p,args);}:value;}}):pass;};const value=target[key];return typeof value==='function'?value.bind(target):value;}}):e;owner.encode(measured,{view:target.createView(),format:'rgba8unorm',source,fine,reactants,dims:[2,2,2],invViewProj:view.inverse??identity,depthZeroToOne:view.depthZeroToOne??false,settings:{enabled:true,refresh:0,exchangeStrength:0,stateLife:0,...settings},cameraValues:camera,depth,identity:'fixture',gridExtinction:view.gridExtinction,allowUnavailableGridExtinction:view.allowUnavailableGridExtinction,profileWrites:label=>{view.profiles?.push(label);return {};}});const read=d.createBuffer({size:1024,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});e.copyTextureToBuffer({texture:target},{buffer:read,bytesPerRow:256},[4,4]);d.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);const pixels=new Uint8Array(read.getMappedRange().slice(0));read.unmap();read.destroy();return pixels;};
+ const draw=async(step=0,settings={})=>{source.step=step;let publish;const e=d.createCommandEncoder();const dp=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthClearValue:view.depth??1,depthStoreOp:'store'}});dp.end();const measured=view.trace||view.passTrace?new Proxy(e,{get(target,key){if(key==='beginRenderPass')return desc=>{view.passTrace?.push(desc.label);const pass=target.beginRenderPass(desc);return desc.label==='spatial material support'?new Proxy(pass,{get(p,k){const value=p[k];return typeof value==='function'?function(...args){if(k==='draw'||k==='drawIndexed')view.trace?.push({method:k,args});return value.apply(p,args);}:value;}}):pass;};const value=target[key];return typeof value==='function'?value.bind(target):value;}}):e;owner.encode(measured,{view:target.createView(),format:'rgba8unorm',source,fine,reactants,dims:[2,2,2],invViewProj:view.inverse??identity,depthZeroToOne:view.depthZeroToOne??false,settings:{enabled:true,refresh:0,exchangeStrength:0,stateLife:0,...settings},cameraValues:camera,depth,identity:'fixture',gridExtinction:view.gridExtinction,allowUnavailableGridExtinction:view.allowUnavailableGridExtinction,...(view.materialQuery?{materialTransform:{scale:1,translate:[0,0,0]},afterMaterialSubmit:fn=>{publish=fn;}}:{}),profileWrites:label=>{view.profiles?.push(label);return {};}});const read=d.createBuffer({size:1024,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});e.copyTextureToBuffer({texture:target},{buffer:read,bytesPerRow:256},[4,4]);d.queue.submit([e.finish()]);publish?.();await read.mapAsync(GPUMapMode.READ);const pixels=new Uint8Array(read.getMappedRange().slice(0));read.unmap();read.destroy();return pixels;};
  try{await run({owner,seed,draw,setMaterial:grid.upload,upload:rows=>d.queue.writeBuffer(births,0,rows)});}finally{owner.dispose();births.destroy();uniform.destroy();grid.dispose();target.destroy();depth.destroy();}
 }
 test('optically negligible carriers cannot dilute an overlapping live carrier',async()=>{
@@ -561,13 +611,13 @@ test('emitter births use admitted supply without a ray batch, and light refresh 
   const emitter={lo:[0,0,0],span:[1,1,1],uniformValues,aperture,noise,collection,solid,sourceStep:0};
   const source={buffer:dummy,uniform:sourceUniform,width:1,height:1,pixels:0,samples:0,outputWidth:32,outputHeight:32,backtrace:1,viewProj:emitterVP};
   async function draw(step,settings={},appearanceEdit=null,material={},capture=false){
-   const e=d.createCommandEncoder(),dp=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthClearValue:1,depthStoreOp:'store'}});dp.end();
+   let publish;const e=d.createCommandEncoder(),dp=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthClearValue:1,depthStoreOp:'store'}});dp.end();
    owner.encode(e,{view:target.createView(),format:'rgba8unorm',source:{...source,step},fine:grid.fine,reactants:grid.reactants,dims:[2,2,2],invViewProj:identity,
      settings:{enabled:true,acquisitionMode:2,capacity:4,emitterBirthsPerStep:4,lightRefreshEvery:3,acquisitionEnabled:false,exchangeEnabled:false,groupingEnabled:false,transportEnabled:false,reactionEnabled:false,stateLife:0,...settings},
-     material,emitter:{...emitter,sourceStep:step-1},incident:{texture:light,masks:mask,planes,generation:step,frame:step,appearanceEdit},cameraValues:camera,depth,identity:'emitter-fixture'});
+     material,emitter:{...emitter,sourceStep:step-1},incident:{texture:light,masks:mask,planes,generation:step,frame:step,appearanceEdit},cameraValues:camera,depth,identity:'emitter-fixture',materialTransform:{scale:1,translate:[0,0,0]},afterMaterialSubmit:fn=>{publish=fn;}});
    const read=capture?d.createBuffer({size:8192,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ}):null;
    if(read)e.copyTextureToBuffer({texture:target},{buffer:read,bytesPerRow:256},[32,32]);
-   d.queue.submit([e.finish()]);
+   d.queue.submit([e.finish()]);publish();
    if(read){await read.mapAsync(GPUMapMode.READ);const pixels=new Uint8Array(read.getMappedRange().slice(0));read.destroy();return pixels;}
    await d.queue.onSubmittedWorkDone();return owner.sample();
   }
@@ -575,7 +625,9 @@ test('emitter births use admitted supply without a ray batch, and light refresh 
   try{
    illuminate(2);
    const initial=await draw(0);assert.ok(initial.records.every(x=>x===0),'presentation alone cannot emit');
-   const born=await draw(1);const first=cohort(born);
+   assert.deepEqual((await readBirthGenerations(d,owner,0)).values,[0,0,0,0]);
+   const born=await draw(1);const first=cohort(born),birthKeys=await readBirthGenerations(d,owner,1);
+   assert.deepEqual(birthKeys.values,[1,1,1,1]);
    assert.equal(born.state.freshSamples,0);
    assert.equal(first.filter(p=>p[3]===1).length,4);
    assert.ok(first.every(p=>p.slice(0,3).every(x=>x>=-1&&x<0)&&p[20]>.79));
@@ -583,8 +635,10 @@ test('emitter births use admitted supply without a ray batch, and light refresh 
    illuminate(7);
    const held=await draw(2);assert.deepEqual(cohort(held).map(p=>p.slice(0,3)),first.map(p=>p.slice(0,3)),'a full pool cannot overwrite existing carriers');
    assert.equal((await owner.statistics()).droppedBirths,4);
+   assert.deepEqual(await readBirthGenerations(d,owner,2),birthKeys,'dropped emitter births do not change identities');
    assert.ok(cohort(held).every(p=>p[3]===2&&p[4]===2));
    const paused=await draw(2,{lightRefreshEvery:1,emitterBirthsPerStep:2});assert.deepEqual(paused.records,held.records);
+   assert.deepEqual(await readBirthGenerations(d,owner,2),birthKeys);
    // Hold the parcels and remove all light so readback isolates optical
    // coverage. A ceiling may move extinction inward but must not erase the
    // represented column weight. Use an unclipped emitter and low optical
@@ -633,6 +687,12 @@ test('emitter births use admitted supply without a ray batch, and light refresh 
    assert.deepEqual(cohort(editedLight).map(p=>[...p.slice(0,4),...p.slice(8)]),cohort(refreshed).map(p=>[...p.slice(0,4),...p.slice(8)]));
    illuminate(12);
    assert.deepEqual((await draw(3,{lightRefreshEvery:0},11)).records,editedLight.records,'the same edit does not resample on subsequent draws');
+   const expired=await draw(4,{birthsEnabled:false,maxAge:1});
+   assert.ok(cohort(expired).every(p=>p[3]===0));
+   assert.deepEqual(await readBirthGenerations(d,owner,4),birthKeys);
+   const reborn=await draw(5);
+   assert.ok(cohort(reborn).every(p=>p[3]===1));
+   assert.deepEqual(await readBirthGenerations(d,owner,5),{epoch:birthKeys.epoch,values:[2,2,2,2]});
    illuminate(7);owner.reset();
    await draw(3,{emitterBirthsPerStep:2});
    const lowerRate=cohort(await draw(4,{emitterBirthsPerStep:2,lightRefreshEvery:0})).filter(p=>p[3]>0);

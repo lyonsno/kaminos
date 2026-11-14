@@ -64,6 +64,7 @@ fn emitterRandom(seed:u32)->f32{return f32(hash32(seed)>>8u)/16777216.0;}
  let slot=atomicLoad(&freeSlots[i+1u]);
  particles[slot]=Particle(vec4<f32>(position,1),vec4<f32>(0),vec4<f32>(intrinsic,material.x),
    vec4<f32>(0),vec4<f32>(pitch,0,1,thickness),material);
+ recordParticleBirth(slot);
 }
 `;
 

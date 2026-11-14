@@ -6,10 +6,10 @@ import * as particle from '../volume-optical-particles.mjs';
 test('material queries borrow the live buffers, refuse a stale step, and replace the generation on reset',()=>{
  const submitted=[],finish={},device={createCommandEncoder:()=>({finish:()=>finish}),queue:{submit:commands=>submitted.push(commands)}};
  const handoff=particle.createParticleMaterialHandoff(device);
- const particles={label:'actual particles'},options={},fine={},sourceOptions={};
+ const particles={label:'actual particles'},birthGenerations={label:'actual generations'},options={},fine={},sourceOptions={};
  const transform={scale:2,translate:[1,3,5]};
  let current=true;
- const frame={isCurrent:()=>current,step:18,frame:23,slots:130,dims:[4,5,4],transform,particles,options,fine,sourceOptions,acquisitionMode:1};
+ const frame={isCurrent:()=>current,step:18,frame:23,slots:130,dims:[4,5,4],transform,particles,birthGenerations,options,fine,sourceOptions,acquisitionMode:1};
  assert.equal(handoff.submit(18,()=>assert.fail('absent frame')).available,false);
  handoff.publish(frame);
  transform.translate[0]=99;
@@ -17,6 +17,7 @@ test('material queries borrow the live buffers, refuse a stale step, and replace
  assert.deepEqual(submitted,[]);
  const first=handoff.submit(18,(encoder,input)=>{
   assert.equal(input.particles,particles);
+  assert.equal(input.birthGenerations,birthGenerations);
   assert.equal(input.options,options);
   assert.equal(input.fine,fine);
   assert.equal(input.sourceOptions,sourceOptions);
