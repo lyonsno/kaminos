@@ -15,7 +15,7 @@ export function createSceneDocumentSession({
     records.assertReloadable(plan.objects);
     return plan;
   }
-  function bind(value) { filename = value; revision++; bound(value); }
+  function bind(value, savedDocument) { filename = value; revision++; bound(value,savedDocument); }
   const failure = error => ({ok:false, error:error.message || String(error)});
 
   async function persist(document, target, {saveAsName = null, overwrite = false} = {}, address = structuredClone(readAddress())) {
@@ -44,7 +44,7 @@ export function createSceneDocumentSession({
       if (result.ok) {
         // A successful artifact survives a later document transition, but it
         // cannot claim that newer document's overwrite target or address.
-        if (revision === startRevision && requests.current() === loadGeneration && !state().blocked) bind(result.filename);
+        if (revision === startRevision && requests.current() === loadGeneration && !state().blocked) bind(result.filename,result.document);
         saved(result);
       }
     } catch (error) { result = failure(error); status(`Save failed: ${result.error}`); }

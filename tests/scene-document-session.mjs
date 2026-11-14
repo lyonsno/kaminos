@@ -162,3 +162,15 @@ test('animate render hold pauses ordinary rendering while sceneDocument is apply
  assert.equal(g.session.state().phase,'idle');
  assert.equal(isHeld(g.session),false,'failed restoration that remains save-blocked in idle phase must not permanently hold rendering');
 });
+
+test('a current Save As retains the captured tune for subsequent saves after closing its owner',async()=>{
+ const f=fixture();
+ const scene={...document(),opticalParticleSetup:{particles:{expansion:1.73}}};
+ const existing=f.config.bound;
+ let retained=null;
+ const session=createSceneDocumentSession({...f.config,bound(name,submitted){existing(name);if(submitted)retained=submitted.opticalParticleSetup;}});
+ assert.equal(await session.save(scene,null),true);
+ assert.deepEqual(retained,scene.opticalParticleSetup);
+ assert.equal(await session.save({...document(),opticalParticleSetup:retained}),true);
+ assert.deepEqual(f.posts[1].opticalParticleSetup,scene.opticalParticleSetup);
+});
