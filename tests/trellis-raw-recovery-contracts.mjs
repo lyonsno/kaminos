@@ -2,9 +2,9 @@
 import {execFileSync} from 'node:child_process';import {webcrypto,createHash}from 'node:crypto';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs/promises';
 import {runTrellisInPage,createTrellisPageAuthoringGeneration}from '../authoring-trellis-page.mjs';
-const html=await fs.readFile(new URL('../index.html',import.meta.url),'utf8');
-const a=html.indexOf('const persistTrellisPageRun=async out=>{'),b=html.indexOf('\n  // TRELLIS in this page',a);
-const decoration=html.slice(html.indexOf('      // Decoding succeeded and mesh finishing failed:'),html.indexOf('      if(error?.trellisCapture)'));
+import {createTrellisAuthoringPersistence} from '../authoring-trellis-persistence.mjs';
+const operation=await fs.readFile(new URL('../authoring-trellis-operation.mjs',import.meta.url),'utf8');
+const decoration=operation.slice(operation.indexOf('      // Decoding succeeded and mesh finishing failed:'),operation.indexOf('      if(error?.trellisCapture)'));
 const fields=()=>({decode:{vertices:new Float32Array([0,0,0,1,0,0,0,1,0]),triangles:new Uint32Array([0,1,2])},materialFields:{features:new Float32Array([1,-1,.5,0,.8,1]),coordinates:new Int32Array([800,900,1000]),resolution:1024}});
 async function actualFinishingFailure(inputs){
  const output={geometry:{coordinates:{id:'gc'}},material:{coordinates:{id:'mc'},features:{id:'mf'},resolution:1024}};
@@ -36,11 +36,10 @@ with tempfile.TemporaryDirectory() as d:
   catch(error){return {ok:false,json:async()=>({error:error.stderr.toString()})};}
   stored.push({glb,generation:result.generation});return {ok:true,json:async()=>({result})};
  };
- const persistence=html.slice(html.indexOf('  const persistGeneratedMesh=async'),b).replace('const loadModule=specifier=>import(specifier);','const loadModule=moduleLoader;');
- const persist=Function('fetch','crypto','window','setInfo','console','moduleLoader',`${persistence};return persistTrellisPageRun;`)(fetch,webcrypto,{},()=>{},{warn(){}},s=>import(new URL('../'+s.replace('./',''),import.meta.url)));
+ const {persist}=createTrellisAuthoringPersistence({request:fetch});
  const service=createTrellisPageAuthoringGeneration({availability:()=>({status:'available'}),
   async runPage(){runs++;const error=await actualFinishingFailure(inputs);
-   Function('error','signal','label','runId','imageSha256','image','pixels','preparation','pack',decoration)(error,null,'elbow','run-raw','b'.repeat(64),{source:'/original.png'},null,null,{manifestSha256:'c'.repeat(64)});throw error;},
+   Function('error','signal','label','runId','imageSha256','image','pixels','preparation','pack','target',decoration)(error,null,'elbow','run-raw','b'.repeat(64),{source:'/original.png'},null,null,{manifestSha256:'c'.repeat(64)},'this-page');throw error;},
   persist:(glb,generation,label,extra)=>persist({glb,generation,label,...extra})});
  await assert.rejects(service.run({source:'/original.png',label:'elbow'}),/UV unwrap failed/);
  if(retry){assert.equal(service.busy(),true,'raw inputs remain pending after failed storage');diskFails=false;await service.retryPersistence();}
