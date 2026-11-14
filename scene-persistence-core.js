@@ -189,6 +189,7 @@ export function planSceneRestore(data, { allowEmpty = false } = {}) {
 export function buildSceneDocument({
   timestamp = new Date().toISOString(),
   objects = [],
+  transientObjectIds = [],
   groups = [],
   materialLibrary = undefined,
   activeObjectId = null,
@@ -215,7 +216,10 @@ export function buildSceneDocument({
   backdrop = false,
   backdropBrightness = undefined,
 } = {}) {
-  const sceneObjects = objects.map(normalizeSceneObjectRecord);
+  const transient=new Set(transientObjectIds);
+  const sceneObjects = objects.filter(record=>!transient.has(record.id)).map(normalizeSceneObjectRecord);
+  if(transient.has(activeObjectId))activeObjectId=null;
+  if(Array.isArray(selectionIds))selectionIds=selectionIds.filter(id=>!transient.has(id));
   const liquidSetup = normalizeLocalLiquidSetup(localLiquid);
   if (sceneObjects.some(record => record.type === LOCAL_LIQUID_EMITTER_TYPE) && !liquidSetup) {
     throw new Error('Authored water emitters require a saved local liquid domain');

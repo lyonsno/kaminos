@@ -21,3 +21,18 @@ test('one native scene transform drives all optical receivers independently from
  owner={setOpticalParticleView:v=>calls.push(v)};h.sync();assert.equal(calls.length,start+2,'replacement runtime receives the same current optical pose');
  h.disable();assert.equal(calls.at(-1),null);assert.equal(h.view(),null);h.root.rotation.y=0;h.sync();assert.equal(calls.at(-1),null);h.enable();assert.ok(h.view());
 });
+
+import {buildSceneDocument} from '../scene-persistence-core.js';
+import {defaultSceneRecordOperations} from '../scene-record-operations.mjs';
+test('native optical handles stay selectable but their pose is saved only in the experiment setup',()=>{
+ const helper={id:'arrow',type:'experiment',source:'optical-particles:integral-direction',fileName:'Integral direction'};
+ assert.equal(defaultSceneRecordOperations.reloadable(helper),false,'the editor helper is not an independent scene asset');
+ const d=buildSceneDocument({objects:[helper],activeObjectId:'arrow',selectionIds:['arrow'],transientObjectIds:['arrow'],opticalParticleSetup:{particles:{enabled:true},integralView:view}});
+ assert.deepEqual(d.objects,[]);assert.equal(d.activeObjectId,null);assert.deepEqual(d.selectionIds,[]);
+ defaultSceneRecordOperations.assertReloadable(d.objects);assert.deepEqual(d.opticalParticleSetup.integralView,view);
+});
+
+test('an undeclared unsupported object still fails scene admission',()=>{
+ const d=buildSceneDocument({objects:[{id:'other',type:'experiment',source:'unsupported'}],transientObjectIds:['arrow']});
+ assert.equal(d.objects.length,1);assert.throws(()=>defaultSceneRecordOperations.assertReloadable(d.objects),/re-dropped/);
+});

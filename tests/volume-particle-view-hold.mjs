@@ -36,3 +36,8 @@ test('a manually moved common optical frame overrides the viewer without changin
  assert.deepEqual(owner.select(frame(9),false,manual).viewProj,manual.viewProj,'viewer movement is independent');
  assert.deepEqual(owner.select(frame(9),false).viewProj,frame(9).viewProj,'leaving manual control resumes the viewer');
 });
+
+test('a temporary manual direction preserves a previously pinned optical view',()=>{
+ const owner=createParticleViewFrame();owner.select(frame(1));owner.select(frame(2),true);
+ owner.select(frame(3),true,frame(7));assert.deepEqual(owner.select(frame(4),true).viewProj,frame(1).viewProj);
+});

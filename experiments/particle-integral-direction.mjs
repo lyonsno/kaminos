@@ -1,7 +1,7 @@
 import {Group,ArrowHelper,Vector3,Matrix4} from '../lib/three.core.js';
 import {checkedParticleInspectionView} from '../volume-particle-inspection.mjs';
 export async function createParticleIntegralDirection({session,select,runtime,view,onChange=()=>{}}){
- const initial=checkedParticleInspectionView(view),root=new Group();root.name='Integral direction';
+ const initial=checkedParticleInspectionView(view),root=new Group();root.name='Integral direction';root.userData.kaminosDocumentTransient=true;
  const distance=new Vector3(...initial.position).distanceTo(new Vector3(...initial.target));
  root.position.fromArray(initial.target);root.quaternion.setFromRotationMatrix(new Matrix4().lookAt(new Vector3(...initial.position),new Vector3(...initial.target),new Vector3(...initial.up)));
  const arrow=new ArrowHelper(new Vector3(0,0,-1),new Vector3(),distance*.12,0xffb347);root.add(arrow);

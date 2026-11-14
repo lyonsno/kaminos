@@ -25871,13 +25871,15 @@ function editOwnedFireSettings(ownerId,kind,patch) {
 }
 
 function buildSceneData(capture = null) {
-  const objects = workingScene.objects.map(serializeSceneObject);
+  const transientObjectIds=workingScene.objects.filter(entry=>entry.object?.userData?.kaminosDocumentTransient===true).map(entry=>entry.id);
+  const transient=new Set(transientObjectIds);
+  const objects = workingScene.objects.filter(entry=>!transient.has(entry.id)).map(serializeSceneObject);
   const activeObject = objects.find(obj => obj.id === workingScene.activeObjectId) || objects[0] || null;
   const provenance = provenanceForSource(activeObject?.source || modelSourceUrl);
 
   const data = buildSceneDocument({
     timestamp: new Date().toISOString(),
-    objects,
+    objects,transientObjectIds,
     materialLibrary: sceneMaterials.document(),
     groups: serializeSceneGroups(),
     activeObjectId: workingScene.activeObjectId,
