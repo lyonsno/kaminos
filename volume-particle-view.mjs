@@ -7,9 +7,10 @@ export function createParticleViewFrame(){
   return {viewProj:Array.from(frame.viewProj),inverse:Array.from(frame.inverse),size:[...frame.size]};
  }
  return {
-  select(frame,locked=false){
+  select(frame,locked=false,manual=null){
    if(typeof locked!=='boolean')throw Error('Particle optical view lock must be boolean');
    const next=checked(frame);
+   if(manual){current=checked(manual);pinned=null;return {...current,locked:true,manual:true};}
    if(locked){pinned??=current??next;return {...pinned,locked:true};}
    pinned=null;current=next;return {...next,locked:false};
   },

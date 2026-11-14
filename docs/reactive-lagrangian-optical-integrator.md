@@ -126,3 +126,20 @@ The cockpit's **Pause simulation and particles** action uses shared scene playba
 **Lock optical view** is independent from playback. It pins the last evaluated optical projection, splat planes and particle attenuation frame. The viewing camera can then orbit those world-space planes. Unlocking resumes integration aligned to the viewing camera. The control changes observation only; it does not resample or change carried composition. The locked projection is session state and is recaptured after a source reset.
 
 This is an inspection of the existing directional representation, not a new 3D optical-material model. While locked, the ordinary reference march and camera-grid extinction assist are visibly suspended. Particle attenuation uses the pinned frame; opaque scene geometry clips the current viewing camera only. Use the ordinary unlocked view for the normal combined scene. The effective state reports `materialHeld` and `opticalView`, including its matrix and solid-clipping scope.
+
+### A common integral direction
+
+**Edit integral direction**, beside the hold controls, selects an orange arrow
+in the native scene editor. Use Rotate (`R`) or Move (`G`) to change its pose.
+The arrow controls one common perspective optical frame for all retained
+particles. The ordinary viewing camera remains independent, during both held
+and live material evolution. **Use viewing camera** leaves this manual frame
+and returns to the viewing camera or the separate optical-view lock.
+
+The control changes the projection and depth integration of the existing
+retained material. Acquiring new material continues through the existing
+collector. It does not reacquire the simulated medium from the arrow view.
+Reference marching and the camera-grid extinction assist are suspended while
+the manual frame is active. Opaque scene clipping remains viewing-camera-only.
+The current optical pose is included in the experiment inputs and scene recipe;
+its arrow is an experiment-owned editor object.

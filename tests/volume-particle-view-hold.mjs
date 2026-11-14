@@ -27,3 +27,12 @@ test('optical frame owns its coordinates and only a reset admits a different sou
  owner.reset();assert.equal(owner.select(frame(3),true).viewProj[12],3);
  assert.throws(()=>owner.select({...frame(),inverse:[1]},false),/inverse/);
 });
+
+test('a manually moved common optical frame overrides the viewer without changing the lock preference',()=>{
+ const owner=createParticleViewFrame();owner.select(frame(0));const manual=frame(7);
+ const a=owner.select(frame(2),false,manual);
+ assert.deepEqual(a.viewProj,manual.viewProj,'the common manual frame must drive all optical projections');
+ assert.equal(a.locked,true);assert.equal(a.manual,true);
+ assert.deepEqual(owner.select(frame(9),false,manual).viewProj,manual.viewProj,'viewer movement is independent');
+ assert.deepEqual(owner.select(frame(9),false).viewProj,frame(9).viewProj,'leaving manual control resumes the viewer');
+});
