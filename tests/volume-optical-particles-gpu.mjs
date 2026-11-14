@@ -130,6 +130,19 @@ test('native carriers measure directional stretch from transport, distinguishing
   },{state:[0,0,1,0],velocity,backtrace:2,stepScale:1});
  });
 });
+test('Fine-flow stretch is a rate in reference time, not a finite displacement',async()=>{
+ await withKaminosGpu(async({device:d})=>{
+  for(const dtScale of [.5,.8])await opticalFixture(d,async({owner,seed,draw})=>{
+   const rows=new Float32Array(16*16);rows.set([1,0,0,1,.125,0,0,1,-.2,.2,0,.1,0,0,0,0]);seed(rows);
+   const settings={debugView:9,reactionEnabled:false,flow:.4};
+   await draw(0,settings);
+   await draw(2,settings);
+   const state=(await owner.sample()).records;
+   assert.ok(Math.abs(state[14]-.24/dtScale)<1e-5,`rate per reference step at scale ${dtScale}`);
+   assert.ok(Math.abs(state[0]-.185)<1e-5,'native center motion spans both elapsed steps, independently of reference scale');
+  },{state:[0,0,1,0],velocity:([x,y])=>[.2*x,-.2*y,0],backtrace:3,stepScale:dtScale});
+ });
+});
 test('reaction creates soot extinction from actual fuel and oxygen when the initial grid has no soot',async()=>{
  await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw})=>{
   const rows=new Float32Array(16*16);rows.set([4,2,1,0,0,0,0,1,-.5,.5,1,1,4,2,1,0]);seed(rows);await draw();const initial=(await owner.sample()).records[20];
