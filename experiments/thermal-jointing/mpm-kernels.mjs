@@ -152,7 +152,7 @@ fn nodeFrom(j:u32)->Node {
  }
  if(coordinates.y==i32(n)-1){rate+=params.heat.y*(params.heat.z-T);}
  let delta=params.time.x*rate;let nextT=T+delta;
- if(!(nextT>=params.heat.z-.000001&&nextT<=1.000001)){atomicAdd(&diagnostics[2],1u);return;}
+ if(!(nextT>=-.000001&&nextT<=1.000001)){atomicAdd(&diagnostics[2],1u);return;}
  thermalDelta[i]=delta;
 }
 @compute @workgroup_size(128) fn updateStrength(@builtin(global_invocation_id) gid:vec3u){

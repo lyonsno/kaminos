@@ -33,7 +33,9 @@ particle history and intact fraction survive transfer.
 
 Heat evolves directly on the persistent reference material lattice, with six
 neighbors at spacing0.5 and an exposed upper-layer cooling condition. The
-explicit stability check uses dt*(24*diffusivity+cooling)<=0.8. Equal-mass
+explicit stability check uses dt*(24*diffusivity+cooling)<=0.8. Ambient is
+a boundary input; existing material may remain colder after ambient is raised.
+The admissible normalized material temperature interval remains[0,1]. Equal-mass
 interior exchanges are symmetric; the thermal state avoids interpolation
 through the mechanical grid. The previous FLIP transfer produced ringing even
 after bounding its overshoot and is removed from this route. Reference thermal

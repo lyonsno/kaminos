@@ -87,3 +87,14 @@ test('material-neighbor conduction conserves heat in an insulated stationary sol
   }finally{solver.dispose();}
  });
 });
+test('raising ambient does not reject existing cooled material when heat exchange is disabled',async()=>{
+ await withKaminosGpu(async({device})=>{
+  const solver=await createThermalMpm({device,options:{particlesPerAxis:8,cooling:12,contraction:0,damage:false,fixedBase:false}});
+  try{
+   solver.advance(1);const before=await solver.snapshot();assert.equal(before.state.fault,null);
+   solver.setOptions({ambient:1,cooling:0,diffusivity:0});solver.advance(1);const after=await solver.snapshot();
+   assert.equal(after.state.fault,null);assert.equal(after.state.completedSteps,2);
+   for(let j=0;j<before.particles.length;j+=44)assert.equal(after.particles[j+7],before.particles[j+7]);
+  }finally{solver.dispose();}
+ });
+});

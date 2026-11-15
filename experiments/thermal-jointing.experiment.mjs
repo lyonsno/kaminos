@@ -1,5 +1,5 @@
 import {Group,InstancedMesh,BoxGeometry,Matrix4,StorageBufferAttribute,MeshStandardNodeMaterial} from '../lib/three.webgpu.js';
-import {storage,wgslFn,instanceIndex,positionLocal,normalLocal,uniform,uint} from '../lib/three.tsl.js';
+import {storage,wgslFn,instanceIndex,positionLocal,normalLocal,uniform,uint,transformNormalToView} from '../lib/three.tsl.js';
 import {createThermalMpm,thermalConfig,PARTICLE_WORDS} from './thermal-jointing/mpm-solver.mjs';
 
 const pointPosition=wgslFn('fn thermal_position(i:u32,p:vec3f,n:f32,data:ptr<storage,array<vec4f>,read>)->vec3f {let j=i*11u;let F=mat3x3f((*data)[j+2u].xyz,(*data)[j+3u].xyz,(*data)[j+4u].xyz);return ((*data)[j].xyz+F*p-vec3f(3.+n*.25,3.,3.+n*.25))*.25;}');
@@ -25,7 +25,7 @@ export default {
    solver=await createThermalMpm({device,options:authored(config),particleBuffer:buffer});
    const data=storage(attribute,'vec4',config.count*11).toReadOnly(),material=new MeshStandardNodeMaterial({roughness:.85,metalness:0});
    material.positionNode=pointPosition({i:instanceIndex,p:positionLocal,n:uniform(config.particlesPerAxis),data});
-   material.normalNode=pointNormal({i:instanceIndex,p:normalLocal,data});
+   material.normalNode=transformNormalToView(pointNormal({i:instanceIndex,p:normalLocal,data}));
    material.colorNode=pointColor({i:instanceIndex,mode,data});
    mesh=new InstancedMesh(new BoxGeometry(.49,.49,.49),material,config.count);mesh.name='Thermal material cells';mesh.frustumCulled=false;
    const identity=new Matrix4();for(let i=0;i<config.count;i++)mesh.setMatrixAt(i,identity);
