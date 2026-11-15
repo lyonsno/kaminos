@@ -9,7 +9,7 @@ export function summarizePacketInspection(snapshot){
  return {available:true,identity:snapshot.identity,activePackets:s[0],emittingPackets:s[1],directedConnections:s[2],subrays:s[3],kernelBoundsTests:s[4],intersectedKernels:s[5],sliceDeposits:s[6],solidTriangleTests:s[7],counterOverflow:!!s[8],supportDiameter:{min:diameters[0]??0,median:diameters[Math.floor(diameters.length/2)]??0,max:diameters.at(-1)??0},activeIds:active,definition:'kernel-union AABB diagonal in Fine units; packet centers and receiving supports are separate'};
 }
 export function createPacketSupportView(parent){
- const geometry=new BufferGeometry(),material=new LineBasicMaterial({vertexColors:true,transparent:true,opacity:.7,depthTest:false}),lines=new LineSegments(geometry,material);lines.name='Measured optical packet supports';lines.userData.kaminosDocumentTransient=true;lines.renderOrder=1000;lines.visible=false;parent.add(lines);
+ const geometry=new BufferGeometry(),material=new LineBasicMaterial({vertexColors:true,transparent:true,opacity:.7,depthTest:false,depthWrite:false,toneMapped:false}),lines=new LineSegments(geometry,material);lines.name='Measured optical packet supports';lines.userData.kaminosDocumentTransient=true;lines.userData.kaminosEditorHelper=true;lines.userData.kaminosEditorOnly=true;lines.renderOrder=1000;lines.visible=false;parent.add(lines);
  const boxEdges=[[0,1],[0,2],[0,4],[1,3],[1,5],[2,3],[2,6],[3,7],[4,5],[4,6],[5,7],[6,7]];
  return {
   set(snapshot,mode){lines.visible=mode!=='off'&&snapshot?.available===true;if(!lines.visible)return;const positions=[],colors=[],transform=snapshot.transform??{scale:1,translate:[0,0,0]},put=(p,c)=>{positions.push(...p.map((v,i)=>v*transform.scale+transform.translate[i]));colors.push(...c);};
@@ -26,6 +26,7 @@ export function createPacketSupportView(parent){
    }
    geometry.setAttribute('position',new Float32BufferAttribute(positions,3));geometry.setAttribute('color',new Float32BufferAttribute(colors,3));geometry.computeBoundingSphere();
   },
+  read(){return {visible:lines.visible,vertices:geometry.getAttribute('position')?.count??0,bounds:geometry.boundingSphere?{center:geometry.boundingSphere.center.toArray(),radius:geometry.boundingSphere.radius}:null};},
   dispose(){parent.remove(lines);geometry.dispose();material.dispose();},
  };
 }

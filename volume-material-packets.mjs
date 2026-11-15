@@ -12,7 +12,7 @@ export function materialPacketPlan(limits,{slots,dims,pitch,settings}){
  const s=packetNetworkSettings(settings),packetDims=[s.packetWidth,Math.ceil(s.packetWidth*dims[1]/dims[0]),Math.ceil(s.packetWidth*dims[2]/dims[0])];
  const leafDims=packetDims.map(x=>x*s.materialSubdivisions),packetCount=packetDims.reduce((a,b)=>a*b,1),leaves=leafDims.reduce((a,b)=>a*b,1),kernels=leaves*2,partials=Math.ceil(slots/128);
  for(const n of [slots,packetCount,leaves,kernels,partials])if(!Number.isSafeInteger(n)||n<1||n>0xffffffff)throw Error('Material packet count exceeds u32 capacity');
- const sizes={params:64,bounds:32,partials:partials*32,counts:leaves*4,cursors:leaves*4,offsets:(leaves+1)*4,ids:slots*4,membership:slots*4,kernels:kernels*128,leaves:leaves*32,packets:packetCount*64,centers:packetCount*16,stats:64};
+ const sizes={params:64,bounds:32,partials:partials*32,counts:leaves*4,cursors:leaves*4,offsets:(leaves+1)*4,ids:slots*4,membership:slots*4,kernels:kernels*128,leaves:leaves*64,packets:packetCount*64,centers:packetCount*16,stats:64};
  for(const [k,n]of Object.entries(sizes))if(n>Math.min(limits.maxBufferSize,limits.maxStorageBufferBindingSize))throw Error('Material packet '+k+' exceeds effective device buffer capacity');
  for(const n of [partials,Math.ceil(slots/64),leaves,Math.ceil(packetCount/64)])if(n>limits.maxComputeWorkgroupsPerDimension)throw Error('Material packet dispatch exceeds effective device capacity');
  return {slots,packetDims,leafDims,packetCount,leaves,kernels,partials,pitch,sizes,settings:s,bytes:Object.values(sizes).reduce((a,b)=>a+b,0)};
@@ -54,7 +54,7 @@ fn leafAt(p:vec3<f32>)->u32{let dims=plan.counts.yzw;let q=min(vec3<u32>(clamp((
 @compute @workgroup_size(64) fn countMaterial(@builtin(global_invocation_id) id:vec3<u32>){let i=id.x;if(i>=plan.counts.x){return;}membership[i]=0xffffffffu;if(useful(primary[i])){let cell=leafAt(primary[i].anchor.xyz);membership[i]=cell;atomicAdd(&counts[cell],1u);}}
 @compute @workgroup_size(1) fn prefixMaterial(){let total=plan.counts.y*plan.counts.z*plan.counts.w;var offset=0u;for(var i=0u;i<total;i++){offsets[i]=offset;offset+=atomicLoad(&counts[i]);atomicStore(&cursors[i],0u);}offsets[total]=offset;}
 @compute @workgroup_size(64) fn scatterMaterial(@builtin(global_invocation_id) id:vec3<u32>){let i=id.x;if(i>=plan.counts.x){return;}let cell=membership[i];if(cell!=0xffffffffu){ids[offsets[cell]+atomicAdd(&cursors[cell],1u)]=i;}}
-struct Moment {emission:vec4<f32>,ef:vec4<f32>,ed:vec4<f32>,ec:vec4<f32>,tf:vec4<f32>,td:vec4<f32>,tc:vec4<f32>,bulk:vec4<f32>}
+struct Moment {emission:vec4<f32>,ef:vec4<f32>,ed:vec4<f32>,ec:vec4<f32>,tf:vec4<f32>,td:vec4<f32>,tc:vec4<f32>,bulk:vec4<f32>,blo:vec4<f32>,bhi:vec4<f32>}
 var<workgroup> moments:array<Moment,64>;
 fn crossTerms(p:vec3<f32>)->vec3<f32>{return vec3<f32>(p.x*p.y,p.x*p.z,p.y*p.z);}
 fn fittedKernel(first:vec4<f32>,diag:vec3<f32>,off:vec3<f32>,amount:vec4<f32>,origin:vec3<f32>,parent:u32,role:u32,count:u32)->MaterialKernel{
@@ -68,20 +68,20 @@ fn fittedKernel(first:vec4<f32>,diag:vec3<f32>,off:vec3<f32>,amount:vec4<f32>,or
 }
 @compute @workgroup_size(64) fn fitMaterial(@builtin(workgroup_id) gid:vec3<u32>,@builtin(local_invocation_index) tid:u32){
  let cell=gid.x;let dims=plan.counts.yzw;let xyz=vec3<u32>(cell%dims.x,cell/dims.x%dims.y,cell/(dims.x*dims.y));let cellWidth=(bounds[1].xyz-bounds[0].xyz)/vec3<f32>(dims);let origin=bounds[0].xyz+(vec3<f32>(xyz)+.5)*cellWidth;
- var m:Moment;
+ var m:Moment;m.blo=vec4<f32>(3.402823e38);m.bhi=-m.blo;
  for(var at=offsets[cell]+tid;at<offsets[cell+1u];at+=64u){let p=primary[ids[at]];let radius=particleLightBaseRadius(p,optics);let fade=select(1.0,particleLifeFade(p.motion.w,optics.lifeControl.y),optics.lifeControl.x>0);let volume=radius.x*radius.y*p.shape.w*plan.measure.y;let e=max(vec3<f32>(0),particleLightIntrinsic(p)*optics.gain.x*fade)*volume;let ew=dot(e,vec3<f32>(.2126,.7152,.0722));let tw=particleLightExtinction(p,optics)*optics.material.w*optics.gain.y*fade*volume;
   let pos=p.anchor.xyz-origin;var y=vec3<f32>(0,1,0);if(optics.raster.z>0){let v=mix(y,particleDirectionDecode(p.shape.yz),optics.raster.z);if(dot(v,v)>1e-10){y=normalize(v);}}let x=normalize(cross(y,select(vec3<f32>(0,0,1),vec3<f32>(1,0,0),abs(y.z)>.99)));let z=cross(x,y);
   let vd=x*x*radius.x*radius.x+y*y*radius.y*radius.y+z*z*radius.z*radius.z;
   let vc=crossTerms(x)*radius.x*radius.x+crossTerms(y)*radius.y*radius.y+crossTerms(z)*radius.z*radius.z;
   m.emission+=vec4<f32>(e,ew);m.ef+=vec4<f32>(pos*ew,ew);m.ed+=vec4<f32>((pos*pos+vd)*ew,0);m.ec+=vec4<f32>((crossTerms(pos)+vc)*ew,0);
-  m.tf+=vec4<f32>(pos*tw,tw);m.td+=vec4<f32>((pos*pos+vd)*tw,0);m.tc+=vec4<f32>((crossTerms(pos)+vc)*tw,0);m.bulk+=vec4<f32>(p.anchor.xyz*volume,volume);
+  m.tf+=vec4<f32>(pos*tw,tw);m.td+=vec4<f32>((pos*pos+vd)*tw,0);m.tc+=vec4<f32>((crossTerms(pos)+vc)*tw,0);m.bulk+=vec4<f32>(p.anchor.xyz*volume,volume);let materialExtent=plan.shape.x*plan.shape.y*sqrt(vd);m.blo=min(m.blo,vec4<f32>(p.anchor.xyz-materialExtent,0));m.bhi=max(m.bhi,vec4<f32>(p.anchor.xyz+materialExtent,0));
  }
- moments[tid]=m;workgroupBarrier();for(var k=32u;k>0u;k/=2u){if(tid<k){let n=moments[tid+k];moments[tid].emission+=n.emission;moments[tid].ef+=n.ef;moments[tid].ed+=n.ed;moments[tid].ec+=n.ec;moments[tid].tf+=n.tf;moments[tid].td+=n.td;moments[tid].tc+=n.tc;moments[tid].bulk+=n.bulk;}workgroupBarrier();}
- if(tid==0u){let m=moments[0];let parentXYZ=xyz/plan.packets.w;let parent=parentXYZ.x+plan.packets.x*(parentXYZ.y+plan.packets.y*parentXYZ.z);let count=atomicLoad(&counts[cell]);kernels[2u*cell]=fittedKernel(m.ef,m.ed.xyz,m.ec.xyz,vec4<f32>(m.emission.xyz,0),origin,parent,0u,count);kernels[2u*cell+1u]=fittedKernel(m.tf,m.td.xyz,m.tc.xyz,vec4<f32>(0,0,0,m.tf.w),origin,parent,1u,count);leafMaterial[2u*cell]=m.bulk;leafMaterial[2u*cell+1u]=vec4<f32>(m.emission.xyz,m.tf.w);}
+ moments[tid]=m;workgroupBarrier();for(var k=32u;k>0u;k/=2u){if(tid<k){let n=moments[tid+k];moments[tid].emission+=n.emission;moments[tid].ef+=n.ef;moments[tid].ed+=n.ed;moments[tid].ec+=n.ec;moments[tid].tf+=n.tf;moments[tid].td+=n.td;moments[tid].tc+=n.tc;moments[tid].bulk+=n.bulk;moments[tid].blo=min(moments[tid].blo,n.blo);moments[tid].bhi=max(moments[tid].bhi,n.bhi);}workgroupBarrier();}
+ if(tid==0u){let m=moments[0];let parentXYZ=xyz/plan.packets.w;let parent=parentXYZ.x+plan.packets.x*(parentXYZ.y+plan.packets.y*parentXYZ.z);let count=atomicLoad(&counts[cell]);kernels[2u*cell]=fittedKernel(m.ef,m.ed.xyz,m.ec.xyz,vec4<f32>(m.emission.xyz,0),origin,parent,0u,count);kernels[2u*cell+1u]=fittedKernel(m.tf,m.td.xyz,m.tc.xyz,vec4<f32>(0,0,0,m.tf.w),origin,parent,1u,count);leafMaterial[4u*cell]=m.bulk;leafMaterial[4u*cell+1u]=vec4<f32>(m.emission.xyz,m.tf.w);leafMaterial[4u*cell+2u]=m.blo;leafMaterial[4u*cell+3u]=m.bhi;}
 }
 @compute @workgroup_size(64) fn summarizePackets(@builtin(global_invocation_id) id:vec3<u32>){
  let i=id.x;let pd=plan.packets.xyz;if(i>=pd.x*pd.y*pd.z){return;}let at=vec3<u32>(i%pd.x,i/pd.x%pd.y,i/(pd.x*pd.y));let sub=plan.packets.w;let ld=plan.counts.yzw;var p:MaterialPacket;var bulk=vec4<f32>(0);var lo=vec3<f32>(3.402823e38);var hi=-lo;var members=0u;
- for(var z=0u;z<sub;z++){for(var y=0u;y<sub;y++){for(var x=0u;x<sub;x++){let c=at*sub+vec3<u32>(x,y,z);let leaf=c.x+ld.x*(c.y+ld.y*c.z);bulk+=leafMaterial[2u*leaf];p.power+=leafMaterial[2u*leaf+1u];members+=atomicLoad(&counts[leaf]);for(var role=0u;role<2u;role++){let k=kernels[2u*leaf+role];if(k.tags.w!=0u){lo=min(lo,k.lo.xyz);hi=max(hi,k.hi.xyz);}}}}}
+ for(var z=0u;z<sub;z++){for(var y=0u;y<sub;y++){for(var x=0u;x<sub;x++){let c=at*sub+vec3<u32>(x,y,z);let leaf=c.x+ld.x*(c.y+ld.y*c.z);bulk+=leafMaterial[4u*leaf];p.power+=leafMaterial[4u*leaf+1u];if(atomicLoad(&counts[leaf])>0u&&kernels[2u*leaf].tags.w==0u&&kernels[2u*leaf+1u].tags.w==0u){lo=min(lo,leafMaterial[4u*leaf+2u].xyz);hi=max(hi,leafMaterial[4u*leaf+3u].xyz);}members+=atomicLoad(&counts[leaf]);for(var role=0u;role<2u;role++){let k=kernels[2u*leaf+role];if(k.tags.w!=0u){lo=min(lo,k.lo.xyz);hi=max(hi,k.hi.xyz);}}}}}
  if(bulk.w>0){let center=bulk.xyz/bulk.w;let radius=length(max(abs(lo-center),abs(hi-center)))*plan.shape.z;p.center=vec4<f32>(center,max(radius,plan.shape.w*.01));p.lo=vec4<f32>(lo,bulk.w);p.hi=vec4<f32>(hi,f32(members));atomicAdd(&stats[0],1u);if(any(p.power.xyz>vec3<f32>(0))){atomicAdd(&stats[1],1u);}}
  packets[i]=p;centers[i]=p.center;
 }

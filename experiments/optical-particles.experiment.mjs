@@ -44,7 +44,7 @@ export default {
   // Beaming's worker settings travel with its scene address, but are not a
   // recipe for the shared field. Preserve them for a round trip to that branch.
   const {particles:_particles,simulationReaction:_reaction,source:_source,ambientBoundary,sharedLighting,lighting,integralView:_integralView,packetLighting:_packetLighting,...forwarded}=inputs;
-  let packetSettings={enabled:false,...packetNetworkSettings(),...inputs.packetLighting},packetOwner=null,packetHelper=null,packetStatus=null,packetInspection=null,packetSupportView=null,packetInspecting=false;const packetFields=[];
+  let packetSettings={enabled:false,...packetNetworkSettings(),...inputs.packetLighting},packetOwner=null,packetHelper=null,packetStatus=null,packetInspection=null,packetSupportView=null,packetInspecting=null;const packetFields=[];
   const legacyShared=lighting&&['intervalMs','environmentBlur','lightSurfaces','volumeGrid','sourceGrid'].some(key=>Object.hasOwn(lighting,key))
    &&!['width','transportWidth','filterLength','padding','supportSigmas','albedo','mode'].some(key=>Object.hasOwn(lighting,key));
   if(lighting&&!legacyShared)forwarded.lighting=lighting;
@@ -115,7 +115,7 @@ export default {
   let controlPolicy,manualPolicy,unavailable,stretchLegend;
   function sync(force=false){if(!panel)return;let e;try{e=read().effective;}catch(err){error=err.message;e={};}
    if(packetStatus){const state=packetOwner?.read(),r=state?.receipt;const actual=packetInspection?.available?` · ${packetInspection.activePackets} occupied / ${r?.packetCapacity??'?'} · ${packetInspection.emittingPackets} emitting · supports at step ${packetInspection.identity.step}`:'';packetStatus.textContent=state?.error??`${state?.phase??'off'}${r?.available?(state.settings.mode==='material-packets'?` · ${r.packetDims.join(' × ')} packet capacity · ${r.settings.materialSubdivisions}³ material strata/packet`:' · '+r.settings.receivers+' material receivers · '+r.settings.sources+' source groups')+' · '+r.settings.width+'² transverse rays · '+r.settings.sections+' sections · step '+r.identity.step:''}${actual}`;}
-   for(const {key,input,row,role} of packetFields){row.hidden=role==='common'&&packetSettings.mode!=='material-packets'||role==='reference'&&packetSettings.mode!=='fine-reference';if(host.controls.document.activeElement===input||input.classList.contains('scrubbing'))continue;if(input.type==='checkbox')input.checked=packetSettings[key];else input.value=String(packetSettings[key]);}
+   for(const {key,input,row,role} of packetFields){row.hidden=role==='common'&&packetSettings.mode!=='material-packets'||role==='reference'&&packetSettings.mode!=='fine-reference';row.style.display=row.hidden?'none':'grid';if(host.controls.document.activeElement===input||input.classList.contains('scrubbing'))continue;if(input.type==='checkbox')input.checked=packetSettings[key];else input.value=String(packetSettings[key]);}
    projectReaction(e.simulationReaction);
    if(pauseButton){const held=playback().paused;pauseButton.textContent=held?'Resume simulation and particles':'Pause simulation and particles';pauseButton.setAttribute('aria-pressed',String(held));}
    if(directionButton)directionButton.textContent=directionView?'Select integral direction':'Edit integral direction';
@@ -156,13 +156,13 @@ export default {
    if(!packetOwner&&enabled){packetHelper=new Group();packetHelper.name='Packet lighting scene connection';packetHelper.userData.kaminosDocumentTransient=true;await session.attach(packetHelper,{owned:true,presentation:true,metadata:{source:'optical-particles:packet-lighting'}});packetOwner=createParticlePacketLighting({runtime:source,scene:()=>packetHelper.parent,onChange:()=>{session.redraw();sync();}});packetSupportView=createPacketSupportView(packetHelper);}
    if(Object.keys(patch).some(k=>k!=='view')){packetInspection=null;packetSupportView?.set(null,'off');}packetSettings=next;if(next.view==='off')packetSupportView?.set(null,'off');packetOwner?.configure(next);persist();record({kind:'particle.packet-lighting',settings:next});session.redraw();sync(true);return read();
   }
-  async function inspectPackets(){
-   if(packetInspecting)return packetInspection;packetInspecting=true;
+  function inspectPackets(){
+   if(packetInspecting)return packetInspecting;packetInspecting=(async()=>{
    try{const owner=packetOwner,snapshot=await owner?.inspect();if(disposed||owner!==packetOwner)return {available:false,reason:'Packet owner changed'};
     packetInspection=snapshot?summarizePacketInspection(snapshot):{available:false,reason:'Packet lighting is off'};
     if(snapshot?.available&&packetSettings.mode==='material-packets'&&Object.entries(snapshot.settings).every(([k,v])=>k==='view'||packetSettings[k]===v))packetSupportView?.set(snapshot,packetSettings.view);
-    session.redraw();sync();return snapshot?.available?{...packetInspection,packets:Array.from(snapshot.packets),kernels:Array.from(snapshot.kernels),stats:Array.from(snapshot.stats),bounds:Array.from(snapshot.bounds),transform:snapshot.transform}:packetInspection;
-   }finally{packetInspecting=false;}
+    session.redraw();sync();return snapshot?.available?{...packetInspection,view:packetSupportView?.read(),packets:Array.from(snapshot.packets),kernels:Array.from(snapshot.kernels),stats:Array.from(snapshot.stats),bounds:Array.from(snapshot.bounds),transform:snapshot.transform}:packetInspection;
+   }finally{packetInspecting=null;}})();return packetInspecting;
   }
   function lightingRoute(){
    const owner=win.__kaminosSceneRadiance;

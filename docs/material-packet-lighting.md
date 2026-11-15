@@ -16,6 +16,10 @@ covariances. They are normalized finite ellipsoidal Gaussians. An absorbing soot
 region need not share the bright region's shape. Changing shape scale or cutoff
 preserves the declared integrated amount.
 
+An occupied stratum with zero effective optical coefficients keeps finite receiving
+bounds from its current primary material support. Optical gains therefore cannot
+turn that packet into a globally supported receiver.
+
 That amount uses a provisional volume proxy: the primary finite Gaussian profile
 area times base support radii in two axes times the acquired represented ray
 interval. Emission gain, extinction gain, material density and survival fade are

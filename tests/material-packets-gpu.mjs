@@ -55,3 +55,23 @@ test('every intervening absorbing packet and current solid clip the finite sourc
   try{const open=await run();assert.ok(open>0);const solid=await run(true);assert.ok(solid<open*1e-5,`${solid} behind solid versus ${open}`);rows[24+22]=500;const smoke=await run();assert.ok(smoke<open*.01,`${smoke} through third material versus ${open}`);}finally{network.dispose();f.dispose();}
  },{wgslSources:[{label:'current packet source and third material',code:materialPacketTransportWgsl(16),entryPoint:'tracePackets'}]});
 });
+
+test('zero effective optical amounts retain finite local material receiver supports',async()=>{
+ await withKaminosGpu(async({device:d})=>{
+  const f=fixture(d,new Float32Array([...record([-.5,0,0],[0,0,0],2),...record([.5,0,0],[2,1,.5],0)])),b=createMaterialPacketBuilder(d);await b.prepare();
+  try{for(const zero of ['extinction','emission','both']){
+   f.optionData[57]=zero==='emission'?1:0;f.optionData[56]=zero==='extinction'?1:0;d.queue.writeBuffer(f.options,0,f.optionData);
+   const [pp]=await read(d,e=>[b.encode(e,{material:f.material,settings:{mode:'material-packets',packetWidth:3}}).resources.packets],f.make);const p=new Float32Array(pp);let occupied=0;
+   for(let at=0;at<p.length;at+=16){if(!p[at+11])continue;occupied++;assert.ok(p.slice(at,at+16).every(Number.isFinite),'zero effective coefficients must retain finite material support');assert.ok(p[at+3]>0&&p[at+3]<.5,'zero optical gain must not grant global receiving reach');for(let a=0;a<3;a++)assert.ok(p[at+4+a]<=p[at+a]&&p[at+a]<=p[at+8+a]);}assert.equal(occupied,2);
+  }}finally{b.dispose();f.dispose();}
+ },{wgslSources:[{label:'zero gain packet support production',code:MATERIAL_PACKET_BUILD_WGSL,entryPoint:'summarizePackets'}]});
+});
+
+test('coarse emission covariance retains a tilted material population',async()=>{
+ await withKaminosGpu(async({device:d})=>{
+  const f=fixture(d,new Float32Array([...record([-.1,-.15,0],[1,1,1],0),...record([.1,.15,0],[1,1,1],0)])),b=createMaterialPacketBuilder(d);await b.prepare();
+  try{const [raw]=await read(d,e=>[b.encode(e,{material:f.material,settings:{mode:'material-packets',packetWidth:1}}).resources.kernels],f.make);const k=new Float32Array(raw),a=k[4],bb=k[5],c=k[6],dd=k[9],ee=k[10],ff=k[14],det=a*(dd*ff-ee*ee)-bb*(bb*ff-c*ee)+c*(bb*ee-c*dd);
+   close(k[0],0,1e-3);close(k[1],0,1e-3);close((dd*ff-ee*ee)/det,.0109,1e-3);close((a*ff-c*c)/det,.0234,1e-3);close((c*ee-bb*ff)/det,.015,1e-3);
+  }finally{b.dispose();f.dispose();}
+ },{wgslSources:[{label:'tilted material covariance production',code:MATERIAL_PACKET_BUILD_WGSL,entryPoint:'fitMaterial'}]});
+});
