@@ -27,32 +27,87 @@ function uniforms(c) {
  f.set([c.prestrain,c.preparedSplit?1:0,c.splitVelocity,c.damage?1:0],20);
  return bytes;
 }
+
 export async function createThermalMpm({device,options={},particleBuffer=null}) {
- let config=thermalConfig(options),step=0,disposed=false;
- const owned=[],U=GPUBufferUsage;
- const make=(size,usage,label)=>{if(size>device.limits.maxBufferSize||size>device.limits.maxStorageBufferBindingSize)throw Error('Thermal state exceeds device buffer limits: '+label);const b=device.createBuffer({size,usage,label});owned.push(b);return b;};
- const particles=particleBuffer??make(config.count*PARTICLE_WORDS*4,U.STORAGE|U.COPY_SRC|U.COPY_DST,'Persistent thermal material points');
+ let config=thermalConfig(options),step=0,disposed=false,completed={step:0,time:0},fault=null;
+ const authored=()=>Object.fromEntries(Object.entries(config).filter(([k])=>!['count','gridSize','gridNodes'].includes(k)));
+ const owned=[],U=GPUBufferUsage,N=config.gridNodes*2;
+ const make=(size,usage,label)=>{if(size>device.limits.maxBufferSize||((usage&U.STORAGE)&&size>device.limits.maxStorageBufferBindingSize))throw Error('Thermal state exceeds device buffer limits: '+label);const b=device.createBuffer({size,usage,label});owned.push(b);return b;};
+ const storage=(size,label)=>make(size,U.STORAGE|U.COPY_SRC|U.COPY_DST,label);
+ const particles=particleBuffer??storage(config.count*PARTICLE_WORDS*4,'Persistent thermal material points');
+ if(particles.size!==config.count*PARTICLE_WORDS*4)throw Error('Thermal particle buffer size differs from effective resolution');
  const params=make(96,U.UNIFORM|U.COPY_DST,'Thermal material parameters');
+ const resources={0:particles,1:storage(N*64,'Transfer atomics'),2:storage(N*64,'Two motion fields'),
+  3:params,4:storage(config.gridNodes*8,'Damage gradient orientation'),5:storage(N*16,'Phase PCG'),
+  6:storage(N*4,'Phase stiffness atomics'),7:storage(config.count*16,'Phase gradient'),
+  8:storage(Math.ceil(N/128)*16,'Phase reduction'),9:storage(32,'Phase and material clocks'),
+  11:storage(config.gridNodes*4,'Particle bin heads'),12:storage(config.count*4,'Particle bin links'),
+  13:storage(32,'Material fault and completion counters')};
  device.queue.writeBuffer(params,0,uniforms(config));
- const resources={0:particles,3:params},kernels={};
- async function kernel(name,bindings) {
-  const module=device.createShaderModule({code:THERMAL_MPM_WGSL,label:'Thermal '+name});
-  const errors=(await module.getCompilationInfo()).messages.filter(m=>m.type==='error');
-  if(errors.length)throw Error(errors.map(m=>m.message).join('; '));
+ const module=device.createShaderModule({code:THERMAL_MPM_WGSL,label:'Thermal phase-field MPM'});
+ const errors=(await module.getCompilationInfo()).messages.filter(m=>m.type==='error');
+ if(errors.length){for(const b of owned)b.destroy();throw Error(errors.map(m=>m.lineNum+': '+m.message).join('; '));}
+ const specs={
+ initialize:[0,3],binParticles:[0,3,11,12,13],damageGradients:[0,3,4,11,12,13],gradientSeeds:[0,3,4,13],
+ deposit:[0,1,3,4,13],reconcile:[1,2,3,13],heatStep:[0,2,3,4,13],
+ phaseSeed:[2,5],matrixGather:[0,2,3,4,5,7,13],matrixScatter:[0,2,3,4,6,7,13],
+ matrixFinish:[2,5,6],phaseStart:[2,5],dotPA:[2,5,8],reducePA:[8,9],
+ phaseUpdate:[5,9],dotR:[2,5,8],reduceR:[8,9],phaseDirection:[2,5,9],
+ gather:[0,2,3,4,5,13],finishStep:[3,9,13]};
+ const kernels={};
+ try{
+ for(const [name,bindings] of Object.entries(specs)){
   const pipeline=await device.createComputePipelineAsync({layout:'auto',compute:{module,entryPoint:name},label:'Thermal '+name});
   const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:bindings.map(binding=>({binding,resource:{buffer:resources[binding]}}))});
   kernels[name]={pipeline,group};
  }
- function dispatch(e,name,count) {const k=kernels[name],groups=Math.ceil(count/128);if(groups>device.limits.maxComputeWorkgroupsPerDimension)throw Error('Thermal dispatch exceeds hardware workgroup dimension');const p=e.beginComputePass({label:'Thermal '+name});p.setPipeline(k.pipeline);p.setBindGroup(0,k.group);p.dispatchWorkgroups(groups);p.end();}
- await kernel('initialize',[0,3]);
- const reset=()=>{const e=device.createCommandEncoder();dispatch(e,'initialize',config.count);device.queue.submit([e.finish()]);step=0;};
+ }catch(error){for(const b of owned)b.destroy();throw error;}
+ function dispatch(e,name,count) {
+  const k=kernels[name],groups=Math.ceil(count/128);if(groups>device.limits.maxComputeWorkgroupsPerDimension)throw Error('Thermal dispatch exceeds hardware workgroup dimension');
+  const p=e.beginComputePass({label:'Thermal '+name});p.setPipeline(k.pipeline);p.setBindGroup(0,k.group);p.dispatchWorkgroups(groups);p.end();
+ }
+ function matrix(e){e.clearBuffer(resources[6]);dispatch(e,'matrixGather',config.count);dispatch(e,'matrixScatter',config.count);dispatch(e,'matrixFinish',N);}
+ function ensure(){if(disposed)throw Error('Thermal solver disposed');if(fault)throw Error(fault);}
+ const reset=()=>{
+  if(disposed)throw Error('Thermal solver disposed');const e=device.createCommandEncoder();
+  e.clearBuffer(resources[9]);e.clearBuffer(resources[13]);dispatch(e,'initialize',config.count);device.queue.submit([e.finish()]);step=0;completed={step:0,time:0};fault=null;
+ };
+ const read=()=>({route:'thermal-phase-field-mpm.webgpu.v0',count:config.count,submittedSteps:step,completedSteps:completed.step,time:completed.time,fault,config:{...config}});
+ async function readBuffers(entries){
+  const e=device.createCommandEncoder();const staging=entries.map(([buffer,bytes])=>{const b=device.createBuffer({size:bytes,usage:U.COPY_DST|U.MAP_READ});e.copyBufferToBuffer(buffer,0,b,0,bytes);return b;});
+  try{device.queue.submit([e.finish()]);await Promise.all(staging.map(b=>b.mapAsync(GPUMapMode.READ)));return staging.map(b=>b.getMappedRange().slice(0));}
+  finally{for(const b of staging)b.destroy();}
+ }
+ async function status(){
+  const [raw,clock]=await readBuffers([[resources[13],32],[resources[9],32]]),d=new Uint32Array(raw);
+  completed={step:d[6],time:new Float32Array(clock)[4]};
+  if(d[0]||d[1]||d[2])fault='Material solve paused: '+JSON.stringify({invalidDeformation:d[0],escapedSupport:d[1],nonfiniteOrAtomicRange:d[2]});
+  return {...read(),splitNodes:d[4],diagnostics:Array.from(d)};
+ }
  reset();
  return {particles,get config(){return {...config};},
-  setOptions(patch){const c=thermalConfig({...config,...patch});if(c.count!==config.count)throw Error('Resolution change requires a new thermal solver');config=c;device.queue.writeBuffer(params,0,uniforms(config));},
-  advance(steps=1){if(disposed)throw Error('Thermal solver disposed');if(!Number.isSafeInteger(steps)||steps<1)throw Error('Positive integral step count required');step+=steps;},
-  reset,
-  read:()=>({route:'thermal-phase-field-mpm.webgpu.v0',count:config.count,step,time:step*config.dt,config:{...config}}),
-  async snapshot(){const b=device.createBuffer({size:particles.size,usage:U.COPY_DST|U.MAP_READ});try{const e=device.createCommandEncoder();e.copyBufferToBuffer(particles,0,b,0,particles.size);device.queue.submit([e.finish()]);await b.mapAsync(GPUMapMode.READ);return {state:this.read(),particles:new Float32Array(b.getMappedRange()).slice()};}finally{b.destroy();}},
-  dispose(){disposed=true;for(const b of owned)b.destroy();}
+  setOptions(patch){ensure();const c=thermalConfig({...authored(),...patch});if(c.count!==config.count||c.gridSize!==config.gridSize)throw Error('Resolution/reference extent change requires a new thermal solver');config=c;device.queue.writeBuffer(params,0,uniforms(config));return read();},
+  advance(steps=1){
+   ensure();if(!Number.isSafeInteger(steps)||steps<1)throw Error('Positive integral step count required');
+   const e=device.createCommandEncoder();
+   for(let s=0;s<steps;s++){
+    e.clearBuffer(resources[1]);e.clearBuffer(resources[4]);e.clearBuffer(resources[11]);e.clearBuffer(resources[13],16,4);
+    dispatch(e,'binParticles',config.count);dispatch(e,'damageGradients',config.count);dispatch(e,'gradientSeeds',config.count);
+    dispatch(e,'deposit',config.count);dispatch(e,'reconcile',config.gridNodes);dispatch(e,'heatStep',N);
+    dispatch(e,'phaseSeed',N);
+    if(config.damage){
+     matrix(e);dispatch(e,'phaseStart',N);
+     for(let k=0;k<config.phaseIterations;k++){
+      matrix(e);dispatch(e,'dotPA',N);dispatch(e,'reducePA',128);dispatch(e,'phaseUpdate',N);
+      dispatch(e,'dotR',N);dispatch(e,'reduceR',128);dispatch(e,'phaseDirection',N);
+     }
+    }
+    dispatch(e,'gather',config.count);dispatch(e,'finishStep',1);
+   }
+   device.queue.submit([e.finish()]);step+=steps;return read();
+  },
+  reset,read,status,
+  async snapshot(){const state=await status();const [raw]=await readBuffers([[particles,particles.size]]);return {state,particles:new Float32Array(raw)};},
+  dispose(){if(disposed)return;disposed=true;for(const b of owned)b.destroy();}
  };
 }
