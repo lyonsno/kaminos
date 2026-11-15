@@ -29,13 +29,22 @@ establish arbitrary junctions or subcell opening at every fracture orientation.
 
 A matrix-free, lumped-mass preconditioned conjugate-gradient solve updates the
 phase field. Its configurable iteration count is an approximation; irreversible
-particle history and intact fraction survive transfer. Heat uses explicit
-mass-weighted grid conduction and upper exposed-face cooling. Temperature is
-transferred as a FLIP increment with an explicit [ambient, initial] extrema
-limiter. The thermalLimiterApplications counter exposes its use. The limiter
-removes spurious heating observed in unlimited transfer, but does not conserve
-thermal energy exactly. Spatial/temporal convergence and heat calibration remain
-unestablished.
+particle history and intact fraction survive transfer.
+
+Heat evolves directly on the persistent reference material lattice, with six
+neighbors at spacing0.5 and an exposed upper-layer cooling condition. The
+explicit stability check uses dt*(24*diffusivity+cooling)<=0.8. Equal-mass
+interior exchanges are symmetric; the thermal state avoids interpolation
+through the mechanical grid. The previous FLIP transfer produced ringing even
+after bounding its overshoot and is removed from this route. Reference thermal
+connections currently survive mechanical separation: heat isolation across new
+cracks, changing free surfaces and thermal contact remain unimplemented.
+This source does not yet establish heat transport for detached fragments.
+
+Strength-variation edits update the stored material field in reference
+coordinates while preserving deformation and damage history. Prestrain,
+prepared-split and split-velocity are initialization-only options; changing them
+requires a new solver and rejects without changing the effective configuration.
 
 Fixed-point integer atomics accumulate transfer and stiffness terms. Fault
 counters reject nonfinite/out-of-range individual contributions, invalid

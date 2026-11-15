@@ -12,7 +12,7 @@ export function thermalConfig(input={}) {
  if(c.dt<=0||c.mu<=0||c.bulk<=0||c.length<=0||c.toughness<=0||c.prestrain<=-1||c.contraction<0||c.contraction>=1)throw Error('Invalid positive thermal material domain');
  for(const k of ['diffusivity','cooling','damping','friction','splitVelocity'])if(c[k]<0)throw Error('Nonnegative thermal option required: '+k);
  for(const k of ['ambient','residual','variation','separation'])if(c[k]<0||c[k]>1)throw Error('Unit interval thermal option required: '+k);
- if(c.dt*(6*c.diffusivity+c.cooling)>.8)throw Error('Thermal explicit diffusion step is too large');
+ if(c.dt*(24*c.diffusivity+c.cooling)>.8)throw Error('Thermal explicit diffusion step is too large');
  if(c.dt*Math.sqrt(c.bulk+4*c.mu/3)>.35)throw Error('Thermal mechanical step exceeds initial elastic CFL');
  c.count=c.particlesPerAxis**3;c.gridSize=Math.ceil(c.particlesPerAxis*.5*(1+c.prestrain))+8;c.gridNodes=c.gridSize**3;
  return c;
@@ -40,7 +40,7 @@ export async function createThermalMpm({device,options={},particleBuffer=null}) 
  const resources={0:particles,1:storage(N*64,'Transfer atomics'),2:storage(N*64,'Two motion fields'),
   3:params,4:storage(config.gridNodes*8,'Damage gradient orientation'),5:storage(N*16,'Phase PCG'),
   6:storage(N*4,'Phase stiffness atomics'),7:storage(config.count*16,'Phase gradient'),
-  8:storage(Math.ceil(N/128)*16,'Phase reduction'),9:storage(32,'Phase and material clocks'),
+  8:storage(Math.ceil(N/128)*16,'Phase reduction'),9:storage(32,'Phase and material clocks'),10:storage(config.count*4,'Persistent material heat increments'),
   11:storage(config.gridNodes*4,'Particle bin heads'),12:storage(config.count*4,'Particle bin links'),
   13:storage(32,'Material fault and completion counters')};
  device.queue.writeBuffer(params,0,uniforms(config));
@@ -48,12 +48,12 @@ export async function createThermalMpm({device,options={},particleBuffer=null}) 
  const errors=(await module.getCompilationInfo()).messages.filter(m=>m.type==='error');
  if(errors.length){for(const b of owned)b.destroy();throw Error(errors.map(m=>m.lineNum+': '+m.message).join('; '));}
  const specs={
- initialize:[0,3],binParticles:[0,3,11,12,13],damageGradients:[0,3,4,11,12,13],gradientSeeds:[0,3,4,13],
- deposit:[0,1,3,4,13],reconcile:[1,2,3,13],heatStep:[0,2,3,4,13],
+ initialize:[0,3],updateStrength:[0,3],binParticles:[0,3,11,12,13],damageGradients:[0,3,4,11,12,13],gradientSeeds:[0,3,4,13],
+ deposit:[0,1,3,4,13],reconcile:[1,2,3,13],heatStep:[0,3,10,13],
  phaseSeed:[2,5],matrixGather:[0,2,3,4,5,7,13],matrixScatter:[0,2,3,4,6,7,13],
  matrixFinish:[2,5,6],phaseStart:[2,5],dotPA:[2,5,8],reducePA:[8,9],
  phaseUpdate:[5,9],dotR:[2,5,8],reduceR:[8,9],phaseDirection:[2,5,9],
- gather:[0,2,3,4,5,13],finishStep:[3,9,13]};
+ gather:[0,2,3,4,5,10,13],finishStep:[3,9,13]};
  const kernels={};
  try{
  for(const [name,bindings] of Object.entries(specs)){
@@ -72,7 +72,7 @@ export async function createThermalMpm({device,options={},particleBuffer=null}) 
   if(disposed)throw Error('Thermal solver disposed');const e=device.createCommandEncoder();
   e.clearBuffer(resources[9]);e.clearBuffer(resources[13]);dispatch(e,'initialize',config.count);device.queue.submit([e.finish()]);step=0;completed={step:0,time:0};fault=null;
  };
- const read=()=>({route:'thermal-phase-field-mpm.webgpu.v0',count:config.count,submittedSteps:step,completedSteps:completed.step,time:completed.time,fault,config:{...config}});
+ const read=()=>({route:'thermal-reference-heat-phase-field-mpm.webgpu.v1',count:config.count,thermalRoute:'reference-material-six-neighbor-diffusion',materialPointSpacing:.5,mechanicalGridSpacing:1,blockWidth:config.particlesPerAxis*.5,submittedSteps:step,completedSteps:completed.step,time:completed.time,fault,config:{...config}});
  async function readBuffers(entries){
   const e=device.createCommandEncoder();const staging=entries.map(([buffer,bytes])=>{const b=device.createBuffer({size:bytes,usage:U.COPY_DST|U.MAP_READ});e.copyBufferToBuffer(buffer,0,b,0,bytes);return b;});
   try{device.queue.submit([e.finish()]);await Promise.all(staging.map(b=>b.mapAsync(GPUMapMode.READ)));return staging.map(b=>b.getMappedRange().slice(0));}
@@ -82,18 +82,20 @@ export async function createThermalMpm({device,options={},particleBuffer=null}) 
   const [raw,clock]=await readBuffers([[resources[13],32],[resources[9],32]]),d=new Uint32Array(raw);
   completed={step:d[6],time:new Float32Array(clock)[4]};
   if(d[0]||d[1]||d[2])fault='Material solve paused: '+JSON.stringify({invalidDeformation:d[0],escapedSupport:d[1],nonfiniteOrAtomicRange:d[2]});
-  return {...read(),splitNodes:d[4],thermalLimiterApplications:d[7],phasePreconditionedResidual:new Float32Array(clock)[2],diagnostics:Array.from(d)};
+  return {...read(),splitNodes:d[4],phasePreconditionedResidual:new Float32Array(clock)[2],diagnostics:Array.from(d)};
  }
  reset();
  return {particles,get config(){return {...config};},
-  setOptions(patch){ensure();const c=thermalConfig({...authored(),...patch});if(c.count!==config.count||c.gridSize!==config.gridSize)throw Error('Resolution/reference extent change requires a new thermal solver');config=c;device.queue.writeBuffer(params,0,uniforms(config));return read();},
+  setOptions(patch){ensure();const c=thermalConfig({...authored(),...patch});if(c.count!==config.count||c.gridSize!==config.gridSize)throw Error('Resolution/reference extent change requires a new thermal solver');for(const key of ['prestrain','preparedSplit','splitVelocity'])if(c[key]!==config[key])throw Error('Initialization option '+key+' requires a new thermal solver');
+   const strengthChanged=c.variation!==config.variation;config=c;device.queue.writeBuffer(params,0,uniforms(config));
+   if(strengthChanged){const e=device.createCommandEncoder();dispatch(e,'updateStrength',config.count);device.queue.submit([e.finish()]);}return read();},
   advance(steps=1){
    ensure();if(!Number.isSafeInteger(steps)||steps<1)throw Error('Positive integral step count required');
    const e=device.createCommandEncoder();
    for(let s=0;s<steps;s++){
     e.clearBuffer(resources[1]);e.clearBuffer(resources[4]);e.clearBuffer(resources[11]);e.clearBuffer(resources[13],16,4);
     dispatch(e,'binParticles',config.count);dispatch(e,'damageGradients',config.count);dispatch(e,'gradientSeeds',config.count);
-    dispatch(e,'deposit',config.count);dispatch(e,'reconcile',config.gridNodes);dispatch(e,'heatStep',N);
+    dispatch(e,'deposit',config.count);dispatch(e,'reconcile',config.gridNodes);dispatch(e,'heatStep',config.count);
     dispatch(e,'phaseSeed',N);
     if(config.damage){
      matrix(e);dispatch(e,'phaseStart',N);

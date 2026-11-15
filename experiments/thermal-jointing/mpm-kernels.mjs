@@ -6,7 +6,7 @@ struct Particle {
  x:vec4f, v:vec4f, f0:vec4f, f1:vec4f, f2:vec4f,
  c0:vec4f, c1:vec4f, c2:vec4f, history:vec4f, rest:vec4f, grad:vec4f
 }
-struct Node {v:vec4f, heat:vec4f, normal:vec4f, phase:vec4f}
+struct Node {v:vec4f, damage:vec4f, normal:vec4f, phase:vec4f}
 struct Choice {norm:atomic<u32>, seed:atomic<u32>}
 struct Params {dims:vec4u, time:vec4f, heat:vec4f, fracture:vec4f, motion:vec4f, init:vec4f}
 @group(0) @binding(0) var<storage,read_write> particles:array<Particle>;
@@ -19,6 +19,7 @@ struct Params {dims:vec4u, time:vec4f, heat:vec4f, fracture:vec4f, motion:vec4f,
 @group(0) @binding(7) var<storage,read_write> gradients:array<vec4f>;
 @group(0) @binding(8) var<storage,read_write> partials:array<vec4f>;
 @group(0) @binding(9) var<storage,read_write> control:array<vec4f>;
+@group(0) @binding(10) var<storage,read_write> thermalDelta:array<f32>;
 @group(0) @binding(11) var<storage,read_write> heads:array<atomic<u32>>;
 @group(0) @binding(12) var<storage,read_write> next:array<u32>;
 @group(0) @binding(13) var<storage,read_write> diagnostics:array<atomic<u32>>;
@@ -100,7 +101,7 @@ fn fieldFor(p:Particle,n:u32)->u32 {if(nodes[n*2u].normal.w>.5){return n*2u+side
   let o=vec3i(x,y,z);let n=nodeId(base+o);let j=(n*2u+side(p,n))*16u;let w=weight(f,o);let dw=derivative(f,o);let d=vec3f(base+o)-p.x.xyz;
   let m=p.x.w*w;let momentum=m*(p.v.xyz+C*d)-params.time.x*p.history.z*(stress*dw);
   add(j,m);add(j+1u,momentum.x);add(j+2u,momentum.y);add(j+3u,momentum.z);
-  add(j+4u,m*p.v.w);add(j+5u,m*(1.-p.history.x));atomicMax(&acc[j+7u],bitcast<i32>(1.-p.history.x));
+  add(j+5u,m*(1.-p.history.x));atomicMax(&acc[j+7u],bitcast<i32>(1.-p.history.x));
   add(j+8u,p.x.w*dw.x);add(j+9u,p.x.w*dw.y);add(j+10u,p.x.w*dw.z);
   add(j+11u,volume*w*(1.+beta*p.history.y));add(j+12u,volume*w);add(j+13u,volume*w*p.history.x);
  }}}
@@ -109,17 +110,17 @@ fn value(i:u32)->f32{return f32(atomicLoad(&acc[i]))/FP;}
 fn nodeFrom(j:u32)->Node {
  let a=j*16u;let m=value(a);var n=Node(vec4f(0),vec4f(0),vec4f(0),vec4f(0));
  if(m<=0.){return n;}n.v=vec4f(value(a+1u),value(a+2u),value(a+3u),m);
- n.heat=vec4f(value(a+4u),0,value(a+5u),bitcast<f32>(atomicLoad(&acc[a+7u])));
+ n.damage=vec4f(0,0,value(a+5u),bitcast<f32>(atomicLoad(&acc[a+7u])));
  n.normal=vec4f(value(a+8u),value(a+9u),value(a+10u),0);
  n.phase=vec4f(value(a+11u),value(a+12u),value(a+13u),0);return n;
 }
 @compute @workgroup_size(128) fn reconcile(@builtin(global_invocation_id) gid:vec3u){
  let i=gid.x;if(i>=params.dims.x*params.dims.x*params.dims.x||broken()){return;}
  var a=nodeFrom(i*2u);var b=nodeFrom(i*2u+1u);
- let separate=a.v.w>0.&&b.v.w>0.&&max(a.heat.w,b.heat.w)>=params.motion.w&&min(a.heat.z/a.v.w,b.heat.z/b.v.w)>.03;
- if(!separate){a.v+=b.v;a.heat.x+=b.heat.x;a.heat.z+=b.heat.z;a.phase+=b.phase;a.normal+=b.normal;b=Node(vec4f(0),vec4f(0),vec4f(0),vec4f(0));}
- if(a.v.w>0.){a.v=vec4f(a.v.xyz/a.v.w,a.v.w);a.heat.x/=a.v.w;a.phase.z/=max(a.phase.y,1e-20);}
- if(b.v.w>0.){b.v=vec4f(b.v.xyz/b.v.w,b.v.w);b.heat.x/=b.v.w;b.phase.z/=max(b.phase.y,1e-20);}
+ let separate=a.v.w>0.&&b.v.w>0.&&max(a.damage.w,b.damage.w)>=params.motion.w&&min(a.damage.z/a.v.w,b.damage.z/b.v.w)>.03;
+ if(!separate){a.v+=b.v;a.damage.z+=b.damage.z;a.phase+=b.phase;a.normal+=b.normal;b=Node(vec4f(0),vec4f(0),vec4f(0),vec4f(0));}
+ if(a.v.w>0.){a.v=vec4f(a.v.xyz/a.v.w,a.v.w);a.phase.z/=max(a.phase.y,1e-20);}
+ if(b.v.w>0.){b.v=vec4f(b.v.xyz/b.v.w,b.v.w);b.phase.z/=max(b.phase.y,1e-20);}
  if(separate){
   var n=a.normal.xyz/max(length(a.normal.xyz),1e-20)-b.normal.xyz/max(length(b.normal.xyz),1e-20);
   n/=max(length(n),1e-20);let relative=b.v.xyz-a.v.xyz;let reduced=a.v.w*b.v.w/(a.v.w+b.v.w);
@@ -139,26 +140,24 @@ fn nodeFrom(j:u32)->Node {
   nodes[i*2u+u32(k)]=n;
  }
 }
+// Diffusion on the persistent reference material lattice (spacing .5).
+// Reference thermal connectivity is retained after mechanical separation.
 @compute @workgroup_size(128) fn heatStep(@builtin(global_invocation_id) gid:vec3u){
- let i=gid.x;let N=params.dims.x*params.dims.x*params.dims.x;if(i>=N*2u||broken()){return;}
- let n=nodes[i];if(n.v.w<=0.){return;}let pos=positionOfNode(i/2u);var delta=0.;
- for(var axis=0;axis<3;axis++){for(var sign=-1;sign<=1;sign+=2){
-  var q=pos;q[axis]+=sign;var sumMass=0.;var sumHeat=0.;
-  if(inside(q)){let j=nodeId(q)*2u;
-   for(var field=0u;field<2u;field++){
-    let other=nodes[j+field];if(other.v.w<=0.){continue;}
-    if(n.normal.w>.5&&other.normal.w>.5){
-     let seedA=atomicLoad(&choices[i/2u].seed);let seedB=atomicLoad(&choices[j/2u].seed);
-     let aligned=dot(particles[params.dims.z-seedA].grad.xyz,particles[params.dims.z-seedB].grad.xyz)>=0.;
-     let matchingField=select(1u-i%2u,i%2u,aligned);if(field!=matchingField){continue;}
-    }
-    sumMass+=other.v.w;sumHeat+=other.v.w*other.heat.x;
-   }
-  }
-  if(sumMass>0.){delta+=params.heat.x*min(n.v.w,sumMass)/n.v.w*(sumHeat/sumMass-n.heat.x);}
-  else if(axis==1&&sign==1){delta+=params.heat.y*(params.heat.z-n.heat.x);}
- }}
- nodes[i].heat.y=params.time.x*delta;
+ let i=gid.x;if(i>=params.dims.z||broken()){return;}let n=params.dims.y;
+ let coordinates=vec3i(i32(i%n),i32((i/n)%n),i32(i/(n*n)));let strides=vec3u(1u,n,n*n);
+ let T=particles[i].v.w;var rate=0.;
+ for(var axis=0;axis<3;axis++){
+  if(coordinates[axis]>0){rate+=4.*params.heat.x*(particles[i-strides[axis]].v.w-T);}
+  if(coordinates[axis]<i32(n)-1){rate+=4.*params.heat.x*(particles[i+strides[axis]].v.w-T);}
+ }
+ if(coordinates.y==i32(n)-1){rate+=params.heat.y*(params.heat.z-T);}
+ let delta=params.time.x*rate;let nextT=T+delta;
+ if(!(nextT>=params.heat.z-.000001&&nextT<=1.000001)){atomicAdd(&diagnostics[2],1u);return;}
+ thermalDelta[i]=delta;
+}
+@compute @workgroup_size(128) fn updateStrength(@builtin(global_invocation_id) gid:vec3u){
+ let i=gid.x;if(i>=params.dims.z){return;}let r=particles[i].rest.xyz;
+ particles[i].history.w=1.+params.fracture.w*sin(r.x*1.71)*sin(r.y*2.13)*sin(r.z*1.37);
 }
 @compute @workgroup_size(128) fn phaseSeed(@builtin(global_invocation_id) gid:vec3u){
  let i=gid.x;if(i>=arrayLength(&cg)){return;}let c=nodes[i].phase.z;cg[i]=vec4f(c,0,c,0);
@@ -207,20 +206,16 @@ var<workgroup> sums:array<vec4f,128>;
 }
 @compute @workgroup_size(128) fn gather(@builtin(global_invocation_id) gid:vec3u){
  let i=gid.x;if(i>=params.dims.z||broken()){return;}var p=particles[i];let base=vec3i(floor(p.x.xyz-.5));let f=p.x.xyz-vec3f(base);
- var velocity=vec3f(0);var C=mat3x3f(vec3f(0),vec3f(0),vec3f(0));var L=C;var heat=0.;var intact=0.;
+ var velocity=vec3f(0);var C=mat3x3f(vec3f(0),vec3f(0),vec3f(0));var L=C;let heat=thermalDelta[i];var intact=0.;
  for(var z=0;z<3;z++){for(var y=0;y<3;y++){for(var x=0;x<3;x++){
   let o=vec3i(x,y,z);let j=fieldFor(p,nodeId(base+o));let n=nodes[j];let w=weight(f,o);let dw=derivative(f,o);
-  velocity+=w*n.v.xyz;C+=4.*w*outer(n.v.xyz,vec3f(base+o)-p.x.xyz);L+=outer(n.v.xyz,dw);heat+=w*n.heat.y;intact+=w*cg[j].x;
+  velocity+=w*n.v.xyz;C+=4.*w*outer(n.v.xyz,vec3f(base+o)-p.x.xyz);L+=outer(n.v.xyz,dw);intact+=w*cg[j].x;
  }}}
  let F=(stoneIdentity()+params.time.x*L)*particleF(p);let x=p.x.xyz+params.time.x*velocity;
  if(!validF(F)){atomicAdd(&diagnostics[0],1u);return;}
  let newBase=vec3i(floor(x-.5));if(!inside(newBase)||!inside(newBase+vec3i(2))){atomicAdd(&diagnostics[1],1u);return;}
  if(!(all(abs(velocity)<vec3f(3.4e38))&&abs(p.v.w+heat)<3.4e38)){atomicAdd(&diagnostics[2],1u);return;}
- // Bounded FLIP scalar transfer: suppress the known FLIP extrema overshoot.
- // This limiter is observable and is not an energy-conservation claim.
- let temperature=clamp(p.v.w+heat,params.heat.z,1.);
- if(temperature!=p.v.w+heat){atomicAdd(&diagnostics[7],1u);}
- p.x=vec4f(x,p.x.w);p.v=vec4f(velocity,temperature);p.f0=vec4f(F[0],0);p.f1=vec4f(F[1],0);p.f2=vec4f(F[2],0);
+ p.x=vec4f(x,p.x.w);p.v=vec4f(velocity,p.v.w+heat);p.f0=vec4f(F[0],0);p.f1=vec4f(F[1],0);p.f2=vec4f(F[2],0);
  p.c0=vec4f(C[0],0);p.c1=vec4f(C[1],0);p.c2=vec4f(C[2],0);
  if(params.init.w>.5){p.history.x=stoneIntact(p.history.x,intact);}particles[i]=p;
 }

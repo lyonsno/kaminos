@@ -5,7 +5,7 @@ import {createThermalMpm,PARTICLE_WORDS} from '../experiments/thermal-jointing/m
 import {withKaminosGpu} from '../tools/shader-herder.mjs';
 test('surface cooling changes persistent material temperatures with a resolved gradient',async()=>{
  await withKaminosGpu(async({device})=>{
-  const solver=await createThermalMpm({device,options:{particlesPerAxis:8,cooling:8,damage:false}});
+  const solver=await createThermalMpm({device,options:{particlesPerAxis:8,cooling:8,damage:false,contraction:0,fixedBase:false}});
   try{
    const before=await solver.snapshot();solver.advance(500);const after=await solver.snapshot();
    assert.equal(after.state.fault,null);console.log('cooling-state',after.state);assert.equal(after.particles.length,8**3*PARTICLE_WORDS);
@@ -14,6 +14,10 @@ test('surface cooling changes persistent material temperatures with a resolved g
    assert.equal(mass,64);
    console.log('temperature-range',{cold,hot});assert.ok(cold<.95,'cooling must lower at least one material point by five percent at the selected time');
    assert.ok(hot<=1.00001,'cooling without a heat source must not heat material above its initial temperature');assert.ok(hot-cold>.05,'material must retain a spatial cooling gradient');
+   const rowHeat=new Float64Array(8),rowCount=new Uint32Array(8);
+   for(let j=0;j<after.particles.length;j+=PARTICLE_WORDS){const y=Math.round((after.particles[j+37]-3.25)*2);rowHeat[y]+=after.particles[j+7];rowCount[y]++;}
+   const means=Array.from(rowHeat,(v,i)=>v/rowCount[i]);console.log('cooling profile',means);
+   for(let y=0;y<7;y++)assert.ok(means[y+1]<=means[y]+1e-5,'uniform material cooled only from above must not develop a hotter layer above a cooler one');
   }finally{solver.dispose();}
  });
 });
@@ -56,5 +60,30 @@ test('fixed-point accumulation reports aggregate overflow before accepting anoth
    const e=device.createCommandEncoder(),pass=e.beginComputePass();pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(1);pass.end();e.copyBufferToBuffer(d,0,out,0,32);device.queue.submit([e.finish()]);await out.mapAsync(GPUMapMode.READ);
    assert.equal(new Uint32Array(out.getMappedRange())[2],1,'overflow must fault even when each contribution fits');
   }finally{a.destroy();d.destroy();out.destroy();}
+ });
+});
+
+test('strength variation edits update the persistent field and initialization-only edits reject truthfully',async()=>{
+ await withKaminosGpu(async({device})=>{
+  const solver=await createThermalMpm({device,options:{particlesPerAxis:8,variation:.25}});
+  try{
+   const before=await solver.snapshot();assert.ok(before.particles.some((v,i)=>i%PARTICLE_WORDS===35&&Math.abs(v-1)>.05));
+   solver.setOptions({variation:0});const after=await solver.snapshot();
+   for(let j=0;j<after.particles.length;j++){if(j%PARTICLE_WORDS===35)assert.equal(after.particles[j],1);else assert.equal(after.particles[j],before.particles[j]);}
+   for(const patch of [{prestrain:.01},{preparedSplit:true},{splitVelocity:.5}])assert.throws(()=>solver.setOptions(patch),/initialization|new thermal solver/i);
+   assert.equal(solver.read().config.prestrain,0);
+  }finally{solver.dispose();}
+ });
+});
+test('material-neighbor conduction conserves heat in an insulated stationary solid',async()=>{
+ await withKaminosGpu(async({device})=>{
+  const solver=await createThermalMpm({device,options:{particlesPerAxis:8,cooling:0,contraction:0,damage:false,fixedBase:false}});
+  try{
+   const initial=await solver.snapshot(),p=initial.particles;let energyBefore=0;
+   for(let j=0;j<p.length;j+=PARTICLE_WORDS){p[j+7]=p[j+37]<5?0:1;energyBefore+=p[j+3]*p[j+7];}
+   device.queue.writeBuffer(solver.particles,0,p);solver.advance(100);const after=await solver.snapshot();let energyAfter=0,cold=1,hot=0;
+   for(let j=0;j<p.length;j+=PARTICLE_WORDS){energyAfter+=after.particles[j+3]*after.particles[j+7];cold=Math.min(cold,after.particles[j+7]);hot=Math.max(hot,after.particles[j+7]);}
+   assert.equal(after.state.fault,null);assert.ok(Math.abs(energyAfter-energyBefore)<1e-4);assert.ok(cold>0&&hot<1);
+  }finally{solver.dispose();}
  });
 });
