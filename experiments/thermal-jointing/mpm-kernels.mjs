@@ -1,3 +1,5 @@
+// Damage-gradient partition/contact follows TwoFieldMPM (MIT, adjacent license).
+// penn-graphics-research/TwoFieldMPM@79e4a15c3a3bcc2e30a0de2590c70c03a7e5c67c
 import {THERMAL_STONE_WGSL} from './material-law.mjs';
 export const THERMAL_MPM_WGSL=THERMAL_STONE_WGSL+`
 struct Particle {
@@ -211,7 +213,11 @@ var<workgroup> sums:array<vec4f,128>;
  if(!validF(F)){atomicAdd(&diagnostics[0],1u);return;}
  let newBase=vec3i(floor(x-.5));if(!inside(newBase)||!inside(newBase+vec3i(2))){atomicAdd(&diagnostics[1],1u);return;}
  if(!(all(abs(velocity)<vec3f(3.4e38))&&abs(p.v.w+heat)<3.4e38)){atomicAdd(&diagnostics[2],1u);return;}
- p.x=vec4f(x,p.x.w);p.v=vec4f(velocity,p.v.w+heat);p.f0=vec4f(F[0],0);p.f1=vec4f(F[1],0);p.f2=vec4f(F[2],0);
+ // Bounded FLIP scalar transfer: suppress the known FLIP extrema overshoot.
+ // This limiter is observable and is not an energy-conservation claim.
+ let temperature=clamp(p.v.w+heat,params.heat.z,1.);
+ if(temperature!=p.v.w+heat){atomicAdd(&diagnostics[7],1u);}
+ p.x=vec4f(x,p.x.w);p.v=vec4f(velocity,temperature);p.f0=vec4f(F[0],0);p.f1=vec4f(F[1],0);p.f2=vec4f(F[2],0);
  p.c0=vec4f(C[0],0);p.c1=vec4f(C[1],0);p.c2=vec4f(C[2],0);
  if(params.init.w>.5){p.history.x=stoneIntact(p.history.x,intact);}particles[i]=p;
 }

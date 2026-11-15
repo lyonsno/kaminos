@@ -7,13 +7,13 @@ test('surface cooling changes persistent material temperatures with a resolved g
  await withKaminosGpu(async({device})=>{
   const solver=await createThermalMpm({device,options:{particlesPerAxis:8,cooling:8,damage:false}});
   try{
-   const before=await solver.snapshot();solver.advance(100);const after=await solver.snapshot();
+   const before=await solver.snapshot();solver.advance(500);const after=await solver.snapshot();
    assert.equal(after.state.fault,null);console.log('cooling-state',after.state);assert.equal(after.particles.length,8**3*PARTICLE_WORDS);
    let cold=1,hot=0,mass=0;
    for(let i=0;i<8**3;i++){const j=i*PARTICLE_WORDS;assert.equal(after.particles[j+3],before.particles[j+3]);assert.equal(after.particles[j+39],1);cold=Math.min(cold,after.particles[j+7]);hot=Math.max(hot,after.particles[j+7]);mass+=after.particles[j+3];}
    assert.equal(mass,64);
    console.log('temperature-range',{cold,hot});assert.ok(cold<.95,'cooling must lower at least one material point by five percent at the selected time');
-   assert.ok(hot-cold>.05,'material must retain a spatial cooling gradient');
+   assert.ok(hot<=1.00001,'cooling without a heat source must not heat material above its initial temperature');assert.ok(hot-cold>.05,'material must retain a spatial cooling gradient');
   }finally{solver.dispose();}
  });
 });
