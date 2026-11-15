@@ -71,7 +71,7 @@ test('coarse emission covariance retains a tilted material population',async()=>
  await withKaminosGpu(async({device:d})=>{
   const f=fixture(d,new Float32Array([...record([-.1,-.15,0],[1,1,1],0),...record([.1,.15,0],[1,1,1],0)])),b=createMaterialPacketBuilder(d);await b.prepare();
   try{const [raw]=await read(d,e=>[b.encode(e,{material:f.material,settings:{mode:'material-packets',packetWidth:1}}).resources.kernels],f.make);const k=new Float32Array(raw),a=k[4],bb=k[5],c=k[6],dd=k[9],ee=k[10],ff=k[14],det=a*(dd*ff-ee*ee)-bb*(bb*ff-c*ee)+c*(bb*ee-c*dd);
-   close(k[0],0,1e-3);close(k[1],0,1e-3);close((dd*ff-ee*ee)/det,.0109,1e-3);close((a*ff-c*c)/det,.0234,1e-3);close((c*ee-bb*ff)/det,.015,1e-3);
+   assert.ok(Math.abs(k[0])<3e-8&&Math.abs(k[1])<3e-8);close((dd*ff-ee*ee)/det,.0109,1e-3);close((a*ff-c*c)/det,.0234,1e-3);close((c*ee-bb*ff)/det,.015,1e-3);
   }finally{b.dispose();f.dispose();}
  },{wgslSources:[{label:'tilted material covariance production',code:MATERIAL_PACKET_BUILD_WGSL,entryPoint:'fitMaterial'}]});
 });
