@@ -54,9 +54,12 @@ fn derivative(f:vec3f,o:vec3i)->vec3f {
 fn outer(a:vec3f,b:vec3f)->mat3x3f{return mat3x3f(a*b.x,a*b.y,a*b.z);}
 fn validF(F:mat3x3f)->bool {let j=determinant(F);return j>0.&&j<3.4e38;}
 fn broken()->bool{return atomicLoad(&diagnostics[0])+atomicLoad(&diagnostics[1])+atomicLoad(&diagnostics[2])>0u;}
-fn add(i:u32,v:f32) {
- if(!(abs(v)<2047.)){atomicAdd(&diagnostics[2],1u);return;}atomicAdd(&acc[i],i32(round(v*FP)));
+fn checkedAtomic(cell:ptr<storage,atomic<i32>,read_write>,v:f32) {
+ if(!(abs(v)<2047.)){atomicAdd(&diagnostics[2],1u);return;}
+ let amount=i32(round(v*FP));let old=atomicAdd(cell,amount);
+ if((amount>0&&old>2147483647-amount)||(amount<0&&old<(-2147483647-1)-amount)){atomicAdd(&diagnostics[2],1u);}
 }
+fn add(i:u32,v:f32){checkedAtomic(&acc[i],v);}
 fn side(p:Particle,n:u32)->u32 {
  let seed=atomicLoad(&choices[n].seed);if(seed==0u){return 0u;}
  return select(1u,0u,dot(p.grad.xyz,particles[params.dims.z-seed].grad.xyz)>=0.);
@@ -169,7 +172,7 @@ fn nodeFrom(j:u32)->Node {
  let i=gid.x;if(i>=params.dims.z||broken()){return;}let p=particles[i];let base=vec3i(floor(p.x.xyz-.5));let f=p.x.xyz-vec3f(base);
  for(var z=0;z<3;z++){for(var y=0;y<3;y++){for(var x=0;x<3;x++){
   let o=vec3i(x,y,z);let v=dot(gradients[i].xyz,derivative(f,o));
-  if(!(abs(v)<2047.)){atomicAdd(&diagnostics[2],1u);return;}atomicAdd(&matrixAcc[fieldFor(p,nodeId(base+o))],i32(round(v*FP)));
+  checkedAtomic(&matrixAcc[fieldFor(p,nodeId(base+o))],v);
  }}}
 }
 @compute @workgroup_size(128) fn matrixFinish(@builtin(global_invocation_id) gid:vec3u){

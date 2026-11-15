@@ -41,13 +41,13 @@ Fixed-point integer atomics accumulate transfer and stiffness terms. Fault
 counters reject nonfinite/out-of-range individual contributions, invalid
 deformation and escaped grid support. A failed step may partially update
 particles and must not be interpreted as completed state; reset restarts the
-initial material. Per-contribution guards do not establish an aggregate overflow
-bound for every user-selected extreme. Completed and submitted step counts are
+initial material. Both individual contributions and signed aggregate integer overflow are
+checked; a fault pauses acceptance instead of silently wrapping the sum. Completed and submitted step counts are
 separate. Material time advances by explicit dt, not the wall clock.
 
 Live and exact offline advancement use the same solver. A single batch runs at
 a time; presentation frames do not create a catch-up backlog. Inputs retain the
-starting recipe. Snapshot export retains evolved particle state and effective
+starting recipe. Snapshot export pauses playback and retains evolved particle state and effective
 configuration; snapshot restoration, adaptive refinement, debris ownership
 transfer and coupling to Grist/waves are subsequent work.
 

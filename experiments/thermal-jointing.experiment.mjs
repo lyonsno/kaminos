@@ -50,7 +50,7 @@ export default {
    finally{pending=null;session.redraw();sync();}
   }
   const operations={
-   read,frame(){const size=config.particlesPerAxis*.125;return session.setView({position:[size*1.5,size*1.45+root.position.y,size*1.8],target:[0,size*.5+root.position.y,0]});},
+   read,frame(){const size=config.particlesPerAxis*.125;return session.setView({position:[size*2,size*1.8+root.position.y,size*2.4],target:[0,size*.5+root.position.y,0]});},
    play(value){if(typeof value!=='boolean')throw Error('Boolean playback required');if(error&&value)throw Error(error);playing=value;sync();session.redraw();return read();},
    advance:({steps=1}={})=>advance(steps),
    async reset(){playing=false;await pending?.catch(()=>{});solver.reset();last=await solver.status();error=null;record({kind:'thermal.reset',effective:read()});sync();session.redraw();return read();},
@@ -64,7 +64,7 @@ export default {
    },
    display(value){if(!Number.isInteger(value)||value<0||value>3)throw Error('Unknown thermal display');viewMode=value;mode.value=value;persist();sync();session.redraw();return read();},
    batch(value){if(!Number.isSafeInteger(value)||value<1)throw Error('Positive integral batch required');batch=value;persist();sync();return read();},
-   async snapshot(){await pending?.catch(()=>{});const result=await solver.snapshot();return {schema:'kaminos.thermal-material.v0',...result,particles:Array.from(result.particles)};}
+   async snapshot(){playing=false;await pending?.catch(()=>{});const work=solver.snapshot();pending=work;sync();try{const result=await work;return {schema:'kaminos.thermal-material.v0',...result,particles:Array.from(result.particles)};}finally{pending=null;sync();}}
   };
   const gpuFault=e=>{error=e.error.message;playing=false;sync();};device.addEventListener('uncapturederror',gpuFault);
   try{

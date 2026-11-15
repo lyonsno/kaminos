@@ -43,3 +43,18 @@ test('damage-gradient partition retains outward motion across a prepared damaged
   assert.ok(splitSpeed>sharedSpeed+.1);assert.ok(Math.abs(momentum)<1e-4);
  });
 });
+test('fixed-point accumulation reports aggregate overflow before accepting another material step',async()=>{
+ const {THERMAL_MPM_WGSL}=await import('../experiments/thermal-jointing/mpm-kernels.mjs');
+ await withKaminosGpu(async({device})=>{
+  const U=GPUBufferUsage;
+  const a=device.createBuffer({size:4,usage:U.STORAGE|U.COPY_DST|U.COPY_SRC}),d=device.createBuffer({size:32,usage:U.STORAGE|U.COPY_DST|U.COPY_SRC}),out=device.createBuffer({size:32,usage:U.MAP_READ|U.COPY_DST});
+  try{
+   device.queue.writeBuffer(a,0,new Int32Array([2147483640]));device.queue.writeBuffer(d,0,new Uint32Array(8));
+   const module=device.createShaderModule({code:THERMAL_MPM_WGSL+'\n@compute @workgroup_size(1) fn overflowFixture(){add(0u,.00002);}'});
+   const pipeline=await device.createComputePipelineAsync({layout:'auto',compute:{module,entryPoint:'overflowFixture'}});
+   const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:1,resource:{buffer:a}},{binding:13,resource:{buffer:d}}]});
+   const e=device.createCommandEncoder(),pass=e.beginComputePass();pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(1);pass.end();e.copyBufferToBuffer(d,0,out,0,32);device.queue.submit([e.finish()]);await out.mapAsync(GPUMapMode.READ);
+   assert.equal(new Uint32Array(out.getMappedRange())[2],1,'overflow must fault even when each contribution fits');
+  }finally{a.destroy();d.destroy();out.destroy();}
+ });
+});
