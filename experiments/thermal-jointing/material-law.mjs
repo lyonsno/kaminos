@@ -1,15 +1,14 @@
 // Borden split neo-Hookean energy/stress adapted from CD-MPM, MIT.
 // Source: penn-graphics-research/ziran2019@35742ac3ab1ae42cf2bbe8761fd7c8e630a638c4
-// PRE-FIX oracle baseline: thermal rest stretch is deliberately not applied yet.
-// Native execution is blocked by the host Metal compiler's XPC failure. Establish
-// the restraint-stress test's numerical failure before implementing that change.
-// This module is not registered as a Workbench experiment or a working solver.
+// Thermal rest stretch is an added isotropic constitutive operation. Temperature
+// is normalized: 1 at the initial solid state, 0 at the selected cold endpoint.
+// expansion is the total fractional free contraction across that interval.
 export const THERMAL_STONE_WGSL = `
 fn stoneIdentity() -> mat3x3f {
  return mat3x3f(vec3f(1,0,0),vec3f(0,1,0),vec3f(0,0,1));
 }
 fn stoneElasticF(F:mat3x3f, temperature:f32, expansion:f32) -> mat3x3f {
- return F;
+ return F*(1./(1.+expansion*(temperature-1.)));
 }
 fn stoneDegradation(intact:f32,residual:f32) -> f32 {
  return intact*intact*(1.-residual)+residual;
