@@ -3,10 +3,12 @@ import {PARTICLE_STATE_WGSL} from './volume-particle-state.mjs';
 import {PACKET_BUNDLE_STRUCT_WGSL,packetBundlePlan,createPacketBundleTransport} from './volume-packet-bundle.mjs';
 
 export function packetNetworkSettings(input={}){
- const s={receivers:8,sources:2,width:8,sections:16,nearDirections:6,receiverRadius:.6,nearRatio:.75,gain:1,...input};
- for(const key of Object.keys(s))if(!['receivers','sources','width','sections','nearDirections','receiverRadius','nearRatio','gain'].includes(key))throw Error('Unknown packet network setting '+key);
- for(const key of ['receivers','sources','width','sections','nearDirections'])if(!Number.isSafeInteger(s[key])||s[key]<1||s[key]>0xffffffff)throw Error('Invalid packet network '+key);
- for(const key of ['receiverRadius','nearRatio'])if(!(s[key]>0&&Number.isFinite(Math.fround(s[key]))))throw Error('Invalid packet network '+key);
+ const s={mode:"fine-reference",view:"off",packetWidth:4,materialSubdivisions:1,receiverBlend:1.25,receiverPatch:.25,packetSmoothing:1,supportSigmas:3,receivers:8,sources:2,width:8,sections:16,nearDirections:6,receiverRadius:.6,nearRatio:.75,gain:1,...input};
+ for(const key of Object.keys(s))if(!['mode','view','packetWidth','materialSubdivisions','receiverBlend','receiverPatch','packetSmoothing','supportSigmas','receivers','sources','width','sections','nearDirections','receiverRadius','nearRatio','gain'].includes(key))throw Error('Unknown packet network setting '+key);
+ if(!['off','packets','emission','extinction'].includes(s.view))throw Error('Unknown packet support view');
+ if(!['fine-reference','material-packets'].includes(s.mode))throw Error('Unknown packet network mode');
+ for(const key of ['packetWidth','materialSubdivisions','receivers','sources','width','sections','nearDirections'])if(!Number.isSafeInteger(s[key])||s[key]<1||s[key]>0xffffffff)throw Error('Invalid packet network '+key);
+ for(const key of ['receiverRadius','nearRatio','receiverBlend','receiverPatch','packetSmoothing','supportSigmas'])if(!(s[key]>0&&Number.isFinite(Math.fround(s[key]))))throw Error('Invalid packet network '+key);
  if(!(s.gain>=0&&Number.isFinite(Math.fround(s.gain))))throw Error('Invalid packet network gain');return s;
 }
 

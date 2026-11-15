@@ -20,3 +20,15 @@ test('an unchanged held observation becomes available again after a transient ma
  frame.identity.materialStamp='edited-medium';controller.tick();assert.equal(solves,2,'same-step coefficient changes require a fresh solve');
  controller.dispose();assert.equal(installed,null);
 });
+
+test('preparation retains only the latest requested section variant and keeps the prior field installed',async()=>{
+ const scene=new Group(),pending=[],prepares=[],solved=[];let installed=null;
+ const device={createBuffer:({size})=>({size,destroy(){}}),queue:{writeBuffer(){},onSubmittedWorkDone:async()=>{}}};
+ const frame={identity:{epoch:1,step:1,materialStamp:'held'},domain:{worldFromFine:{scale:1,translate:[0,0,0]}}};
+ const owner={submitOpticalParticleMaterial(fn){fn({},frame,device);return {available:true,identity:frame.identity};},setOpticalParticleIncident(x){installed=x;}};
+ const network={preparationKey:s=>String(s.sections),prepare(s){prepares.push(s.sections);return new Promise(resolve=>pending.push(resolve));},encode(e,{settings:s}){solved.push(s.sections);return {identity:frame.identity,receipt:{identity:frame.identity,settings:s}};},dispose(){}};
+ const c=createParticlePacketLighting({runtime:()=>owner,scene:()=>scene,createCommonNetwork:()=>network});
+ c.configure({enabled:true,mode:'material-packets',sections:8});c.tick();pending.shift()();await new Promise(setImmediate);c.tick();const first=installed;assert.ok(first);
+ c.configure({sections:12});c.tick();c.configure({sections:16});c.tick();c.configure({sections:24});c.tick();assert.deepEqual(prepares,[8,12]);assert.equal(installed,first);
+ pending.shift()();await new Promise(setImmediate);c.tick();assert.deepEqual(prepares,[8,12,24]);assert.deepEqual(solved,[8]);pending.shift()();await new Promise(setImmediate);c.tick();assert.deepEqual(solved,[8,24]);assert.notEqual(installed,first);c.dispose();
+});
