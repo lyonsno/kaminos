@@ -68,7 +68,7 @@ export function createLightSliceReceiverFollow({runtime,onRead=()=>{}}){
   if(!requested||match?.state==='lost'||inFlight)return;
   const owner=runtime();
   const lost=reason=>{match={state:'lost',reason};onRead(match);};
-  if(materialOwner&&owner!==materialOwner){lost('Native particle source changed');return;}
+  if(requested.emissive&&materialOwner&&owner!==materialOwner){lost('Native particle source changed');return;}
   if(!owner?.submitOpticalParticleMaterial)return;
   let pending=null,scope=null;
   try{
@@ -99,7 +99,7 @@ export function createLightSliceReceiverFollow({runtime,onRead=()=>{}}){
     catch(e){staging.destroy();throw e;}
     pending={staging,transform,epoch,step,identity:frame.identity};
    });
-   if(!submitted.available){pending?.staging.destroy();if(scope)void scope.popErrorScope().catch(()=>{});if(submitted.terminal)lost(submitted.reason);return;}
+   if(!submitted.available){pending?.staging.destroy();if(scope)void scope.popErrorScope().catch(()=>{});if(requested.emissive&&submitted.terminal)lost(submitted.reason);return;}
   }catch(e){pending?.staging.destroy();if(scope)void scope.popErrorScope().catch(()=>{});match={state:'lost',reason:e.message};onRead(match);return;}
   if(!pending)return;
   const {staging,transform,epoch,step,identity}=pending,token=requestId;

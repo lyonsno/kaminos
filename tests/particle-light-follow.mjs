@@ -18,4 +18,5 @@ test('terminal material loss ends a track, while a transient material gap leaves
  const f=createLightSliceReceiverFollow({runtime:()=>owner});
  f.start(world,1,{emissive:true});f.tick();assert.equal(f.read().state,'seeking');
  terminal=true;f.tick();assert.deepEqual(f.read(),{state:'lost',reason:'Native particle material is inactive'});
+ f.start(world,1);f.tick();assert.equal(f.read().state,'seeking','receiver follow may be armed before material is admitted');
 });
