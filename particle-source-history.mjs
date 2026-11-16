@@ -7,7 +7,7 @@ const sourceAt=(ray,z)=>ray.slice(z*4,z*4+3).reduce((n,v)=>n+Math.max(v,0),0);
 // Compare two adjacent columns of one projected footprint. One illuminated
 // interval on both paths nominates a shared source, but does not establish
 // that each path observed exactly the same contributors.
-export function sourceHistoryTarget(snapshot){
+export function sourceHistoryTarget(snapshot,{start=0,end=1}={}){
  if(snapshot?.source!=='flame'||snapshot.route!=='native-particle-bundle-ordered-deposition'||snapshot.width<3||snapshot.width%2!==1)return null;
  const {width,sections,moments,emitter,receiver,halfWidth}=snapshot,mid=Math.floor(width/2),donor=mid*(width+1);
  const neighbors=[donor+1,donor-1,donor+width,donor-width];
@@ -20,7 +20,8 @@ export function sourceHistoryTarget(snapshot){
     return sourceAt(row,section)*t*(tau===0?1:-Math.expm1(-tau)/tau);
    };
    const signal=Math.min(opticalPower(a,ta),opticalPower(b,tb));
-   if(signal>0&&signal>(best?.signal??0))best={section,receiver:ray,signal};
+   const depth=(section+.5)/sections;
+   if(depth>=start&&depth<end&&signal>0&&signal>(best?.signal??0))best={section,receiver:ray,signal};
    ta*=Math.exp(-a[section*4+3]);tb*=Math.exp(-b[section*4+3]);
   }
  }

@@ -61,3 +61,11 @@ test('a source carried downstream changes depth order of emission, while every b
  assert.ok(carried.profiles[5].at(-1).light[0]>1);
  assert.ok(Math.abs(carried.profiles[5].at(-1).transmission-.125)<1e-12);
 });
+
+test('a chosen depth window excludes strong sources outside the observed interval',()=>{
+ const sample=bundle(1,8,4);
+ sample.moments[4][4]=100;sample.moments[5][4]=80;
+ assert.equal(sourceHistoryTarget(sample).section,1);
+ assert.equal(sourceHistoryTarget(sample,{start:0,end:.5}).section,0);
+ assert.equal(sourceHistoryTarget(sample,{start:0,end:.1}),null);
+});

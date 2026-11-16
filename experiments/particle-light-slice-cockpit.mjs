@@ -34,8 +34,8 @@ export function createParticleLightSliceCockpit({runtime,session,select,refresh,
   sourceFollow.stop();historyTarget=null;historyKey=null;history=null;prediction=null;score=null;historyStatus=null;
  }
  function trackSource(){
-  const current=reader.read().result,target=sourceHistoryTarget(current);
-  if(!settings.enabled||settings.source!=='flame'||!target)throw Error('Sample native emission on two neighboring paths first (use an odd bundle width of at least 3)');
+  const current=reader.read().result,target=sourceHistoryTarget(current,{start:settings.correctionStart,end:settings.correctionStart+settings.correctionExtent});
+  if(!settings.enabled||settings.source!=='flame'||!target)throw Error('Choose a depth window with emission on two neighboring paths (Native flame, odd bundle width of at least 3)');
   clearHistory();historyTarget=target;historyKey=current.key;
   sourceFollow.start(target.point,target.radius,{emissive:true});
   draw();session.redraw();return read();
@@ -291,7 +291,7 @@ export function createParticleLightSliceCockpit({runtime,session,select,refresh,
   const buttons=document.createElement('div');buttons.style.cssText='display:flex;flex-wrap:wrap;gap:4px;margin:6px 0';
   for(const endpoint of vectors){const button=document.createElement('button');button.type='button';button.textContent='Select '+endpoint;button.addEventListener('click',()=>call('pickLightSliceHandle',{endpoint}));buttons.append(button);}
   const hold=document.createElement('button');hold.type='button';hold.textContent='Hold this sample';hold.addEventListener('click',()=>call('holdLightSlice',{}));buttons.append(hold);panel.append(buttons);
-  const track=document.createElement('button');track.type='button';track.textContent='Track shared emission';track.addEventListener('click',()=>call('trackLightSliceSource',{}));buttons.append(track);
+  const track=document.createElement('button');track.type='button';track.textContent='Track shared emission';track.title='Follow an emitting carrier in the correction depth window and compare two neighboring light paths.';track.addEventListener('click',()=>call('trackLightSliceSource',{}));buttons.append(track);
   const historyLine=document.createElement('p');historyLine.style.cssText='font:12px monospace;white-space:pre-line;overflow-wrap:anywhere';panel.append(historyLine);
   const depth=document.createElement('canvas'),cross=document.createElement('canvas'),status=document.createElement('p');
   for(const c of [depth,cross])c.style.cssText='display:block;width:100%;image-rendering:pixelated;background:#10151a';
