@@ -1,12 +1,12 @@
 // kaminos-test: node
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {seedBundleReuse,reprojectBundleReuse} from '../particle-bundle-reuse.mjs';
+import {seedBundleReuse,reprojectBundleReuse,validateBundleReplay} from '../particle-bundle-reuse.mjs';
 
 function scene(step,fn,tau=0){
  const width=9,sections=3;
  const moments=Array.from({length:width*width},(_,i)=>Array.from({length:sections*4},(_,j)=>j%4===3?tau:j%4===0?fn(i%width,Math.floor(i/width),Math.floor(j/4)):0));
- return {identity:{epoch:1,step,materialStamp:'material'},emitter:[0,0,0],receiver:[0,0,3],halfWidth:4.5,width,sections,moments};
+ return {identity:{epoch:1,step,frame:step*2,materialStamp:'material'},emitter:[0,0,0],receiver:[0,0,3],halfWidth:4.5,width,sections,moments};
 }
 test('the held and advected arms sample the same sparse paths; dense fresh RGB never leaks into predictions',()=>{
  const old=scene(5,(x,y,z)=>x+2*y+z),history=seedBundleReuse(old,3);
@@ -39,4 +39,17 @@ test('history that leaves the patch exposes holes instead of treating unknown em
  assert.equal(p.error,null);
  assert.throws(()=>reprojectBundleReuse(h,moved,{...f,identity:{...f.identity,epoch:2}}),/different material or beam/);
  assert.throws(()=>reprojectBundleReuse(h,moved,scene(10,()=>1)),/later material step/);
+});
+
+test('replay admits complete same-observation profiles and rejects forged coverage or a shortened fresh arm',()=>{
+ const seed=scene(10,()=>1),h=seedBundleReuse(seed,3),positions=h.samples.map(p=>p.xyz);
+ const reference={...scene(11,()=>2),previous:seed.identity,positions};
+ const result=reprojectBundleReuse(h,positions,reference);
+ const tape={geometry:h.basis,source:'native-particle-bundle / same-material Fine velocity',seed,stride:3,samples:positions.length,frames:[{reference,result}]};
+ assert.deepEqual(validateBundleReplay(tape),{hasDense:false,hasSmoke:false});
+ const mutate=(change,reason)=>{const bad=structuredClone(tape);change(bad.frames[0]);assert.throws(()=>validateBundleReplay(bad),reason);};
+ mutate(f=>f.result.fresh[0].pop(),/Incomplete fresh/);
+ mutate(f=>f.result.identity.epoch++,/observation mismatch/);
+ mutate(f=>f.reference.previous={...f.reference.previous,step:9},/skipped or changed/);
+ mutate(f=>f.result.coveredPoints--,/support count/);
 });

@@ -14,6 +14,7 @@ ${PARTICLE_FINE_VELOCITY_WGSL}
  let q=points[id.x];if(q.w==0.0){return;}
  if(!particleInsideFine(q.xyz)){points[id.x].w=0.0;return;}
  let p=q.xyz+particleFineVelocity(q.xyz)*u.time.z*u.transport.x;
+ if(any((bitcast<vec3<u32>>(p)&vec3<u32>(0x7f800000u))==vec3<u32>(0x7f800000u))){points[id.x]=vec4<f32>(0,0,0,-1);return;}
  points[id.x]=vec4<f32>(p,select(0.0,1.0,particleInsideFine(p)));
 }
 `;
@@ -21,10 +22,15 @@ ${PARTICLE_FINE_VELOCITY_WGSL}
 // Replay-only borrow; no per-frame browser work is installed. Reference and
 // velocity are submitted together against the same immutable material identity.
 export function createBundleReuseSampler(runtime,geometry){
- let device=null,transport=null,flow=null,busy=false,last=null;
- async function capture(positions=null){
+ let device=null,transport=null,flow=null,busy=false,last=null,latest=null,currentPositions=null;
+ function arm(seed,positions){
+  if(busy||seed!==latest||currentPositions||!positions.length||positions.some(p=>p.length!==3||!p.every(Number.isFinite)))throw Error('Bundle positions require the first capture and finite seed coordinates');
+  currentPositions=positions.map(p=>[...p]);
+ }
+ async function capture(){
+  const positions=currentPositions;
   if(busy)throw Error('A bundle capture is already in flight');
-  if(positions&&(!last||!positions.length))throw Error('Seed the bundle before advancing');
+  if(last&&!positions)throw Error('Arm retained sections from the first capture before advancing');
   busy=true;
   const buffers=[];let scoped=false,pending=null;
   try{
@@ -65,12 +71,15 @@ export function createBundleReuseSampler(runtime,geometry){
    await Promise.all([read.mapAsync(GPUMapMode.READ),moved?.mapAsync(GPUMapMode.READ)]);
    const moments=readOpticalAtlas(new Uint8Array(read.getMappedRange()),receipt,rowBytes);
    const data=moved&&new Float32Array(moved.getMappedRange());
+   if(data?.some((v,i)=>i%4===3&&v!==0&&v!==1))throw Error('Invalid native Fine advection output');
    const next=data?Array.from({length:positions.length},(_,i)=>data[4*i+3]===1?[0,1,2].map(c=>data[4*i+c]*scale+translate[c]):null):null;
    if(next?.some(p=>p?.some(v=>!Number.isFinite(v))))throw Error('Non-finite native Fine advection result');
-   last=identity;
-   return {...geometry,identity,moments,positions:next,route:'native-particle-bundle / same-material Fine velocity',
+   const previous=last;
+   last=identity;currentPositions=next;
+   latest={...geometry,identity,previous,transform:{scale,translate},moments,positions:next?.map(p=>p&&[...p])??null,route:'native-particle-bundle / same-material Fine velocity',
     flowModel:'pointwise one-step Fine flow, fixed reconstruction support, carried emission, fixed extinction'};
+   return latest;
   }finally{if(scoped)await device?.popErrorScope().catch(()=>{});buffers.forEach(b=>b.destroy());busy=false;}
  }
- return {capture,dispose(){transport?.dispose();transport=null;}};
+ return {arm,capture,dispose(){transport?.dispose();transport=null;}};
 }

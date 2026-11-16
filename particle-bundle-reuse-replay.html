@@ -3,13 +3,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Light bundle replay</title>
 <style>
+[hidden]{display:none}
 :root{color-scheme:dark;font:16px system-ui;background:#14181d;color:#e9ebef}
 body{margin:2rem auto;max-width:1100px;padding:0 1.25rem}h1{margin-bottom:.5rem}p{color:#bfc8d1}
 nav{display:flex;gap:1rem;align-items:center;flex-wrap:wrap;margin:1.5rem 0}label{display:grid;min-width:10rem;gap:.15rem}
 button,select{font:inherit;padding:.4rem .7rem}section{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}
 figure{margin:0;background:#20272f;padding:.8rem;border-radius:.35rem}figcaption{margin-bottom:.75rem}
-canvas{image-rendering:pixelated;width:100%;aspect-ratio:1;background:#000}
-strong{color:#fff}a{color:#9dd1ff}#status{font-variant-numeric:tabular-nums}
+canvas,img{display:block;width:100%;background:#000}canvas{image-rendering:pixelated;width:100%;aspect-ratio:1;background:#000}
+.smokeFrame{position:relative;overflow:hidden;background:#000}.smokeFrame img{position:absolute;max-width:none;height:auto}strong{color:#fff}a{color:#9dd1ff}#status{font-variant-numeric:tabular-nums}
 @media(max-width:650px){body{margin-top:1rem}section{gap:.4rem}figure{padding:.35rem}figcaption{font-size:.8rem}}
 </style>
 <h1>Light through held smoke</h1>
@@ -18,17 +19,21 @@ strong{color:#fff}a{color:#9dd1ff}#status{font-variant-numeric:tabular-nums}
 <button id="play" disabled>Play</button>
 <label>Simulation step <input type="range" id="step" min="0" value="0" disabled></label>
 <label id="planeLabel"><span id="planeName">Depth section</span> <input type="range" id="plane" min="0" value="0" disabled></label>
-<label>View <select id="projection"><option value="cross">Across beam at depth</option><option value="along">Along beam at row</option></select></label>
+<label>View <select id="projection"><option id="smokeOption" value="smoke" hidden>Rendered smoke</option><option value="cross">Across beam at depth</option><option value="along">Along beam at row</option></select></label>
+<label id="densityLabel" hidden>Retained rays <select id="density"><option value="sparse">Sparse</option><option value="dense">Dense control</option></select></label>
+<label id="exposureLabel" hidden>Smoke brightness <input id="exposure" type="range" min="1" max="7" step=".1" value="2.8"></label>
+<label id="frameLabel" hidden><span><input id="fullFrame" type="checkbox"> Full frame</span></label>
 </nav>
 <section>
-<figure><figcaption><strong>Held</strong></figcaption><canvas id="held" aria-label="Held sparse emission"></canvas></figure>
-<figure><figcaption><strong>Advected</strong></figcaption><canvas id="advected" aria-label="Emission carried with the Fine flow"></canvas></figure>
-<figure><figcaption><strong>Fresh emission</strong></figcaption><canvas id="fresh" aria-label="Fresh emission with the old extinction"></canvas></figure>
+<figure><figcaption><strong>Held</strong></figcaption><div class="smokeFrame" id="heldFrame" hidden><img id="heldSmoke" alt="Held emission through the native smoke"></div><canvas id="held" aria-label="Held sparse emission"></canvas></figure>
+<figure><figcaption><strong>Advected</strong></figcaption><div class="smokeFrame" id="advectedFrame" hidden><img id="advectedSmoke" alt="Advected emission through the native smoke"></div><canvas id="advected" aria-label="Emission carried with the Fine flow"></canvas></figure>
+<figure><figcaption><strong>Fresh emission</strong></figcaption><div class="smokeFrame" id="freshFrame" hidden><img id="freshSmoke" alt="Fresh emission through the native smoke"></div><canvas id="fresh" aria-label="Fresh emission with the old extinction"></canvas></figure>
 </section>
 <p id="status" aria-live="polite">Loading recorded native material…</p>
-<p>The blue checkerboard marks an unknown light prefix: at least one upstream section lacked transported coverage. A black cell has a valid prediction of little or no light. All panels use the same exposure.</p>
+<p id="coverageNote">The blue checkerboard marks an unknown light prefix: at least one upstream section lacked transported coverage. A black cell has a valid prediction of little or no light. All panels use the same exposure.</p>
 <script type="module">
-const get=id=>document.getElementById(id),status=get('status'),step=get('step'),plane=get('plane'),projection=get('projection'),play=get('play');
+import {validateBundleReplay} from './particle-bundle-reuse.mjs';
+const get=id=>document.getElementById(id),status=get('status'),step=get('step'),plane=get('plane'),projection=get('projection'),play=get('play'),density=get('density');
 let tape,timer;
 async function load(){
  const path=new URLSearchParams(location.search).get('recording');
@@ -37,16 +42,62 @@ async function load(){
  if(!response.ok)throw Error('Recording unavailable ('+response.status+')');
  tape=await response.json();
  const {frames,geometry:{width,sections},stride,samples}=tape;
- if(tape.source!=='native-particle-bundle / same-material Fine velocity'||!frames.length||samples!==(width/stride)**2*sections||
-    frames.some(({result:r},i)=>r.identity.step!==tape.seed.identity.step+i+1||r.totalPoints!==width*width*sections))throw Error('Incomplete or wrong-route native replay');
+ const {hasDense:compared,hasSmoke}=validateBundleReplay(tape);
+ if(hasSmoke){get('smokeOption').hidden=false;projection.value='smoke';}
+ if(compared){
+  get('densityLabel').hidden=false;
+  density.options[0].textContent=(width/stride)**2+' (sparse)';
+  density.options[1].textContent=width**2+' (dense control)';
+ }
+ let framing=null;
+ if(hasSmoke){
+  const urls=frames.flatMap(f=>Object.values(f.smoke)),images=await Promise.all(urls.map(async url=>{const im=new Image();im.src=url;await im.decode();return im;}));
+  const [first]=images,w=first.naturalWidth,h=first.naturalHeight;
+  const c=document.createElement('canvas');c.width=w;c.height=h;
+  const ctx=c.getContext('2d',{willReadFrequently:true});
+  const xs=new Float64Array(w),ys=new Float64Array(h);
+  for(const im of images){
+   if(im.naturalWidth!==w||im.naturalHeight!==h)throw Error('Replay camera dimensions changed');
+   ctx.clearRect(0,0,w,h);ctx.drawImage(im,0,0);
+   const pixels=ctx.getImageData(0,0,w,h).data;
+   for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    const i=4*(x+y*w),power=Math.max(0,pixels[i]-15,pixels[i+1]-15,pixels[i+2]-15);
+    xs[x]+=power;ys[y]+=power;
+   }
+  }
+  const bounds=a=>{
+   const mass=a.reduce((n,x)=>n+x,0);
+   if(!(mass>0))throw Error('No visible smoke at the common exposure');
+   let sum=0,lo=0,hi=a.length-1;
+   for(let i=0;i<a.length;i++){sum+=a[i];if(sum<mass*.005)lo=i;if(sum>=mass*.995){hi=i;break;}}
+   const pad=Math.ceil(.12*(hi-lo+1));
+   return [Math.max(0,lo-pad),Math.min(a.length,hi+pad+1)];
+  };
+  const [x,x1]=bounds(xs),[y,y1]=bounds(ys);
+  framing={w,h,x,y,cw:x1-x,ch:y1-y};
+ }
  const peak=frames.reduce((max,f)=>f.result.fresh.reduce((roof,ray)=>ray.reduce((n,p)=>Math.max(n,...p.light),roof),max),0);
  if(!(peak>0))throw Error('Replay has no visible native reference');
  step.max=frames.length-1;plane.max=sections-1;plane.value=sections-1;
  play.disabled=step.disabled=plane.disabled=false;
  function draw(){
-  const r=frames[Number(step.value)].result,k=Number(plane.value),along=projection.value==='along';
+  const frame=frames[Number(step.value)],r=projection.value!=='smoke'&&compared&&density.value==='dense'?frame.dense:frame.result,k=Number(plane.value),along=projection.value==='along',smoke=projection.value==='smoke';
+  get('planeLabel').hidden=smoke;get('exposureLabel').hidden=get('frameLabel').hidden=!smoke;
+  get('densityLabel').hidden=smoke||!compared;
+  get('coverageNote').textContent=smoke
+   ? 'All panels share one crop and brightness across the whole replay. Only the selected beam contributes light. Direct flame emission is hidden; unsupported predictions contribute no beam light here. Use the across/along views to see the blue coverage mask.'
+   : 'Blue checkerboards mark unsupported light prefixes. Black cells have a valid prediction of little or no light. All panels use the same exposure.';
   for(const mode of ['held','advected','fresh']){
-   const canvas=get(mode);canvas.width=along?sections:width;canvas.height=width;
+   const canvas=get(mode),image=get(mode+'Smoke'),border=get(mode+'Frame');
+   canvas.hidden=smoke;border.hidden=!smoke;
+   if(smoke){
+    let {w,h,x,y,cw,ch}=framing;
+    if(get('fullFrame').checked){x=y=0;cw=w;ch=h;}
+    border.style.aspectRatio=cw+'/'+ch;
+    image.style.cssText='width:'+(100*w/cw)+'%;left:'+(-100*x/cw)+'%;top:'+(-100*y/ch)+'%;filter:brightness('+get('exposure').value+')';
+    image.src=frame.smoke[mode];continue;
+   }
+   canvas.width=along?sections:width;canvas.height=width;
    const ctx=canvas.getContext('2d'),pixels=ctx.createImageData(canvas.width,canvas.height);
    for(let y=0;y<width;y++)for(let x=0;x<canvas.width;x++){
     const p=along?r[mode][k*width+y][x]:r[mode][y*width+x][k];
@@ -56,12 +107,12 @@ async function load(){
    ctx.putImageData(pixels,0,0);
   }
   const frac=n=>n===null?'—':(100*n).toFixed(1)+'%';
-  status.textContent='Step '+r.identity.step+' (seed '+r.heldIdentity.step+') · '+(along?'Row ':'Depth section ')+(k+1)+' · '+
+  status.textContent='Step '+r.identity.step+' (seed '+r.heldIdentity.step+') · '+(smoke?'Same native smoke':(along?'Row ':'Depth section ')+(k+1))+' · '+
    r.coveredPoints+'/'+r.totalPoints+' receiver points covered · '+frac(r.missingEnergyFraction)+' of fresh light lies in unsupported prefixes. '+
    (r.error?'Mean error on '+r.compared+' common points: held '+r.error.held.toFixed(3)+', advected '+r.error.advected.toFixed(3)+'.':'No common points to score.');
  }
  projection.onchange=()=>{const along=projection.value==='along';get('planeName').textContent=along?'Transverse row':'Depth section';plane.max=(along?width:sections)-1;plane.value=along?Math.floor(width/2):sections-1;draw();};
- step.oninput=plane.oninput=draw;
+ step.oninput=plane.oninput=density.onchange=get('exposure').oninput=get('fullFrame').onchange=draw;
  play.onclick=()=>{if(timer){clearInterval(timer);timer=null;play.textContent='Play';}else{timer=setInterval(()=>{step.value=(Number(step.value)+1)%frames.length;draw();},350);play.textContent='Pause';}};
  draw();
 }

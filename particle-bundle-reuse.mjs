@@ -70,3 +70,36 @@ export function reprojectBundleReuse(history,positions,reference){
  return {identity:{...reference.identity},heldIdentity:history.identity,held,advected,fresh,support:advectedState.support,coveredPoints,
   totalPoints:held.length*history.basis.sections,compared,missingEnergyFraction:energy?missingEnergy/energy:null,error:compared?{held:holdError/compared,advected:warpError/compared}:null};
 }
+
+const sameObservation=(a,b)=>!!a&&!!b&&a.epoch===b.epoch&&a.step===b.step&&a.materialStamp===b.materialStamp&&a.frame===b.frame;
+const fixedValues=(a,n)=>Array.isArray(a)&&a.length===n;
+export function validateBundleReplay(tape){
+ const {geometry:g,seed,stride,samples,frames}=tape??{};
+ const w=g?.width,z=g?.sections,n=w*w;
+ if(tape?.source!=='native-particle-bundle / same-material Fine velocity'||![w,z,stride].every(v=>Number.isSafeInteger(v)&&v>0)||
+    stride%2!==1||w%stride||samples!==(w/stride)**2*z||!frames?.length||!seed?.identity||
+    !Number.isSafeInteger(seed.identity.epoch)||!Number.isSafeInteger(seed.identity.step)||!Number.isSafeInteger(seed.identity.frame)||
+    typeof seed.identity.materialStamp!=='string')throw Error('Incomplete or wrong-route native replay');
+ const check=(r,id)=>{
+  if(!sameObservation(r?.identity,id)||!sameObservation(r.heldIdentity,seed.identity)||r.totalPoints!==n*z)throw Error('Replay arm observation mismatch');
+  for(const arm of ['held','advected','fresh']){
+   if(!fixedValues(r[arm],n)||r[arm].some(ray=>!fixedValues(ray,z)||ray.some(point=>
+      !(arm==='advected'&&point===null)&&(!fixedValues(point?.light,3)||!point.light.every(Number.isFinite)))))
+    throw Error('Incomplete '+arm+' replay profile');
+  }
+  if(r.advected.flat().filter(Boolean).length!==r.coveredPoints)throw Error('Replay support count disagrees with its pixels');
+ };
+ let previous=seed.identity;
+ const hasDense=frames.some(f=>f.dense!=null),hasSmoke=frames.some(f=>f.smoke!=null);
+ for(const {reference,result,dense,smoke} of frames){
+  const id=reference?.identity;
+  if(!id||id.epoch!==seed.identity.epoch||id.materialStamp!==seed.identity.materialStamp||id.step!==previous.step+1||
+     !sameObservation(reference.previous,previous)||geometry(reference)!==geometry(g)||
+     !fixedValues(reference.positions,samples+(hasDense?n*z:0))||reference.positions.some(p=>p!==null&&(!fixedValues(p,3)||!p.every(Number.isFinite))))
+   throw Error('Replay skipped or changed native material');
+  check(result,id);if(hasDense)check(dense,id);
+  if(hasSmoke&&['held','advected','fresh'].some(arm=>!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(smoke?.[arm]??'')))throw Error('Incomplete smoke rendering');
+  previous=id;
+ }
+ return {hasDense,hasSmoke};
+}
