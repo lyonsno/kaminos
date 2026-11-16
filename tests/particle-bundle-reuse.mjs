@@ -1,6 +1,7 @@
 // kaminos-test: node
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {createBundleReuseSampler} from '../particle-bundle-reuse-native.mjs';
 import {seedBundleReuse,reprojectBundleReuse,validateBundleReplay} from '../particle-bundle-reuse.mjs';
 
 function scene(step,fn,tau=0){
@@ -52,4 +53,9 @@ test('replay admits complete same-observation profiles and rejects forged covera
  mutate(f=>f.result.identity.epoch++,/observation mismatch/);
  mutate(f=>f.reference.previous={...f.reference.previous,step:9},/skipped or changed/);
  mutate(f=>f.result.coveredPoints--,/support count/);
+});
+
+test('native trajectories cannot arm before the first real material capture',()=>{
+ const sampler=createBundleReuseSampler(null,{});
+ assert.throws(()=>sampler.arm(null,[[0,0,0]]),/first capture/);
 });

@@ -21,10 +21,11 @@ ${PARTICLE_FINE_VELOCITY_WGSL}
 
 // Replay-only borrow; no per-frame browser work is installed. Reference and
 // velocity are submitted together against the same immutable material identity.
-export function createBundleReuseSampler(runtime,geometry){
+export function createBundleReuseSampler(runtime,requestedGeometry){
+ const geometry=structuredClone(requestedGeometry);
  let device=null,transport=null,flow=null,busy=false,last=null,latest=null,currentPositions=null;
  function arm(seed,positions){
-  if(busy||seed!==latest||currentPositions||!positions.length||positions.some(p=>p.length!==3||!p.every(Number.isFinite)))throw Error('Bundle positions require the first capture and finite seed coordinates');
+  if(busy||!last||seed!==latest||currentPositions||!positions.length||positions.some(p=>p.length!==3||!p.every(Number.isFinite)))throw Error('Bundle positions require the first capture and finite seed coordinates');
   currentPositions=positions.map(p=>[...p]);
  }
  async function capture(){
@@ -75,8 +76,8 @@ export function createBundleReuseSampler(runtime,geometry){
    const next=data?Array.from({length:positions.length},(_,i)=>data[4*i+3]===1?[0,1,2].map(c=>data[4*i+c]*scale+translate[c]):null):null;
    if(next?.some(p=>p?.some(v=>!Number.isFinite(v))))throw Error('Non-finite native Fine advection result');
    const previous=last;
-   last=identity;currentPositions=next;
-   latest={...geometry,identity,previous,transform:{scale,translate},moments,positions:next?.map(p=>p&&[...p])??null,route:'native-particle-bundle / same-material Fine velocity',
+   Object.freeze(identity);last=identity;currentPositions=next;
+   latest={...structuredClone(geometry),identity,previous,transform:{scale,translate},moments,positions:next?.map(p=>p&&[...p])??null,route:'native-particle-bundle / same-material Fine velocity',
     flowModel:'pointwise one-step Fine flow, fixed reconstruction support, carried emission, fixed extinction'};
    return latest;
   }finally{if(scoped)await device?.popErrorScope().catch(()=>{});buffers.forEach(b=>b.destroy());busy=false;}
