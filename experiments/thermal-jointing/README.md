@@ -48,7 +48,7 @@ coordinates while preserving deformation and damage history. Prestrain,
 prepared-split and split-velocity are initialization-only options; changing them
 requires a new solver and rejects without changing the effective configuration.
 
-Fixed-point integer atomics accumulate transfer and stiffness terms. Fault
+Fixed-point integer atomics accumulate mechanical transfer terms. Phase coefficients and matrix products use floating-point compare/exchange accumulation because finite tensile-history coefficients can exceed the fixed-point range. Fault
 counters reject nonfinite/out-of-range individual contributions, invalid
 deformation and escaped grid support. A failed step may partially update
 particles and must not be interpreted as completed state; reset restarts the

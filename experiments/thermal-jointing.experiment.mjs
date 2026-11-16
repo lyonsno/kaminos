@@ -95,7 +95,7 @@ export default {
    field('Phase iterations','phaseIterations',1,1);field('Steps per batch','batch',1,1);field('Block width (points; restarts)','particlesPerAxis',1,4);
    const check=document.createElement('input');check.type='checkbox';check.checked=config.fixedBase;check.onchange=()=>invoke('setOptions',{fixedBase:check.checked}).catch(failed);const label=document.createElement('label');label.append(check,' Restrain bottom');panel.append(label);
    button('Save material state','snapshot').onclick=()=>invoke('snapshot').then(result=>{const url=URL.createObjectURL(new Blob([JSON.stringify(result)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='thermal-material.json';a.click();URL.revokeObjectURL(url);}).catch(failed);
-   status=document.createElement('p');status.setAttribute('role','status');panel.append(status);sync();
+   status=document.createElement('p');status.setAttribute('role','status');status.style.cssText='white-space:normal;overflow-wrap:anywhere;min-width:0;max-width:100%;box-sizing:border-box';panel.append(status);sync();
   },async dispose(){disposed=true;playing=false;clearTimeout(debounce);stop?.();for(const c of controls)c?.dispose();await pending?.catch(()=>{});device.removeEventListener('uncapturederror',gpuFault);release();await session.dispose();}};
  }
 };

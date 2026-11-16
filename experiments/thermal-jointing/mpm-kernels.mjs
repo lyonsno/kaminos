@@ -55,10 +55,28 @@ fn derivative(f:vec3f,o:vec3i)->vec3f {
 fn outer(a:vec3f,b:vec3f)->mat3x3f{return mat3x3f(a*b.x,a*b.y,a*b.z);}
 fn validF(F:mat3x3f)->bool {let j=determinant(F);return j>0.&&j<3.4e38;}
 fn broken()->bool{return atomicLoad(&diagnostics[0])+atomicLoad(&diagnostics[1])+atomicLoad(&diagnostics[2])>0u;}
+fn arithmeticFault(kind:u32){atomicAdd(&diagnostics[2],1u);atomicAdd(&diagnostics[kind],1u);}
 fn checkedAtomic(cell:ptr<storage,atomic<i32>,read_write>,v:f32) {
- if(!(abs(v)<2047.)){atomicAdd(&diagnostics[2],1u);return;}
+ if(!(abs(v)<=bitcast<f32>(0x7f7fffffu))){arithmeticFault(3u);return;}
+ if(!(abs(v)<2047.)){arithmeticFault(5u);return;}
  let amount=i32(round(v*FP));let old=atomicAdd(cell,amount);
- if((amount>0&&old>2147483647-amount)||(amount<0&&old<(-2147483647-1)-amount)){atomicAdd(&diagnostics[2],1u);}
+ if((amount>0&&old>2147483647-amount)||(amount<0&&old<(-2147483647-1)-amount)){arithmeticFault(5u);}
+}
+// Phase coefficients grow with tensile history / toughness. Accumulate their
+// f32 bit patterns with CAS instead of imposing the transfer's fixed-point range.
+fn phaseAdd(cell:ptr<storage,atomic<i32>,read_write>,v:f32) {
+ let largest=bitcast<f32>(0x7f7fffffu);
+ if(!(abs(v)<=largest)){arithmeticFault(3u);return;}
+ var old=atomicLoad(cell);
+ loop {
+  let current=bitcast<f32>(old);
+  if(!(abs(current)<=largest)){arithmeticFault(3u);return;}
+  let sum=current+v;
+  if(!(abs(sum)<=largest)){arithmeticFault(7u);return;}
+  let result=atomicCompareExchangeWeak(cell,old,bitcast<i32>(sum));
+  if(result.exchanged){break;}
+  old=result.old_value;
+ }
 }
 fn add(i:u32,v:f32){checkedAtomic(&acc[i],v);}
 fn side(p:Particle,n:u32)->u32 {
@@ -103,7 +121,7 @@ fn fieldFor(p:Particle,n:u32)->u32 {if(nodes[n*2u].normal.w>.5){return n*2u+side
   add(j,m);add(j+1u,momentum.x);add(j+2u,momentum.y);add(j+3u,momentum.z);
   add(j+5u,m*(1.-p.history.x));atomicMax(&acc[j+7u],bitcast<i32>(1.-p.history.x));
   add(j+8u,p.x.w*dw.x);add(j+9u,p.x.w*dw.y);add(j+10u,p.x.w*dw.z);
-  add(j+11u,volume*w*(1.+beta*p.history.y));add(j+12u,volume*w);add(j+13u,volume*w*p.history.x);
+  phaseAdd(&acc[j+11u],volume*w*(1.+beta*p.history.y));phaseAdd(&acc[j+12u],volume*w);phaseAdd(&acc[j+13u],volume*w*p.history.x);
  }}}
 }
 fn value(i:u32)->f32{return f32(atomicLoad(&acc[i]))/FP;}
@@ -112,7 +130,7 @@ fn nodeFrom(j:u32)->Node {
  if(m<=0.){return n;}n.v=vec4f(value(a+1u),value(a+2u),value(a+3u),m);
  n.damage=vec4f(0,0,value(a+5u),bitcast<f32>(atomicLoad(&acc[a+7u])));
  n.normal=vec4f(value(a+8u),value(a+9u),value(a+10u),0);
- n.phase=vec4f(value(a+11u),value(a+12u),value(a+13u),0);return n;
+ n.phase=vec4f(bitcast<f32>(atomicLoad(&acc[a+11u])),bitcast<f32>(atomicLoad(&acc[a+12u])),bitcast<f32>(atomicLoad(&acc[a+13u])),0);return n;
 }
 @compute @workgroup_size(128) fn reconcile(@builtin(global_invocation_id) gid:vec3u){
  let i=gid.x;if(i>=params.dims.x*params.dims.x*params.dims.x||broken()){return;}
@@ -171,11 +189,11 @@ fn nodeFrom(j:u32)->Node {
  let i=gid.x;if(i>=params.dims.z||broken()){return;}let p=particles[i];let base=vec3i(floor(p.x.xyz-.5));let f=p.x.xyz-vec3f(base);
  for(var z=0;z<3;z++){for(var y=0;y<3;y++){for(var x=0;x<3;x++){
   let o=vec3i(x,y,z);let v=dot(gradients[i].xyz,derivative(f,o));
-  checkedAtomic(&matrixAcc[fieldFor(p,nodeId(base+o))],v);
+  phaseAdd(&matrixAcc[fieldFor(p,nodeId(base+o))],v);
  }}}
 }
 @compute @workgroup_size(128) fn matrixFinish(@builtin(global_invocation_id) gid:vec3u){
- let i=gid.x;if(i>=arrayLength(&cg)){return;}cg[i].w=nodes[i].phase.x*cg[i].z+f32(atomicLoad(&matrixAcc[i]))/FP;
+ let i=gid.x;if(i>=arrayLength(&cg)){return;}cg[i].w=nodes[i].phase.x*cg[i].z+bitcast<f32>(atomicLoad(&matrixAcc[i]));
 }
 @compute @workgroup_size(128) fn phaseStart(@builtin(global_invocation_id) gid:vec3u){
  let i=gid.x;if(i>=arrayLength(&cg)){return;}let r=nodes[i].phase.y-cg[i].w;cg[i]=vec4f(cg[i].x,r,r/max(nodes[i].phase.x,1e-20),0);

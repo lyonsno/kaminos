@@ -98,3 +98,45 @@ test('raising ambient does not reject existing cooled material when heat exchang
   }finally{solver.dispose();}
  });
 });
+
+test('finite cooled solid does not overflow phase accumulation at the observed contraction',async()=>{
+ await withKaminosGpu(async({device})=>{
+  const solver=await createThermalMpm({device,options:{particlesPerAxis:8,contraction:.2900859375,cooling:0,diffusivity:0,toughness:.008,variation:0,fixedBase:false}});
+  try{
+   const initial=await solver.snapshot();
+   for(let j=0;j<initial.particles.length;j+=PARTICLE_WORDS)initial.particles[j+7]=.05306239798665047;
+   device.queue.writeBuffer(solver.particles,0,initial.particles);solver.advance(1);const after=await solver.snapshot();
+   assert.equal(after.state.fault,null,'finite phase coefficients at the observed temperature must remain representable');
+   assert.equal(after.state.completedSteps,1);
+   const stretch=1/(1+.2900859375*(.05306239798665047-1)),J=stretch**3;
+   const positiveEnergy=.5*50*(.5*(J*J-1)-Math.log(J));
+   const expected=1/(1+4*.6*(1-.00001)/.008*positiveEnergy);
+   for(let j=0;j<after.particles.length;j+=PARTICLE_WORDS){assert.equal(after.particles[j+3],.125);assert.ok(Math.abs(after.particles[j+32]-expected)<5e-7,'uniform intact fraction must match the constant phase equation');}
+
+  }finally{solver.dispose();}
+ });
+});
+
+test('floating phase atomics retain signed large sums and reject actual overflow or nonfinite input',async()=>{
+ const {THERMAL_MPM_WGSL}=await import('../experiments/thermal-jointing/mpm-kernels.mjs');
+ await withKaminosGpu(async({device})=>{
+  const U=GPUBufferUsage,buffers=[];
+  const make=size=>{const b=device.createBuffer({size,usage:U.STORAGE|U.COPY_SRC|U.COPY_DST});buffers.push(b);return b;};
+  const a=make(16),d=make(32),values=make(16),out=device.createBuffer({size:48,usage:U.MAP_READ|U.COPY_DST});buffers.push(out);
+  try{
+   device.queue.writeBuffer(a,0,new Float32Array([0,0,3e38,0]));device.queue.writeBuffer(d,0,new Uint32Array(8));device.queue.writeBuffer(values,0,new Float32Array([65536,-8192,3e38,NaN]));
+   const module=device.createShaderModule({code:THERMAL_MPM_WGSL+`
+    @group(0) @binding(14) var<storage,read> phaseTestValues:array<f32>;
+    @compute @workgroup_size(64) fn phaseAtomicFixture(@builtin(global_invocation_id) id:vec3u){
+     phaseAdd(&acc[0],phaseTestValues[0]);phaseAdd(&acc[1],phaseTestValues[1]);
+     if(id.x==0u){phaseAdd(&acc[2],phaseTestValues[2]);phaseAdd(&acc[3],phaseTestValues[3]);}
+    }`});
+   const pipeline=await device.createComputePipelineAsync({layout:'auto',compute:{module,entryPoint:'phaseAtomicFixture'}});
+   const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:1,resource:{buffer:a}},{binding:13,resource:{buffer:d}},{binding:14,resource:{buffer:values}}]});
+   const e=device.createCommandEncoder(),pass=e.beginComputePass();pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(1);pass.end();e.copyBufferToBuffer(a,0,out,0,16);e.copyBufferToBuffer(d,0,out,16,32);device.queue.submit([e.finish()]);await out.mapAsync(GPUMapMode.READ);
+   const raw=out.getMappedRange(),sum=new Float32Array(raw,0,4),faults=new Uint32Array(raw,16,8);
+   assert.equal(sum[0],64*65536);assert.equal(sum[1],-64*8192);assert.equal(sum[2],Math.fround(3e38));assert.equal(sum[3],0);
+   assert.equal(faults[2],2);assert.equal(faults[3],1);assert.equal(faults[5],0);assert.equal(faults[7],1);
+  }finally{for(const b of buffers)b.destroy();}
+ });
+});

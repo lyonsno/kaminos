@@ -81,8 +81,8 @@ export async function createThermalMpm({device,options={},particleBuffer=null}) 
  async function status(){
   const [raw,clock]=await readBuffers([[resources[13],32],[resources[9],32]]),d=new Uint32Array(raw);
   completed={step:d[6],time:new Float32Array(clock)[4]};
-  if(d[0]||d[1]||d[2])fault='Material solve paused: '+JSON.stringify({invalidDeformation:d[0],escapedSupport:d[1],nonfiniteOrAtomicRange:d[2]});
-  return {...read(),splitNodes:d[4],phasePreconditionedResidual:new Float32Array(clock)[2],diagnostics:Array.from(d)};
+  if(d[0]||d[1]||d[2])fault='Material solve paused: '+JSON.stringify({invalidDeformation:d[0],escapedSupport:d[1],nonfiniteOrAtomicRange:d[2],arithmetic:{nonfiniteValues:d[3],fixedPointRange:d[5],floatOverflow:d[7],other:d[2]-d[3]-d[5]-d[7]}});
+  return {...read(),arithmetic:{nonfiniteValues:d[3],fixedPointRange:d[5],floatOverflow:d[7],other:d[2]-d[3]-d[5]-d[7]},splitNodes:d[4],phasePreconditionedResidual:new Float32Array(clock)[2],diagnostics:Array.from(d)};
  }
  reset();
  return {particles,get config(){return {...config};},
