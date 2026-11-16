@@ -27,6 +27,7 @@ canvas{display:block;width:100%;width:min(100%,55vh);margin:auto;background:#000
 </section>
 <p id="method">Beam extinction is held. Missing beam coverage contributes no light in these camera views. At the loop boundary the scene jumps back to the seed.</p>
 <script type="module">
+import {RESIDENT_VOLUME_ROUTE,volumeRefreshDue} from './particle-resident-volume.mjs';
 const q=id=>document.getElementById(id),status=q('status'),step=q('step'),play=q('play'),gain=q('gain'),pace=q('pace'),full=q('full');
 const arms=['held','advected'];
 const same=(a,b)=>a&&b&&a.epoch===b.epoch&&a.step===b.step&&a.frame===b.frame&&a.materialStamp===b.materialStamp;
@@ -36,9 +37,10 @@ async function load(){
  const response=await fetch('/api/read?root=scenes&raw=1&path='+encodeURIComponent(file));
  if(!response.ok)throw Error('Recording unavailable ('+response.status+')');
  const tape=await response.json(),{frames,seed,plan,schedule}=tape;
- const volume=tape.source==='whole-fine-six-direction-resident-light',directions=volume?6:1;
+ const volume=tape.source===RESIDENT_VOLUME_ROUTE,directions=volume?6:1;
  if((!volume&&tape.source!=='resident-equal-fresh-ray-beam')||!Array.isArray(frames)||frames.length<2||!same(frames[0].identity,seed)||!Number.isSafeInteger(plan?.points))throw Error('Incomplete resident recording');
  if(volume){
+  if(tape.geometry?.refreshEvery!==2)throw Error('Expected a whole-volume half-cadence recording');
   q('title').textContent='Whole-volume light: held or carried';
   q('intro').textContent='Six directions cover the same Fine volume. Both smoke views get the same fresh rays every other update. Only old samples are moved on the right.';
   q('method').textContent='Extinction stays at the seed. When a carried direction loses support it uses the held estimate for that direction. The last frame jumps back to the seed when the replay loops.';
@@ -51,6 +53,8 @@ async function load(){
   const i=new Image();i.src=r.src;await i.decode();return i;
  };
  if(!Array.isArray(schedule)||schedule.length!==frames.length||schedule[0]!==0||!schedule.slice(1).includes(directions)||schedule.some(v=>v!==0&&v!==directions))throw Error('Recording has no issued shared fresh rays');
+ const seedInstances=frames[0].work?.freshRasterInstances;
+ if(volume&&(!Number.isSafeInteger(seedInstances)||seedInstances<=0||seedInstances%directions!==0))throw Error('Recording has no submitted fresh geometry');
  let nextSlot=0;
  for(let i=0;i<frames.length;i++){
   const f=frames[i],r=f.work,id=f.identity;
@@ -60,7 +64,9 @@ async function load(){
      !Number.isSafeInteger(id.frame)||(i>0&&id.frame<=frames[i-1].identity.frame)||r?.readbacks!==0||
      r.seedRays!==(i===0?directions*plan.receiverRays:0)||rays!==schedule[i]||
      !Array.isArray(slots)||slots.length!==directions||slots.some(x=>x!==slot)||
-     (volume&&(r.freshAtlasPasses!==Number(i===0||rays>0)||r.directions?.join(',')!=='+X,-X,+Y,-Y,+Z,-Z')))
+     (volume&&(r.updates!==i||rays!==(volumeRefreshDue(i,2)?directions:0)||
+        r.freshAtlasPasses!==Number(i===0||rays>0)||r.freshRasterInstances!==(i===0||rays>0?seedInstances:0)||
+        r.directions?.join(',')!=='+X,-X,+Y,-Y,+Z,-Z')))
    throw Error('Recording lost the common ray schedule or native observation');
  }
  if(arms.some(a=>new Set(frames.map(f=>f.images?.[a]?.sha256)).size<2))throw Error('A smoke arm never changed during the replay');

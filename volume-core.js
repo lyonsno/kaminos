@@ -5,7 +5,7 @@ import {createGPUImmersedCollection} from './volume-immersed-source-gpu.mjs';
 import {createGPUImmersedWorldSources} from './volume-immersed-world-source-gpu.mjs';
 import {createDeferredPipelines} from './deferred-pipelines.mjs';
 import {createOpticalParticles,opticalParticleSettings,particleReactionFromSimulation} from './volume-optical-particles.mjs';
-import {createResidentVolume,residentVolumeSettings} from './particle-resident-volume.mjs';
+import {createResidentVolume,residentVolumeSettings,residentVolumeProfilePasses} from './particle-resident-volume.mjs';
 import {createSplitIntegral,splitIntegralSettings,SPLIT_OPTICAL_OFF_WGSL,splitOpticalShader} from './volume-split-integral.mjs';
 import {EMPTY_SPACE_WGSL} from './volume-empty-space.mjs';
 import {resolveWorldCalibration,calibrationSignature,calibrationWaveletLattice,WORLD_CALIBRATION_WGSL,resolveSimulationLevers} from './volume-world-calibration.mjs';
@@ -14427,7 +14427,7 @@ export function createKaminosVolumePrototype({
       } else {
         if(particleSettings.enabled&&particleSettings.liveTimings&&!particleProfileWrites){
           particleTimings??=createParticleTiming(device);const plan=particleFieldPlan(device.limits,{slots:particleBudget().slots,dims:[gridSize,gridHeight,gridSize],pitch:2/gridSize,cellSize:particleSettings.exchangeSpacing>0?particleSettings.exchangeSpacing/(2/gridSize):particleSettings.exchangeCellSize});
-          passiveParticleSample=particleTimings.begin({enabled:true,every:particleSettings.timingEvery,frame:state.frameCount,step:state.simStepCount,route:state.effectiveRoute??state.backend,passNames:['acquisition',...plan.groupingProfilePasses,...plan.fieldProfilePasses,'follow','update','births','lightRefresh','depthBounds','depthDeposit','depthPrefix','gridExtinction','raster','resolve','present','referenceMarch']});
+          passiveParticleSample=particleTimings.begin({enabled:true,every:particleSettings.timingEvery,frame:state.frameCount,step:state.simStepCount,route:state.effectiveRoute??state.backend,passNames:['acquisition',...plan.groupingProfilePasses,...plan.fieldProfilePasses,'follow','update','births','lightRefresh','depthBounds','depthDeposit','depthPrefix','gridExtinction','raster','resolve','present','referenceMarch',...(residentParticleVolume.mode==='off'?[]:residentVolumeProfilePasses)]});
         }
         encodeDraw(encoder, currentTexture.createView(), 'kaminos volume canvas pass',pipeline,{particleProfileWrites:passiveParticleSample?.writes});
         passiveParticleSample?.finish(encoder);
@@ -18468,7 +18468,7 @@ export function createKaminosVolumePrototype({
       const pausedBefore=capturePaused,simulationPausedBefore=simulationPaused;
       this.setCapturePaused(true);if(settleInputs)simulationPaused=true;await foregroundDrain;
       const plan=particleFieldPlan(device.limits,{slots:particleBudget().slots,dims:[gridSize,gridHeight,gridSize],pitch:2/gridSize,cellSize:particleSettings.exchangeSpacing>0?particleSettings.exchangeSpacing/(2/gridSize):particleSettings.exchangeCellSize});
-      const passNames=['acquisition',...plan.groupingProfilePasses,...plan.fieldProfilePasses,'follow','update','births','lightRefresh','depthBounds','depthDeposit','depthPrefix','gridExtinction','raster','resolve','present','referenceMarch'];
+      const passNames=['acquisition',...plan.groupingProfilePasses,...plan.fieldProfilePasses,'follow','update','births','lightRefresh','depthBounds','depthDeposit','depthPrefix','gridExtinction','raster','resolve','present','referenceMarch',...(residentParticleVolume.mode==='off'?[]:residentVolumeProfilePasses)];
       const labels=[],query=device.createQuerySet({type:'timestamp',count:passNames.length*2});
       const resolved=device.createBuffer({size:passNames.length*16,usage:GPUBufferUsage.QUERY_RESOLVE|GPUBufferUsage.COPY_SRC});
       const readback=device.createBuffer({size:passNames.length*16,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});

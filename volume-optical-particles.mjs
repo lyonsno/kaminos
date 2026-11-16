@@ -58,6 +58,7 @@ fn particleReact(state:vec4<f32>,dt:f32,burnTime:f32,cooling:f32,heatRelease:f32
  return vec4<f32>(max(0.0,state.x-burn),(state.y+heatRelease*burn)*exp(-dt/cooling),state.z+sootYield*burn,burn);
 }
 `;
+const particleMaterialCoverage=acquisitionMode=>({kind:acquisitionMode===2?'emitter-born':'camera-acquired',unsampled:'unknown'});
 function particlePoolIdentity(s,width,height,identity){const columns=s.populationWidth||Math.ceil(width/s.spacing),rows=s.populationHeight||Math.ceil(height/s.spacing),slots=s.capacity||columns*rows;return JSON.stringify([slots,s.acquisitionMode,s.capacity?null:[columns,rows],identity]);}
 function fieldSettings(s,dims){return {strength:s.exchangeStrength,time:s.exchangeTime,cellSize:s.exchangeSpacing>0?s.exchangeSpacing/(2/dims[0]):s.exchangeCellSize,heatRate:s.exchangeHeat,speciesRate:s.exchangeSpecies,sootRate:s.exchangeSoot,rate:s.exchangeRate,interval:s.exchangeEvery,enabled:s.exchangeEnabled,groupingEnabled:s.groupingEnabled};}
 export function particleReactionFromSimulation(config){
@@ -155,7 +156,7 @@ export function createParticleMaterialHandoff(device){
     identity:Object.freeze({epoch,step,frame,materialStamp}),
     domain:Object.freeze({origin:Object.freeze([-1,-1,-1]),pitch:2/dims[0],dims:Object.freeze([...dims]),
      worldFromFine:Object.freeze({scale:transform.scale,translate:Object.freeze([...transform.translate])})}),
-    coverage:Object.freeze({kind:acquisitionMode===2?'emitter-born':'camera-acquired',unsampled:'unknown'}),
+    coverage:Object.freeze(particleMaterialCoverage(acquisitionMode)),
     measure:'raw-coefficients-and-support-proposal',
    });
   },
@@ -679,7 +680,7 @@ export function createOpticalParticles(device,{transparent=false,indexedQuads=tr
      volumeView.set({...next,includeIntrinsic});installedVolume={next,includeIntrinsic};
     }
     activeLightView=volumeView;
-    volumeState={requested:volumeSettings.mode,effective:field.route,identity:field.identity,settings:{...volumeSettings},work:field.work};
+    volumeState={requested:volumeSettings.mode,effective:field.route,identity:field.identity,settings:{...volumeSettings},coverage:particleMaterialCoverage(s.acquisitionMode),solidVisibility:'not-sampled',work:field.work};
    }catch(e){clearVolume();volumeState={...volumeState,reason:String(e.message??e)};}
   }
   const sliceViewRoute=activeLightView.route(materialHandoff.epoch,step,materialStamp),sliceViewActive=sliceViewRoute!=='off';

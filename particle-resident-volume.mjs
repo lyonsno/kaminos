@@ -1,6 +1,11 @@
 import {createResidentBeam,residentBeamPlan} from './particle-resident-beam.mjs';
 import {createPacketBundleTransport,finitePacketBundle} from './volume-packet-bundle.mjs';
 
+export const RESIDENT_VOLUME_ROUTE='whole-fine-six-direction-resident-light';
+const directions=[['+X','-X'],['+Y','-Y'],['+Z','-Z']];
+export const residentVolumeProfilePasses=Object.freeze(['packet-solid','packet-raster',...directions.flat().flatMap(
+ d=>[...['seedTau','carry','refresh','bin','gather','resolve'].map(p=>d+' '+p),'merge '+d])]);
+
 const allowed={mode:['off','held','advected'],presentation:['smoke','flame']};
 export function residentVolumeSettings(patch={}){
  const next={mode:'off',presentation:'smoke',width:12,stride:3,refreshEvery:2,gain:1,...patch};
@@ -21,7 +26,7 @@ export function residentVolumeSweeps(dims){
   emitter[axis]-=sign*spans[axis];receiver[axis]+=sign*spans[axis];
   const far=2*spans[axis],b=finitePacketBundle({origin:emitter,target:receiver,halfSize:[1,1],far,weight:1});
   const half=v=>v.reduce((sum,x,i)=>sum+Math.abs(x)*spans[i],0);
-  return {direction:(sign>0?'+':'-')+'XYZ'[axis],emitter,receiver,halfWidth:half(b.right),halfHeight:half(b.up),far,
+  return {direction:directions[axis][Number(sign<0)],emitter,receiver,halfWidth:half(b.right),halfHeight:half(b.up),far,
    forward:b.forward,right:b.right,up:b.up,map:[component(b.right),component(b.up.map(x=>-x)),component(b.forward)]};
  }));
 }
@@ -95,7 +100,7 @@ export function createResidentVolume(device,requested,dims){
    const identity=fields[0].identity;
    const view=buffer=>({identity,axis,halfHeight,buffer,device,fieldKind:'resident-volume'});
    updates=next;
-   latest={identity,views:{held:view(combinedHeld),advected:view(combinedAdvected)},route:'whole-fine-six-direction-resident-light',
+   latest={identity,views:{held:view(combinedHeld),advected:view(combinedAdvected)},route:RESIDENT_VOLUME_ROUTE,
     work:{updates,stepDelta,directions:sweeps.map(s=>s.direction),seedRays:seed?plan.receiverRays*sweeps.length:0,
      freshRays:refresh?sweeps.length:0,freshRasterInstances:receipt?.instances??0,freshAtlasPasses:receipt?1:0,
      freshSlots:fields.map(f=>f.work.refreshedSlot),retainedSections:plan.sampleCount*sweeps.length,receiverPoints:plan.points,
