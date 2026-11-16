@@ -4,20 +4,21 @@ import {PARTICLE_KERNEL_WGSL,PARTICLE_STATE_WGSL} from './volume-particle-state.
 const vector=(v,n,name)=>{if(!Array.isArray(v)||v.length!==n||v.some(x=>!Number.isFinite(x)||!Number.isFinite(Math.fround(x))))throw Error('Invalid bundle '+name);return [...v];};
 const count=(v,name)=>{if(!Number.isSafeInteger(v)||v<1||v>0xffffffff)throw Error('Invalid bundle '+name);return v;};
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
-export function finitePacketBundle({origin,target,halfSize,near=0,far,weight,receiver=0,source=0xffffffff}){
+export function finitePacketBundle({origin,target,halfSize,near=0,far,weight,momentScale=1,receiver=0,source=0xffffffff}){
  origin=vector(origin,3,'origin');target=vector(target,3,'target');halfSize=vector(halfSize,2,'footprint');
  const delta=target.map((x,i)=>x-origin[i]),distance=Math.hypot(...delta);
  if(!(distance>0&&Number.isFinite(distance)))throw Error('Invalid bundle direction');
  if(!(near>=0&&far>near&&Number.isFinite(Math.fround(far))))throw Error('Invalid bundle endpoints');
  if(halfSize.some(x=>x<=0)||!(weight>=0&&Number.isFinite(Math.fround(weight))))throw Error('Invalid bundle footprint or weight');
+ if(!(momentScale>0&&Number.isFinite(Math.fround(1/momentScale))))throw Error('Invalid bundle moment encoding');
  for(const x of [receiver,source])if(!Number.isSafeInteger(x)||x<0||x>0xffffffff)throw Error('Invalid bundle membership');
  const forward=delta.map(x=>x/distance),seed=Math.abs(forward[1])<.9?[0,1,0]:[1,0,0];
  const tangent=cross(seed,forward),norm=Math.hypot(...tangent),right=tangent.map(x=>x/norm),up=cross(forward,right);
- return {origin,forward,right,up,near,far,halfSize,weight,receiver,source,distance};
+ return {origin,forward,right,up,near,far,halfSize,weight,momentScale,receiver,source,distance};
 }
 export function packPacketBundles(bundles){
  const data=new ArrayBuffer(bundles.length*96),f=new Float32Array(data),u=new Uint32Array(data);
- bundles.forEach((b,i)=>{const at=i*24;f.set([...b.origin,b.near,...b.forward,b.far,...b.right,b.halfSize[0],...b.up,b.halfSize[1],b.weight,0,0,0],at);u.set([b.receiver,b.source,0,0],at+20);});return data;
+ bundles.forEach((b,i)=>{const at=i*24;f.set([...b.origin,b.near,...b.forward,b.far,...b.right,b.halfSize[0],...b.up,b.halfSize[1],b.weight,0,0,b.momentScale===1?0:(b.momentScale??0)],at);u.set([b.receiver,b.source,0,0],at+20);});return data;
 }
 export function packetBundlePlan(limits,{width,height,sections,bundles,slots,receivers}){
  for(const [k,v] of Object.entries({width,height,sections,bundles,slots,receivers}))count(v,k);
@@ -95,7 +96,8 @@ struct Splat {@builtin(position) position:vec4<f32>,@location(0) local:vec2<f32>
  let blocker=mix(b.origin.w,b.forward.w,textureLoad(solids,at+vec2<i32>(solidTile*plan.image.xy),0));
  let length=max(0.0,min(in.depth+in.interval*.5,min(b.forward.w,blocker))-max(in.depth-in.interval*.5,b.origin.w));
  let ke=particleFootprint(in.local,material.kernelE.xyz,material.kernelT.w);let kt=particleFootprint(in.local,material.kernelT.xyz,material.kernelT.w);
- return in.optical*vec4<f32>(vec3<f32>(ke),kt)*length;
+ let encode=select(1.0,b.weight.w,b.weight.w>0.0);
+ return in.optical*vec4<f32>(vec3<f32>(ke),kt)*length*encode;
 }
 @vertex fn solid(@builtin(vertex_index) vertex:u32,@builtin(instance_index) bi:u32)->@builtin(position)vec4<f32>{
  let b=bundles[bi];let point=triangles[vertex].xyz;let xy=bundlePlane(point,b);let distance=dot(point-b.origin.xyz,b.forward.xyz);
@@ -104,10 +106,11 @@ struct Splat {@builtin(position) position:vec4<f32>,@location(0) local:vec2<f32>
 @compute @workgroup_size(64) fn integrate(@builtin(global_invocation_id) gid:vec3<u32>){
  let samples=plan.image.x*plan.image.y;let index=gid.x;if(index>=samples*plan.count.y){return;}
  let bi=index/samples;let xy=vec2<u32>(index%samples%plan.image.x,index%samples/plan.image.x);var light=vec3<f32>(0);var transmission=1.0;var valid=true;
+ let encode=select(1.0,bundles[bi].weight.w,bundles[bi].weight.w>0.0);
  for(var k=0u;k<plan.image.w;k++){
   let value=textureLoad(moments,vec2<i32>(xy+bundleTile(bi*plan.image.w+k)*plan.image.xy),0);
   if(any(value.xyz>=vec3<f32>(65504.0))){valid=false;continue;}
-  let tau=min(value.w,65504.0);light+=transmission*value.xyz*bundleSlab(tau);transmission*=exp(-tau);
+  let tau=min(value.w,65504.0)/encode;light+=transmission*(value.xyz/encode)*bundleSlab(tau);transmission*=exp(-tau);
  }
  rays[index]=vec4<f32>(light,select(-1.0,transmission,valid));
 }
@@ -170,7 +173,7 @@ export function createPacketBundleTransport(device){
    pass=encoder.beginRenderPass({label:'packet joint source and extinction slices',colorAttachments:[{view:r.atlas.createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}]});
    pass.setPipeline(pipelines.splat);pass.setBindGroup(0,bind(pipelines.splat,[[0,material.particles],[1,material.options],[2,bundleBuffer],[3,membership??r.membership],[4,r.plan],[5,r.solids]]));pass.draw(6,plan.instances);pass.end();
    for(const [entry,entries,groups] of [
-    ['integrate',[[4,r.plan],[6,r.atlas],[7,r.rays]],Math.ceil(plan.rays/64)],
+    ['integrate',[[2,bundleBuffer],[4,r.plan],[6,r.atlas],[7,r.rays]],Math.ceil(plan.rays/64)],
     ['average',[[2,bundleBuffer],[4,r.plan],[7,r.rays],[8,r.means]],Math.ceil(bundleCount/64)],
     ['gather',[[2,bundleBuffer],[4,r.plan],[8,r.means],[9,r.incident]],Math.ceil(receivers/64)]]){
     const p=pipeline(entry);pass=encoder.beginComputePass({label:'packet bundle '+entry});pass.setPipeline(p);pass.setBindGroup(0,bind(p,entries));pass.dispatchWorkgroups(groups);pass.end();

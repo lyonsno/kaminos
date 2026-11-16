@@ -1,9 +1,9 @@
 import {BufferGeometry,Color,Float32BufferAttribute,LineBasicMaterial,LineSegments,Mesh,MeshBasicMaterial,SphereGeometry,Vector3} from '../lib/three.core.js';
-import {createLightSliceProbe,compareSliceSections} from '../particle-light-slice.mjs';
+import {createLightSliceProbe,compareSliceSections,packLightSliceView} from '../particle-light-slice.mjs';
 import {bindParticleNumber} from '../particle-number-control.mjs';
 
 const initial=Object.freeze({enabled:false,mode:'ray',source:'probe',view:'fine',halfWidth:.15,offsets:7,sweepOffsets:17,sections:32,
- gain:1,refreshSteps:4,depthStride:4,acrossStride:3,correctionStart:.25,correctionExtent:.25,sharingRadius:.18,depth:1,showGeometry:true});
+ gain:1,refreshSteps:4,depthStride:4,acrossStride:3,correctionStart:.25,correctionExtent:.25,sharingRadius:.18,depth:1,showGeometry:true,smokeView:false});
 const discrete=new Set(['offsets','sweepOffsets','sections','refreshSteps','depthStride','acrossStride']);
 const ratios=new Set(['correctionStart','correctionExtent','sharingRadius','depth']);
 const choices={mode:['ray','bundle','sweep'],source:['probe','flame'],view:['fine','coarse','shared','held']};
@@ -11,7 +11,7 @@ const vectors=new Set(['emitter','receiver']);
 function checked(settings,patch){
  const result={...settings};
  for(const [key,v] of Object.entries(patch)){
-  if(key==='enabled'||key==='showGeometry'){if(typeof v!=='boolean')throw Error('Invalid '+key);}
+  if(key==='enabled'||key==='showGeometry'||key==='smokeView'){if(typeof v!=='boolean')throw Error('Invalid '+key);}
   else if(key in choices){if(!choices[key].includes(v))throw Error('Unknown '+key);}
   else if(vectors.has(key)){if(!Array.isArray(v)||v.length!==3||!v.every(x=>Number.isFinite(Math.fround(x))))throw Error('Invalid '+key+' position');}
   else if(discrete.has(key)){if(!Number.isSafeInteger(v)||v<(key==='refreshSteps'?0:1))throw Error('Invalid '+key);}
@@ -24,7 +24,7 @@ function checked(settings,patch){
 }
 
 export function createParticleLightSliceCockpit({runtime,session,select,host,onSettings=()=>{},record=()=>{},inputs={}}){
- let settings=checked(initial,inputs),refs=null,mounting=null,disposed=false,view=null,held=null,observed=null,comparison=null,comparisonKey=null,lastWorld=null,error=null;
+ let settings=checked(initial,inputs),refs=null,mounting=null,disposed=false,view=null,held=null,observed=null,comparison=null,comparisonKey=null,lastWorld=null,error=null,previewOwner=null,previewSnapshot=null,previewProfiles=null;
  const controls=[],disposers=[];
  const reader=createLightSliceProbe({runtime,onChange:()=>{if(!disposed){draw();session.redraw();}}});
  function marker(name,color,point){
@@ -40,7 +40,7 @@ export function createParticleLightSliceCockpit({runtime,session,select,host,onS
   lines.name='Light slice paths';lines.renderOrder=100;
   lines.userData.kaminosDocumentTransient=true;lines.userData.kaminosEditorHelper=true;lines.userData.kaminosEditorOnly=true;
   const options={owned:true,metadata:{source:'optical-particles:light-slice',type:'experiment'}};
-  const a=await session.attach(emitter,options),b=await session.attach(receiver,options);
+  const a=await session.attach(emitter,{...options,metadata:{...options.metadata,label:emitter.name}}),b=await session.attach(receiver,{...options,metadata:{...options.metadata,label:receiver.name}});
   await session.attach(lines,{...options,presentation:true});
   if(disposed)return;
   refs={emitter,receiver,lines,a,b};
@@ -132,6 +132,18 @@ export function createParticleLightSliceCockpit({runtime,session,select,host,onS
   canvas.title=(end?'Across the beam at chosen depth':'Left to right: emitter to receiver. Rows: offsets through center of the patch.')+
    ' · sampled material step '+snapshot.identity.step;
  }
+ function clearPreview(){
+  previewOwner?.setOpticalParticleLightSliceView?.(null);previewOwner=previewSnapshot=previewProfiles=null;
+ }
+ function preview(snapshot,profiles){
+  if(!snapshot||!profiles||!settings.enabled||!settings.smokeView){if(previewOwner)clearPreview();return;}
+  const owner=runtime();
+  if(owner!==previewOwner&&previewOwner)clearPreview();
+  if(snapshot===previewSnapshot&&profiles===previewProfiles)return;
+  if(!owner?.setOpticalParticleLightSliceView)throw Error('Smoke-only beam output is unavailable on this renderer');
+  owner.setOpticalParticleLightSliceView(packLightSliceView(snapshot,profiles));
+  previewOwner=owner;previewSnapshot=snapshot;previewProfiles=profiles;
+ }
  function draw(){
   const a=reader.read(),snapshot=settings.view==='held'?held:a.result;let profiles=null;
   if(snapshot){
@@ -141,6 +153,7 @@ export function createParticleLightSliceCockpit({runtime,session,select,host,onS
    if(observed!==snapshot||comparisonKey!==key){observed=snapshot;comparisonKey=key;comparison=compareSliceSections(snapshot.moments,quality);}
    profiles=comparison[settings.view==='held'?'fine':settings.view];
   }
+  try{preview(snapshot,profiles);}catch(e){error=e.message;clearPreview();}
   geometry(snapshot,profiles);
   if(!view)return;
   updateVisibility();
@@ -185,6 +198,7 @@ export function createParticleLightSliceCockpit({runtime,session,select,host,onS
    disposers.push(bindParticleNumber({input,read:()=>settings[key],apply:v=>invoke('setLightSlice',{[key]:v}),onAccepted:draw,onError:e=>{error=e.message;draw();}}));
   }
   checkbox(panel,'showGeometry','Show beam in scene');
+  checkbox(panel,'smokeView','Smoke with selected light only');
   const buttons=document.createElement('div');buttons.style.cssText='display:flex;flex-wrap:wrap;gap:4px;margin:6px 0';
   for(const endpoint of vectors){const button=document.createElement('button');button.type='button';button.textContent='Select '+endpoint;button.addEventListener('click',()=>call('pickLightSliceHandle',{endpoint}));buttons.append(button);}
   const hold=document.createElement('button');hold.type='button';hold.textContent='Hold this sample';hold.addEventListener('click',()=>call('holdLightSlice',{}));buttons.append(hold);panel.append(buttons);
@@ -193,8 +207,8 @@ export function createParticleLightSliceCockpit({runtime,session,select,host,onS
   depth.style.height='64px';cross.style.height='86px';
   status.style.cssText='font:12px monospace;overflow-wrap:anywhere';
   panel.append(status,'Along beam',depth,'Across beam at selected depth',cross);
-  const note=document.createElement('p');note.textContent='Probe and native flame use the same selected projected particle optics. Coarse is a grouped patch from that deposition; it is not the legacy global field. Shared replaces the chosen stretch with the center-ray optics. Smoke-only scene rendering is separate.';
+  const note=document.createElement('p');note.textContent='Probe and native flame use the same selected projected particle optics. Coarse is a grouped patch from that deposition; it is not the legacy global field. Shared replaces the chosen stretch with the center-ray optics. Smoke-only keeps the flame emitting into the light solve and hides its direct camera emission.';
   panel.append(note);view={panel,depth,cross,status,hold};draw();
  }
- return {read,configure,pick,hold,tick,mount,dispose(){disposed=true;reader.dispose();disposers.forEach(d=>d?.dispose?.());}};
+ return {read,configure,pick,hold,tick,mount,dispose(){disposed=true;clearPreview();reader.dispose();disposers.forEach(d=>d?.dispose?.());}};
 }

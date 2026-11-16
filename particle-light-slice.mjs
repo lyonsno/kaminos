@@ -19,7 +19,7 @@ function half(word){
  return sign*(exp===31?(frac?NaN:Infinity):exp===0?frac*2**-24:(1+frac/1024)*2**(exp-15));
 }
 
-export function readOpticalAtlas(bytes, layout, rowBytes){
+export function readOpticalAtlas(bytes, layout, rowBytes, encodingScale=1){
  const {width,height,sections,columns,atlasWidth,atlasHeight}=layout;
  if(rowBytes%2||rowBytes<atlasWidth*8||bytes.byteLength<rowBytes*atlasHeight)throw Error('Incomplete optical atlas readback');
  const data=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
@@ -29,8 +29,8 @@ export function readOpticalAtlas(bytes, layout, rowBytes){
    const at=(y+Math.floor(z/columns)*height)*rowBytes+(x+(z%columns)*width)*8;
    for(let c=0;c<4;c++){
     const sample=half(data.getUint16(at+c*2,true));
-    if(!Number.isFinite(sample)||sample<0||sample>=65504)throw Error('Optical atlas is nonfinite or saturated');
-    moments.push(sample);
+    if(!Number.isFinite(sample)||sample<0||sample>=65504)throw Error('Optical atlas is nonfinite or saturated at ray '+pixel+', section '+z+', channel '+c+' ('+sample+')');
+    moments.push(sample/encodingScale);
    }
   }
   return moments;
@@ -71,27 +71,28 @@ export function createLightSliceProbe({runtime,onChange=()=>{},createTransport=c
     const transform=frame.domain.worldFromFine;
     const toFine=p=>p.map((v,c)=>(v-transform.translate[c])/transform.scale);
     const origin=toFine(emitter),target=toFine(receiver),distance=Math.hypot(...target.map((v,c)=>v-origin[c]));
-    const bundle=finitePacketBundle({origin,target,halfSize:[halfWidth/transform.scale,halfWidth/transform.scale],far:distance,weight:1});
+    const momentScale=1/256;
+    const bundle=finitePacketBundle({origin,target,halfSize:[halfWidth/transform.scale,halfWidth/transform.scale],far:distance,weight:1,momentScale});
     const encoded=transport.encode(encoder,{material:frame,bundles:[bundle],width,height:width,sections,receivers:1});
     const layout=encoded.receipt,rowBytes=Math.ceil(layout.atlasWidth*8/256)*256;
     const bytes=rowBytes*layout.atlasHeight;if(bytes>device.limits.maxBufferSize)throw Error('Selected optical atlas exceeds readback capacity');
     const staging=device.createBuffer({label:'selected light slice optical sections',size:bytes,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
     try{encoder.copyTextureToBuffer({texture:transport.buffers.atlas},{buffer:staging,bytesPerRow:rowBytes},{width:layout.atlasWidth,height:layout.atlasHeight});}
     catch(e){staging.destroy();throw e;}
-    pending={staging,layout,rowBytes,frameIdentity:{...frame.identity}};
+    pending={staging,layout,rowBytes,momentScale,transform:structuredClone(transform),frameIdentity:{...frame.identity}};
    });
    if(!submitted.available){reason=submitted.reason;pending?.staging.destroy();return;}
   }catch(e){pending?.staging.destroy();error=e.message;onChange(read());return;}
   reason=null;
   if(!pending)return;
-  const {staging,layout,rowBytes,frameIdentity}=pending,token=generation;
+  const {staging,layout,rowBytes,momentScale,transform,frameIdentity}=pending,token=generation;
   inFlight=true;
   staging.mapAsync(GPUMapMode.READ).then(()=>{
    if(disposed||token!==generation)return;
-   const moments=readOpticalAtlas(new Uint8Array(staging.getMappedRange()),layout,rowBytes);
+   const moments=readOpticalAtlas(new Uint8Array(staging.getMappedRange()),layout,rowBytes,momentScale);
    const injection=source==='probe'?[gain,gain*.82,gain*.56]:[0,0,0];
    const profiles=moments.map(ray=>resolveDirectionalProfile(ray,{incoming:injection,native:source==='flame'}));
-   result={identity:frameIdentity,key,source,gain,emitter:[...emitter],receiver:[...receiver],halfWidth,sections,width,profiles,moments,
+   result={identity:frameIdentity,key,source,gain,momentScale,transform,emitter:[...emitter],receiver:[...receiver],halfWidth,sections,width,profiles,moments,
     route:'native-particle-bundle-ordered-deposition',model:'projected particle support, center-slice axial interval; no scene solids'};
    error=null;lastKey=key;
   }).catch(e=>{if(token===generation)error=e.message;}).finally(()=>{
@@ -120,4 +121,17 @@ export function compareSliceSections(moments,{width,depthStride=4,acrossStride=2
  const opts={incoming:source==='probe'?[gain,gain*.82,gain*.56]:[0,0,0],native:source==='flame'};
  const apply=rays=>rays.map(ray=>resolveDirectionalProfile(ray,opts));
  return {fine:apply(moments),coarse:apply(coarse),shared:apply(refined),anchor,depthMask,affected};
+}
+
+export function packLightSliceView(snapshot,profiles){
+ const {transform,width,sections,identity}=snapshot;
+ if(profiles.length!==width*width||profiles.some(ray=>ray.length!==sections))throw Error('Cannot display an incomplete light slice');
+ const toFine=p=>p.map((v,c)=>(v-transform.translate[c])/transform.scale);
+ const origin=toFine(snapshot.emitter),target=toFine(snapshot.receiver),half=snapshot.halfWidth/transform.scale;
+ const length=Math.hypot(...target.map((v,c)=>v-origin[c]));
+ const basis=finitePacketBundle({origin,target,halfSize:[half,half],far:length,weight:1});
+ const axis=new Float32Array([...origin,half,...basis.forward,length,...basis.right,width,...basis.up,sections]);
+ const values=new Float32Array(width*width*sections*4);
+ for(let i=0;i<profiles.length;i++)for(let z=0;z<sections;z++)values.set(profiles[i][z].light,(i*sections+z)*4);
+ return {identity,axis,values};
 }

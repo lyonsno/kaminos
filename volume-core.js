@@ -18513,6 +18513,10 @@ export function createKaminosVolumePrototype({
         throw Error('Cannot install incident light without an active particle source');
       return opticalParticles?.setPacketIncident(field);
     },
+    setOpticalParticleLightSliceView(view) {
+      if (view!==null&&(!state.active||deviceRetired||!opticalParticles)) throw Error('Cannot show a beam without native optical particles');
+      opticalParticles?.setSliceView(view);
+    },
     submitOpticalParticleMaterial(encode) {
       if(!state.active||deviceRetired||!particleSettings.enabled||state.opticalParticles?.effective!=='world-optical-particles'||!opticalParticles)
         return {available:false,reason:'Optical particle material is inactive'};

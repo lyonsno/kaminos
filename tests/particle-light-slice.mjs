@@ -1,7 +1,7 @@
 // kaminos-test: node
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {resolveDirectionalProfile,compareSliceSections,readOpticalAtlas} from '../particle-light-slice.mjs';
+import {resolveDirectionalProfile,compareSliceSections,readOpticalAtlas,packLightSliceView} from '../particle-light-slice.mjs';
 
 test('emitter light loses transmission downstream while local emission is attenuated only by later sections',()=>{
  const profile=resolveDirectionalProfile([0,0,0,Math.log(2), 2,0,0,0, 0,0,0,Math.log(4)],{incoming:[8,0,0],native:true});
@@ -30,7 +30,16 @@ test('atlas decoding honors WebGPU row padding and preserves each ray and depth'
  u.setUint16(256+6,0x4200,true);u.setUint16(256+14,0x4400,true);
  const layout={width:2,height:1,sections:2,columns:1,atlasWidth:2,atlasHeight:2};
  assert.deepEqual(readOpticalAtlas(new Uint8Array(buffer),layout,256).map(a=>[a[3],a[7]]),[[1,3],[2,4]]);
+ assert.deepEqual(readOpticalAtlas(new Uint8Array(buffer),layout,256,.25).map(a=>[a[3],a[7]]),[[4,12],[8,16]]);
  assert.throws(()=>readOpticalAtlas(new Uint8Array(buffer,0,400),layout,256),/Incomplete/);
  u.setUint16(14,0x7c00,true);
  assert.throws(()=>readOpticalAtlas(new Uint8Array(buffer),layout,256),/saturated/);
+});
+
+test('the display consumes ordered sections at the actual world beam converted to Fine coordinates',()=>{
+ const packed=packLightSliceView({identity:{epoch:2},emitter:[8,4,8],receiver:[8,4,12],halfWidth:1,sections:2,width:1,transform:{scale:2,translate:[8,2,8]}},
+  [[{light:[2,4,8]},{light:[1,2,4]}]]);
+ assert.deepEqual(Array.from(packed.axis.slice(0,8)),[0,1,0,.5,0,0,1,2]);
+ assert.deepEqual(Array.from(packed.values),[2,4,8,0,1,2,4,0]);
+ assert.deepEqual(packed.identity,{epoch:2});
 });
