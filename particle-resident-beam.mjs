@@ -111,12 +111,19 @@ fn addEmission(m:vec4<f32>,incoming:vec3<f32>,trans:f32,depth:f32)->vec3<f32>{
  let k=select((1.0-trans)/max(depth,1e-10),1.0-.5*depth,depth<1e-4);
  return incoming*trans+k*m.rgb/m.w;
 }
+// Independent spatial queries first; only the ordered optical recurrence is
+// serial in depth. The output buffers temporarily hold each local mixture.
+@compute @workgroup_size(64) fn gather(@builtin(global_invocation_id) id:vec3<u32>){
+ let i=id.x;if(i>=arrayLength(&held)){return;}
+ let ray=i/layers();let z=i%layers();let q=vec3<f32>(vec3<u32>(ray%cells(),ray/cells(),z));
+ held[i]=heldLight(q,z);advected[i]=movedLight(q);
+}
 @compute @workgroup_size(64) fn resolve(@builtin(global_invocation_id) id:vec3<u32>){
  let ray=id.x;if(ray>=cells()*cells()){return;}
  var old=vec3<f32>(0);var moved=vec3<f32>(0);var oldOk=true;var movedOk=true;
  for(var z=0u;z<layers();z++){
-  let at=ray*layers()+z;let d=tau[at];let tr=exp(-d);let q=vec3<f32>(vec3<u32>(ray%cells(),ray/cells(),z));
-  let a=heldLight(q,z);let b=movedLight(q);
+  let at=ray*layers()+z;let d=tau[at];let tr=exp(-d);
+  let a=held[at];let b=advected[at];
   let knownDepth=d>=0.0&&d<65504.0;
   oldOk=oldOk&&a.w>0.0&&knownDepth;movedOk=movedOk&&b.w>0.0&&knownDepth;
   old=addEmission(a,old,tr,d);moved=addEmission(b,moved,tr,d);
@@ -138,7 +145,7 @@ export function createResidentBeam(device,requested){
  const cfg=make('geometry and cadence',96,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST);
  const seedTransport=createPacketBundleTransport(device),refreshTransport=createPacketBundleTransport(device);
  const shader=device.createShaderModule({label:'resident finite beam history',code:PARTICLE_RESIDENT_BEAM_WGSL});
- const pipelines=Object.fromEntries(['seedTau','carry','refresh','bin','resolve'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'resident beam '+entryPoint,layout:'auto',compute:{module:shader,entryPoint}})]));
+ const pipelines=Object.fromEntries(['seedTau','carry','refresh','bin','gather','resolve'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'resident beam '+entryPoint,layout:'auto',compute:{module:shader,entryPoint}})]));
  const pass=(encoder,key,items,n,profile)=>{
   const p=pipelines[key];const c=encoder.beginComputePass({label:'resident beam '+key,...profile(key)});
   c.setPipeline(p);c.setBindGroup(0,device.createBindGroup({layout:p.getBindGroupLayout(0),entries:items.map(([binding,resource])=>({binding,resource:resource?.createView?resource.createView():{buffer:resource}}))}));c.dispatchWorkgroups(groups(n));c.end();
@@ -169,7 +176,8 @@ export function createResidentBeam(device,requested){
    if(atlas)pass(encoder,'refresh',[[0,cfg],[1,r.samples],[3,atlas]],init?plan.sampleCount:plan.sections,profileWrites);
    encoder.clearBuffer(r.heads);
    pass(encoder,'bin',[[0,cfg],[1,r.samples],[7,r.heads],[8,r.links]],plan.sampleCount,profileWrites);
-   pass(encoder,'resolve',[[0,cfg],[1,r.samples],[2,r.tau],[7,r.heads],[8,r.links],[9,r.held],[10,r.advected]],plan.receiverRays,profileWrites);
+   pass(encoder,'gather',[[0,cfg],[1,r.samples],[7,r.heads],[8,r.links],[9,r.held],[10,r.advected]],plan.points,profileWrites);
+   pass(encoder,'resolve',[[0,cfg],[2,r.tau],[9,r.held],[10,r.advected]],plan.receiverRays,profileWrites);
    identity=Object.freeze({...id});transformKey=key;if(cadence)sequence++;
    const view=buf=>({identity,axis,buffer:buf,device});
    return {identity,views:{held:view(r.held),advected:view(r.advected)},plan,
