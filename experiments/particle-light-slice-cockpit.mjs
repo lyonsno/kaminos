@@ -1,13 +1,14 @@
 import {BufferGeometry,Color,Float32BufferAttribute,Group,LineBasicMaterial,LineSegments,Mesh,MeshBasicMaterial,SphereGeometry,Vector3} from '../lib/three.core.js';
 import {createLightSliceProbe,compareSliceSections,packLightSliceView} from '../particle-light-slice.mjs';
 import {createLightSliceReceiverFollow} from '../particle-light-follow.mjs';
+import {sourceHistoryTarget,seedSourceHistory,predictSourceHistory,scoreSourceHistory} from '../particle-source-history.mjs';
 import {bindParticleNumber} from '../particle-number-control.mjs';
 
 const initial=Object.freeze({enabled:false,mode:'ray',source:'probe',view:'fine',halfWidth:.15,offsets:7,sweepOffsets:17,sections:32,
  gain:1,refreshSteps:4,depthStride:4,acrossStride:3,correctionStart:.25,correctionExtent:.25,sharingRadius:.18,depth:1,showGeometry:true,smokeView:false,previewGain:12,followReceiver:false,followRadius:1});
 const discrete=new Set(['offsets','sweepOffsets','sections','refreshSteps','depthStride','acrossStride']);
 const ratios=new Set(['correctionStart','correctionExtent','sharingRadius','depth']);
-const choices={mode:['ray','bundle','sweep'],source:['probe','flame'],view:['fine','coarse','shared','held']};
+const choices={mode:['ray','bundle','sweep'],source:['probe','flame'],view:['fine','coarse','shared','held','advected']};
 const vectors=new Set(['emitter','receiver']);
 function checked(settings,patch){
  const result={...settings};
@@ -27,6 +28,42 @@ function checked(settings,patch){
 export function createParticleLightSliceCockpit({runtime,session,select,refresh,host,onSettings=()=>{},record=()=>{},inputs={}}){
  let settings=checked(initial,inputs),refs=null,mounting=null,disposed=false,view=null,held=null,observed=null,comparison=null,comparisonKey=null,lastWorld=null,error=null,previewOwner=null,previewSnapshot=null,previewProfiles=null,previewGain=null,followReceiverPosition=null,followWorldKey=null;
  const controls=[],disposers=[];
+ let historyTarget=null,historyKey=null,history=null,prediction=null,score=null,historyStatus=null;
+ const sourceFollow=createLightSliceReceiverFollow({runtime,onRead:()=>{if(!disposed){draw();session.redraw();}}});
+ function clearHistory(){
+  sourceFollow.stop();historyTarget=null;historyKey=null;history=null;prediction=null;score=null;historyStatus=null;
+ }
+ function trackSource(){
+  const current=reader.read().result,target=sourceHistoryTarget(current);
+  if(!settings.enabled||settings.source!=='flame'||!target)throw Error('Sample native emission on two neighboring paths first (use an odd bundle width of at least 3)');
+  clearHistory();historyTarget=target;historyKey=current.key;
+  sourceFollow.start(target.point,target.radius,{emissive:true});
+  draw();session.redraw();return read();
+ }
+ function updateHistory(snapshot){
+  if(!historyTarget)return;
+  if(snapshot&&snapshot.key!==historyKey){clearHistory();return;}
+  const hit=sourceFollow.read();
+  if(hit.state==='lost'){
+   prediction=null;score=null;historyStatus=hit.reason??'Source carrier ended';return;
+  }
+  if(!history&&snapshot&&hit.state==='following')history=seedSourceHistory(snapshot,hit,historyTarget);
+  if(!history){historyStatus='Waiting for a source carrier and beam from the same material step';return;}
+  if(hit.state==='following'&&(!prediction||prediction.identity!==hit.identity)){
+   prediction=predictSourceHistory(history,hit);prediction.identity=hit.identity;
+  }
+  if(prediction?.available&&snapshot){
+   const checked=scoreSourceHistory(history,prediction,snapshot);
+   if(checked)score=checked;
+  }
+  historyStatus=prediction?.available?'Source followed; transmission held independently on both paths':prediction?.reason??'Waiting for source';
+ }
+ function historyRead(){
+  const {available=false,identity=null,point=null,scale=null}=prediction??{};
+  const end=profiles=>history?profiles?.[history.target.receiver]?.at(-1)??null:null;
+  return {status:historyStatus,available,identity,point,scale,heldIdentity:history?.snapshot.identity??null,
+   support:historyTarget,recipient:end(prediction?.profiles),score};
+ }
  const reader=createLightSliceProbe({runtime,onChange:()=>{if(!disposed){draw();session.redraw();}}});
  const follow=createLightSliceReceiverFollow({runtime,onRead:state=>{
   if(disposed||!refs||!settings.enabled||!settings.followReceiver)return;
@@ -65,7 +102,7 @@ export function createParticleLightSliceCockpit({runtime,session,select,refresh,
   updateVisibility();
  }
  function updateVisibility(){if(refs){refs.emitter.visible=settings.enabled;refs.receiver.visible=settings.enabled;refs.lines.visible=settings.enabled&&settings.showGeometry;}}
- function read(){const a=reader.read(),r=a.result;return {settings:structuredClone(settings),follow:follow.read(),probe:{prepared:a.prepared,inFlight:a.inFlight,error:error??a.error,reason:a.reason,
+ function read(){const a=reader.read(),r=a.result;return {settings:structuredClone(settings),follow:follow.read(),sourceHistory:historyRead(),probe:{prepared:a.prepared,inFlight:a.inFlight,error:error??a.error,reason:a.reason,
   ...(r?{identity:r.identity,route:r.route,source:r.source,model:r.model,width:r.width,sections:r.sections,emitter:r.emitter,receiver:r.receiver}:{}),
   center:r?.profiles[Math.floor(r.width/2)*(r.width+1)]?.at(-1)??null,heldIdentity:held?.identity??null},handles:refs?{emitter:refs.a.id,receiver:refs.b.id}:null};}
  async function configure(patch){
@@ -73,6 +110,7 @@ export function createParticleLightSliceCockpit({runtime,session,select,refresh,
   const next=checked(settings,patch);
   if('receiver' in patch&&!('followReceiver' in patch))next.followReceiver=false;
   if(next.view==='held'&&!held)throw Error('Hold a sampled profile first');
+  if(!next.enabled||['emitter','receiver','mode','source','halfWidth','sections','offsets','sweepOffsets','gain'].some(k=>k in patch))clearHistory();
   settings=next;error=null;
   if(settings.enabled&&!refs){await(mounting??=make().finally(()=>{mounting=null;}));}
   if(refs)for(const key of vectors)if(key in patch){
@@ -105,14 +143,16 @@ export function createParticleLightSliceCockpit({runtime,session,select,refresh,
    follow.stop();followReceiverPosition=null;followWorldKey=null;settings={...settings,followReceiver:false};
   }
   if(lastWorld!==key){
+   if(lastWorld!==null&&historyTarget)clearHistory();
    lastWorld=key;
    settings={...settings,emitter,receiver};if(key!==followWorldKey)onSettings(structuredClone(settings));draw();session.redraw();
   }
   if(settings.followReceiver)follow.tick();
+  if(historyTarget)sourceFollow.tick();
   try{
    reader.tick({emitter,receiver,halfWidth:settings.halfWidth,sections:settings.sections,
     width:settings.mode==='ray'?1:settings.mode==='bundle'?settings.offsets:settings.sweepOffsets,
-    refreshSteps:settings.refreshSteps,source:settings.source,gain:settings.gain});
+    refreshSteps:historyTarget&&!history?1:settings.refreshSteps,source:settings.source,gain:settings.gain});
   }catch(e){error=e.message;}
  }
 
@@ -142,6 +182,11 @@ export function createParticleLightSliceCockpit({runtime,session,select,refresh,
     const color=new Color(settings.view==='held'?0xbb9afc:0xffaa56).multiplyScalar(level);
     put(s.clone().lerp(e,i/r.length),s.clone().lerp(e,(i+1)/r.length),color);
    }
+  }
+  if(prediction?.available){
+   const q=new Vector3(...prediction.point),r=history.target.radius;
+   put(q.clone().addScaledVector(right,-r),q.clone().addScaledVector(right,r),new Color(0x8cffd2));
+   put(q.clone().addScaledVector(up,-r),q.clone().addScaledVector(up,r),new Color(0x8cffd2));
   }
   const p=a.clone().lerp(b,settings.depth);put(p.clone().addScaledVector(right,-.035),p.clone().addScaledVector(right,.035),new Color(0x87d6fb));
   refs.lines.geometry.setAttribute('position',new Float32BufferAttribute(positions,3));
@@ -176,13 +221,14 @@ export function createParticleLightSliceCockpit({runtime,session,select,refresh,
   previewOwner=owner;previewSnapshot=snapshot;previewProfiles=profiles;previewGain=settings.previewGain;
  }
  function draw(){
-  const a=reader.read(),snapshot=settings.view==='held'?held:a.result;let profiles=null;
+  const a=reader.read();updateHistory(a.result);
+  const snapshot=settings.view==='advected'?history?.snapshot:settings.view==='held'?held:a.result;let profiles=null;
   if(snapshot){
    const quality={width:snapshot.width,depthStride:settings.depthStride,acrossStride:settings.acrossStride,correctionStart:settings.correctionStart,
     correctionExtent:settings.correctionExtent,sharingRadius:settings.sharingRadius,source:snapshot.source,gain:snapshot.gain};
    const key=JSON.stringify(quality);
-   if(observed!==snapshot||comparisonKey!==key){observed=snapshot;comparisonKey=key;comparison=compareSliceSections(snapshot.moments,quality);}
-   profiles=comparison[settings.view==='held'?'fine':settings.view];
+   if(settings.view!=='advected'&&(observed!==snapshot||comparisonKey!==key)){observed=snapshot;comparisonKey=key;comparison=compareSliceSections(snapshot.moments,quality);}
+   profiles=settings.view==='advected'?(prediction?.available?prediction.profiles:null):comparison[settings.view==='held'?'fine':settings.view];
   }
   try{preview(snapshot,profiles);}catch(e){error=e.message;clearPreview();}
   geometry(snapshot,profiles);
@@ -197,7 +243,7 @@ export function createParticleLightSliceCockpit({runtime,session,select,refresh,
    const behind=runtime()?.opticalParticleState?.()?.step;
    const moved=!!refs&&JSON.stringify([snapshot.emitter,snapshot.receiver])!==JSON.stringify(Object.values(points()));
    line=`Material step ${snapshot.identity.step}${Number.isFinite(behind)?' / current '+behind:''} · ${width}×${width} rays · ${snapshot.sections} sections · transmission ${(sample.transmission*100).toFixed(1)}% · light ${sample.light.map(x=>x.toFixed(3)).join(' / ')}`+
-    (settings.view==='held'?' · held measurement':moved?' · measured endpoints differ from current handles':'')+(a.inFlight?' · updating':'')+(a.error??error?' · '+(a.error??error):'');
+    (settings.view==='advected'?' · source step '+prediction.identity.step+' · held transmission':settings.view==='held'?' · held measurement':moved?' · measured endpoints differ from current handles':'')+(a.inFlight?' · updating':'')+(a.error??error?' · '+(a.error??error):'');
    heat(view.depth,profiles,width,{sections:snapshot.sections,depth:z,snapshot});
    heat(view.cross,profiles,width,{end:true,sections:snapshot.sections,depth:z,snapshot});
   }else{view.depth.hidden=true;view.cross.hidden=true;}
@@ -205,6 +251,13 @@ export function createParticleLightSliceCockpit({runtime,session,select,refresh,
   if(settings.followReceiver)line+=' · '+(anchor.state==='following'?'Following carrier at step '+anchor.step:anchor.reason??'Seeking nearby material');
   view.status.textContent=settings.enabled?line:'Light slice off';
   view.hold.disabled=!a.result;
+  view.track.disabled=!a.result||settings.source!=='flame';
+  const scalar=row=>row?row.light.map(v=>v.toFixed(3)).join(' / '):'—';
+  const current=historyRead(),checked=current.score;
+  view.history.textContent=historyStatus?(historyStatus+
+   (current.available?' · source step '+current.identity.step+' · source scale ×'+current.scale.toFixed(3)+' · neighbor B '+scalar(current.recipient)+' · held transmission '+(100*current.recipient.transmission).toFixed(1)+'%':'')+
+   (checked?'\nAt step '+checked.identity.step+': B held '+scalar(checked.held)+' · tracked '+scalar(checked.predicted)+' · corrected using A only '+scalar(checked.donorCorrected)+' · B fresh '+scalar(checked.fresh)+' (fresh transmission '+(100*checked.fresh.transmission).toFixed(1)+'%)':'')):'';
+  view.history.hidden=!historyStatus;
   view.panel.hidden=!settings.enabled;
  }
  function mount(root,document,invoke){
@@ -215,7 +268,7 @@ export function createParticleLightSliceCockpit({runtime,session,select,refresh,
   const checkbox=(parent,key,label)=>{const row=document.createElement('label'),e=document.createElement('input');e.type='checkbox';e.checked=settings[key];row.append(e,' '+label);parent.append(row);controls.push([key,e]);e.addEventListener('change',()=>call('setLightSlice',{[key]:e.checked}));};
   checkbox(fieldset,'enabled','Inspect native light through particles');fieldset.append(panel);
   const labels={mode:['Paths',['One ray','Bundle patch','One-direction sweep']],source:['Source',['Diagnostic emitter','Native flame']],
-   view:['Display',['Fresh fine profile','Coarse patch','Shared correction','Held measurement']]};
+   view:['Display',['Fresh fine profile','Coarse patch','Shared correction','Held measurement','Advected source · held transmission']]};
   for(const [key,[title,names]] of Object.entries(labels)){
    const label=document.createElement('label'),e=document.createElement('select');label.style.cssText='display:flex;justify-content:space-between;gap:5px;margin:6px 0';
    choices[key].forEach((v,i)=>{const option=document.createElement('option');option.value=v;option.textContent=names[i];e.append(option);});
@@ -238,6 +291,8 @@ export function createParticleLightSliceCockpit({runtime,session,select,refresh,
   const buttons=document.createElement('div');buttons.style.cssText='display:flex;flex-wrap:wrap;gap:4px;margin:6px 0';
   for(const endpoint of vectors){const button=document.createElement('button');button.type='button';button.textContent='Select '+endpoint;button.addEventListener('click',()=>call('pickLightSliceHandle',{endpoint}));buttons.append(button);}
   const hold=document.createElement('button');hold.type='button';hold.textContent='Hold this sample';hold.addEventListener('click',()=>call('holdLightSlice',{}));buttons.append(hold);panel.append(buttons);
+  const track=document.createElement('button');track.type='button';track.textContent='Track shared emission';track.addEventListener('click',()=>call('trackLightSliceSource',{}));buttons.append(track);
+  const historyLine=document.createElement('p');historyLine.style.cssText='font:12px monospace;white-space:pre-line;overflow-wrap:anywhere';panel.append(historyLine);
   const depth=document.createElement('canvas'),cross=document.createElement('canvas'),status=document.createElement('p');
   for(const c of [depth,cross])c.style.cssText='display:block;width:100%;image-rendering:pixelated;background:#10151a';
   depth.style.height='64px';cross.style.height='86px';
@@ -245,11 +300,11 @@ export function createParticleLightSliceCockpit({runtime,session,select,refresh,
   plots.append(status,'Along beam',depth,'Across beam at selected depth',cross);
   panel.append(advanced);
   const note=document.createElement('p');note.textContent='Probe and native flame use the same selected projected particle optics. Coarse is a grouped patch from that deposition; it is not the legacy global field. Shared replaces the chosen stretch with the center-ray optics. Smoke-only keeps the flame emitting into the light solve and hides its direct camera emission.';
-  panel.append(note);view={panel,depth,cross,status,hold};draw();
+  panel.append(note);view={panel,depth,cross,status,hold,track,history:historyLine};draw();
  }
  function inspect({heldSample=false}={}){
   const snapshot=heldSample?held:reader.read().result;
-  return snapshot?{available:true,snapshot:structuredClone(snapshot),settings:structuredClone(settings)}:{available:false,reason:'No sampled profile'};
+  return snapshot?{available:true,snapshot:structuredClone(snapshot),settings:structuredClone(settings),sourceHistory:structuredClone(historyRead())}:{available:false,reason:'No sampled profile'};
  }
- return {read,inspect,configure,pick,hold,tick,mount,dispose(){disposed=true;clearPreview();follow.dispose();reader.dispose();disposers.forEach(d=>d?.dispose?.());}};
+ return {read,inspect,configure,pick,hold,trackSource,tick,mount,dispose(){disposed=true;clearPreview();sourceFollow.dispose();follow.dispose();reader.dispose();disposers.forEach(d=>d?.dispose?.());}};
 }
