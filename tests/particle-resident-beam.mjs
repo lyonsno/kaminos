@@ -1,7 +1,7 @@
 // kaminos-test: node
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {residentBeamPlan,residentBeamRefresh} from '../particle-resident-beam.mjs';
+import {residentBeamPlan,residentBeamRefresh,residentBeamFitsFine} from '../particle-resident-beam.mjs';
 
 test('rotating acquisition sends one centered ray to both histories and revisits all nine slots',()=>{
  const p=residentBeamPlan({width:9,sections:12,stride:3});
@@ -25,15 +25,23 @@ test('native renderer borrows exactly one same-step resident output without assu
  const buffer={size:128,usage:128},identity={epoch:2,step:7,materialStamp:"native"};
  try{
   view.set({axis,buffer,identity,device});
+  assert.equal(view.route(2,7,"native"),"selected-resident-beam-scattering-only");
   assert.equal(view.entries(2,7,"native")[0].resource.buffer,buffer);
   assert.deepEqual(view.entries(2,8,"native"),[]);
   assert.deepEqual(view.entries(2,7,"edited"),[]);
   assert.deepEqual(view.entries(3,7),[]);
   assert.throws(()=>view.set({axis,buffer,identity,device:{}}),/resident beam/);
   view.set({axis,values:new Float32Array(32).fill(1),identity});
+  assert.equal(view.route(2,8,"edited"),"selected-beam-scattering-only");
   assert.notEqual(view.entries(2,8)[0].resource.buffer,buffer,'CPU-authored held view keeps existing behavior');
   assert.equal(writes.length,3);
   view.dispose();
   assert.ok(!retired.includes(buffer));
  }finally{globalThis.GPUBufferUsage=previous;}
+});
+
+test('a beam whose center is inside cannot start with one side outside the Fine flow',()=>{
+ const b={origin:[0,0,-.8],forward:[0,0,1],right:[1,0,0],up:[0,1,0],halfSize:[.2,.2],far:1.6};
+ assert.equal(residentBeamFitsFine(b,[18,18,18]),true);
+ assert.equal(residentBeamFitsFine({...b,origin:[.9,0,-.8]},[18,18,18]),false);
 });

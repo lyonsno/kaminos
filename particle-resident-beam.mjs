@@ -13,6 +13,17 @@ export function residentBeamRefresh({side,retainedRays,stride},schedule){
  return {slot,x:slot%side*stride+offset,y:Math.floor(slot/side)*stride+offset};
 }
 
+// This comparison isolates flow, so begin with the entire finite patch
+// admitted by the exact Fine domain sampled by the native carry kernel.
+export function residentBeamFitsFine(b,[nx,ny,nz]){
+ const top=[1,2*ny/nx-1,1];
+ if(nx!==nz)return false;
+ return [0,b.far].every(z=>[-1,1].every(x=>[-1,1].every(y=>b.origin.every((v,i)=>{
+  const p=v+z*b.forward[i]+x*b.right[i]*b.halfSize[0]+y*b.up[i]*b.halfSize[1];
+  return Number.isFinite(p)&&p>=-1&&p<=top[i];
+ }))));
+}
+
 export const PARTICLE_RESIDENT_BEAM_WGSL=/* wgsl */`
 ${PARTICLE_BUFFER_ABI_WGSL}
 struct Beam {origin:vec4<f32>, forward:vec4<f32>, right:vec4<f32>, up:vec4<f32>, schedule:vec4<u32>, gain:vec4<f32>}
@@ -143,7 +154,7 @@ export function createResidentBeam(device,requested){
  const storage=GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST;
  const r=Object.fromEntries(Object.entries(sizes).map(([k,n])=>[k,make(k,n,storage)]));
  const cfg=make('geometry and cadence',96,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST);
- const seedTransport=createPacketBundleTransport(device),refreshTransport=createPacketBundleTransport(device);
+ let seedTransport=createPacketBundleTransport(device);const refreshTransport=createPacketBundleTransport(device);
  const shader=device.createShaderModule({label:'resident finite beam history',code:PARTICLE_RESIDENT_BEAM_WGSL});
  const pipelines=Object.fromEntries(['seedTau','carry','refresh','bin','gather','resolve'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'resident beam '+entryPoint,layout:'auto',compute:{module:shader,entryPoint}})]));
  const pass=(encoder,key,items,n,profile)=>{
@@ -156,9 +167,11 @@ export function createResidentBeam(device,requested){
    if(disposed||!material?.fine||!material.sourceOptions||!material.options||!material.identity)throw Error('Current native beam material is unavailable');
    const init=!identity,id=material.identity,transform=material.domain.worldFromFine,key=JSON.stringify(transform);
    if(!init&&(identity.epoch!==id.epoch||identity.materialStamp!==id.materialStamp||identity.step+1!==id.step||transformKey!==key))throw Error('Resident beam requires consecutive unchanged material; reseed the comparison');
+   if(!init&&seedTransport){seedTransport.dispose();seedTransport=null;}
    const fine=p=>p.map((v,i)=>(v-transform.translate[i])/transform.scale);
    const origin=fine(g.emitter),target=fine(g.receiver),far=Math.hypot(...target.map((v,i)=>v-origin[i])),half=g.halfWidth/transform.scale;
    const bundle=finitePacketBundle({origin,target,halfSize:[half,half],far,weight:1});
+   if(init&&!residentBeamFitsFine(bundle,material.domain.dims))throw Error('The finite reuse patch must start fully inside the native Fine domain');
    const cadence=init||!refresh?null:residentBeamRefresh(plan,sequence);
    let receipt=null,atlas=null;
    if(init||cadence){
@@ -182,11 +195,11 @@ export function createResidentBeam(device,requested){
    const view=buf=>({identity,axis,buffer:buf,device});
    return {identity,views:{held:view(r.held),advected:view(r.advected)},plan,
     work:{seedRays:init?plan.receiverRays:0,refreshRays:cadence?1:0,refreshedSlot:cadence?.slot??null,sectionsMoved:init?0:plan.sampleCount,receiverPoints:plan.points,rasterInstances:receipt?.instances??0,
-     persistentBytes:Object.values(sizes).reduce((a,b)=>a+b,96),readbacks:0},
+     reuseBufferBytes:Object.values(sizes).reduce((a,b)=>a+b,96),packetWorkspaceBytes:((init?receipt:refreshTransport.read())?.bytes??0),readbacks:0},
     tau:r.tau,authority:'resident equal-budget finite patch; seed extinction and one shared fresh emission column'};
   },
   dispose(){
-   disposed=true;seedTransport.dispose();refreshTransport.dispose();
+   if(disposed)return;disposed=true;seedTransport?.dispose();refreshTransport.dispose();
    device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>[cfg,...Object.values(r)].forEach(b=>b.destroy()));
   }
  };

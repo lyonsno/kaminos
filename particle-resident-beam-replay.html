@@ -16,15 +16,15 @@ canvas{display:block;width:100%;width:min(100%,55vh);margin:auto;background:#000
 <nav aria-label="Replay controls">
 <button id="play" disabled>Play</button>
 <label>Step <input type="range" id="step" min="0" value="0" disabled></label>
-<label>Brightness <input type="range" id="gain" min="1" max="6" value="2.8" step=".1"></label>
+<label>Brightness <input type="range" id="gain" min=".4" max="6" value="1.8" step=".1"></label>
 <label>Step interval <select id="pace"><option value="500">Slow</option><option value="220" selected>Medium</option><option value="80">Quick</option></select></label>
 <label><span><input id="full" type="checkbox"> Full frame</span></label>
 </nav>
+<p id="status" aria-live="polite">Loading recorded native smoke…</p>
 <section>
 <figure><figcaption><strong>Held light</strong></figcaption><canvas id="held" aria-label="Same-budget light with no movement of old samples"></canvas></figure>
 <figure><figcaption><strong>Carried light</strong></figcaption><canvas id="advected" aria-label="Same-budget light with old samples following Fine flow"></canvas></figure>
 </section>
-<p id="status" aria-live="polite">Loading recorded native smoke…</p>
 <p>Beam extinction is held. Missing beam coverage contributes no light in these camera views. At the loop boundary the scene jumps back to the seed.</p>
 <script type="module">
 const q=id=>document.getElementById(id),status=q('status'),step=q('step'),play=q('play'),gain=q('gain'),pace=q('pace'),full=q('full');
@@ -35,24 +35,26 @@ async function load(){
  if(!file)throw Error('Select a resident replay');
  const response=await fetch('/api/read?root=scenes&raw=1&path='+encodeURIComponent(file));
  if(!response.ok)throw Error('Recording unavailable ('+response.status+')');
- const tape=await response.json(),{frames,seed,plan}=tape;
+ const tape=await response.json(),{frames,seed,plan,schedule}=tape;
  if(tape.source!=='resident-equal-fresh-ray-beam'||!Array.isArray(frames)||frames.length<2||!same(frames[0].identity,seed)||!Number.isSafeInteger(plan?.points))throw Error('Incomplete resident recording');
  const decode=async(frame,arm)=>{
-  const r=frame.images?.[arm];if(!same(r?.identity,frame.identity)||r.mode!==arm||r.observedStep!==frame.identity.step||r.route!=='selected-beam-scattering-only'||
+  const r=frame.images?.[arm];if(!same(r?.identity,frame.identity)||r.mode!==arm||r.observedStep!==frame.identity.step||r.route!=='selected-resident-beam-scattering-only'||
       !/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(r.src))throw Error('Wrong smoke render receipt');
   const digest=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(r.src)));
   if(Array.from(digest,x=>x.toString(16).padStart(2,'0')).join('')!==r.sha256)throw Error('Smoke pixels do not match the captured arm');
   const i=new Image();i.src=r.src;await i.decode();return i;
  };
+ if(!Array.isArray(schedule)||schedule.length!==frames.length||schedule[0]!==0||!schedule.slice(1).includes(1)||schedule.some(v=>v!==0&&v!==1))throw Error('Recording has no issued shared fresh rays');
  let nextSlot=0;
  for(let i=0;i<frames.length;i++){
   const f=frames[i],r=f.work,id=f.identity;
   if(id?.step!==seed.step+i||id.epoch!==seed.epoch||id.materialStamp!==seed.materialStamp||
      !Number.isSafeInteger(id.frame)||(i>0&&id.frame<=frames[i-1].identity.frame)||r?.readbacks!==0||
-     r.seedRays!==(i===0?plan.receiverRays:0)||![0,1].includes(r.refreshRays)||(i===0&&r.refreshRays!==0)||
+     r.seedRays!==(i===0?plan.receiverRays:0)||r.refreshRays!==schedule[i]||
      (r.refreshRays===0&&r.refreshedSlot!==null)||(r.refreshRays===1&&r.refreshedSlot!==nextSlot++%plan.retainedRays))
    throw Error('Recording lost the common ray schedule or native observation');
  }
+ if(arms.some(a=>new Set(frames.map(f=>f.images?.[a]?.sha256)).size<2))throw Error('A smoke arm never changed during the replay');
  const decoded=await Promise.all(frames.map(f=>Promise.all(arms.map(a=>decode(f,a)))));
  const image=decoded[0][0],w=image.naturalWidth,h=image.naturalHeight;
  const xMass=new Float64Array(w),yMass=new Float64Array(h),scratch=document.createElement('canvas');
@@ -61,7 +63,9 @@ async function load(){
   if(im.naturalWidth!==w||im.naturalHeight!==h)throw Error('Camera dimensions changed across the comparison');
   scan.clearRect(0,0,w,h);scan.drawImage(im,0,0);
   const pixels=scan.getImageData(0,0,w,h).data;
-  for(let y=0;y<h;y++)for(let x=0;x<w;x++){const at=(x+y*w)*4,n=Math.max(0,pixels[at]-15,pixels[at+1]-15,pixels[at+2]-15);xMass[x]+=n;yMass[y]+=n;}
+  let signal=0;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){const at=(x+y*w)*4,n=Math.max(0,pixels[at]-15,pixels[at+1]-15,pixels[at+2]-15);xMass[x]+=n;yMass[y]+=n;signal+=n;}
+  if(!signal)throw Error('A recorded panel has no visible smoke; comparison withheld');
  }
  const limits=mass=>{
   const total=mass.reduce((x,y)=>x+y,0);
@@ -76,7 +80,7 @@ async function load(){
   const i=Number(step.value),{identity,work,coverage}=frames[i];
   for(const [k,name] of arms.entries()){
    const canvas=q(name),sx=full.checked?0:x,sy=full.checked?0:y,sw=full.checked?w:x1-x,sh=full.checked?h:y1-y;
-   canvas.width=sw;canvas.height=sh;
+   canvas.width=sw;canvas.height=sh;canvas.style.width='min(100%, '+(53*sw/sh)+'vh)';
    const ctx=canvas.getContext('2d');ctx.fillStyle='#000';ctx.fillRect(0,0,sw,sh);
    ctx.filter='brightness('+gain.value+')';ctx.drawImage(decoded[i][k],sx,sy,sw,sh,0,0,sw,sh);
   }

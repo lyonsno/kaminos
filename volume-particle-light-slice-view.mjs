@@ -18,6 +18,7 @@ fn sliceIncident(position:vec3<f32>)->vec3<f32>{
 export function createParticleLightSliceView(device,retire){
  let field=null,parameters=null,epoch=null;
  let borrowed=null,borrowedStep=null,borrowedStamp=null;
+ const admitted=(e,s,stamp)=>epoch!==null&&e===epoch&&(!borrowed||s===borrowedStep&&stamp===borrowedStamp);
  const usage=()=>GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST;
  return {
   set(next){
@@ -44,8 +45,9 @@ export function createParticleLightSliceView(device,retire){
    device.queue.writeBuffer(parameters,0,axis);
    epoch=identity.epoch;
   },
+  route(e,s,stamp){return !admitted(e,s,stamp)?'off':borrowed?'selected-resident-beam-scattering-only':'selected-beam-scattering-only';},
   entries(currentEpoch,currentStep,currentStamp){
-   return epoch!==null&&currentEpoch===epoch&&(!borrowed||borrowedStep===currentStep&&borrowedStamp===currentStamp)
+   return admitted(currentEpoch,currentStep,currentStamp)
     ?[{binding:12,resource:{buffer:borrowed??field}},{binding:13,resource:{buffer:parameters}}]:[];
   },
   dispose(){retire([field,parameters].filter(Boolean));field=parameters=epoch=borrowed=borrowedStep=borrowedStamp=null;},
