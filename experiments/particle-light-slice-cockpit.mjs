@@ -247,5 +247,9 @@ export function createParticleLightSliceCockpit({runtime,session,select,refresh,
   const note=document.createElement('p');note.textContent='Probe and native flame use the same selected projected particle optics. Coarse is a grouped patch from that deposition; it is not the legacy global field. Shared replaces the chosen stretch with the center-ray optics. Smoke-only keeps the flame emitting into the light solve and hides its direct camera emission.';
   panel.append(note);view={panel,depth,cross,status,hold};draw();
  }
- return {read,configure,pick,hold,tick,mount,dispose(){disposed=true;clearPreview();follow.dispose();reader.dispose();disposers.forEach(d=>d?.dispose?.());}};
+ function inspect({heldSample=false}={}){
+  const snapshot=heldSample?held:reader.read().result;
+  return snapshot?{available:true,snapshot:structuredClone(snapshot),settings:structuredClone(settings)}:{available:false,reason:'No sampled profile'};
+ }
+ return {read,inspect,configure,pick,hold,tick,mount,dispose(){disposed=true;clearPreview();follow.dispose();reader.dispose();disposers.forEach(d=>d?.dispose?.());}};
 }

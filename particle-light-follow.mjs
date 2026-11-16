@@ -9,7 +9,7 @@ export function followReceiverRead(previous,sample){
 }
 
 export const PARTICLE_LIGHT_FOLLOW_WGSL=/* wgsl */`${PARTICLE_LIGHT_MATERIAL_WGSL}
-struct FollowQuery {target:vec4<f32>, key:vec4<u32>}
+struct FollowQuery {location:vec4<f32>, key:vec4<u32>}
 struct FollowResult {position:vec4<f32>, key:vec4<u32>}
 @group(0) @binding(0) var<storage,read> particles:array<Particle>;
 @group(0) @binding(1) var<storage,read> generations:array<u32>;
@@ -32,10 +32,10 @@ fn writePoint(slot:u32){
   }
   return;
  }
- var best=query.target.w;var slot=0xffffffffu;
+ var best=query.location.w;var slot=0xffffffffu;
  for(var i=tid;i<count;i+=64u){
   if(particles[i].anchor.w<=0.0||generations[i]==0u||generations[i]==0xffffffffu){continue;}
-  let delta=particles[i].anchor.xyz-query.target.xyz;
+  let delta=particles[i].anchor.xyz-query.location.xyz;
   let distance=dot(delta,delta);
   if(distance<best||(distance==best&&i<slot)){best=distance;slot=i;}
  }
@@ -60,12 +60,13 @@ export function createLightSliceReceiverFollow({runtime,onRead=()=>{}}){
  function tick(){
   if(!requested||match?.state==='lost'||inFlight)return;
   const owner=runtime();if(!owner?.submitOpticalParticleMaterial)return;
-  let pending=null;
+  let pending=null,scope=null;
   try{
    const submitted=owner.submitOpticalParticleMaterial((encoder,frame,ownDevice)=>{
     const {epoch,step}=frame.identity;
     if(match?.birth&&match.epoch!==epoch){match=followReceiverRead(match,null);onRead(match);return;}
     if(lastEpoch===epoch&&lastStep===step)return;
+    scope=ownDevice;scope.pushErrorScope('validation');
     if(!resources||device!==ownDevice){
      release();device=ownDevice;
      const storage=GPUBufferUsage.STORAGE,copy=GPUBufferUsage.COPY_DST;
@@ -87,12 +88,13 @@ export function createLightSliceReceiverFollow({runtime,onRead=()=>{}}){
     catch(e){staging.destroy();throw e;}
     pending={staging,transform,epoch,step};
    });
-   if(!submitted.available){pending?.staging.destroy();return;}
-  }catch(e){pending?.staging.destroy();match={state:'lost',reason:e.message};onRead(match);return;}
+   if(!submitted.available){pending?.staging.destroy();if(scope)void scope.popErrorScope().catch(()=>{});return;}
+  }catch(e){pending?.staging.destroy();if(scope)void scope.popErrorScope().catch(()=>{});match={state:'lost',reason:e.message};onRead(match);return;}
   if(!pending)return;
   const {staging,transform,epoch,step}=pending,token=requestId;
   lastEpoch=epoch;lastStep=step;inFlight=true;
-  staging.mapAsync(GPUMapMode.READ).then(()=>{
+  Promise.all([staging.mapAsync(GPUMapMode.READ),scope.popErrorScope()]).then(([,validation])=>{
+   if(validation)throw Error(validation.message);
    if(token!==requestId)return;
    const bytes=staging.getMappedRange(),u=new Uint32Array(bytes),f=new Float32Array(bytes);
    const sample={epoch,step,slot:u[4],birth:u[5],point:Array.from(f.slice(0,3),(v,c)=>v*transform.scale+transform.translate[c])};
