@@ -122,7 +122,7 @@ export function compareSliceSections(moments,{width,depthStride=4,acrossStride=2
  return {fine:apply(moments),coarse:apply(coarse),shared:apply(refined),anchor,depthMask,affected};
 }
 
-export function packLightSliceView(snapshot,profiles){
+export function packLightSliceView(snapshot,profiles,gain=1){
  const {transform,width,sections,identity}=snapshot;
  if(profiles.length!==width*width||profiles.some(ray=>ray.length!==sections))throw Error('Cannot display an incomplete light slice');
  const toFine=p=>p.map((v,c)=>(v-transform.translate[c])/transform.scale);
@@ -131,6 +131,6 @@ export function packLightSliceView(snapshot,profiles){
  const basis=finitePacketBundle({origin,target,halfSize:[half,half],far:length,weight:1});
  const axis=new Float32Array([...origin,half,...basis.forward,length,...basis.right,width,...basis.up,sections]);
  const values=new Float32Array(width*width*sections*4);
- for(let i=0;i<profiles.length;i++)for(let z=0;z<sections;z++)values.set(profiles[i][z].light.map(v=>Math.max(0,v)),(i*sections+z)*4);
+ for(let i=0;i<profiles.length;i++)for(let z=0;z<sections;z++)values.set(profiles[i][z].light.map(v=>Math.max(0,v)*gain),(i*sections+z)*4);
  return {identity,axis,values};
 }

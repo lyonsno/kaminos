@@ -85,7 +85,7 @@ export default {
   let lightSliceSettings={...inputs.lightSlice};
   if(lightSliceSettings.view==='held')lightSliceSettings.view='fine';
   const lightSlice=createParticleLightSliceCockpit({runtime:source,session,host,inputs:lightSliceSettings,
-   select:id=>win.kaminosSelection?.set([id],id),record,onSettings:next=>{lightSliceSettings=next;persist();}});
+   select:id=>win.kaminosSelection?.set([id],id),refresh:asset=>win.kaminosWorkbenchRefreshPresentation?.(asset),record,onSettings:next=>{lightSliceSettings=next;persist();}});
   const edits=win.kaminosSceneEdits,coverageTarget=edits?'@particle-coverage:'+win.crypto.randomUUID():null;
   const coverageSlice=({coverage,pixelFloor,maxFootprint})=>({coverage,pixelFloor,maxFootprint});
   let ownCoverageGesture=false;
