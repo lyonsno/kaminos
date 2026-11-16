@@ -64,12 +64,13 @@ export function particleReactionFromSimulation(config){
  const e=config?.effective;if(!e?.admitted)return null;
  return {burnTime:e.mixingTimeSteps,cooling:e.coolingTimeSteps,heatRelease:e.model.heatOfCombustion,sootYield:e.model.sootYield,smokeLife:e.model.sootRetirementSteps};
 }
-const OPTIONS=/* wgsl */`
+export const PARTICLE_BUFFER_ABI_WGSL=/* wgsl */`
 // Motion: measured fuel burn per reference step (0 unmeasured, -1 measured zero), vertical rise, optional Fine stretch rate (0 unmeasured, -1 measured no stretch), survival.
 struct Particle {anchor:vec4<f32>, source:vec4<f32>, emission:vec4<f32>, motion:vec4<f32>, shape:vec4<f32>, state:vec4<f32>}
 struct Options {vp:mat4x4<f32>, inverse:mat4x4<f32>, size:vec4<u32>, time:vec4<f32>, reaction:vec4<f32>, shape:vec4<f32>, transport:vec4<f32>, fine:vec4<f32>, gain:vec4<f32>, raster:vec4<f32>, support:vec4<f32>, acquisition:vec4<u32>, lighting:vec4<f32>, seed:vec4<f32>, visibility:vec4<f32>,chemistry:vec4<f32>,material:vec4<f32>,appearance:vec4<f32>,lives:vec4<f32>,lifeControl:vec4<f32>,kernelE:vec4<f32>,kernelT:vec4<f32>,oxidation:vec4<f32>,work:vec4<f32>,workExtra:vec4<f32>,reservedWork:vec4<f32>,viewProj:mat4x4<f32>,viewRaster:vec4<f32>}
 struct SourceOptions {vp:mat4x4<f32>,size:vec4<u32>,policy:vec4<f32>,life:vec4<f32>,flow:vec4<f32>,worldLo:vec4<f32>,worldDims:vec4<f32>,worldMap:vec4<f32>,middleLo:vec4<f32>,middleDims:vec4<f32>,middleMap:vec4<f32>,arenaOffsets:vec4<u32>}
 `;
+const OPTIONS=PARTICLE_BUFFER_ABI_WGSL;
 const PARTICLE_LIGHT_TERMS_WGSL=/* wgsl */`
 fn particleLightIsActive(p:Particle)->bool{return p.anchor.w>0.0;}
 fn particleLightIntrinsic(p:Particle)->vec3<f32>{return select(vec3<f32>(0),p.emission.xyz,particleLightIsActive(p));}
@@ -168,6 +169,19 @@ export function createParticleMaterialHandoff(device){
   },
  };
 }
+export const PARTICLE_FINE_VELOCITY_WGSL=/* wgsl */`fn particleInsideFine(p:vec3<f32>)->bool{return all(p>=vec3<f32>(-1))&&all(p<=vec3<f32>(1,2.0*u.fine.y/u.fine.x-1.0,1));}
+fn particleFineVelocity(p:vec3<f32>)->vec3<f32>{
+ let dims=vec3<i32>(u.fine.xyz);let pitch=source.flow.z;
+  var result=vec3<f32>(0);
+  for(var a=0u;a<3u;a++){
+   var offset=vec3<f32>(.5);if(source.flow.w>.5){offset[a]=1;}
+   let cell=clamp((p+vec3<f32>(1))/pitch-offset,vec3<f32>(0),vec3<f32>(dims)-1.001);let base=vec3<i32>(floor(cell));let f=fract(cell);
+   for(var z=0;z<2;z++){for(var y=0;y<2;y++){for(var x=0;x<2;x++){
+    let c=clamp(base+vec3<i32>(x,y,z),vec3<i32>(0),dims-1);let i=u32(c.x+dims.x*(c.y+dims.y*c.z));let w=select(1.0-f,f,vec3<bool>(x==1,y==1,z==1));result[a]+=fine[4u*i][a]*w.x*w.y*w.z;
+   }}}
+  }return result*pitch;
+}
+`;
 export const PARTICLE_COMPUTE_WGSL=/* wgsl */`${OPTIONS}
 @group(0) @binding(0) var<storage,read_write> particles:array<Particle>;
 @group(0) @binding(1) var<storage,read> births:array<vec4<f32>>;
@@ -217,20 +231,10 @@ fn coarseVelocity(p:vec3<f32>,middle:bool)->vec3<f32>{
   }}}
  }return result/map.w;
 }
-fn particleInsideFine(p:vec3<f32>)->bool{return all(p>=vec3<f32>(-1))&&all(p<=vec3<f32>(1,2.0*u.fine.y/u.fine.x-1.0,1));}
+${PARTICLE_FINE_VELOCITY_WGSL}
 fn particleOutsideSingleGrid(p:vec3<f32>)->bool{return source.worldDims.w<.5&&!particleInsideFine(p);}
 fn particleVelocity(p:vec3<f32>)->vec3<f32>{
- let dims=vec3<i32>(u.fine.xyz);let pitch=source.flow.z;
- if(particleInsideFine(p)){
-  var result=vec3<f32>(0);
-  for(var a=0u;a<3u;a++){
-   var offset=vec3<f32>(.5);if(source.flow.w>.5){offset[a]=1;}
-   let cell=clamp((p+vec3<f32>(1))/pitch-offset,vec3<f32>(0),vec3<f32>(dims)-1.001);let base=vec3<i32>(floor(cell));let f=fract(cell);
-   for(var z=0;z<2;z++){for(var y=0;y<2;y++){for(var x=0;x<2;x++){
-    let c=clamp(base+vec3<i32>(x,y,z),vec3<i32>(0),dims-1);let i=u32(c.x+dims.x*(c.y+dims.y*c.z));let w=select(1.0-f,f,vec3<bool>(x==1,y==1,z==1));result[a]+=fine[4u*i][a]*w.x*w.y*w.z;
-   }}}
-  }return result*pitch;
- }
+ if(particleInsideFine(p)){return particleFineVelocity(p);}
  let q=p*source.middleMap.w+source.middleMap.xyz;
  let middle=source.middleDims.w>.5&&all(q>=source.middleLo.xyz)&&all(q<source.middleLo.xyz+source.middleDims.xyz*source.middleLo.w);
  return coarseVelocity(p,middle);

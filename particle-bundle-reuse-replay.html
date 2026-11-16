@@ -1,0 +1,69 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Light bundle replay</title>
+<style>
+:root{color-scheme:dark;font:16px system-ui;background:#14181d;color:#e9ebef}
+body{margin:2rem auto;max-width:1100px;padding:0 1.25rem}h1{margin-bottom:.5rem}p{color:#bfc8d1}
+nav{display:flex;gap:1rem;align-items:center;flex-wrap:wrap;margin:1.5rem 0}label{display:grid;min-width:10rem;gap:.15rem}
+button,select{font:inherit;padding:.4rem .7rem}section{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}
+figure{margin:0;background:#20272f;padding:.8rem;border-radius:.35rem}figcaption{margin-bottom:.75rem}
+canvas{image-rendering:pixelated;width:100%;aspect-ratio:1;background:#000}
+strong{color:#fff}a{color:#9dd1ff}#status{font-variant-numeric:tabular-nums}
+@media(max-width:650px){body{margin-top:1rem}section{gap:.4rem}figure{padding:.35rem}figcaption{font-size:.8rem}}
+</style>
+<h1>Light through held smoke</h1>
+<p>The same straight receiver paths, shown three ways. The held and advected views start with the same sparse emission. All three use the old extinction.</p>
+<nav aria-label="Replay controls">
+<button id="play" disabled>Play</button>
+<label>Simulation step <input type="range" id="step" min="0" value="0" disabled></label>
+<label id="planeLabel"><span id="planeName">Depth section</span> <input type="range" id="plane" min="0" value="0" disabled></label>
+<label>View <select id="projection"><option value="cross">Across beam at depth</option><option value="along">Along beam at row</option></select></label>
+</nav>
+<section>
+<figure><figcaption><strong>Held</strong></figcaption><canvas id="held" aria-label="Held sparse emission"></canvas></figure>
+<figure><figcaption><strong>Advected</strong></figcaption><canvas id="advected" aria-label="Emission carried with the Fine flow"></canvas></figure>
+<figure><figcaption><strong>Fresh emission</strong></figcaption><canvas id="fresh" aria-label="Fresh emission with the old extinction"></canvas></figure>
+</section>
+<p id="status" aria-live="polite">Loading recorded native material…</p>
+<p>The blue checkerboard marks an unknown light prefix: at least one upstream section lacked transported coverage. A black cell has a valid prediction of little or no light. All panels use the same exposure.</p>
+<script type="module">
+const get=id=>document.getElementById(id),status=get('status'),step=get('step'),plane=get('plane'),projection=get('projection'),play=get('play');
+let tape,timer;
+async function load(){
+ const path=new URLSearchParams(location.search).get('recording');
+ if(!path)throw Error('No replay selected');
+ const response=await fetch('/api/read?root=scenes&raw=1&path='+encodeURIComponent(path));
+ if(!response.ok)throw Error('Recording unavailable ('+response.status+')');
+ tape=await response.json();
+ const {frames,geometry:{width,sections},stride,samples}=tape;
+ if(tape.source!=='native-particle-bundle / same-material Fine velocity'||!frames.length||samples!==(width/stride)**2*sections||
+    frames.some(({result:r},i)=>r.identity.step!==tape.seed.identity.step+i+1||r.totalPoints!==width*width*sections))throw Error('Incomplete or wrong-route native replay');
+ const peak=frames.reduce((max,f)=>f.result.fresh.reduce((roof,ray)=>ray.reduce((n,p)=>Math.max(n,...p.light),roof),max),0);
+ if(!(peak>0))throw Error('Replay has no visible native reference');
+ step.max=frames.length-1;plane.max=sections-1;plane.value=sections-1;
+ play.disabled=step.disabled=plane.disabled=false;
+ function draw(){
+  const r=frames[Number(step.value)].result,k=Number(plane.value),along=projection.value==='along';
+  for(const mode of ['held','advected','fresh']){
+   const canvas=get(mode);canvas.width=along?sections:width;canvas.height=width;
+   const ctx=canvas.getContext('2d'),pixels=ctx.createImageData(canvas.width,canvas.height);
+   for(let y=0;y<width;y++)for(let x=0;x<canvas.width;x++){
+    const p=along?r[mode][k*width+y][x]:r[mode][y*width+x][k];
+    const rgb=p?p.light.map(v=>Math.round(255*Math.log1p(15*Math.max(0,v)/peak)/Math.log(16))):(x+y)%2?[20,75,105]:[31,109,149];
+    pixels.data.set([...rgb,255],4*(y*canvas.width+x));
+   }
+   ctx.putImageData(pixels,0,0);
+  }
+  const frac=n=>n===null?'—':(100*n).toFixed(1)+'%';
+  status.textContent='Step '+r.identity.step+' (seed '+r.heldIdentity.step+') · '+(along?'Row ':'Depth section ')+(k+1)+' · '+
+   r.coveredPoints+'/'+r.totalPoints+' receiver points covered · '+frac(r.missingEnergyFraction)+' of fresh light lies in unsupported prefixes. '+
+   (r.error?'Mean error on '+r.compared+' common points: held '+r.error.held.toFixed(3)+', advected '+r.error.advected.toFixed(3)+'.':'No common points to score.');
+ }
+ projection.onchange=()=>{const along=projection.value==='along';get('planeName').textContent=along?'Transverse row':'Depth section';plane.max=(along?width:sections)-1;plane.value=along?Math.floor(width/2):sections-1;draw();};
+ step.oninput=plane.oninput=draw;
+ play.onclick=()=>{if(timer){clearInterval(timer);timer=null;play.textContent='Play';}else{timer=setInterval(()=>{step.value=(Number(step.value)+1)%frames.length;draw();},350);play.textContent='Pause';}};
+ draw();
+}
+load().catch(e=>{status.textContent=e.message;});
+</script>
