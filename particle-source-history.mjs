@@ -25,9 +25,10 @@ export function sourceHistoryTarget(snapshot){
   }
  }
  if(!best)return null;
- const fraction=(best.section+.5)/sections;
+ const length=distance(emitter,receiver),fraction=(best.section+.5)/sections;
  return {...best,donor,point:emitter.map((x,i)=>x+(receiver[i]-x)*fraction),
-  radius:Math.min(halfWidth,distance(emitter,receiver)/(2*sections))};
+  axis:emitter.map((x,i)=>(receiver[i]-x)/length),sectionWidth:length/sections,
+  radius:Math.min(halfWidth,length/(2*sections))};
 }
 
 export function seedSourceHistory(snapshot,hit,target=sourceHistoryTarget(snapshot)){
@@ -37,32 +38,44 @@ export function seedSourceHistory(snapshot,hit,target=sourceHistoryTarget(snapsh
  return {snapshot,target,hit};
 }
 
-function predictionFor(history,scale){
+function depositSource(ray,originalSection,depth,scale){
+ const values=Array.from(ray),source=values.slice(4*originalSection,4*originalSection+3);
+ const lo=Math.floor(depth),hi=Math.ceil(depth),share=depth-lo;
+ for(let c=0;c<3;c++){
+  values[4*originalSection+c]-=source[c];
+  values[4*lo+c]+=source[c]*scale*(1-share);
+  values[4*hi+c]+=source[c]*scale*share;
+ }
+ return resolveDirectionalProfile(values);
+}
+function predictionFor(history,depth,scale){
  const {moments}=history.snapshot,{section,donor,receiver}=history.target;
- // Replace only the sampled source interval. With extinction held, its
- // contribution is linear in the updated emission even in a dense medium.
- return moments.map((ray,i)=>resolveDirectionalProfile(i!==donor&&i!==receiver?ray:
-  ray.map((v,c)=>Math.floor(c/4)===section&&c%4!==3?v*scale:v)));
+ return moments.map((ray,i)=>i===donor||i===receiver?depositSource(ray,section,depth,scale):resolveDirectionalProfile(ray));
 }
 
 export function predictSourceHistory(history,hit){
  const invalid=(reason)=>({available:false,reason});
  if(!hit?.identity||hit.identity.epoch!==history.hit.identity.epoch||hit.birth!==history.hit.birth||hit.slot!==history.hit.slot)return invalid('Tracked source carrier ended');
  if(hit.identity.step<history.hit.identity.step)return invalid('Source observation predates the held paths');
- if(distance(history.target.point,hit.point)>history.target.radius)return invalid('Source moved outside the held crossing; sample again');
- const scale=hit.sourcePower/history.hit.sourcePower;
+ const {axis,section,sectionWidth,radius}=history.target,
+       movement=hit.point.map((p,i)=>p-history.hit.point[i]),
+       axial=movement.reduce((v,x,i)=>v+x*axis[i],0),
+       transverse=Math.hypot(...movement.map((v,i)=>v-axial*axis[i]));
+ const z=section+axial/sectionWidth,max=history.snapshot.sections-1;
+ if(transverse>radius||z<-.5||z>max+.5)return invalid('Source moved outside the held crossing; sample again');
+ const depth=Math.min(max,Math.max(0,z)),scale=hit.sourcePower/history.hit.sourcePower;
  if(!Number.isFinite(scale)||scale<0)return invalid('Invalid current source strength');
- return {available:true,identity:hit.identity,point:hit.point,scale,profiles:predictionFor(history,scale)};
+ return {available:true,identity:hit.identity,point:hit.point,scale,depth,profiles:predictionFor(history,depth,scale)};
 }
 
 export function scoreSourceHistory(history,prediction,reference){
  if(!prediction.available||!sameFrame(prediction.identity,reference.identity)||reference.key!==history.snapshot.key)return null;
  const {donor,receiver,section}=history.target;
- const donorScale=sourceAt(reference.moments[donor],section)/sourceAt(history.snapshot.moments[donor],section);
- // Only A's source measurement produces the corrected answer. B's current
- // deposition is consulted below, solely as the held-out comparison.
- const corrected=resolveDirectionalProfile(history.snapshot.moments[receiver].map((v,i)=>Math.floor(i/4)===section&&i%4!==3?v*donorScale:v));
+ // A still has to observe the same source section before its aggregate
+ // measurement can calibrate B. B's fresh light remains reference-only.
+ const canCompareDonor=Math.round(prediction.depth)===section;
+ const donorScale=canCompareDonor?sourceAt(reference.moments[donor],section)/sourceAt(history.snapshot.moments[donor],section):null;
  return {identity:reference.identity,held:resolveDirectionalProfile(history.snapshot.moments[receiver]).at(-1),
-  predicted:prediction.profiles[receiver].at(-1),donorCorrected:corrected.at(-1),
+  predicted:prediction.profiles[receiver].at(-1),donorCorrected:donorScale===null?null:depositSource(history.snapshot.moments[receiver],section,prediction.depth,donorScale).at(-1),
   fresh:resolveDirectionalProfile(reference.moments[receiver]).at(-1)};
 }

@@ -19,7 +19,7 @@ test('native deposited emission seeds two distinct path columns at one explicit 
 test('live source fades through held per-ray extinction, with no current recipient input',()=>{
  const sample=bundle(1,8,4),history=seedSourceHistory(sample,hit(1,20));
  assert.ok(history);
- const prediction=predictSourceHistory(history,hit(2,10,[0,0,.55]));
+ const prediction=predictSourceHistory(history,hit(2,10,[0,.05,.45]));
  assert.equal(prediction.available,true);
  assert.equal(prediction.profiles[5].at(-1).light[0],.5);
  assert.ok(Math.abs(prediction.profiles[5].at(-1).transmission-.25)<1e-12);
@@ -44,4 +44,20 @@ test('pool reuse, unsupported movement and mismatched material observations cann
  const prediction=predictSourceHistory(seed,hit(2,10));
  assert.equal(scoreSourceHistory(seed,prediction,bundle(3,4,2)),null);
  assert.equal(scoreSourceHistory(seed,prediction,{...bundle(2,4,2),key:'changed'}),null);
+});
+
+test('a source carried downstream changes depth order of emission, while every blocker stays at its held depth',()=>{
+ const sample=bundle(1,8,4);
+ // The first two intervals are clear and the third is extinctive.
+ sample.sections=3;sample.receiver=[0,0,3];
+ sample.moments=sample.moments.map(r=>[...r.slice(0,4),0,0,0,0,...r.slice(4)]);
+ sample.moments[4][7]=Math.log(2);sample.moments[5][7]=Math.log(2);
+ const history=seedSourceHistory(sample,hit(1,20));
+ assert.ok(history);
+ const carried=predictSourceHistory(history,hit(2,20,[0,0,2.45]));
+ assert.ok(carried.available,carried.reason);
+ assert.deepEqual(carried.profiles[5].map(r=>r.tau),[0,Math.log(2),Math.log(4)]);
+ assert.equal(carried.profiles[5][0].light[0],0);
+ assert.ok(carried.profiles[5].at(-1).light[0]>1);
+ assert.ok(Math.abs(carried.profiles[5].at(-1).transmission-.125)<1e-12);
 });
