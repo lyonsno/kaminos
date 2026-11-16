@@ -12,9 +12,9 @@ test('finite bundles carry axial distances independent of perspective clip W',()
  const data=packPacketBundles([b]);assert.equal(data.byteLength,96);
  const f=new Float32Array(data),u=new Uint32Array(data);
  assert.deepEqual([...f.slice(0,8)],[2,3,4,.25,0,0,1,7]);
- assert.equal(f[16],.125);assert.deepEqual([...u.slice(20,23)],[2,3,0xffffffff]);
+ assert.equal(f[16],.125);assert.deepEqual([...u.slice(20,24)],[2,3,0,0]);
  const isolated=finitePacketBundle({origin:[0,0,0],target:[0,0,1],halfSize:[1,1],far:1,weight:1,sourceSlot:0});
- assert.equal(new Uint32Array(packPacketBundles([isolated]))[22],0);
+ assert.equal(new Uint32Array(packPacketBundles([isolated]))[23],1);
  assert.throws(()=>finitePacketBundle({origin:[0,0,0],target:[0,0,0],halfSize:[1,1],far:1,weight:1}),/direction/);
  assert.throws(()=>finitePacketBundle({origin:[0,0,0],target:[0,0,1],halfSize:[1,1],near:2,far:1,weight:1}),/endpoints/);
 });

@@ -70,7 +70,11 @@ export function createLightSliceProbe({runtime,onChange=()=>{},createTransport=c
     const attached=carrier?.state==='following'&&carrier.identity?.epoch===epoch&&carrier.identity.step===step&&carrier.identity.materialStamp===materialStamp;
     if(bindSource&&!attached)return;
     const needsIsolation=attached&&(!result?.isolatedCarrier||result.isolatedCarrier.slot!==carrier.slot||result.isolatedCarrier.birth!==carrier.birth);
-    if(!(bindSource&&needsIsolation)&&result?.identity.epoch===epoch&&key===lastKey&&step>=result.identity.step&&
+    // The carrier readback and atlas may finish in either order. Upgrade a
+    // current reference only when its exact carrier has arrived and refresh is on.
+    const upgrade=needsIsolation&&(bindSource||(refreshSteps>0&&key===lastKey&&
+      result?.identity.epoch===epoch&&result.identity.step===step&&result.identity.materialStamp===materialStamp));
+    if(!upgrade&&result?.identity.epoch===epoch&&key===lastKey&&step>=result.identity.step&&
        ((step===result.identity.step&&materialStamp===result.identity.materialStamp)||
        (step>result.identity.step&&(refreshSteps===0||step-result.identity.step<refreshSteps))))return;
     const transform=frame.domain.worldFromFine;

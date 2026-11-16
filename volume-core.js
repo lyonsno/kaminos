@@ -18519,7 +18519,7 @@ export function createKaminosVolumePrototype({
     },
     submitOpticalParticleMaterial(encode) {
       if(!state.active||deviceRetired||!particleSettings.enabled||state.opticalParticles?.effective!=='world-optical-particles'||!opticalParticles)
-        return {available:false,reason:'Optical particle material is inactive'};
+        return {available:false,terminal:true,reason:'Optical particle material is inactive'};
       return opticalParticles.submitMaterialQuery(state.simStepCount,encode);
     },
     async sampleOpticalParticles(){return opticalParticles?.sample()??{available:false};},

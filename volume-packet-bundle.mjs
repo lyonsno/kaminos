@@ -17,7 +17,9 @@ export function finitePacketBundle({origin,target,halfSize,near=0,far,weight,rec
 }
 export function packPacketBundles(bundles){
  const data=new ArrayBuffer(bundles.length*96),f=new Float32Array(data),u=new Uint32Array(data);
- bundles.forEach((b,i)=>{const at=i*24;f.set([...b.origin,b.near,...b.forward,b.far,...b.right,b.halfSize[0],...b.up,b.halfSize[1],b.weight,0,0,0],at);u.set([b.receiver,b.source,b.sourceSlot??0xffffffff,0],at+20);});return data;
+ // ids.z belongs to the GPU packet network's direction. ids.w is zero
+ // for all existing bundles, or one plus the isolated particle slot.
+ bundles.forEach((b,i)=>{const at=i*24;f.set([...b.origin,b.near,...b.forward,b.far,...b.right,b.halfSize[0],...b.up,b.halfSize[1],b.weight,0,0,0],at);u.set([b.receiver,b.source,0,(b.sourceSlot??0xffffffff)===0xffffffff?0:b.sourceSlot+1],at+20);});return data;
 }
 export function packetBundlePlan(limits,{width,height,sections,bundles,slots,receivers}){
  for(const [k,v] of Object.entries({width,height,sections,bundles,slots,receivers}))count(v,k);
@@ -67,7 +69,7 @@ struct Splat {@builtin(position) position:vec4<f32>,@location(0) local:vec2<f32>
  if(depth+interval*.5<=b.origin.w||depth-interval*.5>=b.forward.w){return out;}
  let fade=select(1.0,particleLifeFade(p.motion.w,material.lifeControl.y),material.lifeControl.x>0);
  var source=particleLightIntrinsic(p)*material.gain.x*fade;
- if((b.ids.y!=0xffffffffu&&membership[pi]!=b.ids.y)||(b.ids.z!=0xffffffffu&&pi!=b.ids.z)){source=vec3<f32>(0);}
+ if((b.ids.y!=0xffffffffu&&membership[pi]!=b.ids.y)||(b.ids.w!=0u&&pi!=b.ids.w-1u)){source=vec3<f32>(0);}
  let tau=particleLightExtinction(p,material)*fade;
  if(max(max(source.x,source.y),max(source.z,tau))<=0){return out;}
  let radius=particleLightBaseRadius(p,material);

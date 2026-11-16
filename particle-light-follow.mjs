@@ -56,20 +56,24 @@ fn writePoint(slot:u32){
 `;
 
 export function createLightSliceReceiverFollow({runtime,onRead=()=>{}}){
- let requested=null,match=null,requestId=0,lastEpoch=null,lastStep=null,lastStamp=null,device=null,resources=null,inFlight=false;
+ let requested=null,match=null,requestId=0,lastEpoch=null,lastStep=null,lastStamp=null,materialOwner=null,device=null,resources=null,inFlight=false;
  const read=()=>match??{state:requested?'seeking':'world'};
  function release(){
   if(resources){const old=Object.values(resources).filter(x=>x?.destroy);device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>old.forEach(x=>x.destroy()));}
   resources=null;device=null;
  }
- function stop(){requested=null;match=null;lastEpoch=lastStep=lastStamp=null;requestId++;}
+ function stop(){requested=null;match=null;lastEpoch=lastStep=lastStamp=materialOwner=null;requestId++;}
  function start(receiver,radius,{emissive=false}={}){stop();requested={receiver:[...receiver],radius,emissive};}
  function tick(){
   if(!requested||match?.state==='lost'||inFlight)return;
-  const owner=runtime();if(!owner?.submitOpticalParticleMaterial)return;
+  const owner=runtime();
+  const lost=reason=>{match={state:'lost',reason};onRead(match);};
+  if(materialOwner&&owner!==materialOwner){lost('Native particle source changed');return;}
+  if(!owner?.submitOpticalParticleMaterial)return;
   let pending=null,scope=null;
   try{
    const submitted=owner.submitOpticalParticleMaterial((encoder,frame,ownDevice)=>{
+    materialOwner=owner;
     const {epoch,step,materialStamp}=frame.identity;
     if(match?.birth&&match.epoch!==epoch){match=followReceiverRead(match,null);onRead(match);return;}
     if(lastEpoch===epoch&&lastStep===step&&lastStamp===materialStamp)return;
@@ -95,7 +99,7 @@ export function createLightSliceReceiverFollow({runtime,onRead=()=>{}}){
     catch(e){staging.destroy();throw e;}
     pending={staging,transform,epoch,step,identity:frame.identity};
    });
-   if(!submitted.available){pending?.staging.destroy();if(scope)void scope.popErrorScope().catch(()=>{});return;}
+   if(!submitted.available){pending?.staging.destroy();if(scope)void scope.popErrorScope().catch(()=>{});if(submitted.terminal)lost(submitted.reason);return;}
   }catch(e){pending?.staging.destroy();if(scope)void scope.popErrorScope().catch(()=>{});match={state:'lost',reason:e.message};onRead(match);return;}
   if(!pending)return;
   const {staging,transform,epoch,step,identity}=pending,token=requestId;
