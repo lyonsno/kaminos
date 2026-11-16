@@ -53,6 +53,8 @@ test('replay admits complete same-observation profiles and rejects forged covera
  mutate(f=>f.result.identity.epoch++,/observation mismatch/);
  mutate(f=>f.reference.previous={...f.reference.previous,step:9},/skipped or changed/);
  mutate(f=>f.result.coveredPoints--,/support count/);
+ mutate(f=>{delete f.reference.identity.frame;delete f.result.identity.frame;},/skipped or changed/);
+ mutate(f=>{f.result.advected[0][0]=null;f.result.coveredPoints--;},/regained support/);
  tape.frames[0].smoke=Object.fromEntries(['held','advected','fresh'].map(mode=>[mode,{mode,identity:{...reference.identity},observedStep:reference.identity.step,route:'selected-beam-scattering-only',src:'data:image/png;base64,AA=='}]));
  assert.deepEqual(validateBundleReplay(tape),{hasDense:false,hasSmoke:true});
  mutate(f=>f.smoke.fresh.observedStep--,/Smoke capture does not match/);

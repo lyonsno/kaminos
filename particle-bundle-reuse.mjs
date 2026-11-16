@@ -87,13 +87,14 @@ export function validateBundleReplay(tape){
       !(arm==='advected'&&point===null)&&(!fixedValues(point?.light,3)||!point.light.every(Number.isFinite)))))
     throw Error('Incomplete '+arm+' replay profile');
   }
+  if(r.advected.some(ray=>ray.includes(null)&&ray.slice(ray.indexOf(null)).some(Boolean)))throw Error('Replay regained support behind a missing section');
   if(r.advected.flat().filter(Boolean).length!==r.coveredPoints)throw Error('Replay support count disagrees with its pixels');
  };
  let previous=seed.identity;
  const hasDense=frames.some(f=>f.dense!=null),hasSmoke=frames.some(f=>f.smoke!=null);
  for(const {reference,result,dense,smoke} of frames){
   const id=reference?.identity;
-  if(!id||id.epoch!==seed.identity.epoch||id.materialStamp!==seed.identity.materialStamp||id.step!==previous.step+1||
+  if(!id||!Number.isSafeInteger(id.frame)||id.epoch!==seed.identity.epoch||id.materialStamp!==seed.identity.materialStamp||id.step!==previous.step+1||
      !sameObservation(reference.previous,previous)||geometry(reference)!==geometry(g)||
      !fixedValues(reference.positions,samples+(hasDense?n*z:0))||reference.positions.some(p=>p!==null&&(!fixedValues(p,3)||!p.every(Number.isFinite))))
    throw Error('Replay skipped or changed native material');
