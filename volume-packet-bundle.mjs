@@ -4,20 +4,20 @@ import {PARTICLE_KERNEL_WGSL,PARTICLE_STATE_WGSL} from './volume-particle-state.
 const vector=(v,n,name)=>{if(!Array.isArray(v)||v.length!==n||v.some(x=>!Number.isFinite(x)||!Number.isFinite(Math.fround(x))))throw Error('Invalid bundle '+name);return [...v];};
 const count=(v,name)=>{if(!Number.isSafeInteger(v)||v<1||v>0xffffffff)throw Error('Invalid bundle '+name);return v;};
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
-export function finitePacketBundle({origin,target,halfSize,near=0,far,weight,receiver=0,source=0xffffffff}){
+export function finitePacketBundle({origin,target,halfSize,near=0,far,weight,receiver=0,source=0xffffffff,sourceSlot=0xffffffff}){
  origin=vector(origin,3,'origin');target=vector(target,3,'target');halfSize=vector(halfSize,2,'footprint');
  const delta=target.map((x,i)=>x-origin[i]),distance=Math.hypot(...delta);
  if(!(distance>0&&Number.isFinite(distance)))throw Error('Invalid bundle direction');
  if(!(near>=0&&far>near&&Number.isFinite(Math.fround(far))))throw Error('Invalid bundle endpoints');
  if(halfSize.some(x=>x<=0)||!(weight>=0&&Number.isFinite(Math.fround(weight))))throw Error('Invalid bundle footprint or weight');
- for(const x of [receiver,source])if(!Number.isSafeInteger(x)||x<0||x>0xffffffff)throw Error('Invalid bundle membership');
+ for(const x of [receiver,source,sourceSlot])if(!Number.isSafeInteger(x)||x<0||x>0xffffffff)throw Error('Invalid bundle membership');
  const forward=delta.map(x=>x/distance),seed=Math.abs(forward[1])<.9?[0,1,0]:[1,0,0];
  const tangent=cross(seed,forward),norm=Math.hypot(...tangent),right=tangent.map(x=>x/norm),up=cross(forward,right);
- return {origin,forward,right,up,near,far,halfSize,weight,receiver,source,distance};
+ return {origin,forward,right,up,near,far,halfSize,weight,receiver,source,sourceSlot,distance};
 }
 export function packPacketBundles(bundles){
  const data=new ArrayBuffer(bundles.length*96),f=new Float32Array(data),u=new Uint32Array(data);
- bundles.forEach((b,i)=>{const at=i*24;f.set([...b.origin,b.near,...b.forward,b.far,...b.right,b.halfSize[0],...b.up,b.halfSize[1],b.weight,0,0,0],at);u.set([b.receiver,b.source,0,0],at+20);});return data;
+ bundles.forEach((b,i)=>{const at=i*24;f.set([...b.origin,b.near,...b.forward,b.far,...b.right,b.halfSize[0],...b.up,b.halfSize[1],b.weight,0,0,0],at);u.set([b.receiver,b.source,b.sourceSlot??0xffffffff,0],at+20);});return data;
 }
 export function packetBundlePlan(limits,{width,height,sections,bundles,slots,receivers}){
  for(const [k,v] of Object.entries({width,height,sections,bundles,slots,receivers}))count(v,k);
@@ -67,7 +67,7 @@ struct Splat {@builtin(position) position:vec4<f32>,@location(0) local:vec2<f32>
  if(depth+interval*.5<=b.origin.w||depth-interval*.5>=b.forward.w){return out;}
  let fade=select(1.0,particleLifeFade(p.motion.w,material.lifeControl.y),material.lifeControl.x>0);
  var source=particleLightIntrinsic(p)*material.gain.x*fade;
- if(b.ids.y!=0xffffffffu&&membership[pi]!=b.ids.y){source=vec3<f32>(0);}
+ if((b.ids.y!=0xffffffffu&&membership[pi]!=b.ids.y)||(b.ids.z!=0xffffffffu&&pi!=b.ids.z)){source=vec3<f32>(0);}
  let tau=particleLightExtinction(p,material)*fade;
  if(max(max(source.x,source.y),max(source.z,tau))<=0){return out;}
  let radius=particleLightBaseRadius(p,material);

@@ -45,10 +45,16 @@ export function createParticleLightSliceCockpit({runtime,session,select,refresh,
   if(snapshot&&snapshot.key!==historyKey){clearHistory();return;}
   const hit=sourceFollow.read();
   if(hit.state==='lost'){
-   prediction=null;score=null;historyStatus=hit.reason??'Source carrier ended';return;
+   clearHistory();historyStatus=hit.reason??'Source carrier ended';return;
   }
-  if(!history&&snapshot&&hit.state==='following')history=seedSourceHistory(snapshot,hit,historyTarget);
-  if(!history){historyStatus='Waiting for a source carrier and beam from the same material step';return;}
+  if(!history&&hit.state==='following'&&snapshot?.isolatedCarrier?.slot===hit.slot&&snapshot.isolatedCarrier.birth===hit.birth){
+   const a=snapshot.identity,b=hit.identity;
+   if(a.epoch===b.epoch&&a.step===b.step&&a.materialStamp===b.materialStamp){
+    history=seedSourceHistory(snapshot,hit,historyTarget);
+    if(!history){clearHistory();historyStatus='Selected carrier did not contribute to both paths in that section; narrow the bundle or choose another depth';return;}
+   }
+  }
+  if(!history){historyStatus='Waiting for a source carrier and beam from the same material step · pause if necessary';return;}
   if(hit.state==='following'&&(!prediction||prediction.identity!==hit.identity)){
    prediction=predictSourceHistory(history,hit);prediction.identity=hit.identity;
   }
@@ -62,7 +68,7 @@ export function createParticleLightSliceCockpit({runtime,session,select,refresh,
   const {available=false,identity=null,point=null,scale=null}=prediction??{};
   const end=profiles=>history?profiles?.[history.target.receiver]?.at(-1)??null:null;
   return {status:historyStatus,available,identity,point,scale,heldIdentity:history?.snapshot.identity??null,
-   support:historyTarget,recipient:end(prediction?.profiles),score};
+   support:history?.target??historyTarget,recipient:end(prediction?.profiles),score};
  }
  const reader=createLightSliceProbe({runtime,onChange:()=>{if(!disposed){draw();session.redraw();}}});
  const follow=createLightSliceReceiverFollow({runtime,onRead:state=>{
@@ -152,7 +158,7 @@ export function createParticleLightSliceCockpit({runtime,session,select,refresh,
   try{
    reader.tick({emitter,receiver,halfWidth:settings.halfWidth,sections:settings.sections,
     width:settings.mode==='ray'?1:settings.mode==='bundle'?settings.offsets:settings.sweepOffsets,
-    refreshSteps:historyTarget&&!history?1:settings.refreshSteps,source:settings.source,gain:settings.gain});
+    refreshSteps:settings.refreshSteps,source:settings.source,gain:settings.gain,carrier:historyTarget?sourceFollow.read():null,bindSource:!!historyTarget&&!history});
   }catch(e){error=e.message;}
  }
 
@@ -256,7 +262,7 @@ export function createParticleLightSliceCockpit({runtime,session,select,refresh,
   const current=historyRead(),checked=current.score;
   view.history.textContent=historyStatus?(historyStatus+
    (current.available?' · source step '+current.identity.step+' · source scale ×'+current.scale.toFixed(3)+' · neighbor B '+scalar(current.recipient)+' · held transmission '+(100*current.recipient.transmission).toFixed(1)+'%':'')+
-   (checked?'\nAt step '+checked.identity.step+': B held '+scalar(checked.held)+' · tracked '+scalar(checked.predicted)+' · corrected using A only '+scalar(checked.donorCorrected)+' · B fresh '+scalar(checked.fresh)+' (fresh transmission '+(100*checked.fresh.transmission).toFixed(1)+'%)':'')):'';
+   (checked?'\nAt step '+checked.identity.step+': B held '+scalar(checked.held)+' · tracked '+scalar(checked.predicted)+' · corrected using A only '+scalar(checked.donorCorrected)+' · B fresh emission / held extinction '+scalar(checked.freshEmissionHeldExtinction)+' · B fresh '+scalar(checked.fresh)+' (fresh transmission '+(100*checked.fresh.transmission).toFixed(1)+'%)':'')):'';
   view.history.hidden=!historyStatus;
   view.panel.hidden=!settings.enabled;
  }

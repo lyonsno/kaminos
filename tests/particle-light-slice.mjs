@@ -35,6 +35,14 @@ test('atlas decoding honors WebGPU row padding and preserves each ray and depth'
  assert.throws(()=>readOpticalAtlas(new Uint8Array(buffer),layout,256),/saturated/);
 });
 
+test('isolated source readback starts at the second bundle across the atlas boundary',()=>{
+ const bytes=new Uint8Array(512),data=new DataView(bytes.buffer);
+ for(const [offset,word] of [[0,0x3c00],[8,0x4000],[16,0x4200],[256,0x4400]])data.setUint16(offset,word,true);
+ const layout={width:1,height:1,sections:2,columns:3,atlasWidth:3,atlasHeight:2,tiles:4};
+ assert.deepEqual(readOpticalAtlas(bytes,layout,256,1)[0].filter((_,i)=>i%4===0),[3,4]);
+ assert.throws(()=>readOpticalAtlas(bytes,layout,256,2),/Absent optical atlas bundle/);
+});
+
 test('the display consumes ordered sections at the actual world beam converted to Fine coordinates',()=>{
  const packed=packLightSliceView({identity:{epoch:2},emitter:[8,4,8],receiver:[8,4,12],halfWidth:1,sections:2,width:1,transform:{scale:2,translate:[8,2,8]}},
   [[{light:[2,4,8]},{light:[1,2,4]}]]);

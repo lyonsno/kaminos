@@ -19,14 +19,16 @@ function half(word){
  return sign*(exp===31?(frac?NaN:Infinity):exp===0?frac*2**-24:(1+frac/1024)*2**(exp-15));
 }
 
-export function readOpticalAtlas(bytes, layout, rowBytes){
- const {width,height,sections,columns,atlasWidth,atlasHeight}=layout;
+export function readOpticalAtlas(bytes, layout, rowBytes,bundle=0){
+ const {width,height,sections,columns,atlasWidth,atlasHeight,tiles=sections}=layout;
+ if(!Number.isSafeInteger(bundle)||bundle<0||(bundle+1)*sections>tiles)throw Error('Absent optical atlas bundle');
  if(rowBytes%2||rowBytes<atlasWidth*8||bytes.byteLength<rowBytes*atlasHeight)throw Error('Incomplete optical atlas readback');
  const data=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
  return Array.from({length:width*height},(_,pixel)=>{
   const x=pixel%width,y=Math.floor(pixel/width),moments=[];
   for(let z=0;z<sections;z++){
-   const at=(y+Math.floor(z/columns)*height)*rowBytes+(x+(z%columns)*width)*8;
+   const tile=bundle*sections+z;
+   const at=(y+Math.floor(tile/columns)*height)*rowBytes+(x+(tile%columns)*width)*8;
    for(let c=0;c<4;c++){
     const sample=half(data.getUint16(at+c*2,true));
     if(!Number.isFinite(sample)||(c===3&&sample<0)||Math.abs(sample)>=65504)throw Error('Optical atlas is nonfinite or saturated at ray '+pixel+', section '+z+', channel '+c+' ('+sample+')');
@@ -45,7 +47,7 @@ export function createLightSliceProbe({runtime,onChange=()=>{},createTransport=c
   generation++;transport?.dispose();transport=null;device=null;prepared=false;preparing=false;
   lastKey=null;result=null;error=null;reason=null;
  }
- function tick({emitter,receiver,halfWidth,sections,width,refreshSteps,source,gain}){
+ function tick({emitter,receiver,halfWidth,sections,width,refreshSteps,source,gain,carrier=null,bindSource=false}){
   if(disposed)return;
   const next=runtime();
   if(owner!==next){owner=next;resetTransport();}
@@ -65,33 +67,39 @@ export function createLightSliceProbe({runtime,onChange=()=>{},createTransport=c
     }
     if(!prepared)return;
     const {step,epoch,materialStamp}=frame.identity;
-    if(result?.identity.epoch===epoch&&key===lastKey&&step>=result.identity.step&&
+    const attached=carrier?.state==='following'&&carrier.identity?.epoch===epoch&&carrier.identity.step===step&&carrier.identity.materialStamp===materialStamp;
+    if(bindSource&&!attached)return;
+    const needsIsolation=attached&&(!result?.isolatedCarrier||result.isolatedCarrier.slot!==carrier.slot||result.isolatedCarrier.birth!==carrier.birth);
+    if(!(bindSource&&needsIsolation)&&result?.identity.epoch===epoch&&key===lastKey&&step>=result.identity.step&&
        ((step===result.identity.step&&materialStamp===result.identity.materialStamp)||
        (step>result.identity.step&&(refreshSteps===0||step-result.identity.step<refreshSteps))))return;
     const transform=frame.domain.worldFromFine;
     const toFine=p=>p.map((v,c)=>(v-transform.translate[c])/transform.scale);
     const origin=toFine(emitter),target=toFine(receiver),distance=Math.hypot(...target.map((v,c)=>v-origin[c]));
     const bundle=finitePacketBundle({origin,target,halfSize:[halfWidth/transform.scale,halfWidth/transform.scale],far:distance,weight:1});
-    const encoded=transport.encode(encoder,{material:frame,bundles:[bundle],width,height:width,sections,receivers:1});
+    const bundles=attached?[bundle,{...bundle,sourceSlot:carrier.slot}]:[bundle];
+    const encoded=transport.encode(encoder,{material:frame,bundles,width,height:width,sections,receivers:1});
     const layout=encoded.receipt,rowBytes=Math.ceil(layout.atlasWidth*8/256)*256;
     const bytes=rowBytes*layout.atlasHeight;if(bytes>device.limits.maxBufferSize)throw Error('Selected optical atlas exceeds readback capacity');
     const staging=device.createBuffer({label:'selected light slice optical sections',size:bytes,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
     try{encoder.copyTextureToBuffer({texture:transport.buffers.atlas},{buffer:staging,bytesPerRow:rowBytes},{width:layout.atlasWidth,height:layout.atlasHeight});}
     catch(e){staging.destroy();throw e;}
-    pending={staging,layout,rowBytes,transform:structuredClone(transform),frameIdentity:{...frame.identity}};
+    pending={staging,layout,rowBytes,transform:structuredClone(transform),frameIdentity:{...frame.identity},isolatedCarrier:attached?{slot:carrier.slot,birth:carrier.birth}:null};
    });
    if(!submitted.available){reason=submitted.reason;pending?.staging.destroy();return;}
   }catch(e){pending?.staging.destroy();error=e.message;onChange(read());return;}
   reason=null;
   if(!pending)return;
-  const {staging,layout,rowBytes,transform,frameIdentity}=pending,token=generation;
+  const {staging,layout,rowBytes,transform,frameIdentity,isolatedCarrier}=pending,token=generation;
   inFlight=true;
   staging.mapAsync(GPUMapMode.READ).then(()=>{
    if(disposed||token!==generation)return;
-   const moments=readOpticalAtlas(new Uint8Array(staging.getMappedRange()),layout,rowBytes);
+   const bytes=new Uint8Array(staging.getMappedRange());
+   const moments=readOpticalAtlas(bytes,layout,rowBytes);
    const injection=source==='probe'?[gain,gain*.82,gain*.56]:[0,0,0];
    const profiles=moments.map(ray=>resolveDirectionalProfile(ray,{incoming:injection,native:source==='flame'}));
-   result={identity:frameIdentity,key,source,gain,transform,emitter:[...emitter],receiver:[...receiver],halfWidth,sections,width,profiles,moments,
+   const isolatedMoments=isolatedCarrier?readOpticalAtlas(bytes,layout,rowBytes,1):null;
+   result={identity:frameIdentity,key,source,gain,transform,isolatedCarrier,isolatedMoments,emitter:[...emitter],receiver:[...receiver],halfWidth,sections,width,profiles,moments,
     route:'native-particle-bundle-ordered-deposition',model:'projected particle support, center-slice axial interval; no scene solids'};
    error=null;lastKey=key;
   }).catch(e=>{if(token===generation)error=e.message;}).finally(()=>{

@@ -7,7 +7,7 @@ const hit=(step,power,point=[0,0,.45],extras={})=>({identity:stamp(step),slot:2,
 const ray=(emission,tau)=>[emission,0,0,0,0,0,0,tau];
 const bundle=(step,a,b,ta=Math.log(2),tb=Math.log(4))=>{
  const moments=Array.from({length:9},()=>ray(0,0));moments[4]=ray(a,ta);moments[5]=ray(b,tb);
- return {key:'geometry',identity:stamp(step),route:'native-particle-bundle-ordered-deposition',source:'flame',width:3,sections:2,halfWidth:.3,emitter:[0,0,0],receiver:[0,0,2],moments};
+ return {key:'geometry',identity:stamp(step),route:'native-particle-bundle-ordered-deposition',source:'flame',width:3,sections:2,halfWidth:.3,emitter:[0,0,0],receiver:[0,0,2],moments,isolatedMoments:moments.map(row=>[...row]),isolatedCarrier:{slot:2,birth:19}};
 };
 test('native deposited emission seeds two distinct path columns at one explicit depth',()=>{
  const target=sourceHistoryTarget(bundle(1,8,4));
@@ -51,6 +51,7 @@ test('a source carried downstream changes depth order of emission, while every b
  // The first two intervals are clear and the third is extinctive.
  sample.sections=3;sample.receiver=[0,0,3];
  sample.moments=sample.moments.map(r=>[...r.slice(0,4),0,0,0,0,...r.slice(4)]);
+ sample.isolatedMoments=sample.moments.map(row=>[...row]);
  sample.moments[4][7]=Math.log(2);sample.moments[5][7]=Math.log(2);
  const history=seedSourceHistory(sample,hit(1,20));
  assert.ok(history);
@@ -68,4 +69,22 @@ test('a chosen depth window excludes strong sources outside the observed interva
  assert.equal(sourceHistoryTarget(sample).section,1);
  assert.equal(sourceHistoryTarget(sample,{start:0,end:.5}).section,0);
  assert.equal(sourceHistoryTarget(sample,{start:0,end:.1}),null);
+});
+
+test('a shared track may replace only its isolated deposited RGB, not unrelated light in the same section',()=>{
+ const sample=bundle(1,8,4);
+ sample.moments[5][2]=32;
+ delete sample.isolatedCarrier;
+ assert.equal(seedSourceHistory(sample,hit(1,20)),null);
+ sample.isolatedCarrier={slot:2,birth:19};
+ const seeded=seedSourceHistory(sample,hit(1,20));assert.ok(seeded);
+ const off=predictSourceHistory(seeded,hit(2,0));
+ assert.deepEqual(off.profiles[5].at(-1).light,[0,0,8]);
+ assert.equal(scoreSourceHistory(seeded,predictSourceHistory(seeded,hit(1,20)),sample),null);
+ const opticallyDifferent=bundle(2,8,4,0,Math.log(8));
+ const checked=scoreSourceHistory(seeded,off,opticallyDifferent);
+ assert.ok(Math.abs(checked.fresh.light[0]-.5)<1e-12);
+ assert.equal(checked.freshEmissionHeldExtinction.light[0],1);
+ sample.isolatedMoments[5][0]=0;
+ assert.equal(seedSourceHistory(sample,hit(1,20)),null);
 });

@@ -34,13 +34,16 @@ export function sourceHistoryTarget(snapshot,{start=0,end=1}={}){
 
 export function seedSourceHistory(snapshot,hit,target=sourceHistoryTarget(snapshot)){
  if(!target||!sameFrame(snapshot.identity,hit?.identity)||!(hit.sourcePower>0)||!(hit.birth>0)||
-    distance(target.point,hit.point)>target.radius||
-    ![target.donor,target.receiver].every(i=>sourceAt(snapshot.moments[i],target.section)>0))return null;
- return {snapshot,target,hit};
+    distance(target.point,hit.point)>target.radius||!snapshot.isolatedMoments||snapshot.isolatedCarrier?.slot!==hit.slot||
+    snapshot.isolatedCarrier.birth!==hit.birth)return null;
+ const {donor,receiver,section}=target,neighbors=[receiver,donor+1,donor-1,donor+snapshot.width,donor-snapshot.width];
+ const shared=neighbors.find(i=>sourceAt(snapshot.isolatedMoments[i],section)>0);
+ if(sourceAt(snapshot.isolatedMoments[donor],section)<=0||shared===undefined)return null;
+ return {snapshot,target:{...target,receiver:shared},hit};
 }
 
-function depositSource(ray,originalSection,depth,scale){
- const values=Array.from(ray),source=values.slice(4*originalSection,4*originalSection+3);
+function depositSource(ray,isolated,originalSection,depth,scale){
+ const values=Array.from(ray),source=isolated.slice(4*originalSection,4*originalSection+3);
  const lo=Math.floor(depth),hi=Math.ceil(depth),share=depth-lo;
  for(let c=0;c<3;c++){
   values[4*originalSection+c]-=source[c];
@@ -51,7 +54,7 @@ function depositSource(ray,originalSection,depth,scale){
 }
 function predictionFor(history,depth,scale){
  const {moments}=history.snapshot,{section,donor,receiver}=history.target;
- return moments.map((ray,i)=>i===donor||i===receiver?depositSource(ray,section,depth,scale):resolveDirectionalProfile(ray));
+ return moments.map((ray,i)=>i===donor||i===receiver?depositSource(ray,history.snapshot.isolatedMoments[i],section,depth,scale):resolveDirectionalProfile(ray));
 }
 
 export function predictSourceHistory(history,hit){
@@ -70,13 +73,14 @@ export function predictSourceHistory(history,hit){
 }
 
 export function scoreSourceHistory(history,prediction,reference){
- if(!prediction.available||!sameFrame(prediction.identity,reference.identity)||reference.key!==history.snapshot.key)return null;
+ if(!reference||!prediction.available||!sameFrame(prediction.identity,reference.identity)||reference.identity.step<=history.snapshot.identity.step||reference.key!==history.snapshot.key)return null;
  const {donor,receiver,section}=history.target;
- // A still has to observe the same source section before its aggregate
- // measurement can calibrate B. B's fresh light remains reference-only.
- const canCompareDonor=Math.round(prediction.depth)===section;
- const donorScale=canCompareDonor?sourceAt(reference.moments[donor],section)/sourceAt(history.snapshot.moments[donor],section):null;
+ // A still has to observe the same carrier in the held section to
+ // calibrate B. B's fresh light remains reference-only.
+ const canCompareDonor=Math.round(prediction.depth)===section&&reference.isolatedMoments&&reference.isolatedCarrier?.slot===history.hit.slot&&reference.isolatedCarrier.birth===history.hit.birth;
+ const donorScale=canCompareDonor?sourceAt(reference.isolatedMoments[donor],section)/sourceAt(history.snapshot.isolatedMoments[donor],section):null;
  return {identity:reference.identity,held:resolveDirectionalProfile(history.snapshot.moments[receiver]).at(-1),
-  predicted:prediction.profiles[receiver].at(-1),donorCorrected:donorScale===null?null:depositSource(history.snapshot.moments[receiver],section,prediction.depth,donorScale).at(-1),
+  predicted:prediction.profiles[receiver].at(-1),donorCorrected:donorScale===null?null:depositSource(history.snapshot.moments[receiver],history.snapshot.isolatedMoments[receiver],section,prediction.depth,donorScale).at(-1),
+  freshEmissionHeldExtinction:resolveDirectionalProfile(reference.moments[receiver].map((v,c)=>c%4===3?history.snapshot.moments[receiver][c]:v)).at(-1),
   fresh:resolveDirectionalProfile(reference.moments[receiver]).at(-1)};
 }
