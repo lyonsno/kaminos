@@ -5,6 +5,7 @@ import {createGPUImmersedCollection} from './volume-immersed-source-gpu.mjs';
 import {createGPUImmersedWorldSources} from './volume-immersed-world-source-gpu.mjs';
 import {createDeferredPipelines} from './deferred-pipelines.mjs';
 import {createOpticalParticles,opticalParticleSettings,particleReactionFromSimulation} from './volume-optical-particles.mjs';
+import {createResidentVolume,residentVolumeSettings} from './particle-resident-volume.mjs';
 import {createSplitIntegral,splitIntegralSettings,SPLIT_OPTICAL_OFF_WGSL,splitOpticalShader} from './volume-split-integral.mjs';
 import {EMPTY_SPACE_WGSL} from './volume-empty-space.mjs';
 import {resolveWorldCalibration,calibrationSignature,calibrationWaveletLattice,WORLD_CALIBRATION_WGSL,resolveSimulationLevers} from './volume-world-calibration.mjs';
@@ -8353,6 +8354,7 @@ export function createKaminosVolumePrototype({
   let splitIntegral=null,splitIntegralShader=null,splitSettings=splitIntegralSettings();
   let particleInspectionView=null;
   let opticalParticles=null,particleSettings=opticalParticleSettings(),lastParticleEmitter=null;
+  let residentParticleVolume=residentVolumeSettings(),residentParticleVolumeRevision=0;
   function captureParticleEmitterStep(){
     lastParticleEmitter=null;
     if(!particleSettings.enabled||particleSettings.acquisitionMode!==2||!immersedCollectionTexture||!sceneSolidTexture)return;
@@ -14113,7 +14115,7 @@ export function createKaminosVolumePrototype({
       const lightField=emitterGridSupported&&distributedFrameIsUsable(sceneSource)&&(liveLightingMode()==='paced'||distributedFrame.frame===sceneSource.frame)&&!distributedFrame.previewStale?distributedFrame.smokeReconstruction:null;
       const emitter=emitterParticles&&lastParticleEmitter?.allocation===state.thermalFluidAllocationId&&lastParticleEmitter?.sourceStep===state.simStepCount-1?lastParticleEmitter:null;
       const materialContext=opticalParticleMaterialContext();
-      state.opticalParticles=opticalParticles.encode(encoder,{view,emitter,
+      state.opticalParticles=opticalParticles.encode(encoder,{view,emitter,residentVolume:{settings:residentParticleVolume,create:createResidentVolume,revision:residentParticleVolumeRevision},
         incident:lightField?{texture:lightField.texture,masks:lightField.masks,planes:lightField.planes,generation:distributedFrame.generation,frame:distributedFrame.frame,appearanceEdit:distributedFrame.appearanceEdit??null}:null,
         materialTransform:productTransform,materialSourceIsCurrent:()=>opticalParticleMaterialContext().every((value,index)=>value===materialContext[index]),afterMaterialSubmit:after=>thermalSubmissions.record(encoder,after),opticalView:particleInspectionView?particleInspectionProjection(particleInspectionView,productTransform,state.width/state.height,camera.coordinateSystem):null,allowUnavailableGridExtinction:true,gridExtinction:particleSettings.fillExtinction>0||particleSettings.extinctionView>0?{...(particleExtinctionSource??sceneVolumeSource)?.describe(),expectedFrame:state.frameCount}:null,format:targetPipeline===readbackPipeline?'rgba8unorm':format,source:{...particleSourceFrame,held:simulationPaused||normalizeLookFreeze(controlsSnapshot.lookFreeze),reactionStepScale:resolveTimeStepConfig(controlsSnapshot).effective.dtScale},fine:fluidBuffers[currentFluid],reactants:reactantTextures[currentFluid],model:state.reactantCombustion.effective.model,material:{sharedIncidentEnabled:liveLightingMode()==='strict'||!!lightField,sharedIncidentOff:liveLightingMode()==='off',captureDistributedScatter:!!distributedGroup,density:uniforms[23],extinction:uniforms[EMISSIVE_UNIFORM_OFFSET],albedo:uniforms[EMISSIVE_UNIFORM_OFFSET+1],smokeVisible:uniforms[306]>.5?0:1,kelvinPerHeat:state.physicsAppearance.kelvinPerHeat,thermalGain:uniforms[371],cleanGain:uniforms[372],sootBurnoutRate:state.physicsAppearance.effective.sootBurnout?state.physicsAppearance.sootBurnoutRate:0,sootBurnoutKelvin:state.physicsAppearance.sootBurnoutKelvin},dims:[gridSize,gridHeight,gridSize],invViewProj:invViewProj.elements,settings:{...particleSettings,...particleReactionFromSimulation(state.reactantCombustion)},profileWrites:activeParticleProfileWrites??(()=>({})),cameraValues,depthZeroToOne:camera.coordinateSystem===THREE.WebGPUCoordinateSystem,depth:ordinarySceneDepthTexture??ordinarySceneDepthFallback,identity:JSON.stringify(emitterParticles?[productTransform,state.thermalFluidAllocationId]:[worldSmokeKey,intermediateKey,productTransform,state.particleSourceGeneration])});
       if(captureFresh)particleCaptureClock.mark(state.simStepCount,captureIdentity);
@@ -18513,6 +18515,12 @@ export function createKaminosVolumePrototype({
         throw Error('Cannot install incident light without an active particle source');
       return opticalParticles?.setPacketIncident(field);
     },
+    setOpticalParticleResidentVolume(patch){
+      const next=residentVolumeSettings({...residentParticleVolume,...patch});
+      residentParticleVolume=next;return {...next};
+    },
+    opticalParticleResidentVolume(){return {...residentParticleVolume};},
+    reseedOpticalParticleResidentVolume(){residentParticleVolumeRevision++;return residentParticleVolumeRevision;},
     setOpticalParticleLightSliceView(view) {
       if (view!==null&&(!state.active||deviceRetired||!opticalParticles)) throw Error('Cannot show a beam without native optical particles');
       opticalParticles?.setSliceView(view);

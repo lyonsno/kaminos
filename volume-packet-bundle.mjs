@@ -140,7 +140,7 @@ export function createPacketBundleTransport(device){
    device.createRenderPipelineAsync(solidDescriptor).then(p=>{pipelines.solid=p;}),
    device.createRenderPipelineAsync(splatDescriptor).then(p=>{pipelines.splat=p;}),
   ]);},
-  encode(encoder,{material,bundles,width,height,sections,receivers,membership=null,triangles=null,triangleCount=0,profileWrites=()=>({})}){
+  encode(encoder,{material,bundles,width,height,sections,receivers,membership=null,triangles=null,triangleCount=0,momentsOnly=false,profileWrites=()=>({})}){
    if(!material?.particles||!material.options||!material.identity)throw Error('Packet bundles require current native material');
    const list=Array.isArray(bundles),bundleCount=list?bundles.length:bundles?.count;
    const plan=packetBundlePlan(device.limits,{width,height,sections,bundles:bundleCount,slots:material.slots,receivers});
@@ -171,14 +171,14 @@ export function createPacketBundleTransport(device){
    // itself would be a texture feedback hazard, so its dimensions are explicit.
    pass=encoder.beginRenderPass({label:'packet joint source and extinction slices',...profileWrites('packet-raster'),colorAttachments:[{view:r.atlas.createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}]});
    pass.setPipeline(pipelines.splat);pass.setBindGroup(0,bind(pipelines.splat,[[0,material.particles],[1,material.options],[2,bundleBuffer],[3,membership??r.membership],[4,r.plan],[5,r.solids]]));pass.draw(6,plan.instances);pass.end();
-   for(const [entry,entries,groups] of [
+   if(!momentsOnly)for(const [entry,entries,groups] of [
     ['integrate',[[4,r.plan],[6,r.atlas],[7,r.rays]],Math.ceil(plan.rays/64)],
     ['average',[[2,bundleBuffer],[4,r.plan],[7,r.rays],[8,r.means]],Math.ceil(bundleCount/64)],
     ['gather',[[2,bundleBuffer],[4,r.plan],[8,r.means],[9,r.incident]],Math.ceil(receivers/64)]]){
     const p=pipeline(entry);pass=encoder.beginComputePass({label:'packet bundle '+entry,...profileWrites('packet-'+entry)});pass.setPipeline(p);pass.setBindGroup(0,bind(p,entries));pass.dispatchWorkgroups(groups);pass.end();
    }
-   receipt={...plan,identity:{...material.identity},coverage:{...material.coverage},measure:'projected-base-support-with-acquired-axial-interval',visibility:triangleCount?'current-finite-triangle-depth':'empty-solid-scene',history:'fresh-only',source:'intrinsic-emission-only',quantity:'spherical-mean-incoming-radiance',depth:'explicit-axial-distance; center-slice mixture',work:{submittedInstances:plan.instances,subrays:plan.rays,sectionReads:plan.rays*sections,solidTriangles:triangleCount*bundleCount}};
-   return {buffer:r.incident,count:receivers,identity:{...material.identity},receipt};
+   receipt={...plan,identity:{...material.identity},coverage:{...material.coverage},measure:'projected-base-support-with-acquired-axial-interval',visibility:triangleCount?'current-finite-triangle-depth':'empty-solid-scene',history:'fresh-only',source:'intrinsic-emission-only',quantity:momentsOnly?'ordered-emission-and-extinction-slabs':'spherical-mean-incoming-radiance',depth:'explicit-axial-distance; center-slice mixture',work:{submittedInstances:plan.instances,subrays:plan.rays,sectionReads:plan.rays*sections,solidTriangles:triangleCount*bundleCount}};
+   return {buffer:momentsOnly?null:r.incident,count:momentsOnly?0:receivers,identity:{...material.identity},receipt};
   },
   read:()=>receipt,
   get buffers(){return resources;},

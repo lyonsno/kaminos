@@ -49,17 +49,17 @@ fn nominal(ray:u32,z:u32)->vec3<f32>{
  return vec3<f32>(vec3<u32>(ray%side()*stride()+offset,ray/side()*stride()+offset,z));
 }
 fn toWorld(q:vec3<f32>)->vec3<f32>{
- let xy=(2.0*(q.xy+.5)/beam.right.w-1.0)*beam.origin.w;
+ let xy=(2.0*(q.xy+.5)/beam.right.w-1.0)*vec2<f32>(beam.origin.w,beam.gain.y);
  return beam.origin.xyz+beam.right.xyz*xy.x-beam.up.xyz*xy.y+beam.forward.xyz*((q.z+.5)/beam.up.w*beam.forward.w);
 }
 fn toCells(p:vec3<f32>)->vec3<f32>{
  let q=p-beam.origin.xyz;
- return vec3<f32>((vec2<f32>(dot(q,beam.right.xyz),-dot(q,beam.up.xyz))/beam.origin.w+1.0)*beam.right.w*.5-.5,
+ return vec3<f32>((vec2<f32>(dot(q,beam.right.xyz),-dot(q,beam.up.xyz))/vec2<f32>(beam.origin.w,beam.gain.y)+1.0)*beam.right.w*.5-.5,
   dot(q,beam.forward.xyz)/beam.forward.w*beam.up.w-.5);
 }
 fn atlasCell(z:u32,xy:vec2<u32>)->vec4<f32>{
- let columns=beam.schedule.z;let dropWidth=select(1u,cells(),beam.schedule.w==1u);
- return textureLoad(atlas,vec2<i32>(xy+vec2<u32>(z%columns,z/columns)*dropWidth),0);
+ let tile=z+u32(beam.gain.w)*layers();let columns=beam.schedule.z;let dropWidth=select(1u,cells(),beam.schedule.w==1u);
+ return textureLoad(atlas,vec2<i32>(xy+vec2<u32>(tile%columns,tile/columns)*dropWidth),0);
 }
 @compute @workgroup_size(64) fn seedTau(@builtin(global_invocation_id) id:vec3<u32>){
  let i=id.x;if(i>=arrayLength(&tau)){return;}
@@ -69,7 +69,7 @@ fn atlasCell(z:u32,xy:vec2<u32>)->vec4<f32>{
  let i=id.x;if(i>=arrayLength(&samples)||samples[i].position.w!=1.0||u.work.y<.5){return;}
  let p=samples[i].position.xyz;
  if(!particleInsideFine(p)){samples[i].position.w=0.0;return;}
- let moved=p+particleFineVelocity(p)*u.time.z*u.transport.x;
+ let moved=p+particleFineVelocity(p)*u.time.z*u.transport.x*beam.gain.z;
  let finite=all((bitcast<vec3<u32>>(moved)&vec3<u32>(0x7f800000u))!=vec3<u32>(0x7f800000u));
  samples[i].position=vec4<f32>(moved,select(0.0,1.0,finite&&particleInsideFine(moved)));
 }
@@ -154,7 +154,7 @@ export function createResidentBeam(device,requested){
  const storage=GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST;
  const r=Object.fromEntries(Object.entries(sizes).map(([k,n])=>[k,make(k,n,storage)]));
  const cfg=make('geometry and cadence',96,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST);
- let seedTransport=createPacketBundleTransport(device);const refreshTransport=createPacketBundleTransport(device);
+ let seedTransport=g.batched?null:createPacketBundleTransport(device);const refreshTransport=g.batched?null:createPacketBundleTransport(device);
  const shader=device.createShaderModule({label:'resident finite beam history',code:PARTICLE_RESIDENT_BEAM_WGSL});
  const pipelines=Object.fromEntries(['seedTau','carry','refresh','bin','gather','resolve'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'resident beam '+entryPoint,layout:'auto',compute:{module:shader,entryPoint}})]));
  const pass=(encoder,key,items,n,profile)=>{
@@ -162,44 +162,57 @@ export function createResidentBeam(device,requested){
   c.setPipeline(p);c.setBindGroup(0,device.createBindGroup({layout:p.getBindGroupLayout(0),entries:items.map(([binding,resource])=>({binding,resource:resource?.createView?resource.createView():{buffer:resource}}))}));c.dispatchWorkgroups(groups(n));c.end();
  };
  let identity=null,transformKey=null,sequence=0,disposed=false;
- return {
-  encode(encoder,material,{refresh=true,profileWrites=()=>({})}={}){
+ function acquisition(material,{refresh=true,stepDelta=1}={}){
    if(disposed||!material?.fine||!material.sourceOptions||!material.options||!material.identity)throw Error('Current native beam material is unavailable');
    const init=!identity,id=material.identity,transform=material.domain.worldFromFine,key=JSON.stringify(transform);
-   if(!init&&(identity.epoch!==id.epoch||identity.materialStamp!==id.materialStamp||identity.step+1!==id.step||transformKey!==key))throw Error('Resident beam requires consecutive unchanged material; reseed the comparison');
-   if(!init&&seedTransport){seedTransport.dispose();seedTransport=null;}
-   const fine=p=>p.map((v,i)=>(v-transform.translate[i])/transform.scale);
-   const origin=fine(g.emitter),target=fine(g.receiver),far=Math.hypot(...target.map((v,i)=>v-origin[i])),half=g.halfWidth/transform.scale;
-   const bundle=finitePacketBundle({origin,target,halfSize:[half,half],far,weight:1});
+   if(!init&&(identity.epoch!==id.epoch||identity.materialStamp!==id.materialStamp||!Number.isSafeInteger(stepDelta)||stepDelta<1||identity.step+stepDelta!==id.step||transformKey!==key))throw Error('Resident beam requires unchanged material and the actual step delta; reseed the comparison');
+   const fine=p=>g.fineSpace?p:p.map((v,i)=>(v-transform.translate[i])/transform.scale);
+   const origin=fine(g.emitter),target=fine(g.receiver),far=Math.hypot(...target.map((v,i)=>v-origin[i])),span=g.fineSpace?1:transform.scale,half=g.halfWidth/span,halfY=(g.halfHeight??g.halfWidth)/span;
+   const bundle=finitePacketBundle({origin,target,halfSize:[half,halfY],far,weight:1});
    if(init&&!residentBeamFitsFine(bundle,material.domain.dims))throw Error('The finite reuse patch must start fully inside the native Fine domain');
    const cadence=init||!refresh?null:residentBeamRefresh(plan,sequence);
-   let receipt=null,atlas=null;
-   if(init||cadence){
-    const source=init?bundle:{...bundle,halfSize:[half/plan.width,half/plan.width],
-     origin:origin.map((p,i)=>p+bundle.right[i]*half*(2*(cadence.x+.5)/plan.width-1)-bundle.up[i]*half*(2*(cadence.y+.5)/plan.width-1))};
-    const transport=init?seedTransport:refreshTransport,n=init?plan.width:1;
-    receipt=transport.encode(encoder,{material,bundles:[source],width:n,height:n,sections:plan.sections,receivers:1,profileWrites}).receipt;atlas=transport.buffers.atlas;
-   }
+   const request=init?bundle:cadence?{...bundle,halfSize:[half/plan.width,halfY/plan.width],
+    origin:origin.map((p,i)=>p+bundle.right[i]*half*(2*(cadence.x+.5)/plan.width-1)-bundle.up[i]*halfY*(2*(cadence.y+.5)/plan.width-1))}:null;
+   return {init,id,key,origin,far,half,halfY,bundle,cadence,request,width:init?plan.width:1};
+ }
+ return {
+  acquisition,
+  encode(encoder,material,{refresh=true,stepDelta=1,profileWrites=()=>({}),shared=null}={}){
+   const q=acquisition(material,{refresh,stepDelta});
+   const {init,id,key,origin,far,half,halfY,bundle,cadence,request,width}=q;
+   if(!init&&seedTransport){seedTransport.dispose();seedTransport=null;}
+   let receipt=null,atlas=null,offset=0;
+   if(request){
+    if(g.batched){
+     if(!shared?.atlas||shared.receipt?.width!==width||shared.receipt.sections!==plan.sections||
+      shared.receipt.identity.epoch!==id.epoch||shared.receipt.identity.step!==id.step||shared.receipt.identity.materialStamp!==id.materialStamp||
+      !Number.isSafeInteger(shared.index)||shared.index<0||shared.index>=shared.receipt.bundles)throw Error('Invalid shared observation atlas for this beam');
+     receipt=shared.receipt;atlas=shared.atlas;offset=shared.index;
+    }else{
+     const transport=init?seedTransport:refreshTransport;
+     receipt=transport.encode(encoder,{material,bundles:[request],width,height:width,sections:plan.sections,receivers:1,profileWrites}).receipt;atlas=transport.buffers.atlas;
+    }
+   }else if(shared)throw Error('Unscheduled beam atlas');
    const axis=new Float32Array([...origin,half,...bundle.forward,far,...bundle.right,plan.width,...bundle.up,plan.sections]);
    const config=new ArrayBuffer(96),f=new Float32Array(config),u=new Uint32Array(config);
-   f.set(axis);u.set([plan.stride,cadence?.slot??0,receipt?.columns??0,Number(init)],16);f[20]=g.gain??1;
+   f.set(axis);u.set([plan.stride,cadence?.slot??0,receipt?.columns??0,Number(init)],16);f.set([g.gain??1,halfY,stepDelta,offset],20);
    device.queue.writeBuffer(cfg,0,config);
    if(init)pass(encoder,'seedTau',[[0,cfg],[2,r.tau],[3,atlas]],plan.points,profileWrites);
-   else pass(encoder,'carry',[[1,r.samples],[4,material.fine],[5,material.sourceOptions],[6,material.options]],plan.sampleCount,profileWrites);
+   else pass(encoder,'carry',[[0,cfg],[1,r.samples],[4,material.fine],[5,material.sourceOptions],[6,material.options]],plan.sampleCount,profileWrites);
    if(atlas)pass(encoder,'refresh',[[0,cfg],[1,r.samples],[3,atlas]],init?plan.sampleCount:plan.sections,profileWrites);
    encoder.clearBuffer(r.heads);
    pass(encoder,'bin',[[0,cfg],[1,r.samples],[7,r.heads],[8,r.links]],plan.sampleCount,profileWrites);
    pass(encoder,'gather',[[0,cfg],[1,r.samples],[7,r.heads],[8,r.links],[9,r.held],[10,r.advected]],plan.points,profileWrites);
    pass(encoder,'resolve',[[0,cfg],[2,r.tau],[9,r.held],[10,r.advected]],plan.receiverRays,profileWrites);
    identity=Object.freeze({...id});transformKey=key;if(cadence)sequence++;
-   const view=buf=>({identity,axis,buffer:buf,device});
+   const view=buf=>({identity,axis,halfHeight:halfY,buffer:buf,device});
    return {identity,views:{held:view(r.held),advected:view(r.advected)},plan,
-    work:{seedRays:init?plan.receiverRays:0,refreshRays:cadence?1:0,refreshedSlot:cadence?.slot??null,sectionsMoved:init?0:plan.sampleCount,receiverPoints:plan.points,rasterInstances:receipt?.instances??0,
-     reuseBufferBytes:Object.values(sizes).reduce((a,b)=>a+b,96),packetWorkspaceBytes:((init?receipt:refreshTransport.read())?.bytes??0),readbacks:0},
+    work:{seedRays:init?plan.receiverRays:0,refreshRays:cadence?1:0,refreshedSlot:cadence?.slot??null,sectionsMoved:init?0:plan.sampleCount,receiverPoints:plan.points,rasterInstances:g.batched?0:receipt?.instances??0,
+     reuseBufferBytes:Object.values(sizes).reduce((a,b)=>a+b,96),packetWorkspaceBytes:(g.batched?0:(init?receipt:refreshTransport.read())?.bytes??0),readbacks:0},
     tau:r.tau,authority:'resident equal-budget finite patch; seed extinction and one shared fresh emission column'};
   },
   dispose(){
-   if(disposed)return;disposed=true;seedTransport?.dispose();refreshTransport.dispose();
+   if(disposed)return;disposed=true;seedTransport?.dispose();refreshTransport?.dispose();
    device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>[cfg,...Object.values(r)].forEach(b=>b.destroy()));
   }
  };
