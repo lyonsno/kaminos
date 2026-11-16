@@ -98,7 +98,12 @@ export function validateBundleReplay(tape){
      !fixedValues(reference.positions,samples+(hasDense?n*z:0))||reference.positions.some(p=>p!==null&&(!fixedValues(p,3)||!p.every(Number.isFinite))))
    throw Error('Replay skipped or changed native material');
   check(result,id);if(hasDense)check(dense,id);
-  if(hasSmoke&&['held','advected','fresh'].some(arm=>!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(smoke?.[arm]??'')))throw Error('Incomplete smoke rendering');
+  if(hasSmoke)for(const arm of ['held','advected','fresh']){
+   const entry=smoke?.[arm];
+   if(!sameObservation(entry?.identity,id)||entry.mode!==arm||entry.observedStep!==id.step||entry.route!=='selected-beam-scattering-only')
+    throw Error('Smoke capture does not match its observation and arm');
+   if(!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(entry.src))throw Error('Incomplete smoke rendering');
+  }
   previous=id;
  }
  return {hasDense,hasSmoke};

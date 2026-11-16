@@ -53,6 +53,10 @@ test('replay admits complete same-observation profiles and rejects forged covera
  mutate(f=>f.result.identity.epoch++,/observation mismatch/);
  mutate(f=>f.reference.previous={...f.reference.previous,step:9},/skipped or changed/);
  mutate(f=>f.result.coveredPoints--,/support count/);
+ tape.frames[0].smoke=Object.fromEntries(['held','advected','fresh'].map(mode=>[mode,{mode,identity:{...reference.identity},observedStep:reference.identity.step,route:'selected-beam-scattering-only',src:'data:image/png;base64,AA=='}]));
+ assert.deepEqual(validateBundleReplay(tape),{hasDense:false,hasSmoke:true});
+ mutate(f=>f.smoke.fresh.observedStep--,/Smoke capture does not match/);
+ mutate(f=>f.smoke.advected=f.smoke.held,/Smoke capture does not match/);
 });
 
 test('native trajectories cannot arm before the first real material capture',()=>{

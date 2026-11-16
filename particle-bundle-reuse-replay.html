@@ -51,7 +51,7 @@ async function load(){
  }
  let framing=null;
  if(hasSmoke){
-  const urls=frames.flatMap(f=>Object.values(f.smoke)),images=await Promise.all(urls.map(async url=>{const im=new Image();im.src=url;await im.decode();return im;}));
+  const urls=frames.flatMap(f=>Object.values(f.smoke).map(image=>image.src)),images=await Promise.all(urls.map(async url=>{const im=new Image();im.src=url;await im.decode();return im;}));
   const [first]=images,w=first.naturalWidth,h=first.naturalHeight;
   const c=document.createElement('canvas');c.width=w;c.height=h;
   const ctx=c.getContext('2d',{willReadFrequently:true});
@@ -95,7 +95,7 @@ async function load(){
     if(get('fullFrame').checked){x=y=0;cw=w;ch=h;}
     border.style.aspectRatio=cw+'/'+ch;
     image.style.cssText='width:'+(100*w/cw)+'%;left:'+(-100*x/cw)+'%;top:'+(-100*y/ch)+'%;filter:brightness('+get('exposure').value+')';
-    image.src=frame.smoke[mode];continue;
+    image.src=frame.smoke[mode].src;continue;
    }
    canvas.width=along?sections:width;canvas.height=width;
    const ctx=canvas.getContext('2d'),pixels=ctx.createImageData(canvas.width,canvas.height);
