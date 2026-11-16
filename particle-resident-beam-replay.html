@@ -40,7 +40,7 @@ async function load(){
  const volume=tape.source===RESIDENT_VOLUME_ROUTE,directions=volume?6:1;
  if((!volume&&tape.source!=='resident-equal-fresh-ray-beam')||!Array.isArray(frames)||frames.length<2||!same(frames[0].identity,seed)||!Number.isSafeInteger(plan?.points))throw Error('Incomplete resident recording');
  if(volume){
-  if(tape.geometry?.refreshEvery!==2)throw Error('Expected a whole-volume half-cadence recording');
+  if(tape.geometry?.refreshEvery!==2||frames.length<3)throw Error('Expected a whole-volume half-cadence recording with both refresh and reuse');
   q('title').textContent='Whole-volume light: held or carried';
   q('intro').textContent='Six directions cover the same Fine volume. Both smoke views get the same fresh rays every other update. Only old samples are moved on the right.';
   q('method').textContent='Extinction stays at the seed. When a carried direction loses support it uses the held estimate for that direction. The last frame jumps back to the seed when the replay loops.';

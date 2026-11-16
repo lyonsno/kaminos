@@ -674,7 +674,7 @@ export function createOpticalParticles(device,{transparent=false,indexedQuads=tr
     const epoch=materialHandoff.reserveEpoch(),domain={dims:[...dims],worldFromFine:materialTransform};
     const fieldKey=JSON.stringify([epoch,materialStamp,domain.dims,materialTransform,residentVolume.revision,volumeSettings.width,volumeSettings.stride,volumeSettings.gain]);
     if(!residentOwner||residentKey!==fieldKey){clearVolume();residentOwner=residentVolume.create(device,volumeSettings,dims);residentKey=fieldKey;}
-    const field=residentOwner.encode(encoder,{particles,slots,options,fine,sourceOptions:source.uniform,domain,identity:{epoch,step,frame,materialStamp}},{refreshEvery:volumeSettings.refreshEvery});
+    const field=residentOwner.encode(encoder,{particles,slots,options,fine,sourceOptions:source.uniform,domain,identity:{epoch,step,frame,materialStamp}},{refreshEvery:volumeSettings.refreshEvery,profileWrites});
     const next=field.views[volumeSettings.mode],includeIntrinsic=volumeSettings.presentation==='flame';
     if(installedVolume?.next!==next||installedVolume.includeIntrinsic!==includeIntrinsic){
      volumeView.set({...next,includeIntrinsic});installedVolume={next,includeIntrinsic};
