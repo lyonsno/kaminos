@@ -140,7 +140,7 @@ export function createPacketBundleTransport(device){
    device.createRenderPipelineAsync(solidDescriptor).then(p=>{pipelines.solid=p;}),
    device.createRenderPipelineAsync(splatDescriptor).then(p=>{pipelines.splat=p;}),
   ]);},
-  encode(encoder,{material,bundles,width,height,sections,receivers,membership=null,triangles=null,triangleCount=0}){
+  encode(encoder,{material,bundles,width,height,sections,receivers,membership=null,triangles=null,triangleCount=0,profileWrites=()=>({})}){
    if(!material?.particles||!material.options||!material.identity)throw Error('Packet bundles require current native material');
    const list=Array.isArray(bundles),bundleCount=list?bundles.length:bundles?.count;
    const plan=packetBundlePlan(device.limits,{width,height,sections,bundles:bundleCount,slots:material.slots,receivers});
@@ -162,20 +162,20 @@ export function createPacketBundleTransport(device){
    if(list)device.queue.writeBuffer(r.bundles,0,packPacketBundles(bundles));
    device.queue.writeBuffer(r.plan,0,new Uint32Array([width,height,plan.columns,sections,material.slots,bundleCount,receivers,triangleCount,plan.solidColumns,plan.atlasWidth,plan.atlasHeight,0]));
    pipelines.solid??=device.createRenderPipeline(solidDescriptor);
-   let pass=encoder.beginRenderPass({label:'packet current finite solid visibility',colorAttachments:[],depthStencilAttachment:{view:r.solids.createView(),depthLoadOp:'clear',depthStoreOp:'store',depthClearValue:1}});
+   let pass=encoder.beginRenderPass({label:'packet current finite solid visibility',...profileWrites('packet-solid'),colorAttachments:[],depthStencilAttachment:{view:r.solids.createView(),depthLoadOp:'clear',depthStoreOp:'store',depthClearValue:1}});
    if(triangleCount){pass.setPipeline(pipelines.solid);pass.setBindGroup(0,bind(pipelines.solid,[[2,bundleBuffer],[10,triangles]]));
     for(let bi=0;bi<bundleCount;bi++){const x=bi%plan.solidColumns*width,y=Math.floor(bi/plan.solidColumns)*height;pass.setViewport(x,y,width,height,0,1);pass.setScissorRect(x,y,width,height);pass.draw(triangleCount*3,1,0,bi);}}
    pass.end();
    pipelines.splat??=device.createRenderPipeline(splatDescriptor);
    // The splat uses atlas extent from the uniform. Sampling the render target
    // itself would be a texture feedback hazard, so its dimensions are explicit.
-   pass=encoder.beginRenderPass({label:'packet joint source and extinction slices',colorAttachments:[{view:r.atlas.createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}]});
+   pass=encoder.beginRenderPass({label:'packet joint source and extinction slices',...profileWrites('packet-raster'),colorAttachments:[{view:r.atlas.createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}]});
    pass.setPipeline(pipelines.splat);pass.setBindGroup(0,bind(pipelines.splat,[[0,material.particles],[1,material.options],[2,bundleBuffer],[3,membership??r.membership],[4,r.plan],[5,r.solids]]));pass.draw(6,plan.instances);pass.end();
    for(const [entry,entries,groups] of [
     ['integrate',[[4,r.plan],[6,r.atlas],[7,r.rays]],Math.ceil(plan.rays/64)],
     ['average',[[2,bundleBuffer],[4,r.plan],[7,r.rays],[8,r.means]],Math.ceil(bundleCount/64)],
     ['gather',[[2,bundleBuffer],[4,r.plan],[8,r.means],[9,r.incident]],Math.ceil(receivers/64)]]){
-    const p=pipeline(entry);pass=encoder.beginComputePass({label:'packet bundle '+entry});pass.setPipeline(p);pass.setBindGroup(0,bind(p,entries));pass.dispatchWorkgroups(groups);pass.end();
+    const p=pipeline(entry);pass=encoder.beginComputePass({label:'packet bundle '+entry,...profileWrites('packet-'+entry)});pass.setPipeline(p);pass.setBindGroup(0,bind(p,entries));pass.dispatchWorkgroups(groups);pass.end();
    }
    receipt={...plan,identity:{...material.identity},coverage:{...material.coverage},measure:'projected-base-support-with-acquired-axial-interval',visibility:triangleCount?'current-finite-triangle-depth':'empty-solid-scene',history:'fresh-only',source:'intrinsic-emission-only',quantity:'spherical-mean-incoming-radiance',depth:'explicit-axial-distance; center-slice mixture',work:{submittedInstances:plan.instances,subrays:plan.rays,sectionReads:plan.rays*sections,solidTriangles:triangleCount*bundleCount}};
    return {buffer:r.incident,count:receivers,identity:{...material.identity},receipt};
