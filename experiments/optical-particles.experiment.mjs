@@ -1,3 +1,4 @@
+import {createParticleLightSliceCockpit} from './particle-light-slice-cockpit.mjs';
 import {createParticleIntegralDirection} from './particle-integral-direction.mjs';
 import {opticalParticleSettings} from '../volume-optical-particles.mjs';
 import {particleProposalShares} from '../volume-particle-acquisition.mjs';
@@ -43,7 +44,7 @@ export default {
   let settings=opticalParticleSettings({enabled:true,...inputs.particles});
   // Beaming's worker settings travel with its scene address, but are not a
   // recipe for the shared field. Preserve them for a round trip to that branch.
-  const {particles:_particles,simulationReaction:_reaction,source:_source,ambientBoundary,sharedLighting,lighting,integralView:_integralView,packetLighting:_packetLighting,...forwarded}=inputs;
+  const {particles:_particles,simulationReaction:_reaction,source:_source,ambientBoundary,sharedLighting,lighting,integralView:_integralView,packetLighting:_packetLighting,lightSlice:_lightSlice,...forwarded}=inputs;
   let packetSettings={enabled:false,...packetNetworkSettings(),...inputs.packetLighting},packetOwner=null,packetHelper=null,packetStatus=null,packetInspection=null,packetSupportView=null,packetInspecting=null;const packetFields=[];
   const legacyShared=lighting&&['intervalMs','environmentBlur','lightSurfaces','volumeGrid','sourceGrid'].some(key=>Object.hasOwn(lighting,key))
    &&!['width','transportWidth','filterLength','padding','supportSigmas','albedo','mode'].some(key=>Object.hasOwn(lighting,key));
@@ -81,6 +82,10 @@ export default {
    runtime.setControls(patch);
   }
   try{source();}catch(error){await session.dispose();throw error;}
+  let lightSliceSettings={...inputs.lightSlice};
+  if(lightSliceSettings.view==='held')lightSliceSettings.view='fine';
+  const lightSlice=createParticleLightSliceCockpit({runtime:source,session,host,inputs:lightSliceSettings,
+   select:id=>win.kaminosSelection?.set([id],id),record,onSettings:next=>{lightSliceSettings=next;persist();}});
   const edits=win.kaminosSceneEdits,coverageTarget=edits?'@particle-coverage:'+win.crypto.randomUUID():null;
   const coverageSlice=({coverage,pixelFloor,maxFootprint})=>({coverage,pixelFloor,maxFootprint});
   let ownCoverageGesture=false;
@@ -105,7 +110,7 @@ export default {
    },
   };
   const playback=()=>win.kaminosScenePlayback?.read?.()??{paused:source().debugState?.().simulationPaused===true};
-  const read=()=>({settings,packetInspection,packetLighting:packetOwner?.read()??{enabled:packetSettings.enabled,settings:packetSettings,phase:'off'},integralView:directionView,integralDirectionObject:direction?.asset.id??null,playback:playback(),ambientBoundary:source().ambientBoundaryState?.()??null,effective:source().opticalParticleState(),proposal:{...particleProposalShares(settings),conditionalOn:settings.acquisitionMode===2?null:'no-accepted-tracking',trackingAttemptFraction:settings.acquisitionMode===2?null:settings.followFraction,acceptedTrackingFraction:null},population,workPopulation,error,measurement});
+  const read=()=>({settings,lightSlice:lightSlice.read(),packetInspection,packetLighting:packetOwner?.read()??{enabled:packetSettings.enabled,settings:packetSettings,phase:'off'},integralView:directionView,integralDirectionObject:direction?.asset.id??null,playback:playback(),ambientBoundary:source().ambientBoundaryState?.()??null,effective:source().opticalParticleState(),proposal:{...particleProposalShares(settings),conditionalOn:settings.acquisitionMode===2?null:'no-accepted-tracking',trackingAttemptFraction:settings.acquisitionMode===2?null:settings.followFraction,acceptedTrackingFraction:null},population,workPopulation,error,measurement});
   function authoredSourceValue(key){
    const node=host.controls.document.getElementById(SOURCE_FIELDS[key]),value=Number(node?.value);
    return Number.isFinite(value)&&value>0?value:sourceSettings[key];
@@ -146,10 +151,10 @@ export default {
    const sourceControls={...sourceSettings};
    for(const key of Object.keys(SOURCE_FIELDS)){const value=authoredSourceValue(key);if(value!==undefined)sourceControls[key]=value;}
    const boundary=runtime.ambientBoundaryState?.()?.settings??boundaryOverrides;
-   return structuredClone({...forwarded,packetLighting:packetSettings,integralView:directionView,particles:opticalParticleSettings({...runtime.opticalParticleSettings(),...reaction}),simulationReaction:reaction,source:sourceControls,
+   return structuredClone({...forwarded,lightSlice:{...lightSliceSettings,view:lightSliceSettings.view==='held'?'fine':lightSliceSettings.view},packetLighting:packetSettings,integralView:directionView,particles:opticalParticleSettings({...runtime.opticalParticleSettings(),...reaction}),simulationReaction:reaction,source:sourceControls,
     ...(Object.keys(boundary).length?{ambientBoundary:boundary}:{}),...(lightingSettings?{sharedLighting:lightingSettings}:{})});
   }
-  const persist=()=>updateInputs({...forwarded,packetLighting:packetSettings,integralView:directionView,particles:settings,simulationReaction:reactionOverrides,source:sourceSettings,...(Object.keys(boundaryOverrides).length?{ambientBoundary:boundaryOverrides}:{}),...(lightingSettings?{sharedLighting:lightingSettings}:{})});
+  const persist=()=>updateInputs({...forwarded,lightSlice:{...lightSliceSettings,view:lightSliceSettings.view==='held'?'fine':lightSliceSettings.view},packetLighting:packetSettings,integralView:directionView,particles:settings,simulationReaction:reactionOverrides,source:sourceSettings,...(Object.keys(boundaryOverrides).length?{ambientBoundary:boundaryOverrides}:{}),...(lightingSettings?{sharedLighting:lightingSettings}:{})});
   async function setPacketLighting(patch){
    const {enabled=packetSettings.enabled,...quality}={...packetSettings,...patch};if(typeof enabled!=='boolean')throw Error('Packet lighting enabled must be boolean');
    const next={enabled,...packetNetworkSettings(quality)};
@@ -233,7 +238,7 @@ export default {
    if(!direction)direction=await createParticleIntegralDirection({session,runtime:source,view:directionView??session.readView(),select:id=>win.kaminosSelection?.set([id],id),onChange:view=>{directionView=view;persist();}});
    direction.enable();directionView=direction.view();persist();sync(true);return read();
   }
-  const operations={setPacketLighting,inspectPackets,setIntegralDirection,setPaused,setAmbientBoundary,setOptions,setReaction,setSource,setCoverage,setLighting,samplePopulation,async measure(options={}){measurement=await source().measureOpticalParticleFrame(options);sync();return measurement;},reset(){source().resetOpticalParticles();session.redraw();sync(true);return read();},
+  const operations={setLightSlice:lightSlice.configure,pickLightSliceHandle:lightSlice.pick,holdLightSlice:lightSlice.hold,setPacketLighting,inspectPackets,setIntegralDirection,setPaused,setAmbientBoundary,setOptions,setReaction,setSource,setCoverage,setLighting,samplePopulation,async measure(options={}){measurement=await source().measureOpticalParticleFrame(options);sync();return measurement;},reset(){source().resetOpticalParticles();session.redraw();sync(true);return read();},
    setRadius({axis,value:v}){if(!['horizontal','vertical'].includes(axis))throw Error('Unknown radius axis');if(!Number.isFinite(v)||v<=0)throw Error('Radius must be positive');const vertical=settings.radius*settings.stretch;return axis==='vertical'?setOptions({stretch:v/settings.radius}):setOptions({radius:v,stretch:vertical/v});}
   };
   function syncHud(e,force=false){if(!hud)return;hud.style.display=settings.hud?'block':'none';if(!settings.hud)return;const firstTiming=e.timings?.ok&&!hadTiming;hadTiming=!!e.timings?.ok;if(!force&&!firstTiming&&Date.now()-lastHud<250)return;lastHud=Date.now();const rect=current?.opticalParticleViewport?.()?.getBoundingClientRect?.();if(rect){hud.style.left=rect.left+'px';hud.style.top=rect.top+'px';hud.style.width=rect.width+'px';hud.style.height=rect.height+'px';const bars=['authoring-viewport-tools','experiment-toolbar','transform-bar','info-bar'].map(id=>host.controls.document.getElementById(id)).map(el=>el?.getBoundingClientRect?.()).filter(b=>b&&b.width>0&&b.height>0&&b.left<rect.right&&b.right>rect.left);const top=bars.filter(b=>b.top<rect.top+rect.height/2).reduce((v,b)=>Math.max(v,b.bottom),rect.top),bottom=bars.filter(b=>b.top>=rect.top+rect.height/2).reduce((v,b)=>Math.min(v,b.top),rect.bottom);hudTop.style.top=Math.max(2,top-rect.top+4)+'px';hudBottom.style.bottom=Math.max(2,rect.bottom-bottom+4)+'px';}
@@ -243,13 +248,15 @@ export default {
    const field=e.exchange?.field,planned=e.exchange?.planned,fieldText=field?`${field.nodeDims.join('×')} @step ${field.step}`:'off',planText=planned&&field&&planned.nodeDims.join('×')!==field.nodeDims.join('×')?` → ${planned.nodeDims.join('×')} next`:'';text(hudBottom,`field ${fieldText}${planText} · grouping ${ex?.grouping?'on':'held/off'} · exchange ${ex?.fieldGather?'on':'held/off'} · target ${e.targetSize?.join('×')??'—'} · depth ${e.depthField?[e.depthField.width,e.depthField.height,e.depthField.slices].join('×'):'off'} · ${(e.totalBytes/1048576||0).toFixed(1)} MiB\n${timings} · particle GPU intervals exclude shared simulation/lighting`);
   }
   const stop=session.onFrame(({deltaSeconds}={})=>{if(Number.isFinite(deltaSeconds)&&deltaSeconds>0)frameMs=frameMs===null?deltaSeconds*1000:frameMs*.9+deltaSeconds*100;
-   packetOwner?.tick();if(packetSettings.view!=='off'&&!packetInspecting&&packetOwner?.read().receipt?.available)void inspectPackets().catch(e=>{error=e.message;sync();});
+   lightSlice.tick();packetOwner?.tick();if(packetSettings.view!=='off'&&!packetInspecting&&packetOwner?.read().receipt?.available)void inspectPackets().catch(e=>{error=e.message;sync();});
    if(lightingSettings&&win.__kaminosSceneRadiance!==lightingOwner)lightingRoute();popups?.sync();
    direction?.sync();sync();if(settings.hud&&current?.sampleOpticalParticleWork&&!workReading&&Date.now()-lastWorkRead>=1000){lastWorkRead=Date.now();workReading=true;void current.sampleOpticalParticleWork().then(r=>{if(!disposed){workPopulation=r;sync(true);}}).catch(e=>{error=e.message;}).finally(()=>{workReading=false;});}if(settings.renewalDiagnostics&&!reading&&Date.now()-lastPopulationRead>=1000)void samplePopulation().catch(e=>{error=e.message;sync();});});
   if(directionView)try{await setIntegralDirection(true);}catch(error){stop();await session.dispose();throw error;}
+  if(lightSliceSettings.enabled)try{await lightSlice.configure(lightSliceSettings);}catch(error){stop();lightSlice.dispose();await session.dispose();throw error;}
   if(packetSettings.enabled)try{await setPacketLighting(packetSettings);}catch(error){stop();packetOwner?.dispose();await session.dispose();throw error;}
   return {read,operations,snapshotInputs,mount({root,document,invoke}){panel=root;let controlRoot=root;
    function section(label){const fieldset=document.createElement('fieldset'),legend=document.createElement('legend');legend.textContent=label;fieldset.style.cssText='min-width:0;border:1px solid #555;border-radius:6px;padding:8px;margin:12px 0';fieldset.append(legend);root.append(fieldset);controlRoot=fieldset;}
+   lightSlice.mount(root,document,invoke);
    section('Packet illumination');
    const explanation=document.createElement('p');explanation.textContent='Current material packets have both source and receiver roles. Their separate emission/extinction supports are fitted from the primary material. Every emitting packet is evaluated; intervening smoke remains in the integral. Packet advection and light history are deferred. Fine-material transport is retained as a comparison.';controlRoot.append(explanation);
    for(const [key,label,choices] of [['mode','Lighting representation',[['material-packets','Current material packets'],['fine-reference','Fine material reference']]],['view','Packet support view',[['off','Off'],['packets','Packet bounds'],['emission','Emission shapes'],['extinction','Extinction shapes']]]]){
@@ -412,6 +419,6 @@ export default {
    control('Reaction support expansion','expansion','Fractional growth of both radii as a carrier consumes its initial fuel. 0 holds size; 1 permits doubling after that fuel is spent. It changes the footprint without pushing the grid.');
    const reset=document.createElement('button');reset.textContent='Clear particle observations';reset.title='Clear the retained particle pool and begin collecting fresh observations. The simulation is preserved.';reset.addEventListener('click',()=>invoke('reset'));root.append(reset);
    const note=document.createElement('p');note.textContent='Carried reaction, exchange, transport and survival use simulation reference time and hold while paused. Radius, normalized profile and visibility edits can be compared on that held material. Camera movement preserves particles. Source-focused collection also preserves them through output and batch resizing; capacity and acquisition-mode changes clear the pool. Tracking and sampling edits affect subsequent updates. Soot follows its carried composition; captured illumination retains its birth lighting and fades separately. Internal depth ordering remains approximate.';root.append(note);sync();
-  },async dispose(){disposed=true;stop();try{packetSupportView?.dispose();packetOwner?.dispose();popups?.dispose();if(edits){await edits.waitForReplay();if(edits.hasHistoryEntry(coverageTarget))edits.discard(entry=>entry.id===coverageTarget,{preserveUnrelatedActive:true});edits.unregister(coverageTarget);}}finally{if(lightingOwner===win.__kaminosSceneRadiance)lightingOwner?.configureLiveLighting(null);hud?.remove();drags.forEach(x=>x?.dispose?.());try{if(current){current.setOpticalParticles(previous.particles);current.setSplitIntegral(previous.split);current.setOpticalParticleView?.(previous.integralView??null);}}finally{await session.dispose();}}}};
+  },async dispose(){disposed=true;stop();try{lightSlice.dispose();packetSupportView?.dispose();packetOwner?.dispose();popups?.dispose();if(edits){await edits.waitForReplay();if(edits.hasHistoryEntry(coverageTarget))edits.discard(entry=>entry.id===coverageTarget,{preserveUnrelatedActive:true});edits.unregister(coverageTarget);}}finally{if(lightingOwner===win.__kaminosSceneRadiance)lightingOwner?.configureLiveLighting(null);hud?.remove();drags.forEach(x=>x?.dispose?.());try{if(current){current.setOpticalParticles(previous.particles);current.setSplitIntegral(previous.split);current.setOpticalParticleView?.(previous.integralView??null);}}finally{await session.dispose();}}}};
  }
 };
