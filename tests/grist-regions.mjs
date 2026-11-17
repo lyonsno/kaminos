@@ -1,7 +1,7 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {makeRegionState,regionSummary} from '../earth-gpu/regions.mjs';
+import {makeRegionState,regionSummary,retainRegionState} from '../earth-gpu/regions.mjs';
 test('two material lattices own the same total mass before and after particulate composition',()=>{
  const s=makeRegionState({samplesPerRegion:24,gritCount:2});
  assert.equal(s.regionCount,2);
@@ -21,4 +21,11 @@ test('a retained specimen reconstructs the live bodies and irreversible connecti
  const a=s.attachments[0],o=a.body*24;
  const target=[0,1,2].map(k=>a.nodeIds.reduce((v,id,j)=>v+s.floats[id*24+k]*a.weights[j],0));
  assert.ok(Math.hypot(...target.map((x,k)=>x-s.floats[o+k]))<1e-8);
+});
+
+test('captured packed and structured plastic history agree after yielding',()=>{
+ const s=makeRegionState({samplesPerRegion:12,gritCount:1}),plastic=s.tets.slice(),links=s.linkWords.slice();plastic[8]*=1.25;links[(s.attachments.length)*16+14]=.7;
+ const captured=retainRegionState(s,s.floats.slice(),plastic,links);
+ assert.equal(captured.tets[8],captured.material.tets[0].plastic[0]);
+ assert.equal(captured.linkWords[s.attachments.length*16+14],links[s.attachments.length*16+14]);
 });

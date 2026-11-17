@@ -1,4 +1,4 @@
-import {makeEarthState,packMaterial,materialMasses,tetVolume,metric} from './material.mjs';
+import {makeEarthState,packMaterial,materialMasses,tetVolume,metric,retainMaterial} from './material.mjs';
 
 // Two fixed local material lattices. The particles and lattice share one matrix
 // mass budget; particles carry half, and continuum support nodes carry half.
@@ -51,3 +51,5 @@ export function regionSummary(state){
  const masses=materialMasses(state.material);matrixMass+=masses.reduce((a,b)=>a+b,0)*.5;
  return {matrixMass,regions:state.regionCount,samples:state.sampleCount,connections:state.connections.length};
 }
+
+export function retainRegionState(state,floats,plastic,links){return {...retainMaterial(state,floats,plastic),tets:plastic.slice(),linkWords:links.slice()};}
