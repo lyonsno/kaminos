@@ -10,7 +10,7 @@ fn regionCorrection(error:vec3f,inverseMass:f32,strength:f32)->vec3f{return -err
 const start=EARTH_GPU_WGSL.indexOf('@compute @workgroup_size(64) fn transition('),end=EARTH_GPU_WGSL.indexOf('@compute @workgroup_size(64) fn apply(');
 if(start<0||end<=start)throw Error('Earth transition entry changed');
 const base=EARTH_GPU_WGSL.slice(0,start)+'@compute @workgroup_size(64) fn transition(){}\n'+EARTH_GPU_WGSL.slice(end);
-export const REGION_WGSL=base.replace('@group(0) @binding(8) var<storage,read> ties:array<vec4u>;','@group(0) @binding(8) var<storage,read_write> regionLinks:array<RegionLink>;').replace(contactStart,'let b=bodies[i];if(b.shape.z>1.5){return;}\n for(var f=0u;f<p.counts.w;f++)')+REGION_MATH_WGSL+`
+export const REGION_WGSL=base.replace('for(var sa=0u;sa<2u;sa++){for(var sb=0u;sb<2u;sb++){','for(var sa=0u;sa<select(2u,1u,a.shape.z>1.5);sa++){for(var sb=0u;sb<select(2u,1u,b.shape.z>1.5);sb++){').replace('@group(0) @binding(8) var<storage,read> ties:array<vec4u>;','@group(0) @binding(8) var<storage,read_write> regionLinks:array<RegionLink>;').replace(contactStart,'let b=bodies[i];if(b.shape.z>1.5){return;}\n for(var f=0u;f<p.counts.w;f++)')+REGION_MATH_WGSL+`
 struct RegionLink{ids:vec4u,extra:vec4u,weights:vec4f,law:vec4f}
 struct RegionControl{law:vec4f,gripDelta:vec4f}
 @group(0) @binding(9) var<uniform> regionControl:RegionControl;
