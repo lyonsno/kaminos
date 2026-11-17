@@ -91,7 +91,7 @@ export default {
    };
    field('Contraction (%)','contraction',.2,0,100);field('Surface cooling','cooling',.2,0);field('Heat diffusivity','diffusivity',.05,0);
    field('Fracture toughness','toughness',.001,.000001);field('Damage length','length',.025,.000001);
-   field('Strength variation (%)','variation',1,0,100);field('Damping','damping',.01,0);
+   field('Strength variation (%)','variation',1,0,100);field('Damping','damping',.01,0);field('Gravity (downward)','gravity',.05,0);
    field('Phase iterations','phaseIterations',1,1);field('Steps per batch','batch',1,1);field('Block width (points; restarts)','particlesPerAxis',1,4);
    const check=document.createElement('input');check.type='checkbox';check.checked=config.fixedBase;check.onchange=()=>invoke('setOptions',{fixedBase:check.checked}).catch(failed);const label=document.createElement('label');label.append(check,' Restrain bottom');panel.append(label);
    button('Save material state','snapshot').onclick=()=>invoke('snapshot').then(result=>{const url=URL.createObjectURL(new Blob([JSON.stringify(result)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='thermal-material.json';a.click();URL.revokeObjectURL(url);}).catch(failed);
