@@ -35,9 +35,9 @@ function fixture({native=false}={}){
  const inputs=initialPlace();inputs.mode='work';inputs.realization='deck';inputs.insert.center=[0,0];inputs.insert.fitted=true;
  const view=createPlaceView(),scene=new T.Scene();scene.add(view.root);
  let gizmo;
- if(native){gizmo=new SceneTransformControls(camera,canvas);scene.add(gizmo.getHelper());gizmo.attach(view.root);gizmo.addEventListener('mouseDown',()=>active=true);}
+ if(native){gizmo=new SceneTransformControls(camera,canvas);scene.add(gizmo.getHelper());gizmo.attach(view.root);gizmo.addEventListener('mouseDown',()=>active=true);gizmo.addEventListener('mouseUp',()=>active=false);}
  const ctl=installPlaceControls({host,session,view,asset:{id:'fixture',root:view.root},inputs,record(){}});scene.updateMatrixWorld(true);tick();
- const move=(x,y)=>{canvas.dispatch('pointermove',{clientX:x,clientY:y});for(const [id,fn]of [...queue]){queue.delete(id);fn();}};
+ const move=(x,y)=>{canvas.dispatch('pointermove',{clientX:x,clientY:y,button:-1,buttons:gizmo?.dragging?1:0});for(const [id,fn]of [...queue]){queue.delete(id);fn();}};
  const at=point=>{const v=new T.Vector3(...point).project(camera);return {clientX:(v.x+1)*500,clientY:(1-v.y)*400};};
  return {canvas,viewport,win,camera,view,ctl,gizmo,at,move,tick:()=>tick(),dispose(){gizmo?.dispose();ctl.dispose();view.dispose();}};
 }
@@ -73,6 +73,37 @@ test('modified selection clicks retain the native viewport route',()=>{
   for(const name of ['pointerdown','pointerup','click'])f.canvas.dispatch(name,point);
   assert.deepEqual(seen,['pointerdown','pointerup','click']);assert.equal(f.ctl.read().interaction.stage,'idle');
  }finally{f.dispose();}
+});
+
+for(const cancel of ['back','reset','outside','cancel'])test(`a ${cancel} domain press cannot steal the next native selection`,()=>{
+ const f=fixture(),seen=[];try{
+  const p=f.at([0,1.2,0]);f.canvas.dispatch('pointerdown',p);
+  if(cancel==='back')f.ctl.operations.back();
+  if(cancel==='reset')f.ctl.operations.reset();
+  if(cancel==='outside'){const outside=new Element();f.win.append(outside);outside.dispatch('pointerup',p);}
+  if(cancel==='cancel')f.canvas.dispatch('pointercancel',p);
+  for(const name of ['pointerdown','pointerup','click'])f.viewport.addEventListener(name,()=>seen.push(name));
+  for(const name of ['pointerdown','pointerup','click'])f.canvas.dispatch(name,{...p,shiftKey:true});
+  assert.deepEqual(seen,['pointerdown','pointerup','click']);
+ }finally{f.dispose();}
+});
+
+test('a native transform suspends and rebases an unheld domain edit',()=>{
+ const prior=globalThis.document;globalThis.document={pointerLockElement:null};const f=fixture({native:true});
+ try{
+  f.ctl.operations.mode({value:'establish'});
+  const p=f.ctl.read().screen.handles.find(h=>h.id==='extension').sides.find(h=>h.axis===0&&h.sign===1);
+  f.canvas.dispatch('pointerdown',{clientX:p.x,clientY:p.y});f.canvas.dispatch('pointerup',{clientX:p.x,clientY:p.y});f.canvas.dispatch('click',{clientX:p.x,clientY:p.y});
+  assert.equal(f.ctl.read().interaction.stage,'shaping');
+  const before=f.ctl.read().place.regions,grip=f.gizmo._gizmo.gizmo.translate.children.find(node=>node.name==='X');
+  const g=f.at(new T.Vector3(.56,0,0).applyMatrix4(grip.matrixWorld).toArray());
+  f.canvas.dispatch('pointerdown',g);assert.equal(f.gizmo.dragging,true);
+  f.move(g.clientX+20,g.clientY);f.view.root.updateWorldMatrix(true,false);f.tick();
+  assert.notEqual(f.view.root.position.x,0,'The actual native gizmo moves the root');
+  assert.deepEqual(f.ctl.read().place.regions,before,'Moving the root is not a second domain displacement');
+  f.canvas.dispatch('pointerup',{clientX:g.clientX+20,clientY:g.clientY});f.move(g.clientX+20,g.clientY);
+  assert.deepEqual(f.ctl.read().place.regions,before,'Resuming under the moved root does not jump');
+ }finally{f.dispose();globalThis.document=prior;}
 });
 
 for(const independent of [null,.49])test(`failed create restores only its own GI change (${independent??'unchanged'})`,async()=>{
