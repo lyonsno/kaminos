@@ -6,6 +6,16 @@ export function createTrellisAuthoringOperation({appGpuHost,request=globalThis.f
  loadModule=specifier=>import(specifier),WorkerClass=globalThis.Worker}={}){
  if(typeof appGpuHost!=='function')throw TypeError('TRELLIS requires the actual application GPU host');
  let u2netRunner=null;
+ function backgroundRunner(appGpu){
+  if(!u2netRunner){
+   const pending=(async()=>{const {loadU2NetPackage,createU2NetRunner}=await loadModule('./models/u2net/u2net-webgpu.js');
+    return createU2NetRunner({device:appGpu.device,...await loadU2NetPackage(U2NET_PACKAGE_URL)});})();
+   u2netRunner=pending;
+   // Failed initialization owns no returned runner; another attempt may load it.
+   pending.catch(()=>{if(u2netRunner===pending)u2netRunner=null;});
+  }
+  return u2netRunner;
+ }
   const run=async({pixels,highResolutionPixels,image,label='TRELLIS page',signal,onPhase,onInput,onPreview,finishMesh=true,textureSize=1024,scheduling,finishingMode='original-remesh',assertCurrent=()=>{}}={})=>{
     const check=()=>{signal?.throwIfAborted();assertCurrent();};check();
     const response=await request('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};
@@ -36,8 +46,7 @@ export function createTrellisAuthoringOperation({appGpuHost,request=globalThis.f
           const run=await appGpu.beginRun(`u2net-${crypto.randomUUID()}`,{routeId:'u2net.foreground-removal'});
           try{return await removeForegroundU2Net({...options,foreground:run});}finally{await run.finish();}
         },
-        runner:()=>u2netRunner??=(async()=>{const {loadU2NetPackage,createU2NetRunner}=await loadModule('./models/u2net/u2net-webgpu.js');
-          return createU2NetRunner({device:appGpu.device,...await loadU2NetPackage(U2NET_PACKAGE_URL)});})()});
+        runner:()=>backgroundRunner(appGpu)});
       check();pixelValues=normalizePreparedTrellisRgb(prepared);
       highResolutionPixelValues=needsHighConditioning?normalizePreparedTrellisRgb(prepared.highResolution):undefined;preparation={source:image.source,...prepared.provenance};
       // What TRELLIS actually used, kept and shown: the image itself, or the saved U2Net cutout.
@@ -97,6 +106,10 @@ export function createTrellisAuthoringOperation({appGpuHost,request=globalThis.f
   };
 
  return {run,async retire(){
-  if(u2netRunner){const runner=await u2netRunner,app=await appGpuHost();await app.queue.onSubmittedWorkDone();runner.dispose();u2netRunner=null;}
+  const pending=u2netRunner;if(!pending)return;
+  let runner;
+  try{runner=await pending;}catch{if(u2netRunner===pending)u2netRunner=null;return;}
+  const app=await appGpuHost();await app.queue.onSubmittedWorkDone();runner.dispose();
+  if(u2netRunner===pending)u2netRunner=null;
  }};
 }
