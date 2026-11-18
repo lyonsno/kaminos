@@ -187,10 +187,14 @@ export function createPacketCandidates(device, bundleStruct) {
       if (![cellBytes,maskBytes].every(n => Number.isSafeInteger(n) && n <= limit)) throw Error('Particle index exceeds device capacity');
       const indexWork = dispatch(plan.slots);
       const gatherWork = dispatch(cellCount * plan.bundles);
-      // One pool's worth of pair storage. More candidates always take the dense
-      // draw, so temporary memory stays linear without dropping contributors.
+      // The six narrow resident columns shared more than one pool's worth of
+      // pairs in the authored plume profile. Allow two hits per slot on
+      // average, subject to hardware limits and the dense pair count.
+      // Workspace overflow takes the complete dense draw.
       const slotBytes = plan.slots * 4;
-      if (!workspace || workspace.cells.size !== cellBytes || workspace.slotCells.size !== slotBytes || workspace.masks.size !== maskBytes) {
+      const pairBytes = 4 * Math.min(plan.instances, 2 * plan.slots, Math.floor(limit / 4));
+      if (!workspace || workspace.cells.size !== cellBytes || workspace.slotCells.size !== slotBytes ||
+          workspace.masks.size !== maskBytes || workspace.ids.size !== pairBytes) {
         const buffer = (label,size,extra=0) => device.createBuffer({label,size,usage:usage|extra});
         retire(workspace);
         workspace = {
@@ -198,7 +202,7 @@ export function createPacketCandidates(device, bundleStruct) {
           cells: buffer('candidate cells',cellBytes),
           slotCells: buffer('current address per particle',slotBytes),
           masks: buffer('bundle admission bits per cell',maskBytes),
-          ids: buffer('current bundle and slot pairs',slotBytes),
+          ids: buffer('current bundle and slot pairs',pairBytes),
           draw: buffer('bundle indirect draw and candidate count',24,GPUBufferUsage.INDIRECT|GPUBufferUsage.COPY_SRC),
         };
       }
@@ -227,7 +231,7 @@ export function createPacketCandidates(device, bundleStruct) {
       compute(1,[[0,grid],[1,cells],[7,bundleBuffer],[8,masks]],gatherWork.x,gatherWork.y);
       compute(2,[[0,grid],[2,slotCells],[3,ids],[4,draw],[5,material.particles],[6,material.options],[7,bundleBuffer],[8,masks]],indexWork.x,indexWork.y);
       compute(3,[[0,grid],[2,slotCells],[3,ids],[4,draw]],1);
-      return {ids,draw,cellCount,bytes:cellBytes+maskBytes+2*slotBytes+72};
+      return {ids,draw,cellCount,bytes:cellBytes+maskBytes+slotBytes+pairBytes+72};
     },
     dispose() { retire(workspace); workspace = null; },
   };
