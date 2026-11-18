@@ -671,10 +671,10 @@ export function createOpticalParticles(device,{transparent=false,indexedQuads=tr
    volumeState={...volumeState,reason:'Whole-volume history requires the native optical particle view'};
   }else{
    try{
-    const epoch=materialHandoff.reserveEpoch(),domain={dims:[...dims],worldFromFine:materialTransform};
+    const epoch=materialHandoff.reserveEpoch(),domain={origin:[-1,-1,-1],pitch:2/dims[0],dims:[...dims],worldFromFine:materialTransform};
     const fieldKey=JSON.stringify([epoch,materialStamp,domain.dims,materialTransform,residentVolume.revision,volumeSettings.width,volumeSettings.stride,volumeSettings.gain]);
     if(!residentOwner||residentKey!==fieldKey){clearVolume();residentOwner=residentVolume.create(device,volumeSettings,dims);residentKey=fieldKey;}
-    const field=residentOwner.encode(encoder,{particles,slots,options,fine,sourceOptions:source.uniform,domain,identity:{epoch,step,frame,materialStamp}},{refreshEvery:volumeSettings.refreshEvery,profileWrites});
+    const field=residentOwner.encode(encoder,{particles,slots,options,fine,sourceOptions:source.uniform,domain,identity:{epoch,step,frame,materialStamp}},{refreshEvery:volumeSettings.refreshEvery,cullFresh:volumeSettings.cullFresh,profileWrites});
     const next=field.views[volumeSettings.mode],includeIntrinsic=volumeSettings.presentation==='flame';
     if(installedVolume?.next!==next||installedVolume.includeIntrinsic!==includeIntrinsic){
      volumeView.set({...next,includeIntrinsic});installedVolume={next,includeIntrinsic};

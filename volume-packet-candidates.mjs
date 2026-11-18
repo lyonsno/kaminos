@@ -1,0 +1,218 @@
+import {PARTICLE_LIGHT_MATERIAL_WGSL} from './volume-optical-particles.mjs';
+
+export const PACKET_CANDIDATE_WGSL = /* wgsl */`
+struct CandidateGrid {
+  origin: vec4<f32>,
+  size: vec4<u32>,
+  dispatch: vec4<u32>,
+}
+struct Cell {
+  occupied: atomic<u32>,
+  transverse: atomic<u32>,
+  axial: atomic<u32>,
+}
+struct Draw {
+  vertices: u32,
+  instances: u32,
+  firstVertex: u32,
+  firstInstance: u32,
+  dense: u32,
+  candidates: atomic<u32>,
+}
+@group(0) @binding(0) var<uniform> grid: CandidateGrid;
+@group(0) @binding(1) var<storage, read_write> cells: array<Cell>;
+@group(0) @binding(2) var<storage, read_write> slotCells: array<u32>;
+@group(0) @binding(3) var<storage, read_write> candidates: array<u32>;
+@group(0) @binding(4) var<storage, read_write> draw: Draw;
+@group(0) @binding(5) var<storage, read> particles: array<Particle>;
+@group(0) @binding(6) var<uniform> material: Options;
+@group(0) @binding(7) var<storage, read> bundles: array<Bundle>;
+@group(0) @binding(8) var<storage, read_write> cellMasks: array<atomic<u32>>;
+
+fn cellIndex(q: vec3<u32>) -> u32 {
+  return q.x + grid.size.x * (q.y + grid.size.y * q.z);
+}
+
+@compute @workgroup_size(64)
+fn indexCurrent(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let slot = gid.x + gid.y * grid.dispatch.x;
+  if (slot >= arrayLength(&slotCells)) { return; }
+  slotCells[slot] = 0u;
+  let p = particles[slot];
+  if (p.anchor.w <= 0.0 || p.shape.w <= 0.0) { return; }
+
+  // Each particle has one address. Outliers are still tested by the raster.
+  // Its support is a projected rectangle (2.5 radii along each eigenaxis)
+  // and an independent acquired axial interval, not a 3D ellipsoid.
+  let q = (p.anchor.xyz - grid.origin.xyz) / grid.origin.w;
+  let r = abs(particleLightBaseRadius(p, material));
+  let transverse = 4.0 * max(r.x, max(r.y, r.z));
+  let axial = p.shape.w * 0.5;
+  let finite = all((bitcast<vec2<u32>>(vec2<f32>(transverse, axial)) &
+                    vec2<u32>(0x7f800000u)) != vec2<u32>(0x7f800000u));
+  var cell = grid.size.w;
+  if (finite && all(q >= vec3<f32>(0.0)) && all(q < vec3<f32>(grid.size.xyz))) {
+    cell = cellIndex(vec3<u32>(q));
+    atomicMax(&cells[cell].transverse, bitcast<u32>(transverse));
+    atomicMax(&cells[cell].axial, bitcast<u32>(axial));
+  }
+  slotCells[slot] = cell + 1u;
+  atomicStore(&cells[cell].occupied, 1u);
+}
+
+fn touchesBundle(cell: u32, b: Bundle) -> bool {
+  if (cell == grid.size.w) { return true; }
+  let xy = grid.size.x * grid.size.y;
+  let q = vec3<u32>(cell % grid.size.x, cell / grid.size.x % grid.size.y, cell / xy);
+  let p = grid.origin.xyz + (vec3<f32>(q) + 0.5) * grid.origin.w;
+  let delta = p - b.origin.xyz;
+  let halfCell = grid.origin.w * 0.5;
+  // Round the broad phase outward for cell addressing and the FP32 projections.
+  let magnitude = abs(p) + abs(b.origin.xyz);
+  let pad = 8e-6 * (1.0 + magnitude.x + magnitude.y + magnitude.z + grid.origin.w);
+  let lateral = bitcast<f32>(atomicLoad(&cells[cell].transverse)) + pad;
+  let x = abs(dot(delta, b.right.xyz));
+  let y = abs(dot(delta, b.up.xyz));
+  if (x > b.right.w + lateral + dot(abs(b.right.xyz), vec3<f32>(halfCell)) ||
+      y > b.up.w + lateral + dot(abs(b.up.xyz), vec3<f32>(halfCell))) { return false; }
+  let z = dot(delta, b.forward.xyz);
+  let depth = bitcast<f32>(atomicLoad(&cells[cell].axial)) + pad +
+              dot(abs(b.forward.xyz), vec3<f32>(halfCell));
+  return z + depth >= b.origin.w && z - depth <= b.forward.w;
+}
+
+@compute @workgroup_size(64)
+fn classifyCells(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let i = gid.x + gid.y * grid.dispatch.y;
+  let totalCells = grid.size.w + 1u;
+  let bundle = i / totalCells;
+  if (bundle >= grid.dispatch.z) { return; }
+  let cell = i % totalCells;
+  if (atomicLoad(&cells[cell].occupied) == 0u) { return; }
+  let b = bundles[bundle];
+  if (b.weight.x <= 0.0 || !touchesBundle(cell, b)) { return; }
+  atomicOr(&cellMasks[cell * grid.dispatch.w + bundle / 32u], 1u << (bundle % 32u));
+}
+
+@compute @workgroup_size(64)
+fn gatherCandidates(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let slot = gid.x + gid.y * grid.dispatch.x;
+  if (slot >= arrayLength(&slotCells)) { return; }
+  let key = slotCells[slot];
+  if (key == 0u) { return; }
+  // Each invocation reads one compact address and the admission bits for
+  // that cell. A dense cell never serializes its whole population in a lane.
+  for (var word = 0u; word < grid.dispatch.w; word++) {
+    var mask = atomicLoad(&cellMasks[(key - 1u) * grid.dispatch.w + word]);
+    while (mask != 0u) {
+      let bit = firstTrailingBit(mask);
+      let bundle = word * 32u + bit;
+      let i = atomicAdd(&draw.candidates, 1u);
+      if (i < arrayLength(&candidates)) { candidates[i] = bundle * arrayLength(&slotCells) + slot; }
+      mask &= mask - 1u;
+    }
+  }
+}
+
+@compute @workgroup_size(1)
+fn finishCandidateDraw() {
+  let count = atomicLoad(&draw.candidates);
+  let overflow = count > arrayLength(&candidates);
+  draw.vertices = 6u;
+  draw.instances = select(count, arrayLength(&slotCells) * grid.dispatch.z, overflow);
+  draw.firstVertex = 0u;
+  draw.firstInstance = 0u;
+  draw.dense = u32(overflow);
+}
+`;
+
+export const packetCandidateProfilePasses = Object.freeze([
+  'packet-current-index', 'packet-cell-cull', 'packet-candidates', 'packet-draw-count',
+]);
+
+export function createPacketCandidates(device, bundleStruct) {
+  const module = device.createShaderModule({
+    label: 'current particle support index',
+    code: PARTICLE_LIGHT_MATERIAL_WGSL + '\n' + bundleStruct + '\n' + PACKET_CANDIDATE_WGSL,
+  });
+  const pipelines = ['indexCurrent', 'classifyCells', 'gatherCandidates', 'finishCandidateDraw'].map(entryPoint =>
+    device.createComputePipeline({layout:'auto', compute:{module,entryPoint}}));
+  const usage = GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST;
+  let workspace = null;
+  function retire(old) {
+    if (!old) return;
+    queueMicrotask(() => device.queue.onSubmittedWorkDone().catch(()=>{}).then(() => {
+      for (const buffer of Object.values(old)) buffer.destroy();
+    }));
+  }
+  function dispatch(n) {
+    const groups = Math.ceil(n / 64), max = device.limits.maxComputeWorkgroupsPerDimension;
+    const x = Math.min(groups, max), y = Math.ceil(groups / x);
+    if (!(y <= max && x * y * 64 <= 0xffffffff)) throw Error('Particle candidate dispatch exceeds device capacity');
+    return {x,y};
+  }
+
+  return {
+    encode(encoder, {material, bundleBuffer, plan, profileWrites}) {
+      const domain = material.domain;
+      if (!domain?.origin?.every(v => Number.isFinite(Math.fround(v))) || domain.origin.length !== 3 ||
+          domain?.dims?.length !== 3 || !domain.dims.every(v => Number.isSafeInteger(v) && v > 0) ||
+          !(Math.fround(domain.pitch * 4) > 0 && Number.isFinite(Math.fround(domain.pitch * 4)))) {
+        throw Error('Current particle candidates require a finite material domain');
+      }
+      // Four Fine cells per bin is an initial broad-phase resolution. Every bin
+      // is queried conservatively, including the no-domain overflow address.
+      const dims = domain.dims.map(v => Math.ceil(v / 4));
+      const cellCount = dims.reduce((a,b) => a*b, 1) + 1;
+      const cellBytes = cellCount * 12;
+      const words = Math.ceil(plan.bundles / 32);
+      const maskBytes = cellCount * words * 4;
+      const limit = Math.min(device.limits.maxBufferSize, device.limits.maxStorageBufferBindingSize);
+      if (![cellBytes,maskBytes].every(n => Number.isSafeInteger(n) && n <= limit)) throw Error('Particle index exceeds device capacity');
+      const indexWork = dispatch(plan.slots);
+      const gatherWork = dispatch(cellCount * plan.bundles);
+      // One pool's worth of pair storage. More candidates always take the dense
+      // draw, so temporary memory stays linear without dropping contributors.
+      const slotBytes = plan.slots * 4;
+      if (!workspace || workspace.cells.size !== cellBytes || workspace.slotCells.size !== slotBytes || workspace.masks.size !== maskBytes) {
+        const buffer = (label,size,extra=0) => device.createBuffer({label,size,usage:usage|extra});
+        retire(workspace);
+        workspace = {
+          grid: device.createBuffer({label:'current candidate grid',size:48,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST}),
+          cells: buffer('candidate cells',cellBytes),
+          slotCells: buffer('current address per particle',slotBytes),
+          masks: buffer('bundle admission bits per cell',maskBytes),
+          ids: buffer('current bundle and slot pairs',slotBytes),
+          draw: buffer('bundle indirect draw and candidate count',24,GPUBufferUsage.INDIRECT|GPUBufferUsage.COPY_SRC),
+        };
+      }
+      const {grid,cells,slotCells,masks,ids,draw} = workspace;
+      const data = new ArrayBuffer(48);
+      new Float32Array(data).set([...domain.origin,domain.pitch*4]);
+      const u = new Uint32Array(data);
+      u.set([...dims,cellCount-1],4);
+      u.set([indexWork.x*64,gatherWork.x*64,plan.bundles,words],8);
+      device.queue.writeBuffer(grid,0,data);
+      encoder.clearBuffer(cells);
+      encoder.clearBuffer(masks);
+      encoder.clearBuffer(draw);
+      function compute(i, bindings, x, y=1) {
+        const pipeline = pipelines[i], label = packetCandidateProfilePasses[i];
+        const pass = encoder.beginComputePass({label,...profileWrites(label)});
+        pass.setPipeline(pipeline);
+        pass.setBindGroup(0,device.createBindGroup({
+          layout:pipeline.getBindGroupLayout(0),
+          entries:bindings.map(([binding,buffer])=>({binding,resource:{buffer}})),
+        }));
+        pass.dispatchWorkgroups(x,y);
+        pass.end();
+      }
+      compute(0,[[0,grid],[1,cells],[2,slotCells],[5,material.particles],[6,material.options]],indexWork.x,indexWork.y);
+      compute(1,[[0,grid],[1,cells],[7,bundleBuffer],[8,masks]],gatherWork.x,gatherWork.y);
+      compute(2,[[0,grid],[2,slotCells],[3,ids],[4,draw],[8,masks]],indexWork.x,indexWork.y);
+      compute(3,[[0,grid],[2,slotCells],[3,ids],[4,draw]],1);
+      return {ids,draw,cellCount,bytes:cellBytes+maskBytes+2*slotBytes+72};
+    },
+    dispose() { retire(workspace); workspace = null; },
+  };
+}

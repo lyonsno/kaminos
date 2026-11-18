@@ -1,5 +1,6 @@
 import {PARTICLE_LIGHT_MATERIAL_WGSL} from './volume-optical-particles.mjs';
 import {PARTICLE_KERNEL_WGSL,PARTICLE_STATE_WGSL} from './volume-particle-state.mjs';
+import {createPacketCandidates} from './volume-packet-candidates.mjs';
 
 const vector=(v,n,name)=>{if(!Array.isArray(v)||v.length!==n||v.some(x=>!Number.isFinite(x)||!Number.isFinite(Math.fround(x))))throw Error('Invalid bundle '+name);return [...v];};
 const count=(v,name)=>{if(!Number.isSafeInteger(v)||v<1||v>0xffffffff)throw Error('Invalid bundle '+name);return v;};
@@ -54,6 +55,8 @@ struct BundlePlan {image:vec4<u32>,count:vec4<u32>,solid:vec4<u32>}
 @group(0) @binding(8) var<storage,read_write> means:array<vec4<f32>>;
 @group(0) @binding(9) var<storage,read_write> incident:array<vec4<f32>>;
 @group(0) @binding(10) var<storage,read> triangles:array<vec4<f32>>;
+@group(0) @binding(11) var<storage,read> candidatePairs:array<u32>;
+@group(0) @binding(12) var<storage,read> candidateDraw:array<u32>;
 fn bundleTile(tile:u32)->vec2<u32>{return vec2<u32>(tile%plan.image.z,tile/plan.image.z);}
 fn bundleSlab(tau:f32)->f32{if(tau<1e-4){return 1.0-tau*.5+tau*tau/6.0;}return (1.0-exp(-tau))/tau;}
 fn bundleLayer(distance:f32,b:Bundle)->u32{return min(plan.image.w-1u,u32(clamp((distance-b.origin.w)/(b.forward.w-b.origin.w),0.0,1.0)*f32(plan.image.w)));}
@@ -62,6 +65,14 @@ fn bundlePlane(point:vec3<f32>,b:Bundle)->vec2<f32>{let d=point-b.origin.xyz;ret
 export const PACKET_BUNDLE_WGSL=DECL+/* wgsl */`
 struct Splat {@builtin(position) position:vec4<f32>,@location(0) local:vec2<f32>,@location(1) @interpolate(flat) optical:vec4<f32>,@location(2) @interpolate(flat) depth:f32,@location(3) @interpolate(flat) interval:f32,@location(4) @interpolate(flat) bundle:u32,@location(5) @interpolate(flat) layer:u32}
 @vertex fn splat(@builtin(vertex_index) vertex:u32,@builtin(instance_index) instance:u32)->Splat{
+ return splatPair(vertex,instance);
+}
+@vertex fn splatCandidates(@builtin(vertex_index) vertex:u32,@builtin(instance_index) instance:u32)->Splat{
+ var pair=instance;
+ if(candidateDraw[4]==0u){pair=candidatePairs[instance];}
+ return splatPair(vertex,pair);
+}
+fn splatPair(vertex:u32,instance:u32)->Splat{
  var out:Splat;out.position=vec4<f32>(2,2,2,1);
  let bi=instance/plan.count.x;let pi=instance%plan.count.x;let b=bundles[bi];if(b.weight.x<=0){return out;}let p=medium[pi];
  if(p.anchor.w<=0||p.shape.w<=0){return out;}
@@ -127,7 +138,7 @@ struct Splat {@builtin(position) position:vec4<f32>,@location(0) local:vec2<f32>
 
 export function createPacketBundleTransport(device){
  const module=device.createShaderModule({label:'finite orthographic particle bundles',code:PACKET_BUNDLE_WGSL});
- const pipelines={};let resources=null,key=null,receipt=null;const retired=[];
+ const pipelines={};let resources=null,key=null,receipt=null,candidates=null;const retired=[];
  const retire=items=>{retired.push(...items.filter(Boolean));queueMicrotask(()=>{const old=retired.splice(0);device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>old.forEach(b=>b.destroy()));});};
  function pipeline(entry){return pipelines[entry]??=device.createComputePipeline({label:'packet bundle '+entry,layout:'auto',compute:{module,entryPoint:entry}});}
  function bind(p,entries){return device.createBindGroup({layout:p.getBindGroupLayout(0),entries:entries.map(([binding,resource])=>({binding,resource:resource?.createView?resource.createView():{buffer:resource}}))});}
@@ -140,7 +151,7 @@ export function createPacketBundleTransport(device){
    device.createRenderPipelineAsync(solidDescriptor).then(p=>{pipelines.solid=p;}),
    device.createRenderPipelineAsync(splatDescriptor).then(p=>{pipelines.splat=p;}),
   ]);},
-  encode(encoder,{material,bundles,width,height,sections,receivers,membership=null,triangles=null,triangleCount=0,momentsOnly=false,profileWrites=()=>({})}){
+  encode(encoder,{material,bundles,width,height,sections,receivers,membership=null,triangles=null,triangleCount=0,momentsOnly=false,cull=false,profileWrites=()=>({})}){
    if(!material?.particles||!material.options||!material.identity)throw Error('Packet bundles require current native material');
    const list=Array.isArray(bundles),bundleCount=list?bundles.length:bundles?.count;
    const plan=packetBundlePlan(device.limits,{width,height,sections,bundles:bundleCount,slots:material.slots,receivers});
@@ -161,27 +172,38 @@ export function createPacketBundleTransport(device){
    if(membership&&membership.size<material.slots*4)throw Error('Bundle source membership is incomplete');
    if(list)device.queue.writeBuffer(r.bundles,0,packPacketBundles(bundles));
    device.queue.writeBuffer(r.plan,0,new Uint32Array([width,height,plan.columns,sections,material.slots,bundleCount,receivers,triangleCount,plan.solidColumns,plan.atlasWidth,plan.atlasHeight,0]));
+   const selection=cull?(candidates??=createPacketCandidates(device,PACKET_BUNDLE_STRUCT_WGSL)).encode(encoder,{material,bundleBuffer,plan,profileWrites}):null;
    pipelines.solid??=device.createRenderPipeline(solidDescriptor);
    let pass=encoder.beginRenderPass({label:'packet current finite solid visibility',...profileWrites('packet-solid'),colorAttachments:[],depthStencilAttachment:{view:r.solids.createView(),depthLoadOp:'clear',depthStoreOp:'store',depthClearValue:1}});
    if(triangleCount){pass.setPipeline(pipelines.solid);pass.setBindGroup(0,bind(pipelines.solid,[[2,bundleBuffer],[10,triangles]]));
     for(let bi=0;bi<bundleCount;bi++){const x=bi%plan.solidColumns*width,y=Math.floor(bi/plan.solidColumns)*height;pass.setViewport(x,y,width,height,0,1);pass.setScissorRect(x,y,width,height);pass.draw(triangleCount*3,1,0,bi);}}
    pass.end();
-   pipelines.splat??=device.createRenderPipeline(splatDescriptor);
+   const raster=selection
+    ?pipelines.splatCandidates??=device.createRenderPipeline({...splatDescriptor,vertex:{module,entryPoint:'splatCandidates'}})
+    :pipelines.splat??=device.createRenderPipeline(splatDescriptor);
    // The splat uses atlas extent from the uniform. Sampling the render target
    // itself would be a texture feedback hazard, so its dimensions are explicit.
    pass=encoder.beginRenderPass({label:'packet joint source and extinction slices',...profileWrites('packet-raster'),colorAttachments:[{view:r.atlas.createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}]});
-   pass.setPipeline(pipelines.splat);pass.setBindGroup(0,bind(pipelines.splat,[[0,material.particles],[1,material.options],[2,bundleBuffer],[3,membership??r.membership],[4,r.plan],[5,r.solids]]));pass.draw(6,plan.instances);pass.end();
+   const entries=[[0,material.particles],[1,material.options],[2,bundleBuffer],[3,membership??r.membership],[4,r.plan],[5,r.solids]];
+   if(selection)entries.push([11,selection.ids],[12,selection.draw]);
+   pass.setPipeline(raster);pass.setBindGroup(0,bind(raster,entries));
+   if(selection)pass.drawIndirect(selection.draw,0);else pass.draw(6,plan.instances);
+   pass.end();
    if(!momentsOnly)for(const [entry,entries,groups] of [
     ['integrate',[[4,r.plan],[6,r.atlas],[7,r.rays]],Math.ceil(plan.rays/64)],
     ['average',[[2,bundleBuffer],[4,r.plan],[7,r.rays],[8,r.means]],Math.ceil(bundleCount/64)],
     ['gather',[[2,bundleBuffer],[4,r.plan],[8,r.means],[9,r.incident]],Math.ceil(receivers/64)]]){
     const p=pipeline(entry);pass=encoder.beginComputePass({label:'packet bundle '+entry,...profileWrites('packet-'+entry)});pass.setPipeline(p);pass.setBindGroup(0,bind(p,entries));pass.dispatchWorkgroups(groups);pass.end();
    }
-   receipt={...plan,identity:{...material.identity},coverage:{...material.coverage},measure:'projected-base-support-with-acquired-axial-interval',visibility:triangleCount?'current-finite-triangle-depth':'empty-solid-scene',history:'fresh-only',source:'intrinsic-emission-only',quantity:momentsOnly?'ordered-emission-and-extinction-slabs':'spherical-mean-incoming-radiance',depth:'explicit-axial-distance; center-slice mixture',work:{submittedInstances:plan.instances,subrays:plan.rays,sectionReads:plan.rays*sections,solidTriangles:triangleCount*bundleCount}};
-   return {buffer:momentsOnly?null:r.incident,count:momentsOnly?0:receivers,identity:{...material.identity},receipt};
+   receipt={...plan,bytes:plan.bytes+(selection?.bytes??0),identity:{...material.identity},coverage:{...material.coverage},measure:'projected-base-support-with-acquired-axial-interval',visibility:triangleCount?'current-finite-triangle-depth':'empty-solid-scene',history:'fresh-only',source:'intrinsic-emission-only',quantity:momentsOnly?'ordered-emission-and-extinction-slabs':'spherical-mean-incoming-radiance',depth:'explicit-axial-distance; center-slice mixture',work:{
+    rasterSubmission:selection?'gpu-current-support-index':'dense',
+    submittedInstances:selection?null:plan.instances,denseInstances:plan.instances,
+    indexedSlots:selection?plan.slots:0,indexedCells:selection?.cellCount??0,
+    subrays:plan.rays,sectionReads:plan.rays*sections,solidTriangles:triangleCount*bundleCount}};
+   return {buffer:momentsOnly?null:r.incident,count:momentsOnly?0:receivers,identity:{...material.identity},submission:selection?.draw??null,receipt};
   },
   read:()=>receipt,
   get buffers(){return resources;},
-  dispose(){if(resources)retire(Object.values(resources));resources=null;key=null;receipt=null;},
+  dispose(){if(resources)retire(Object.values(resources));candidates?.dispose();candidates=null;resources=null;key=null;receipt=null;},
  };
 }

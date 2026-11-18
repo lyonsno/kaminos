@@ -1,18 +1,20 @@
 import {createResidentBeam,residentBeamPlan} from './particle-resident-beam.mjs';
 import {createPacketBundleTransport,finitePacketBundle} from './volume-packet-bundle.mjs';
+import {packetCandidateProfilePasses} from './volume-packet-candidates.mjs';
 
 export const RESIDENT_VOLUME_ROUTE='whole-fine-six-direction-resident-light';
 const directions=[['+X','-X'],['+Y','-Y'],['+Z','-Z']];
-export const residentVolumeProfilePasses=Object.freeze(['packet-solid','packet-raster',...directions.flat().flatMap(
+export const residentVolumeProfilePasses=Object.freeze([...packetCandidateProfilePasses,'packet-solid','packet-raster',...directions.flat().flatMap(
  d=>[...['seedTau','carry','refresh','bin','gather','resolve'].map(p=>d+' '+p),'merge '+d])]);
 
 const allowed={mode:['off','held','advected'],presentation:['smoke','flame']};
 export function residentVolumeSettings(patch={}){
- const next={mode:'off',presentation:'smoke',width:12,stride:3,refreshEvery:2,gain:1,...patch};
- for(const k of Object.keys(patch))if(!['mode','presentation','width','stride','refreshEvery','gain'].includes(k))throw Error('Unknown light history setting '+k);
+ const next={mode:'off',presentation:'smoke',width:12,stride:3,refreshEvery:2,gain:1,cullFresh:false,...patch};
+ for(const k of Object.keys(patch))if(!['mode','presentation','width','stride','refreshEvery','gain','cullFresh'].includes(k))throw Error('Unknown light history setting '+k);
  for(const [k,values] of Object.entries(allowed))if(!values.includes(next[k]))throw Error('Invalid light history '+k);
  residentBeamPlan({...next,sections:next.width});
  if(!Number.isSafeInteger(next.refreshEvery)||next.refreshEvery<0||!Number.isFinite(next.gain)||next.gain<0||!Number.isFinite(Math.fround(next.gain)))throw Error('Invalid light history cadence or gain');
+ if(typeof next.cullFresh!=='boolean')throw Error('Invalid light history culling setting');
  return next;
 }
 export function volumeRefreshDue(update,every){return update>0&&every>0&&(update-1)%every===0;}
@@ -74,7 +76,7 @@ export function createResidentVolume(device,requested,dims){
  const axis=new Float32Array([...emitter,halfWidth,...forward,far,...right,n,...up,n]);
  let latest=null,updates=0,disposed=false;
  return {
-  encode(encoder,material,{profileWrites=()=>({}),refreshEvery=s.refreshEvery}={}){
+  encode(encoder,material,{profileWrites=()=>({}),refreshEvery=s.refreshEvery,cullFresh=s.cullFresh}={}){
    if(disposed)throw Error('Resident volume is disposed');
    const id=material.identity;
    if(latest?.identity.step===id.step&&latest.identity.epoch===id.epoch&&latest.identity.materialStamp===id.materialStamp)return latest;
@@ -85,7 +87,7 @@ export function createResidentVolume(device,requested,dims){
    if(!seed&&seedAtlas){seedAtlas.dispose();seedAtlas=null;}
    if(seed||refresh){
     const transport=seed?seedAtlas:freshAtlas,width=seed?n:1;
-    receipt=transport.encode(encoder,{material,bundles:requests.map(q=>q.request),width,height:width,sections:n,receivers:1,momentsOnly:true,profileWrites}).receipt;
+    receipt=transport.encode(encoder,{material,bundles:requests.map(q=>q.request),width,height:width,sections:n,receivers:1,momentsOnly:true,cull:!seed&&cullFresh,profileWrites}).receipt;
     shared={atlas:transport.buffers.atlas,receipt};
    }
    const fields=owners.map((o,i)=>o.encode(encoder,material,{refresh,stepDelta,shared:shared?{...shared,index:i}:null,profileWrites:k=>profileWrites(sweeps[i].direction+' '+k)}));
@@ -102,7 +104,9 @@ export function createResidentVolume(device,requested,dims){
    updates=next;
    latest={identity,views:{held:view(combinedHeld),advected:view(combinedAdvected)},route:RESIDENT_VOLUME_ROUTE,
     work:{updates,stepDelta,directions:sweeps.map(s=>s.direction),seedRays:seed?plan.receiverRays*sweeps.length:0,
-     freshRays:refresh?sweeps.length:0,freshRasterInstances:receipt?.instances??0,freshAtlasPasses:receipt?1:0,
+     freshRays:refresh?sweeps.length:0,freshRasterInstances:receipt?receipt.work.submittedInstances:0,
+     freshRasterDenseInstances:receipt?.work.denseInstances??0,freshRasterSubmission:receipt?.work.rasterSubmission??null,
+     freshIndexSlots:receipt?.work.indexedSlots??0,freshAtlasPasses:receipt?1:0,
      freshSlots:fields.map(f=>f.work.refreshedSlot),retainedSections:plan.sampleCount*sweeps.length,receiverPoints:plan.points,
      reuseBufferBytes:fields.reduce((n,f)=>n+f.work.reuseBufferBytes,2*bytes+mapping.length*32),
      packetWorkspaceBytes:((seed?receipt:freshAtlas.read())?.bytes??0),readbacks:0}};
