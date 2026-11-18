@@ -33,6 +33,11 @@ fn cellIndex(q: vec3<u32>) -> u32 {
   return q.x + grid.size.x * (q.y + grid.size.y * q.z);
 }
 
+fn transverseBound(p: Particle) -> f32 {
+  let r = abs(particleLightBaseRadius(p, material));
+  return 4.0 * max(r.x, max(r.y, r.z));
+}
+
 @compute @workgroup_size(64)
 fn indexCurrent(@builtin(global_invocation_id) gid: vec3<u32>) {
   let slot = gid.x + gid.y * grid.dispatch.x;
@@ -45,8 +50,7 @@ fn indexCurrent(@builtin(global_invocation_id) gid: vec3<u32>) {
   // Its support is a projected rectangle (2.5 radii along each eigenaxis)
   // and an independent acquired axial interval, not a 3D ellipsoid.
   let q = (p.anchor.xyz - grid.origin.xyz) / grid.origin.w;
-  let r = abs(particleLightBaseRadius(p, material));
-  let transverse = 4.0 * max(r.x, max(r.y, r.z));
+  let transverse = transverseBound(p);
   let axial = p.shape.w * 0.5;
   let finite = all((bitcast<vec2<u32>>(vec2<f32>(transverse, axial)) &
                     vec2<u32>(0x7f800000u)) != vec2<u32>(0x7f800000u));
@@ -60,25 +64,29 @@ fn indexCurrent(@builtin(global_invocation_id) gid: vec3<u32>) {
   atomicStore(&cells[cell].occupied, 1u);
 }
 
-fn touchesBundle(cell: u32, b: Bundle) -> bool {
-  if (cell == grid.size.w) { return true; }
-  let xy = grid.size.x * grid.size.y;
-  let q = vec3<u32>(cell % grid.size.x, cell / grid.size.x % grid.size.y, cell / xy);
-  let p = grid.origin.xyz + (vec3<f32>(q) + 0.5) * grid.origin.w;
+fn touchesBundle(p: vec3<f32>, transverse: f32, axial: f32, halfCell: f32, b: Bundle) -> bool {
   let delta = p - b.origin.xyz;
-  let halfCell = grid.origin.w * 0.5;
   // Round the broad phase outward for cell addressing and the FP32 projections.
   let magnitude = abs(p) + abs(b.origin.xyz);
   let pad = 8e-6 * (1.0 + magnitude.x + magnitude.y + magnitude.z + grid.origin.w);
-  let lateral = bitcast<f32>(atomicLoad(&cells[cell].transverse)) + pad;
+  let lateral = transverse + pad;
   let x = abs(dot(delta, b.right.xyz));
   let y = abs(dot(delta, b.up.xyz));
   if (x > b.right.w + lateral + dot(abs(b.right.xyz), vec3<f32>(halfCell)) ||
       y > b.up.w + lateral + dot(abs(b.up.xyz), vec3<f32>(halfCell))) { return false; }
   let z = dot(delta, b.forward.xyz);
-  let depth = bitcast<f32>(atomicLoad(&cells[cell].axial)) + pad +
-              dot(abs(b.forward.xyz), vec3<f32>(halfCell));
+  let depth = axial + pad + dot(abs(b.forward.xyz), vec3<f32>(halfCell));
   return z + depth >= b.origin.w && z - depth <= b.forward.w;
+}
+
+fn cellTouches(cell: u32, b: Bundle) -> bool {
+  if (cell == grid.size.w) { return true; }
+  let xy = grid.size.x * grid.size.y;
+  let q = vec3<u32>(cell % grid.size.x, cell / grid.size.x % grid.size.y, cell / xy);
+  let p = grid.origin.xyz + (vec3<f32>(q) + 0.5) * grid.origin.w;
+  let transverse = bitcast<f32>(atomicLoad(&cells[cell].transverse));
+  let axial = bitcast<f32>(atomicLoad(&cells[cell].axial));
+  return touchesBundle(p, transverse, axial, grid.origin.w * 0.5, b);
 }
 
 @compute @workgroup_size(64)
@@ -90,7 +98,7 @@ fn classifyCells(@builtin(global_invocation_id) gid: vec3<u32>) {
   let cell = i % totalCells;
   if (atomicLoad(&cells[cell].occupied) == 0u) { return; }
   let b = bundles[bundle];
-  if (b.weight.x <= 0.0 || !touchesBundle(cell, b)) { return; }
+  if (b.weight.x <= 0.0 || !cellTouches(cell, b)) { return; }
   atomicOr(&cellMasks[cell * grid.dispatch.w + bundle / 32u], 1u << (bundle % 32u));
 }
 
@@ -100,16 +108,24 @@ fn gatherCandidates(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (slot >= arrayLength(&slotCells)) { return; }
   let key = slotCells[slot];
   if (key == 0u) { return; }
+  let cell = key - 1u;
   // Each invocation reads one compact address and the admission bits for
   // that cell. A dense cell never serializes its whole population in a lane.
+  // Material in rejected cells is never fetched by this pass.
   for (var word = 0u; word < grid.dispatch.w; word++) {
-    var mask = atomicLoad(&cellMasks[(key - 1u) * grid.dispatch.w + word]);
+    var mask = atomicLoad(&cellMasks[cell * grid.dispatch.w + word]);
+    if (mask == 0u) { continue; }
+    let p = particles[slot];
+    let transverse = transverseBound(p);
     while (mask != 0u) {
       let bit = firstTrailingBit(mask);
+      mask &= mask - 1u;
       let bundle = word * 32u + bit;
+      if (cell != grid.size.w && !touchesBundle(p.anchor.xyz, transverse, p.shape.w * 0.5, 0.0, bundles[bundle])) {
+        continue;
+      }
       let i = atomicAdd(&draw.candidates, 1u);
       if (i < arrayLength(&candidates)) { candidates[i] = bundle * arrayLength(&slotCells) + slot; }
-      mask &= mask - 1u;
     }
   }
 }
@@ -209,7 +225,7 @@ export function createPacketCandidates(device, bundleStruct) {
       }
       compute(0,[[0,grid],[1,cells],[2,slotCells],[5,material.particles],[6,material.options]],indexWork.x,indexWork.y);
       compute(1,[[0,grid],[1,cells],[7,bundleBuffer],[8,masks]],gatherWork.x,gatherWork.y);
-      compute(2,[[0,grid],[2,slotCells],[3,ids],[4,draw],[8,masks]],indexWork.x,indexWork.y);
+      compute(2,[[0,grid],[2,slotCells],[3,ids],[4,draw],[5,material.particles],[6,material.options],[7,bundleBuffer],[8,masks]],indexWork.x,indexWork.y);
       compute(3,[[0,grid],[2,slotCells],[3,ids],[4,draw]],1);
       return {ids,draw,cellCount,bytes:cellBytes+maskBytes+2*slotBytes+72};
     },
