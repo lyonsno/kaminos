@@ -1,13 +1,18 @@
 import {PARTICLE_LIGHT_MATERIAL_WGSL} from './volume-optical-particles.mjs';
 import {PARTICLE_STATE_WGSL} from './volume-particle-state.mjs';
 import {PACKET_BUNDLE_STRUCT_WGSL,packetBundlePlan,createPacketBundleTransport} from './volume-packet-bundle.mjs';
+import {createReceiverSuccession} from './volume-packet-receiver-succession.mjs';
 
 export function packetNetworkSettings(input={}){
- const s={mode:"fine-reference",view:"off",packetWidth:4,materialSubdivisions:1,receiverBlend:1.25,receiverPatch:.25,packetSmoothing:1,supportSigmas:3,receivers:8,sources:2,width:8,sections:16,nearDirections:6,receiverRadius:.6,nearRatio:.75,gain:1,...input};
- for(const key of Object.keys(s))if(!['mode','view','packetWidth','materialSubdivisions','receiverBlend','receiverPatch','packetSmoothing','supportSigmas','receivers','sources','width','sections','nearDirections','receiverRadius','nearRatio','gain'].includes(key))throw Error('Unknown packet network setting '+key);
+ const defaults={mode:"fine-reference",view:"off",packetWidth:4,materialSubdivisions:1,receiverBlend:1.25,receiverPatch:.25,packetSmoothing:1,supportSigmas:3,receivers:8,sources:2,width:8,sections:16,nearDirections:6,receiverRadius:.6,nearRatio:.75,gain:1,
+  receiverPlacement:'slot-ranges',receiverCore:.55,receiverShell:1,receiverHandoverSteps:3};
+ const s={...defaults,...input};
+ for(const key of Object.keys(s))if(!Object.hasOwn(defaults,key))throw Error('Unknown packet network setting '+key);
  if(!['off','packets','emission','extinction'].includes(s.view))throw Error('Unknown packet support view');
  if(!['fine-reference','material-packets'].includes(s.mode))throw Error('Unknown packet network mode');
- for(const key of ['packetWidth','materialSubdivisions','receivers','sources','width','sections','nearDirections'])if(!Number.isSafeInteger(s[key])||s[key]<1||s[key]>0xffffffff)throw Error('Invalid packet network '+key);
+ if(!['slot-ranges','succession'].includes(s.receiverPlacement))throw Error('Unknown receiver placement');
+ if(!(Math.fround(s.receiverCore)>0&&Math.fround(s.receiverCore)<Math.fround(s.receiverShell)&&s.receiverShell<=1))throw Error('Receiver core and shell must have 0 < core < shell ≤ 1');
+ for(const key of ['packetWidth','materialSubdivisions','receivers','sources','width','sections','nearDirections','receiverHandoverSteps'])if(!Number.isSafeInteger(s[key])||s[key]<1||s[key]>0xffffffff)throw Error('Invalid packet network '+key);
  for(const key of ['receiverRadius','nearRatio','receiverBlend','receiverPatch','packetSmoothing','supportSigmas'])if(!(s[key]>0&&Number.isFinite(Math.fround(s[key]))))throw Error('Invalid packet network '+key);
  if(!(s.gain>=0&&Number.isFinite(Math.fround(s.gain))))throw Error('Invalid packet network gain');return s;
 }
@@ -99,37 +104,81 @@ fn packetPower(p:Particle)->f32{
 export function createPacketNetwork(device){
  const module=device.createShaderModule({label:'current material packet network',code:PACKET_NETWORK_WGSL}),transport=createPacketBundleTransport(device),pipelines={};
  let resources=null,key=null,latest=null,epoch=null;const retire=items=>queueMicrotask(()=>device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>items.forEach(b=>b.destroy())));
+ let succession=null,successionField=null,sourceKey=null;
  let preparing=null;
  return {
   prepare(){return preparing??=Promise.all([transport.prepare(),...['sourceSeeds','assignSources','refitSources','receiverSeeds','buildBundles'].map(async entry=>{pipelines[entry]=await device.createComputePipelineAsync({label:'packet network '+entry,layout:'auto',compute:{module,entryPoint:entry}});})]);},
   encode(encoder,{material,settings,triangles=null,triangleCount=0}){
    if(!material.birthGenerations||material.birthGenerations.size<material.slots*4)throw Error('Packet anchors require current primary birth generations');
-   const s=packetNetworkSettings(settings),count=s.receivers*s.sources*s.nearDirections;
-   const plan=packetBundlePlan(device.limits,{width:s.width,height:s.width,sections:s.sections,bundles:count,slots:material.slots,receivers:s.receivers});
+   const s=packetNetworkSettings(settings), useSuccession=s.receiverPlacement==='succession';
+   const receiverCount=s.receivers*(useSuccession?2:1);
+   const count=receiverCount*s.sources*s.nearDirections;
+   const plan=packetBundlePlan(device.limits,{width:s.width,height:s.width,sections:s.sections,bundles:count,slots:material.slots,receivers:receiverCount});
    if(Math.max(s.sources,s.receivers)>device.limits.maxComputeWorkgroupsPerDimension)throw Error('Packet network exceeds effective reduction dispatch');
-   const next=JSON.stringify([material.slots,s.receivers,s.sources]);
-   if(next!==key){if(resources)retire(Object.values(resources));const storage=GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC;
-    resources={params:device.createBuffer({size:32,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST}),seeds:device.createBuffer({size:s.sources*16,usage:storage}),membership:device.createBuffer({size:material.slots*4,usage:storage}),groups:device.createBuffer({size:s.sources*48,usage:storage}),centers:device.createBuffer({size:s.receivers*16,usage:storage}),bundles:device.createBuffer({size:count*96,usage:storage}),sourceKeys:device.createBuffer({size:s.sources*8,usage:storage}),receiverKeys:device.createBuffer({size:s.receivers*8,usage:storage})};key=next;epoch=null;}
-   if(epoch!==material.identity.epoch){encoder.clearBuffer(resources.sourceKeys);encoder.clearBuffer(resources.receiverKeys);epoch=material.identity.epoch;}
+   const next=JSON.stringify([material.slots,receiverCount,s.sources,useSuccession]);
+   const nextSource=JSON.stringify([material.slots,s.sources,material.identity.epoch]);
+   if(next!==key){const previous=resources;const storage=GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC;
+    resources={params:device.createBuffer({size:32,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST}),seeds:device.createBuffer({size:s.sources*16,usage:storage}),membership:device.createBuffer({size:material.slots*4,usage:storage}),groups:device.createBuffer({size:s.sources*48,usage:storage}),centers:device.createBuffer({size:receiverCount*16,usage:storage}),bundles:device.createBuffer({size:count*96,usage:storage}),sourceKeys:device.createBuffer({size:s.sources*8,usage:storage}),...(!useSuccession?{receiverKeys:device.createBuffer({size:s.receivers*8,usage:storage})}:{})};key=next;epoch=null;
+    if(previous){
+     if(sourceKey===nextSource)encoder.copyBufferToBuffer(previous.sourceKeys,0,resources.sourceKeys,0,resources.sourceKeys.size);
+     retire(Object.values(previous));
+    }
+   }
+   if(sourceKey!==nextSource){encoder.clearBuffer(resources.sourceKeys);sourceKey=nextSource;}
+   if(epoch!==material.identity.epoch){if(resources.receiverKeys)encoder.clearBuffer(resources.receiverKeys);epoch=material.identity.epoch;}
    if(resources.bundles.size!==count*96){retire([resources.bundles]);resources.bundles=device.createBuffer({size:count*96,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC});}
-   const r=resources,data=new ArrayBuffer(32);new Uint32Array(data).set([material.slots,s.receivers,s.sources,s.nearDirections]);new Float32Array(data).set([s.receiverRadius,s.nearRatio,material.domain.pitch,s.gain],4);device.queue.writeBuffer(r.params,0,data);
+   const r=resources,data=new ArrayBuffer(32);new Uint32Array(data).set([material.slots,receiverCount,s.sources,s.nearDirections]);new Float32Array(data).set([s.receiverRadius,s.nearRatio,material.domain.pitch,s.gain],4);device.queue.writeBuffer(r.params,0,data);
+   let overlap=null;
+   if(useSuccession){
+    succession??=createReceiverSuccession(device,retire);
+    overlap=succession.select(encoder,material,s,r.centers);
+   }else if(succession){succession.dispose();succession=null;}
    for(const [entry,entries,groups] of [
     ['sourceSeeds',[[0,material.particles],[1,material.options],[2,r.params],[3,r.seeds],[8,material.birthGenerations],[9,r.sourceKeys]],s.sources],
     ['assignSources',[[0,material.particles],[1,material.options],[2,r.params],[3,r.seeds],[4,r.membership]],Math.ceil(material.slots/64)],
     ['refitSources',[[0,material.particles],[1,material.options],[2,r.params],[4,r.membership],[5,r.groups]],s.sources],
-    ['receiverSeeds',[[0,material.particles],[1,material.options],[2,r.params],[6,r.centers],[8,material.birthGenerations],[10,r.receiverKeys]],s.receivers],
+    ...(!useSuccession?[['receiverSeeds',[[0,material.particles],[1,material.options],[2,r.params],[6,r.centers],[8,material.birthGenerations],[10,r.receiverKeys]],s.receivers]]:[]),
     ['buildBundles',[[2,r.params],[5,r.groups],[6,r.centers],[7,r.bundles]],Math.ceil(count/64)]]){
     const p=pipelines[entry]??=device.createComputePipeline({label:'packet network '+entry,layout:'auto',compute:{module,entryPoint:entry}});
     const bind=device.createBindGroup({layout:p.getBindGroupLayout(0),entries:entries.map(([binding,buffer])=>({binding,resource:{buffer}}))});
     const pass=encoder.beginComputePass({label:'packet network '+entry});pass.setPipeline(p);pass.setBindGroup(0,bind);pass.dispatchWorkgroups(groups);pass.end();
    }
-   const result=transport.encode(encoder,{material,bundles:{buffer:r.bundles,count},membership:r.membership,width:s.width,height:s.width,sections:s.sections,receivers:s.receivers,triangles,triangleCount});
+   const result=transport.encode(encoder,{material,bundles:{buffer:r.bundles,count},membership:r.membership,width:s.width,height:s.width,sections:s.sections,receivers:receiverCount,triangles,triangleCount});
+   if(overlap)overlap.finish(result.buffer);
    const domain=material.domain,extent=domain.dims.map(n=>n*domain.pitch),pitch=s.receiverRadius;
-   latest={...result.receipt,settings:s,sourcePartition:'current disjoint membership around surviving primary anchors; every source member retained',receivers:'primary epoch/slot/birth anchors; reseeded on replacement or loss',near:s.nearDirections===6?'six-axis spherical quadrature inside broad source support':'fixed spherical Fibonacci quadrature inside broad source support',far:'orthographic source footprint; finite rectangular solid angle',sourceCoverage:'current admitted optical particles only',temporalReuse:false,persistentAnchors:true,bytes:plan.bytes+Object.values(r).reduce((sum,b)=>sum+b.size,0)};
-   return {identity:result.identity,centers:r.centers,radiance:result.buffer,receiverCount:s.receivers,grid:{origin:[...domain.origin],dims:extent.map(n=>Math.ceil(n/pitch)),pitch},maxAgeSteps:1,receipt:latest};
+   latest={...result.receipt,settings:s,sourcePartition:'current disjoint membership around surviving primary anchors; every source member retained',receivers:useSuccession?'current carriers assigned to fixed sites with paired handover':'primary epoch/slot/birth anchors; reseeded on replacement or loss',near:s.nearDirections===6?'six-axis spherical quadrature inside broad source support':'fixed spherical Fibonacci quadrature inside broad source support',far:'orthographic source footprint; finite rectangular solid angle',sourceCoverage:'current admitted optical particles only',temporalReuse:false,persistentAnchors:true,bytes:plan.bytes+(succession?.bytes??0)+Object.values(r).reduce((sum,b)=>sum+b.size,0)};
+   if(useSuccession)latest.receiverSuccession={sites:s.receivers,submittedDonorSlots:receiverCount,candidateSlotsChecked:material.slots};
+   successionField=overlap?{identity:result.identity,centers:r.centers,radiance:result.buffer,weights:overlap.weights,count:receiverCount}:null;
+   return {identity:result.identity,centers:r.centers,radiance:result.buffer,...(overlap?{weights:overlap.weights}:{}),receiverCount,grid:{origin:[...domain.origin],dims:extent.map(n=>Math.ceil(n/pitch)),pitch},maxAgeSteps:1,receipt:latest};
+  },
+  async inspect(){
+   const field=successionField;
+   if(!field)return {available:false,reason:'No current receiver succession solve'};
+   const arrays=[[field.centers,16],[field.radiance,16],[field.weights,4]];
+   const copies=arrays.map(([,stride])=>device.createBuffer({size:stride*field.count,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST}));
+   try{
+    const encoder=device.createCommandEncoder({label:'inspect packet receiver handover'});
+    copies.forEach((copy,i)=>encoder.copyBufferToBuffer(arrays[i][0],0,copy,0,copy.size));
+    device.queue.submit([encoder.finish()]);
+    const [centers,radiance,weights]=await Promise.all(copies.map(async buffer=>{
+     await buffer.mapAsync(GPUMapMode.READ);
+     return new Float32Array(buffer.getMappedRange().slice(0));
+    }));
+    const sites=[];
+    for(let i=0;i<field.count;i+=2){
+     const donors=[];
+     for(let j=i;j<i+2;j++){
+      const at=j*4;
+      donors.push({position:Array.from(centers.subarray(at,at+3)),radius:centers[at+3],weight:weights[j],
+       incidentValid:centers[at+3]>0&&radiance[at+3]>0});
+     }
+     sites.push({site:i/2,primary:donors[0],incoming:donors[1]});
+    }
+    return {available:true,kind:'receiver-succession',identity:field.identity,sites};
+   }finally{copies.forEach(buffer=>buffer.destroy());}
   },
   read:()=>latest,
   get buffers(){return {...resources,...(transport.buffers?{transport:transport.buffers}:{})};},
-  dispose(){transport.dispose();if(resources)retire(Object.values(resources));resources=null;key=null;latest=null;epoch=null;},
+  dispose(){transport.dispose();succession?.dispose();succession=null;successionField=null;if(resources)retire(Object.values(resources));resources=null;key=null;sourceKey=null;latest=null;epoch=null;},
  };
 }
