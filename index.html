@@ -23592,10 +23592,11 @@ async function createMountedPromptFire({root,body,burning,signal}) {
     // Exercise the actual cold native workload before admission. The source is
     // off and the prompt consumer is inactive, so no text fuel is consumed.
     host.setSimulationPaused(true);host.resetThermalExperimentFluid();host.setSimulationPaused(false);
-    const prepareSurface=async()=>{
+    const prepareSurface=async({compile=true}={})=>{
       signal.throwIfAborted();if(state.active)throw Error('Cannot warm an active workshop surface');
       setEmission(false);
-      await sceneLightingPreparation.request();
+      if(compile)await sceneLightingPreparation.request();
+      else await sceneLightingPreparation.whenIdle();
       const before=host.debugState().frameCount;
       host.setCanvasPresentationSuppressed(true);
       try {

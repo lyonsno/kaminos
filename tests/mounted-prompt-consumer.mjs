@@ -138,7 +138,7 @@ test('in-flight thermal construction is reused on admission and disposed before 
 test('admitted text activates the prepared shared field and Return only suspends its clock',async()=>{
  const f=fixture();let amount=1,now=0,resets=0;f.workshop.read=()=>({amount});const calls=[];
  const fire={prepare:async()=>calls.push('prepared'),setActive:async v=>calls.push(['active',v]),present:async v=>calls.push(['visible',v]),setEmission:v=>calls.push(['emitting',v]),dispose:async()=>{},read:()=>({phase:'prepared'})};
- const consumer=await createMountedGenerationPrompt({...f,signal:new AbortController().signal,createFire:async()=>fire,clock:()=>now,createBurnBody:async()=>({setMounted(){},reset(){resets++;},read:()=>({steps:0}),dispose(){}})});
+ const consumer=await createMountedGenerationPrompt({...f,signal:new AbortController().signal,createFire:async()=>fire,clock:()=>now,createBurnBody:async()=>({replaceSurface(){},setMounted(){},reset(){resets++;},read:()=>({steps:0}),dispose(){}})});
  try{const work=consumer.prepare({prompt:'BURN'});await tick();const w=f.worker();w.onmessage({data:{id:w.last.id,attributes:{position:{array:new Float32Array([0,0,0,1,0,0,0,1,.1]),itemSize:3,normalized:false}},groups:[],mask:{},samples:[],surface:[]}});await work;
  await consumer.prepare({prompt:'BURN',request:{id:'first',prompt:'BURN'}});f.frameTick();await consumer.setActive(true);assert.equal(resets,1);now=1000;f.frameTick();amount=.5;f.frameTick();assert.deepEqual(calls.filter(x=>Array.isArray(x)&&x[0]==='visible').at(-1),['visible',false],'partial transition must withdraw native binary-shadow fire before fading');amount=0;f.frameTick();const before=consumer.debugState().burner.elapsedSeconds;now=9000;f.frameTick();assert.equal(consumer.debugState().burner.elapsedSeconds,before);amount=1;f.frameTick();assert.equal(resets,1);assert.ok(calls.some(x=>Array.isArray(x)&&x[0]==='emitting'&&x[1]));
  }finally{await await consumer.dispose();}
@@ -165,7 +165,7 @@ test('real mounted consumer releases finished admission and prepares the next ed
  const fire={prepare:async()=>{},setActive:async()=>{},present:async()=>{},setEmission(){},dispose:async()=>{},read:()=>({})};
  const answer=async()=>{await tick();const w=f.worker();w.onmessage({data:{id:w.last.id,attributes:{position:{array:new Float32Array([0,0,0,1,0,0,0,1,.1]),itemSize:3,normalized:false}},groups:[],mask:{},samples:[],surface:[]}});await tick();};
  try{
-  view=installGenerationFlame({document:f.document,slot:new Element(),createRenderer:(_,options)=>createMountedGenerationPrompt({...f,...options,clock:()=>now,createFire:async()=>fire,createBurnBody:async()=>({setMounted(){},reset(){},read:()=>({}),dispose(){}})})});
+  view=installGenerationFlame({document:f.document,slot:new Element(),createRenderer:(_,options)=>createMountedGenerationPrompt({...f,...options,clock:()=>now,createFire:async()=>fire,createBurnBody:async()=>({replaceSurface(){},setMounted(){},reset(){},read:()=>({}),dispose(){}})})});
   await view.setVisible(true);f.frameTick();f.input.value='FIRST';const request={id:'first',prompt:'FIRST'};
   view.render({status:'loading',request});await answer();view.render({status:'running',request});await tick();f.frameTick();
   view.render({status:'complete',request});await tick();now=8000;f.frameTick();await tick();
@@ -179,11 +179,25 @@ test('real mounted consumer releases finished admission and prepares the next ed
 test('Return settles the pending finish waiter but preserves the admitted burn for re-entry',async()=>{
  const f=fixture();let now=0;
  const fire={prepare:async()=>{},setActive:async()=>{},present:async()=>{},setEmission(){},dispose:async()=>{},read:()=>({})};
- const consumer=await createMountedGenerationPrompt({...f,signal:new AbortController().signal,clock:()=>now,createFire:async()=>fire,createBurnBody:async()=>({setMounted(){},reset(){},read:()=>({}),dispose(){}})});
+ const consumer=await createMountedGenerationPrompt({...f,signal:new AbortController().signal,clock:()=>now,createFire:async()=>fire,createBurnBody:async()=>({replaceSurface(){},setMounted(){},reset(){},read:()=>({}),dispose(){}})});
  try{
   const prepare=consumer.prepare({prompt:'FIRST',request:{id:'first',prompt:'FIRST'}});await tick();const w=f.worker();w.onmessage({data:{id:w.last.id,attributes:{position:{array:new Float32Array([0,0,0,1,0,0,0,1,.1]),itemSize:3,normalized:false}},groups:[],mask:{},samples:[],surface:[]}});await prepare;
   f.frameTick();await consumer.setActive(true);let settled=false;consumer.finish().then(()=>{settled=true;});
   now=1000;f.frameTick();await consumer.setActive(false);await tick();assert.equal(settled,true,'hidden view must not leave an unresolvable finish waiter');
   assert.equal(consumer.debugState().request,'first');await consumer.setActive(true);const finished=consumer.finish();now=9000;f.frameTick();await finished;assert.equal(consumer.debugState().request,null);
+ }finally{await consumer.dispose();}
+});
+test('typing replaces voxel data on one prewarmed body without requesting lighting compilation',async()=>{
+ const f=fixture();let built=0,replaced=0,warmed=0;const surfaceWarm=[];const body={replaceSurface(){replaced++;},setMounted(){},reset(){},read:()=>({}),dispose(){}};
+ const fire={prepareSurface:async options=>{surfaceWarm.push(options);},prepare:async()=>{warmed++;},setActive:async()=>{},present:async()=>{},setEmission(){},dispose:async()=>{},read:()=>({})};
+ const consumer=await createMountedGenerationPrompt({...f,signal:new AbortController().signal,createBurnBody:async()=>{built++;return body;},createFire:async()=>fire});
+ const answer=async(text)=>{const work=consumer.prepare({prompt:text});await tick();const w=f.worker();w.onmessage({data:{id:w.last.id,attributes:{position:{array:new Float32Array([0,0,0,1,0,0,0,1,.1]),itemSize:3,normalized:false}},groups:[],mask:{},samples:[],surface:[]}});await work;};
+ try{
+  assert.equal(built,1,'initial workshop preparation must create the reusable body before typing');
+  await answer('FIRST');await answer('SECOND');
+  await consumer.prepare({prompt:'SECOND',request:{id:'admission',prompt:'SECOND'}});
+  assert.deepEqual(surfaceWarm,[{compile:false},{compile:false}],'changed voxel data warms without scene compile; admission performs no warmup');
+  await consumer.prepare({prompt:''});
+  assert.equal(built,1);assert.ok(replaced>=3);assert.equal(warmed,1);assert.equal(consumer.thermalBody,body,'empty drafts retain the warmed resources');
  }finally{await consumer.dispose();}
 });

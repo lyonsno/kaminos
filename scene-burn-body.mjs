@@ -182,6 +182,13 @@ export async function createSceneBurnBody({entry,renderer,scene,ground,onFrame,k
     }));
     return {
       object:entry.object,
+      replaceSurface({bounds,surfaceMask}){
+        if(disposed)throw Error('Burn body is disposed');
+        if(structure.read().enabled||structure.read().required||fracture.active||proxyOriginals.size)throw Error('Surface replacement requires an unfractured body without LOD proxies');
+        field.replaceSurface(bounds,surfaceMask);debris.replaceSurface();
+        for(const binding of bindings)binding.setBounds(bounds);elapsed=0;
+        for(const binding of bindings)binding.update(0);
+      },
       setSettings:settings=>{void structure.configure(settings?.structure===true);void fracture.configure(settings?.fracture===true);},
       get requiresSubmittedSteps(){return fracture.active;},
       afterSubmit:frame=>fracture.afterSubmit(frame),

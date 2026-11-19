@@ -161,14 +161,17 @@ export async function createLiveLogHeatGpu({renderer,mesh,bounds,surfaceGeometry
   if(Math.min(size.x,size.y,size.z)<=0)throw Error('Live log requires volumetric mesh bounds');
   // A worker may classify this exact geometry/bounds before activation. Reuse
   // its resident material inputs; do not silently replace malformed preparation.
-  if(preparedMask!==null){
+  function checkMask(mask){
     const cells=LIVE_LOG_GRID**3;
-    if(!(preparedMask instanceof Uint32Array)||preparedMask.length!==cells||!preparedMask.some(Boolean)||preparedMask.some(v=>v>1)
-      ||!(preparedMask.samples instanceof Float32Array)||preparedMask.samples.length!==cells*8||!preparedMask.samples.every(Number.isFinite)
-      ||(disintegrate&&(!(preparedMask.surface instanceof Uint32Array)||preparedMask.surface.length!==cells||!preparedMask.surface.some(Boolean)||preparedMask.surface.some((v,i)=>v>1||v>preparedMask[i]))))throw Error('Invalid prepared thermal surface mask');
+    if(!(mask instanceof Uint32Array)||mask.length!==cells||mask.some(v=>v>1)
+      ||!(mask.samples instanceof Float32Array)||mask.samples.length!==cells*8||!mask.samples.every(Number.isFinite)
+      ||(disintegrate&&(!(mask.surface instanceof Uint32Array)||mask.surface.length!==cells||mask.surface.some((v,i)=>v>1||v>mask[i]))))throw Error('Invalid prepared thermal surface mask');
   }
-  const surfaceMask=preparedMask??createLogSurfaceMask(surfaceGeometry??mesh.geometry,bounds,LIVE_LOG_GRID,{filled:disintegrate});
-  const summaryCellCount=surfaceMask.reduce((a,b)=>a+b,0);
+  if(preparedMask!==null){checkMask(preparedMask);if(!preparedMask.some(Boolean))throw Error('Invalid prepared thermal surface mask');}
+  let surfaceMask=preparedMask??createLogSurfaceMask(surfaceGeometry??mesh.geometry,bounds,LIVE_LOG_GRID,{filled:disintegrate});
+  let summaryCellCount=surfaceMask.reduce((a,b)=>a+b,0);
+  // Bounds are resident uniforms so a new glyph layout does not replace shaders.
+  bounds=bounds.clone();
   const owned=[];let disposed=false;
   try {
     const module=device.createShaderModule({label:'live log local heat',code:liveLogHeatWGSL(disintegrate)});
@@ -195,7 +198,8 @@ export async function createLiveLogHeatGpu({renderer,mesh,bounds,surfaceGeometry
     const summaryGroups=buffers.map(buffer=>device.createBindGroup({layout:summaryPipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer}},{binding:1,resource:summaryTexture.createView()},{binding:2,resource:{buffer:surface}}]}));
     const wrapper=new THREE.ExternalTexture(texture);wrapper.is3DTexture=true;wrapper.image={width:LIVE_LOG_GRID,height:LIVE_LOG_GRID,depth:LIVE_LOG_GRID};
     wrapper.type=THREE.HalfFloatType;wrapper.format=THREE.RGBAFormat;wrapper.colorSpace=THREE.NoColorSpace;wrapper.minFilter=THREE.LinearFilter;wrapper.magFilter=THREE.LinearFilter;wrapper.generateMipmaps=false;
-    const p=THREE.TSL.positionGeometry.sub(THREE.TSL.vec3(...bounds.min.toArray())).div(THREE.TSL.vec3(...size.toArray()));
+    const loNode=THREE.TSL.uniform(bounds.min.clone()),sizeNode=THREE.TSL.uniform(size.clone());
+    const p=THREE.TSL.positionGeometry.sub(loNode).div(sizeNode);
     const stateNode=THREE.TSL.texture3D(wrapper,p);
     let index=0,steps=0,seconds=0,lastSource=null,generation=1;let cache=new WeakMap();
     function writeParams(source){
@@ -243,6 +247,15 @@ export async function createLiveLogHeatGpu({renderer,mesh,bounds,surfaceGeometry
         const summaryPass=encoder.beginComputePass({label:'live log GPU burn summary'});summaryPass.setPipeline(summaryPipeline);summaryPass.setBindGroup(0,summaryGroups[index]);summaryPass.dispatchWorkgroups(1);summaryPass.end();
         steps++;seconds+=source.dt;lastSource={allocationId:source.allocationId,simStepCount:source.simStepCount,dimensions:[...source.dimensions],transform:structuredClone(source.transform),localToVolume:matrix.toArray()};
       },reset,
+      replaceSurface(nextBounds,mask){
+        if(disposed)throw Error('Live log is disposed');
+        if(regionMotion)throw Error('Cannot replace a regionally moving material surface');
+        checkMask(mask);const nextSize=nextBounds.getSize(new THREE.Vector3());
+        if(![...nextBounds.min.toArray(),...nextSize.toArray()].every(Number.isFinite)||Math.min(...nextSize.toArray())<=0)throw Error('Live log requires volumetric mesh bounds');
+        surfaceMask=mask;summaryCellCount=mask.reduce((a,b)=>a+b,0);bounds.copy(nextBounds);size.copy(nextSize);
+        loNode.value.copy(bounds.min);sizeNode.value.copy(size);
+        device.queue.writeBuffer(surface,0,mask);device.queue.writeBuffer(samples,0,mask.samples);reset();
+      },
       encodeGasSource(encoder,source,target){
         writeParams(source);if(!target.enabled)return;
         const group=device.createBindGroup({layout:gasPipeline.getBindGroupLayout(0),entries:[{binding:2,resource:{buffer:buffers[index]}},{binding:4,resource:{buffer:params}},...(!disintegrate?[{binding:5,resource:{buffer:samples}}]:[]),{binding:6,resource:source.collision.createView()},{binding:7,resource:{buffer:target.accumulation}},

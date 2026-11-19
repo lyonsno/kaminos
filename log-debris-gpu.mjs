@@ -58,7 +58,8 @@ function external(renderer,texture){
 }
 
 export async function createLogDebrisGpu({renderer,field,ground,onFrame=null,thermalControls=null}){
- const device=field.device,{mesh,bounds,dimensions,initial,surface}=field.residentState(),n=dimensions[0],count=n**3;
+ const device=field.device,{mesh,bounds,dimensions}=field.residentState(),n=dimensions[0],count=n**3;
+ let {initial,surface}=field.residentState();
  if(!field.disintegrate||!surface)throw Error('Debris requires a filled consumable material field');
  if(!ground||![...ground.center,ground.height,ground.radius].every(Number.isFinite)||ground.radius<=0)throw Error('Debris requires a finite ground disc');
  const owned=[],wrappers=[];let disposed=false,steps=0,unsubscribe=null,regionMotion=null,oldPoses=null,ownerImage=null;
@@ -86,8 +87,9 @@ export async function createLogDebrisGpu({renderer,field,ground,onFrame=null,the
   const capMaterial=new THREE.MeshStandardNodeMaterial({color:0x19130e,roughness:.72,alphaTest:.5});owned.push(capMaterial);
   const x=instanceIndex.mod(n).toFloat(),y=instanceIndex.div(n).mod(n).toFloat(),z=instanceIndex.div(n*n).toFloat();
   const uv=vec3(x,y,z).add(.5).div(n),cellSize=bounds.getSize(new THREE.Vector3()).divideScalar(n);
-  const local=vec3(...bounds.min.toArray()).add(uv.mul(vec3(...bounds.getSize(new THREE.Vector3()).toArray())));
-  const originalPosition=positionGeometry.mul(vec3(...cellSize.toArray())).add(local);
+  const loNode=THREE.TSL.uniform(bounds.min.clone()),sizeNode=THREE.TSL.uniform(bounds.getSize(new THREE.Vector3()));
+  const local=loNode.add(uv.mul(sizeNode));
+  const originalPosition=positionGeometry.mul(sizeNode.div(n)).add(local);
   capMaterial.positionNode=originalPosition;
   const initialTexture=new THREE.Data3DTexture(Uint16Array.from({length:count*4},(_,i)=>i%4===3&&initial[i>>2]&&!surface[i>>2]?0x3c00:0),n,n,n);
   initialTexture.format=THREE.RGBAFormat;initialTexture.type=THREE.HalfFloatType;initialTexture.minFilter=initialTexture.magFilter=THREE.NearestFilter;initialTexture.needsUpdate=true;owned.push(initialTexture);
@@ -137,6 +139,12 @@ export async function createLogDebrisGpu({renderer,field,ground,onFrame=null,the
     values.set([ground.center[0],ground.height,ground.center[2],ground.radius],40);values.set([frame.dt,n,regionMotion?.count??0,0],44);device.queue.writeBuffer(params,0,values);
     const states=field.residentState(),group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:states.before}},{binding:1,resource:{buffer:states.after}},{binding:2,resource:{buffer:particles}},{binding:3,resource:positions.createView()},{binding:4,resource:sizes.createView()},{binding:5,resource:{buffer:params}},{binding:6,resource:{buffer:regionMotion?.ownerBuffer??noOwner}},{binding:7,resource:{buffer:regionMotion?.matrices??identityPose}},{binding:8,resource:{buffer:oldPoses??identityPose}}]});
     const pass=encoder.beginComputePass({label:'consumed wood to finite char residue'});pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.ceil(count/64));pass.end();if(regionMotion)encoder.copyBufferToBuffer(regionMotion.matrices,0,oldPoses,0,regionMotion.count*64);previous.copy(mesh.matrixWorld);steps++;
+   },replaceSurface(){
+    if(regionMotion)throw Error('Cannot replace regionally moving debris');
+    const current=field.residentState();initial=current.initial;surface=current.surface;
+    loNode.value.copy(bounds.min);bounds.getSize(sizeNode.value);
+    const data=initialTexture.image.data;for(let i=0;i<count;i++)data[i*4+3]=initial[i]&&!surface[i]?0x3c00:0;
+    initialTexture.needsUpdate=true;reset();
    },reset,read:()=>({identity:'finite-wood-residue-v1',steps,capacity:count,initialMaterialCells:initial.reduce((a,b)=>a+b,0),residueFraction:LOG_RESIDUE,ground,runtimeReadbacks:0,sourceWorld:mesh.matrixWorld.toArray(),attachedWorld:caps.matrixWorld.toArray()}),
    async snapshot(){const source=field.residentState();const staging=device.createBuffer({size:particles.size+source.after.size,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
     try{const encoder=device.createCommandEncoder();encoder.copyBufferToBuffer(particles,0,staging,0,particles.size);encoder.copyBufferToBuffer(source.after,0,staging,particles.size,source.after.size);device.queue.submit([encoder.finish()]);await staging.mapAsync(GPUMapMode.READ);const data=new Float32Array(staging.getMappedRange());return {identity:'frozen-material-residue-snapshot-v1',particles:Array.from(data.subarray(0,count*16)),material:Array.from(data.subarray(count*16)),initial:Array.from(initial),read:this.read()};}finally{staging.unmap();staging.destroy();}},

@@ -48,3 +48,20 @@ test('malformed prepared masks reject before GPU allocation instead of silently 
   assert.equal(f.resources.length,0);
  }
 });
+test('changed lettering updates resident data while retaining thermal pipelines, material and debris',async()=>{
+ const f=fixture();let compiled=0;const create=f.renderer.backend.device.createComputePipelineAsync;f.renderer.backend.device.createComputePipelineAsync=async(...args)=>{compiled++;return create(...args);};
+ const body=await createSceneBurnBody({entry:{id:'prompt',object:f.mesh,burnable:{enabled:true,appearance:{profile:'composed',glow:1}}},renderer:f.renderer,scene:f.scene,ground:()=>({center:[0,0,0],height:-1,radius:5}),onFrame:f.onFrame,surfaceMask:f.mask});
+ try{
+  const material=f.mesh.material,texture=residentLightCoverage(f.mesh).read().texture,resources=f.resources.length,pipelines=compiled;
+  const replacement=new THREE.BoxGeometry(1,3,.2);replacement.computeBoundingBox();const mask=createLogSurfaceMask(replacement,replacement.boundingBox,LIVE_LOG_GRID,{filled:true});
+  f.mesh.geometry=replacement;body.replaceSurface({bounds:replacement.boundingBox,surfaceMask:mask});
+  assert.equal(f.mesh.material,material);assert.equal(residentLightCoverage(f.mesh).read().texture,texture);
+  assert.equal(f.resources.length,resources,'editing must not allocate replacement resident resources');assert.equal(compiled,pipelines,'editing must not compile compute pipelines');
+  assert.deepEqual(residentLightCoverage(f.mesh).read().bounds.min.toArray(),replacement.boundingBox.min.toArray());
+  assert.deepEqual(residentLightCoverage(f.mesh).read().bounds.max.toArray(),replacement.boundingBox.max.toArray());
+  assert.deepEqual(Array.from(residentLightCoverage(f.mesh).read().initial),Array.from(mask));
+  assert.equal(body.read().fields[0].summaryCellCount,mask.reduce((a,b)=>a+b,0));assert.equal(body.read().elapsed,0);
+  const bad=new Uint32Array(1);assert.throws(()=>body.replaceSurface({bounds:replacement.boundingBox,surfaceMask:bad}),/Invalid prepared thermal surface mask/);
+  assert.deepEqual(Array.from(residentLightCoverage(f.mesh).read().initial),Array.from(mask),'rejected data leaves previous field intact');
+ }finally{body.dispose();}
+});

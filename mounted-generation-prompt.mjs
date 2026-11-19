@@ -1,4 +1,6 @@
-import {ClippingGroup,Mesh,MeshStandardMaterial,BufferGeometry} from './lib/three.webgpu.js';
+import {ClippingGroup,Mesh,MeshStandardMaterial,BufferGeometry,BoxGeometry} from './lib/three.webgpu.js';
+import {createLogSurfaceMask} from './live-log-surface-mask.mjs';
+import {LIVE_LOG_GRID} from './live-log-heat-core.mjs';
 import {createKilnPromptStrip} from './kiln-prompt-strip.mjs';
 import {installKilnPromptEditor,KILN_PROMPT_WINDOW_HEIGHT} from './kiln-prompt-editor.mjs';
 import {createKilnPromptPreparation} from './kiln-prompt-preparation.mjs';
@@ -22,6 +24,8 @@ export async function createMountedGenerationPrompt({document,workshop,camera,on
  let disposed=false,serial=0,timer=null,admitted=null,prepared=null,preparing=null,error=null,visible=false,admittedScroll=0;
  const editor=installKilnPromptEditor({document,viewport,input,camera,object:root,presentation:mesh,onChange:schedule,onScroll:alignSolid,onError:e=>{error=e.message;changed();}});
  const preparation=createKilnPromptPreparation({rasterize:editor.rasterize,Worker:document.defaultView.Worker});
+ let bodyBounds=null;
+ const emptyMask=()=>{const mask=new Uint32Array(LIVE_LOG_GRID**3);mask.samples=new Float32Array(mask.length*8);mask.surface=new Uint32Array(mask.length);return mask;};
  let handle=null,stop=()=>{},body=null,installation=Promise.resolve(),fire=null,firePreparation=null,burnWindow=null,active=false,startedRequest=null,finishResolve=null;
  root.userData.kaminosCaptureVisibility=()=>{
   if(!body||disposed||workshop.read().amount!==1)return()=>{};
@@ -55,21 +59,28 @@ export async function createMountedGenerationPrompt({document,workshop,camera,on
    // material over a newer draft. Geometry and thermal state share one lifetime.
    const install=installation.catch(()=>{}).then(async()=>{
     if(disposed||token!==serial)return;
-    if(prepared!==result){
-     body?.dispose();body=null;
+    const changedSurface=prepared!==result;
+    if(changedSurface){
+     if(!body?.replaceSurface){body?.dispose();body=null;}
      const old=mesh.geometry;mesh.geometry=result?result.geometry.clone():new BufferGeometry();old.dispose();
      if(result)mesh.userData.kaminosPromptRelief={...mesh.userData.kaminosPromptRelief,...promptReliefMetadata(result.text,'composed')};
+     if(body){
+      const bounds=result?mesh.geometry.boundingBox:bodyBounds;
+      body.replaceSurface({bounds,surfaceMask:result?result.surfaceMask:emptyMask()});
+      if(result)bodyBounds=mesh.geometry.boundingBox.clone();
+     }
      prepared=result;
     }
     if(!result){mesh.visible=false;return;}
     strip.prepare(result.height,admitted?admittedScroll:input.scrollTop);
+    if(changedSurface&&body&&fire){await firePreparation;await fire.prepareSurface?.({compile:false});}
     if(createBurnBody&&handle&&!body){
      const candidate=await createBurnBody({entry:{id:handle.id,object:root,burnable:{enabled:true,appearance:{profile:'composed',glow:1},structure:false,fracture:false}},surfaceMask:result.surfaceMask,surfacePresentation:strip.attachSurface});
      if(disposed){candidate.dispose();return;}
      // A later admission of this draft can retain the construction in flight.
      // A different queued draft disposes it before replacing any geometry.
      body=candidate;body.setMounted(false);
-     if(fire){await firePreparation;await fire.prepareSurface?.();}
+     if(fire){await firePreparation;await fire.prepareSurface?.({compile:false});}
     }
    });installation=install;await install;
   }finally{if(preparing===work)preparing=null;changed();}
@@ -78,6 +89,16 @@ export async function createMountedGenerationPrompt({document,workshop,camera,on
  try {
  await prepare({prompt,request});signal.throwIfAborted();
  handle=await workshop.attach(root,{type:'pbr',label:'Generation prompt',source:null,waterCollision:false});
+ // Establish the material graph once while the workshop is opening. A neutral
+ // nonindexed carrier matches glyph attributes; zero occupancy makes it inert.
+ if(createFire&&createBurnBody&&!body){
+  const seed=prepared?.geometry??new BoxGeometry(2,1,.035).toNonIndexed();seed.computeBoundingBox();
+  if(!prepared){mesh.geometry.dispose();mesh.geometry=seed;}
+  bodyBounds=seed.boundingBox.clone();
+  body=await createBurnBody({entry:{id:handle.id,object:root,burnable:{enabled:true,appearance:{profile:'composed',glow:1},structure:false,fracture:false}},surfaceMask:prepared?.surfaceMask??createLogSurfaceMask(seed,bodyBounds,LIVE_LOG_GRID,{filled:true}),surfacePresentation:strip.attachSurface});
+  if(!prepared)body.replaceSurface({bounds:bodyBounds,surfaceMask:emptyMask()});
+  body.setMounted(false);
+ }
  await prepare({prompt,request});signal.throwIfAborted();
  if(createFire){fire=await createFire({root,body:()=>body,burning:()=>active&&visible,signal});firePreparation=fire.prepare();firePreparation.catch(failure);}
  stop=onFrame(()=>{
