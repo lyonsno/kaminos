@@ -66,6 +66,10 @@ export const SLAB_WGSL = REGION_WGSL
   // gap controls rest spacing and does not set the tear toughness.
   .replace('distance(bodies[c.ids.x].p.xyz,bodies[c.ids.y].p.xyz)/c.law.y-1.0',
     '(distance(bodies[c.ids.x].p.xyz,bodies[c.ids.y].p.xyz)-c.law.y)/.0006')
+  // The specimen sits on an open tray. Keep the floor and let a pulled
+  // corner travel over the side instead of crushing it against a hidden wall.
+  .replace('let difference=clamp(center,lower,upper)-center;',
+    'let difference=vec3f(0.0,max(0.0,lower.y-center.y),0.0);')
   .replace('let ids=faces[fi].xyz;', 'let face=faces[fi];if(!faceExposed(face)){return;}let ids=face.xyz;')
   .replace('let ti=id.x;if(ti>=p.counts.z){return;}let t=tets[ti];',
     'let lane=p.grid.w+id.x;if(lane>=arrayLength(&faces)){return;}let ti=faces[lane].x;if(ti>=p.counts.z){return;}let t=tets[ti];')
