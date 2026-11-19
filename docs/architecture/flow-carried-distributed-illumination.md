@@ -1,6 +1,6 @@
 # Flow-carried distributed illumination for flame — design draft
 
-Status: design draft updated on November 17 with Noah's subsequent decisions, including material-derived blocker construction and core/shell receiver succession. Noah has requested implementation decomposition while retaining representative selection and the combination of direct material information with ray evidence as live design work. Sections 10–12 distinguish the first integrated experiment, extensions and independently implementable prerequisites. These are proposed handoff boundaries, not launched assignments or claims of implemented behavior. The [particle-fetched prequel source audit](particle-fetched-prequel-source-audit_2026-11-17.md) distinguishes existing mechanisms from this proposal.
+Status: design draft updated on November 19 with Noah's decisions on material-derived blockers, receiver births around emissive packets, and ray-history transfer through succession. Noah has requested implementation decomposition while retaining representative selection and the combination of direct material information with ray evidence as live design work. Sections 10–12 distinguish the first integrated experiment, extensions and independently implementable prerequisites. These are proposed handoff boundaries, not launched assignments or claims of implemented behavior. The [particle-fetched prequel source audit](particle-fetched-prequel-source-audit_2026-11-17.md) distinguishes existing mechanisms from this proposal.
 
 The objective is affordable distributed illumination that stays in phase with the reactive Lagrangian flame, especially the glow on nearby material. Dense visible material, source discovery, receiver density, fresh transport work, and output reconstruction resolution are independently controlled. Shared motion should make an observation useful to several predictions over several updates. A successful result must show that evolving illumination, not merely reduce an isolated numerical error.
 
@@ -176,6 +176,22 @@ A fine lookup/deposition grid is an optional acceleration structure, distinct fr
 
 A very coarse Eulerian fallback remains a contender until moving receiver coverage is demonstrated. Removing it is an evidence-based choice, not implied by the existence of many particles. Sparse optical material can still occupy large support or produce meaningful extinction.
 
+### Receiver births around the flame
+
+Give each live emissive packet a roughly spherical frame centered on its current emitting support. Use one band just outside that support as the primary place to recruit near-flame receivers. Start with an offset of about one receiver-support radius from the packet boundary and leave it adjustable. The band follows the packet. A receiver recruited there follows the local fluid at its own position.
+
+For each proposed site, check neighboring bright packets, local material that can scatter incident light, and existing receiver support. Skip sites buried inside bright packets or already adequately covered. Two tongues can open a smoky cleft wide enough for a receiver before their packet neighborhoods have fully separated. A receiver in that cleft can sample both sources. This local test lets the shape of the whole flame influence placement without reconstructing a connected surface or assigning a receiver to each packet that proposed it.
+
+Apply the existing vacancy and succession rule at the accepted sites. The packet band locates a site. The site's inner core and outer shell govern recruitment as carriers come and go. Prefer an eligible live carrier. A passive marker is also viable if it can advect with the local flow and query material at its actual position. Velocity helps estimate residence time. Smoke moving sideways across a tongue is eligible. As its receiver leaves the band, it keeps its identity, position and history in the general pool while the vacancy admits a successor. Packet burnout withdraws its placement sites. Existing receivers continue wherever their material support is useful. The coarse spatial scaffold recruits in occupied pockets that this flow never reaches.
+
+### Which ray history can cross a handoff
+
+A successor can immediately use the predecessor's emitter identity to propose a fresh query. To reuse attenuation, draw the straight connection between today's receiver and source. For each ordered interval, compare its current crossing with the transported footprint of its last fresh measurement, including transverse displacement relative to measured width and coverage along the connection. Check for changed optical state or invalidated blocker dependencies even where the geometry still agrees. A fold in the middle can invalidate an interval while both endpoints move together. Newly traversed lengths have no inherited measurement. If the source packet changes, evaluate the new source's emission and internal extinction for the current view.
+
+Retain the acquisition identity, time and support of each reused interval across every handoff. Successive small displacements accumulate relative to that transported evidence. A fresh measurement renews the interval. When a consequential interval loses support, refresh it if the acquisition backend permits, or acquire the connection again. The source can remain a useful sampling proposal throughout. A fresh observation of the same connection replaces its carried prediction for that contribution. A ray to another emitter enters under the estimator's source-selection weights. Two receivers descending from one measurement share its evidence until they acquire independently.
+
+During ordinary same-connection refreshes, retain the held and carried predictions immediately before acquisition and compare both with the fresh measurement. Include routine refreshes alongside ones triggered by suspected error. In the near-flame crossing case, inspect whether carrying bridges the short interval between fresh observations and how quickly the estimate darkens when smoke enters the line of sight. Unseen intervening material may first become evident on refresh.
+
 ## 9. External illumination and diffuse attenuation
 
 Use source–receiver correspondence to decide reuse. Internal flame light often benefits from co-motion. External sources remain in their proper world frame; the in-volume evidence can still be transported. Static sources do not remove changes in world visibility or in the material crossing their current straight connections.
@@ -186,7 +202,7 @@ Fresh queries see diffuse attenuation as well as dense blockers. Retained observ
 
 ## 10. First candidate and deferred work
 
-The intended first integrated experiment combines arbitrary-direction fresh queries, sparse discovery with local acquisition, small current-state cohorts, uniform-world-length observations, material-derived coarse blocker candidates tested against ray evidence, basic flow/deformation lifecycle, and moving receiver coverage with succession. Reuse the existing reconstruction first; measure the need for finer deposition. Preserve fixed receivers, fresh-only transport, held history and coarse fallback as comparisons.
+The intended first integrated experiment combines arbitrary-direction fresh queries, sparse discovery with local acquisition, small current-state cohorts, uniform-world-length observations, material-derived coarse blocker candidates tested against ray evidence, basic flow/deformation lifecycle, and one near-flame recruitment band per emitting packet feeding the general pool of moving receivers. Coarse spatial coverage and local succession serve the rest of the occupied volume. Reuse the existing reconstruction first; measure the need for finer deposition. Preserve fixed receivers, fresh-only transport, held history and coarse fallback as comparisons.
 
 Build this in increments that answer different questions:
 
@@ -195,6 +211,8 @@ Build this in increments that answer different questions:
 3. **Integrated reuse experiment:** connect fresh observations, shared model updates, lazy history validation and allocation to receivers across the field. Compare visible phase, coverage and self-shadow evolution at equal total work. A locally plausible packet is insufficient evidence for this stage.
 
 The core-and-shell succession, separate emission/extinction participation, and uniform-world-length evidence intervals are selected directions. The primitive family, representative weights, optical overlap ownership, fitting/correction rule and estimator are still proposals to settle while the prerequisites are built. None of these remaining choices requires postponing independent plumbing, but all are material to claiming an integrated lighting result.
+
+Additional outward bands are warranted where the first band and general pool repeatedly leave consequential gaps. Give an emitter-relative site a persistent lighting history of its own only if successive fluid parcels crossing the same side of the flame repeatedly observe similar incident light while their carried estimates diverge. Both are deferred.
 
 Planned later work: learned directional usability/residual features, improved deformation/support inference, more sophisticated proposal allocation, and optional finer lookup deposition if reconstruction cost warrants it. They should consume the same material/observation identity and validity distinctions.
 
@@ -216,11 +234,11 @@ Use emitter-born particles as the working acquisition mode for this build. The o
 
 The decision scene has a small bright flame behind a thick moving plume. A real opening exposes flame, with a few individually legible dark projected elements inside it. The build must address both the grain inside dense smoke and the scale of individual extinction marks seen against the exposed flame. An improvement should preserve the opening’s brightness, outline and motion, as well as the attenuation in its smoky surround. Raising the particle count also changes the sampled reactive population, so use a held population for footprint comparisons.
 
-Extend the optical-particles Workbench with an inspection at a selected pixel or small footprint in the ordinary rendered view. Compare a dot, the neighboring clear sightline onto flame, and the plume edge. Expose the contributors to foreground optical depth in front of the bright emitting depth, with their projected footprint, peak contribution, carrier identity and age, burn/soot state, and effective growth or cap. Distinguish a dominant contributor from several moderate contributors overlapping in depth. Where a segment contains inseparable emission and extinction, preserve that depth ambiguity. Follow a selected carrier through available history, or forward from acquisition, to distinguish near-source burnout from returning smoke. Current height and phase alone cannot establish its trajectory. Keep readback local and on demand.
+Extend the optical-particles Workbench with an inspection at a selected pixel or small footprint in the ordinary rendered view. Compare a dot, the neighboring clear sightline onto flame, and the plume edge. Expose the contributors to foreground optical depth in front of the bright emitting depth, with their projected footprint, peak contribution, carrier identity and age, burn/soot state, and effective growth or cap. The operator paused the simulation and orbited the camera to follow individual carriers responsible for these dots. Inspect the selected carrier against the bright material behind it. Where a segment contains inseparable emission and extinction, preserve that depth ambiguity. Follow a selected carrier through available history, or forward from acquisition, to distinguish near-source burnout from returning smoke. Current height and phase alone cannot establish its trajectory. Keep readback local and on demand.
 
 Provide a held-frame comparison of authored growth with the dedicated smoke spread bypassed. Preserve the independent lifetime/mixing footprint, reaction expansion, opacity, optical weight and depth settings in that comparison, including normal area normalization for the selected route. Display effective settings and eligibility. Phase isolation that changes the rendering law cannot settle this comparison. A change in projected area can preserve integrated optical depth while altering how much flame light passes through the opening.
 
-Use the visible result to select the next change. If young, compact carriers dominate, examine how their optical weight and support evolve across burnout. If old spreading carriers dominate, examine the age curve, footprint ceiling and deformation. If several depth layers combine to make the dots, inspect depth ordering and overlap before retuning individual footprints. The distributed-light blocker fit can use pertinent material observations once the renderer identifies what the foreground actually contains.
+Use the visible result to select the next change. If young, compact carriers dominate, examine how their optical weight and support evolve across burnout. If old spreading carriers dominate, examine the age curve, footprint ceiling and deformation. The distributed-light blocker fit can use pertinent material observations once the renderer identifies what the foreground actually contains.
 
 ## 12. Implementation decomposition and proposed handoffs
 
@@ -228,11 +246,11 @@ This section names outcomes and consumers so Noah can assign work. No lane has b
 
 ### A. Receiver coverage and core/shell succession — strongest independent handoff
 
-**Outcome:** persist useful moving receivers while maintaining coverage near stationary sites, with smooth spatial handover and explicit uncovered regions. The consumer is the incident-light reconstruction used by visible material.
+**Outcome:** persist useful moving receivers while maintaining coverage near supplied sites, with smooth spatial handover and explicit uncovered regions. The consumer is the incident-light reconstruction used by visible material.
 
 **Starting mechanisms:** `volume-packet-network.mjs` already retains receiver keys; `volume-particle-packet-incident.mjs` already reconstructs at actual receiver positions with normalized support. New work is coverage ownership, local candidate offers, vacancy claims/releases and lifecycle weights.
 
-**Inputs:** current candidate identity/position/velocity/eligibility, coverage sites and radii, and illumination histories supplied by the current transport path or a controlled field. This outcome does not depend on choosing source representatives or a blocker fitting family.
+**Inputs:** current candidate identity/position/velocity/eligibility, current site positions and radii from the coarse scaffold or a packet-relative band, and illumination histories supplied by the current transport path or a controlled field. This outcome does not depend on choosing source representatives or a blocker fitting family.
 
 **Composition:** exercise outgoing and incoming probes together through the existing reconstruction. Preserve both spatial locations and share the site's intended support responsibility. Candidate velocity is a recruitment hint; observed location determines participation. A candidate turning away or a recycled slot cannot retain the vacancy indefinitely or inherit an unrelated history.
 
