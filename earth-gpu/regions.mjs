@@ -50,7 +50,8 @@ export function makeRegionState({samplesPerRegion=1536,gritCount=24,seed=71,slab
   const first=connections.length,span=axis==='x'?nz:nx,index=bands.length;
   const address=(g,y,t,forward)=>grainCount+(axis==='x'
    ?nodeId(g,forward?nx:0,y,t):nodeId(g,t,y,forward?nz:0));
-  for(let t=0;t<=span;t++)for(let y=0;y<=ny;y++)for(const [dy,dt] of [[0,0],[1,0],[0,1]]){
+  const pattern=slabSize===null?[[0,0],[1,0],[0,1]]:[[0,0]];
+  for(let t=0;t<=span;t++)for(let y=0;y<=ny;y++)for(const [dy,dt] of pattern){
    if(y+dy>ny||t+dt>span)continue;
    const i=address(a,y,t,true),j=address(b,y+dy,t+dt,false);
    const rest=Math.hypot(...[0,1,2].map(k=>floats[i*24+k]-floats[j*24+k]));

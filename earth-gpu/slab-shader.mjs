@@ -62,6 +62,10 @@ ${narrowPhase}
 
 export const SLAB_WGSL = REGION_WGSL
   .replace(oldContact, slabFaces)
+  // Measure excess separation against a material length. The tiny authored
+  // gap controls rest spacing and does not set the tear toughness.
+  .replace('distance(bodies[c.ids.x].p.xyz,bodies[c.ids.y].p.xyz)/c.law.y-1.0',
+    '(distance(bodies[c.ids.x].p.xyz,bodies[c.ids.y].p.xyz)-c.law.y)/.0006')
   .replace('let ids=faces[fi].xyz;', 'let face=faces[fi];if(!faceExposed(face)){return;}let ids=face.xyz;')
   .replace('let ti=id.x;if(ti>=p.counts.z){return;}let t=tets[ti];',
     'let lane=p.grid.w+id.x;if(lane>=arrayLength(&faces)){return;}let ti=faces[lane].x;if(ti>=p.counts.z){return;}let t=tets[ti];')

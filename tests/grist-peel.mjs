@@ -22,9 +22,10 @@ test('a corner-notch slab stays connected through both axes, and grips address o
   assert.ok(slab.grips.filter(g => g.region === 0).length > 3);
   assert.ok(slab.grips.filter(g => g.region === 1).every(g => slab.material.nodes[g.node-slab.grainCount].region === 2));
   for (const { a, b, first, count } of slab.bands) {
-    assert.ok(count > 0);
+    assert.ok(count === 9 || count === 12);
     for (const link of slab.connections.slice(first, first + count)) {
       assert.ok(link.rest > 0);
+      assert.ok(link.rest < .00025, 'a link may span the seam but not diagonally down the face');
       assert.equal(slab.material.nodes[link.a-slab.grainCount].region, a);
       assert.equal(slab.material.nodes[link.b-slab.grainCount].region, b);
     }
