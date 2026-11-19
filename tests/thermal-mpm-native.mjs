@@ -140,3 +140,47 @@ test('floating phase atomics retain signed large sums and reject actual overflow
   }finally{for(const b of buffers)b.destroy();}
  });
 });
+
+test('a six-iteration thermal step shares compute passes and fuses phase work', async () => {
+ await withKaminosGpu(async ({device}) => {
+  let passes = 0;
+  let dispatches = 0;
+  const instrument = (target, overrides) => new Proxy(target, {
+   get(object, key) {
+    if (key in overrides) return overrides[key];
+    const value = Reflect.get(object, key, object);
+    return typeof value === 'function' ? value.bind(object) : value;
+   },
+  });
+  const counted = instrument(device, {
+   createCommandEncoder(...args) {
+    const encoder = device.createCommandEncoder(...args);
+    return instrument(encoder, {
+     beginComputePass(...passArgs) {
+      passes++;
+      const pass = encoder.beginComputePass(...passArgs);
+      return instrument(pass, {
+       dispatchWorkgroups(...groups) {
+        dispatches++;
+        pass.dispatchWorkgroups(...groups);
+       },
+      });
+     },
+    });
+   },
+  });
+  const solver = await createThermalMpm({
+   device: counted, options: {particlesPerAxis: 8, phaseIterations: 6},
+  });
+  try {
+   passes = dispatches = 0;
+   solver.advance(1);
+   const state = await solver.status();
+   assert.equal(state.fault, null);
+   assert.equal(state.completedSteps, 1);
+   assert.ok(passes <= 8 && dispatches <= 54, `6 phase iterations encoded ${passes} passes and ${dispatches} dispatches`);
+  } finally {
+   solver.dispose();
+  }
+ });
+});

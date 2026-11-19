@@ -41,7 +41,7 @@ export async function createThermalMpm({device,options={},particleBuffer=null}) 
   3:params,4:storage(config.gridNodes*8,'Damage gradient orientation'),5:storage(N*16,'Phase PCG'),
   6:storage(N*4,'Phase stiffness atomics'),7:storage(config.count*16,'Phase gradient'),
   8:storage(Math.ceil(N/128)*16,'Phase reduction'),9:storage(32,'Phase and material clocks'),10:storage(config.count*4,'Persistent material heat increments'),
-  11:storage(config.gridNodes*4,'Particle bin heads'),12:storage(config.count*4,'Particle bin links'),
+  11:storage((config.gridNodes+1)*4,'Particle bin heads and damage presence'),12:storage(config.count*4,'Particle bin links'),
   13:storage(32,'Material fault and completion counters')};
  device.queue.writeBuffer(params,0,uniforms(config));
  const module=device.createShaderModule({code:THERMAL_MPM_WGSL,label:'Thermal phase-field MPM'});
@@ -51,8 +51,8 @@ export async function createThermalMpm({device,options={},particleBuffer=null}) 
  initialize:[0,3],updateStrength:[0,3],binParticles:[0,3,11,12,13],damageGradients:[0,3,4,11,12,13],gradientSeeds:[0,3,4,13],
  deposit:[0,1,3,4,13],reconcile:[1,2,3,13],heatStep:[0,3,10,13],
  phaseSeed:[2,5],matrixGather:[0,2,3,4,5,7,13],matrixScatter:[0,2,3,4,6,7,13],
- matrixFinish:[2,5,6],phaseStart:[2,5],dotPA:[2,5,8],reducePA:[8,9],
- phaseUpdate:[5,9],dotR:[2,5,8],reduceR:[8,9],phaseDirection:[2,5,9],
+ phaseStart:[2,5,6],dotPA:[2,5,6,8],reducePA:[8,9],
+ phaseUpdate:[2,5,8,9],reduceR:[8,9],phaseDirection:[2,5,9],
  gather:[0,2,3,4,5,10,13],finishStep:[3,9,13]};
  const kernels={};
  try{
@@ -62,15 +62,46 @@ export async function createThermalMpm({device,options={},particleBuffer=null}) 
   kernels[name]={pipeline,group};
  }
  }catch(error){for(const b of owned)b.destroy();throw error;}
- function dispatch(e,name,count) {
-  const k=kernels[name],groups=Math.ceil(count/128);if(groups>device.limits.maxComputeWorkgroupsPerDimension)throw Error('Thermal dispatch exceeds hardware workgroup dimension');
-  const p=e.beginComputePass({label:'Thermal '+name});p.setPipeline(k.pipeline);p.setBindGroup(0,k.group);p.dispatchWorkgroups(groups);p.end();
+ // Keep consecutive dispatches together. Buffer clears end the current pass.
+ function commands() {
+  const encoder = device.createCommandEncoder();
+  let pass;
+  function endPass() {
+   if (!pass) return;
+   pass.end();
+   pass = null;
+  }
+  return {
+   dispatch(name, count) {
+    const groups = Math.ceil(count / 128);
+    if (groups > device.limits.maxComputeWorkgroupsPerDimension) {
+     throw Error('Thermal dispatch exceeds hardware workgroup dimension');
+    }
+    pass ??= encoder.beginComputePass({label: 'Thermal ' + name});
+    const {pipeline, group} = kernels[name];
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, group);
+    pass.dispatchWorkgroups(groups);
+   },
+   clearBuffer(...args) {
+    endPass();
+    encoder.clearBuffer(...args);
+   },
+   finish() {
+    endPass();
+    return encoder.finish();
+   },
+  };
  }
- function matrix(e){e.clearBuffer(resources[6]);dispatch(e,'matrixGather',config.count);dispatch(e,'matrixScatter',config.count);dispatch(e,'matrixFinish',N);}
+ function matrix(e) {
+  e.clearBuffer(resources[6]);
+  e.dispatch('matrixGather', config.count);
+  e.dispatch('matrixScatter', config.count);
+ }
  function ensure(){if(disposed)throw Error('Thermal solver disposed');if(fault)throw Error(fault);}
  const reset=()=>{
-  if(disposed)throw Error('Thermal solver disposed');const e=device.createCommandEncoder();
-  e.clearBuffer(resources[9]);e.clearBuffer(resources[13]);dispatch(e,'initialize',config.count);device.queue.submit([e.finish()]);step=0;completed={step:0,time:0};fault=null;
+  if(disposed)throw Error('Thermal solver disposed');const e=commands();
+  e.clearBuffer(resources[9]);e.clearBuffer(resources[13]);e.dispatch('initialize',config.count);device.queue.submit([e.finish()]);step=0;completed={step:0,time:0};fault=null;
  };
  const read=()=>({route:'thermal-reference-heat-phase-field-mpm.webgpu.v1',count:config.count,thermalRoute:'reference-material-six-neighbor-diffusion',materialPointSpacing:.5,mechanicalGridSpacing:1,blockWidth:config.particlesPerAxis*.5,submittedSteps:step,completedSteps:completed.step,time:completed.time,fault,config:{...config}});
  async function readBuffers(entries){
@@ -88,23 +119,23 @@ export async function createThermalMpm({device,options={},particleBuffer=null}) 
  return {particles,get config(){return {...config};},
   setOptions(patch){ensure();const c=thermalConfig({...authored(),...patch});if(c.count!==config.count||c.gridSize!==config.gridSize)throw Error('Resolution/reference extent change requires a new thermal solver');for(const key of ['prestrain','preparedSplit','splitVelocity'])if(c[key]!==config[key])throw Error('Initialization option '+key+' requires a new thermal solver');
    const strengthChanged=c.variation!==config.variation;config=c;device.queue.writeBuffer(params,0,uniforms(config));
-   if(strengthChanged){const e=device.createCommandEncoder();dispatch(e,'updateStrength',config.count);device.queue.submit([e.finish()]);}return read();},
+   if(strengthChanged){const e=commands();e.dispatch('updateStrength',config.count);device.queue.submit([e.finish()]);}return read();},
   advance(steps=1){
    ensure();if(!Number.isSafeInteger(steps)||steps<1)throw Error('Positive integral step count required');
-   const e=device.createCommandEncoder();
+   const e=commands();
    for(let s=0;s<steps;s++){
     e.clearBuffer(resources[1]);e.clearBuffer(resources[4]);e.clearBuffer(resources[11]);e.clearBuffer(resources[13],16,4);
-    dispatch(e,'binParticles',config.count);dispatch(e,'damageGradients',config.count);dispatch(e,'gradientSeeds',config.count);
-    dispatch(e,'deposit',config.count);dispatch(e,'reconcile',config.gridNodes);dispatch(e,'heatStep',config.count);
-    dispatch(e,'phaseSeed',N);
+    e.dispatch('binParticles',config.count);e.dispatch('damageGradients',config.count);e.dispatch('gradientSeeds',config.count);
+    e.dispatch('deposit',config.count);e.dispatch('reconcile',config.gridNodes);e.dispatch('heatStep',config.count);
+    e.dispatch('phaseSeed',N);
     if(config.damage){
-     matrix(e);dispatch(e,'phaseStart',N);
+     matrix(e);e.dispatch('phaseStart',N);
      for(let k=0;k<config.phaseIterations;k++){
-      matrix(e);dispatch(e,'dotPA',N);dispatch(e,'reducePA',128);dispatch(e,'phaseUpdate',N);
-      dispatch(e,'dotR',N);dispatch(e,'reduceR',128);dispatch(e,'phaseDirection',N);
+      matrix(e);e.dispatch('dotPA',N);e.dispatch('reducePA',128);e.dispatch('phaseUpdate',N);
+      e.dispatch('reduceR',128);e.dispatch('phaseDirection',N);
      }
     }
-    dispatch(e,'gather',config.count);dispatch(e,'finishStep',1);
+    e.dispatch('gather',config.count);e.dispatch('finishStep',1);
    }
    device.queue.submit([e.finish()]);step+=steps;return read();
   },

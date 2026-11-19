@@ -88,9 +88,14 @@ fn fieldFor(p:Particle,n:u32)->u32 {if(nodes[n*2u].normal.w>.5){return n*2u+side
  let i=gid.x;if(i>=params.dims.z||broken()){return;}let p=particles[i];let base=vec3i(floor(p.x.xyz-.5));
  if(!inside(base)||!inside(base+vec3i(2))){atomicAdd(&diagnostics[1],1u);return;}
  let h=nodeId(vec3i(floor(p.x.xyz)));next[i]=atomicExchange(&heads[h],i+1u);
+ // The last slot is separate from every spatial bin and is cleared with them.
+ if(p.history.x!=1.){atomicOr(&heads[arrayLength(&heads)-1u],1u);}
 }
 @compute @workgroup_size(128) fn damageGradients(@builtin(global_invocation_id) gid:vec3u){
- let i=gid.x;if(i>=params.dims.z||broken()){return;}let p=particles[i];let cell=vec3i(floor(p.x.xyz));
+ let i=gid.x;if(i>=params.dims.z||broken()){return;}
+ // A constant intact field has exactly zero gradient. Clear any prior value.
+ if(atomicLoad(&heads[arrayLength(&heads)-1u])==0u){particles[i].grad=vec4f(0);return;}
+ let p=particles[i];let cell=vec3i(floor(p.x.xyz));
  var S=1.;var D=1.-p.history.x;var dS=vec3f(0);var dD=vec3f(0);
  for(var z=-2;z<=2;z++){for(var y=-2;y<=2;y++){for(var x=-2;x<=2;x++){
   let c=cell+vec3i(x,y,z);if(!inside(c)){continue;}var link=atomicLoad(&heads[nodeId(c)]);
@@ -189,31 +194,56 @@ fn nodeFrom(j:u32)->Node {
  let i=gid.x;if(i>=params.dims.z||broken()){return;}let p=particles[i];let base=vec3i(floor(p.x.xyz-.5));let f=p.x.xyz-vec3f(base);
  for(var z=0;z<3;z++){for(var y=0;y<3;y++){for(var x=0;x<3;x++){
   let o=vec3i(x,y,z);let v=dot(gradients[i].xyz,derivative(f,o));
-  phaseAdd(&matrixAcc[fieldFor(p,nodeId(base+o))],v);
+  if(v!=0.){phaseAdd(&matrixAcc[fieldFor(p,nodeId(base+o))],v);}
  }}}
 }
-@compute @workgroup_size(128) fn matrixFinish(@builtin(global_invocation_id) gid:vec3u){
- let i=gid.x;if(i>=arrayLength(&cg)){return;}cg[i].w=nodes[i].phase.x*cg[i].z+bitcast<f32>(atomicLoad(&matrixAcc[i]));
+fn appliedPhase(i:u32, direction:f32)->f32 {
+ return nodes[i].phase.x*direction+bitcast<f32>(atomicLoad(&matrixAcc[i]));
 }
 @compute @workgroup_size(128) fn phaseStart(@builtin(global_invocation_id) gid:vec3u){
- let i=gid.x;if(i>=arrayLength(&cg)){return;}let r=nodes[i].phase.y-cg[i].w;cg[i]=vec4f(cg[i].x,r,r/max(nodes[i].phase.x,1e-20),0);
+ let i=gid.x;
+ if(i>=arrayLength(&cg)){return;}
+ let x=cg[i].x;
+ let r=nodes[i].phase.y-appliedPhase(i,cg[i].z);
+ cg[i]=vec4f(x,r,r/max(nodes[i].phase.x,1e-20),0);
 }
 var<workgroup> sums:array<vec4f,128>;
+fn writePhasePartial(lane:u32, group:u32, value:vec4f) {
+ sums[lane]=value;
+ workgroupBarrier();
+ for(var stride=64u;stride>0u;stride/=2u){
+  if(lane<stride){sums[lane]+=sums[lane+stride];}
+  workgroupBarrier();
+ }
+ if(lane==0u){partials[group]=sums[0];}
+}
 @compute @workgroup_size(128) fn dotPA(@builtin(global_invocation_id) gid:vec3u,@builtin(local_invocation_id) lid:vec3u,@builtin(workgroup_id) group:vec3u){
- let i=gid.x;var v=vec4f(0);if(i<arrayLength(&cg)){let s=cg[i];v=vec4f(s.y*s.y/max(nodes[i].phase.x,1e-20),s.z*s.w,0,0);}
- sums[lid.x]=v;workgroupBarrier();for(var stride=64u;stride>0u;stride/=2u){if(lid.x<stride){sums[lid.x]+=sums[lid.x+stride];}workgroupBarrier();}if(lid.x==0u){partials[group.x]=sums[0];}
+ let i=gid.x;
+ var value=vec4f(0);
+ if(i<arrayLength(&cg)){
+  let s=cg[i];
+  let applied=appliedPhase(i,s.z);
+  cg[i].w=applied;
+  value=vec4f(s.y*s.y/max(nodes[i].phase.x,1e-20),s.z*applied,0,0);
+ }
+ writePhasePartial(lid.x,group.x,value);
 }
 @compute @workgroup_size(128) fn reducePA(@builtin(local_invocation_id) lid:vec3u){
  var v=vec4f(0);for(var i=lid.x;i<arrayLength(&partials);i+=128u){v+=partials[i];}
  sums[lid.x]=v;workgroupBarrier();for(var stride=64u;stride>0u;stride/=2u){if(lid.x<stride){sums[lid.x]+=sums[lid.x+stride];}workgroupBarrier();}if(lid.x==0u){control[0]=sums[0];}
 }
-@compute @workgroup_size(128) fn phaseUpdate(@builtin(global_invocation_id) gid:vec3u){
- let i=gid.x;if(i>=arrayLength(&cg)){return;}var alpha=0.;if(control[0].x>1e-14&&control[0].y>1e-14){alpha=control[0].x/control[0].y;}
- cg[i].x+=alpha*cg[i].z;cg[i].y-=alpha*cg[i].w;
-}
-@compute @workgroup_size(128) fn dotR(@builtin(global_invocation_id) gid:vec3u,@builtin(local_invocation_id) lid:vec3u,@builtin(workgroup_id) group:vec3u){
- let i=gid.x;var v=vec4f(0);if(i<arrayLength(&cg)){v.x=cg[i].y*cg[i].y/max(nodes[i].phase.x,1e-20);}
- sums[lid.x]=v;workgroupBarrier();for(var stride=64u;stride>0u;stride/=2u){if(lid.x<stride){sums[lid.x]+=sums[lid.x+stride];}workgroupBarrier();}if(lid.x==0u){partials[group.x]=sums[0];}
+@compute @workgroup_size(128) fn phaseUpdate(@builtin(global_invocation_id) gid:vec3u,@builtin(local_invocation_id) lid:vec3u,@builtin(workgroup_id) group:vec3u){
+ let i=gid.x;
+ var value=vec4f(0);
+ if(i<arrayLength(&cg)){
+  var alpha=0.;
+  if(control[0].x>1e-14&&control[0].y>1e-14){alpha=control[0].x/control[0].y;}
+  let s=cg[i];
+  let r=s.y-alpha*s.w;
+  cg[i]=vec4f(s.x+alpha*s.z,r,s.z,s.w);
+  value.x=r*r/max(nodes[i].phase.x,1e-20);
+ }
+ writePhasePartial(lid.x,group.x,value);
 }
 @compute @workgroup_size(128) fn reduceR(@builtin(local_invocation_id) lid:vec3u){
  var v=0.;for(var i=lid.x;i<arrayLength(&partials);i+=128u){v+=partials[i].x;}
