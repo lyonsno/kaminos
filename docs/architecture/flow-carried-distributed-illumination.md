@@ -210,6 +210,18 @@ Measure acquisition, current-member gathering, packet evaluation, model fitting,
 
 The unresolved central experiment is whether a small current cohort, compressed with declared weights and overlap ownership, remains a useful source and then a useful blocker long enough to pay for acquisition. The separate shared-model experiment asks whether fresh observations improve other current predictions cheaply enough. Both must be visible in the evolving field, not inferred from a good fit on the very observations used to construct it.
 
+### Smoke coverage against a small bright flame
+
+Use emitter-born particles as the working acquisition mode for this build. The operator found a useful flame and smoke regime at roughly 50,000–500,000 particles. The exact tune was lost. Re-establish the visible behavior on a named Pickle revision before choosing a new footprint law.
+
+The decision scene has a small bright flame behind a thick moving plume. A real opening exposes flame, with a few individually legible dark projected elements inside it. The build must address both the grain inside dense smoke and the scale of individual extinction marks seen against the exposed flame. An improvement should preserve the opening’s brightness, outline and motion, as well as the attenuation in its smoky surround. Raising the particle count also changes the sampled reactive population, so use a held population for footprint comparisons.
+
+Extend the optical-particles Workbench with an inspection at a selected pixel or small footprint in the ordinary rendered view. Compare a dot, the neighboring clear sightline onto flame, and the plume edge. Expose the contributors to foreground optical depth in front of the bright emitting depth, with their projected footprint, peak contribution, carrier identity and age, burn/soot state, and effective growth or cap. Distinguish a dominant contributor from several moderate contributors overlapping in depth. Where a segment contains inseparable emission and extinction, preserve that depth ambiguity. Follow a selected carrier through available history, or forward from acquisition, to distinguish near-source burnout from returning smoke. Current height and phase alone cannot establish its trajectory. Keep readback local and on demand.
+
+Provide a held-frame comparison of authored growth with the dedicated smoke spread bypassed. Preserve the independent lifetime/mixing footprint, reaction expansion, opacity, optical weight and depth settings in that comparison, including normal area normalization for the selected route. Display effective settings and eligibility. Phase isolation that changes the rendering law cannot settle this comparison. A change in projected area can preserve integrated optical depth while altering how much flame light passes through the opening.
+
+Use the visible result to select the next change. If young, compact carriers dominate, examine how their optical weight and support evolve across burnout. If old spreading carriers dominate, examine the age curve, footprint ceiling and deformation. If several depth layers combine to make the dots, inspect depth ordering and overlap before retuning individual footprints. The distributed-light blocker fit can use pertinent material observations once the renderer identifies what the foreground actually contains.
+
 ## 12. Implementation decomposition and proposed handoffs
 
 This section names outcomes and consumers so Noah can assign work. No lane has been launched by this document. The existing source audit supplies the implementation starting points; it is revision-specific and each owner must check the code on its chosen base before editing. Module names locate responsibility, not an instruction to seize another lane's active edits.
