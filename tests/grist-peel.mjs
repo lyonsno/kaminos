@@ -44,3 +44,13 @@ test('a corner-notch slab stays connected through both axes, and grips address o
     assert.equal(first, second);
   }
 });
+
+test('larger slabs preserve the same four grit layers in each patch', () => {
+  const slabSize = 10, regionCount = slabSize ** 2;
+  const s = makeRegionState({ slabSize, samplesPerRegion: 8, gritCount: regionCount * 12 });
+  for (let patch = 0; patch < regionCount; patch++) {
+    const heights = Array.from({ length: 12 }, (_, i) =>
+      Math.round(s.floats[(i * regionCount + patch) * 24 + 1] * 10000));
+    for (const h of [12, 23, 34, 45]) assert.equal(heights.filter(y => y === h).length, 3);
+  }
+});

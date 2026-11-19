@@ -31,7 +31,7 @@ export function makeRegionState({samplesPerRegion=1536,gritCount=24,seed=71,slab
  const packed=packMaterial({...base,floats:temporary,grainCount,material}),floats=packed.floats,attachments=[],connections=[];
  // Move hard inclusions into the matrix. Their physical contact remains the
  // existing two-sphere path, with off-center impulses and reciprocal reactions.
- for(let i=0;i<gritCount;i++){const o=i*24,[x,z]=center(i%regionCount);floats[o]=x+Math.sin(i*2.4)*.0018;floats[o+1]=.0012+(i%4)*.0011;floats[o+2]=z+Math.cos(i*1.9)*.0025;}
+ for(let i=0;i<gritCount;i++){const o=i*24,[x,z]=center(i%regionCount);floats[o]=x+Math.sin(i*2.4)*.0018;floats[o+1]=.0012+((slabSize===null?i:Math.floor(i/regionCount))%4)*.0011;floats[o+2]=z+Math.cos(i*1.9)*.0025;}
  for(let i=0;i<nodes.length;i++){floats[(grainCount+i)*24+3]*=2;}
  let rng=seed>>>0;const rand=()=>((rng=(Math.imul(rng,1664525)+1013904223)>>>0)/4294967296);
  for(let g=0;g<regionCount;g++){
