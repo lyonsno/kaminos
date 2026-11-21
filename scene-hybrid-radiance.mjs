@@ -181,11 +181,15 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       const flameBox={min:sourceDomain.lo.map((v,a)=>v*sourceTransform.scale+sourceTransform.translate[a]),max:sourceDomain.hi.map((v,a)=>v*sourceTransform.scale+sourceTransform.translate[a])};
       const started=performance.now(),snapshot=casterScene.withCapture(()=>localVisibility.snapshot(scene),{smokeVisibility:true,flameBox}),{revision,geometry:packed}=snapshot;
       status.localBvhBuilds=snapshot.localBuilds;status.visibilityMeshes=snapshot.meshCount;
-      if(!gather||revision!==geometryRevision||domainKey!==builtDomain){
+      if(!gather||domainKey!==builtDomain){
         status.status='building-smoke-world-visibility';onStatus({...status});
         const next=createVolumeGather(device,{geometry:packed,receivers:[],volumeGrid,sourceDimensions:sourceDomain.dimensions,smokeRefinement,directions,angularPattern,angularRotation,worldGeometry:true,samplingNoise:prototype.sceneLightSamplingTexture?.(),exteriorMedium:true});
         prototype.setSceneDistributedLightFrame(null);gather?.destroy();gather=next;geometryRevision=revision;builtDomain=domainKey;
         status.geometryBuilds++;status.visibilityBuilds++;status.lastGeometryBuildMs=performance.now()-started;status.staticTriangles=packed.triangleCount;
+      }
+      if(revision!==geometryRevision){
+        gather.setGeometry(packed);geometryRevision=revision;
+        status.visibilityBuilds++;status.lastGeometryBuildMs=performance.now()-started;status.staticTriangles=packed.triangleCount;
       }
       gather.setGeometryTransforms(packed.matrices);
       gather.setDirections(directions);gather.setAngularPattern(angularPattern,angularRotation);gather.setRetainComparisons(retainComparisons);

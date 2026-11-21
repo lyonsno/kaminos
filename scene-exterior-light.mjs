@@ -21,14 +21,15 @@ export function createExteriorSmokeLight(device,{grid=8,refinement=4,beforeRepla
         const gcd=(a,b)=>b?gcd(b,a%b):a;
         const widthUnit=dims[0]/dims.reduce(gcd);
         const regionGrid=Math.ceil(grid/widthUnit)*widthUnit;
-        const key=JSON.stringify([revision,source.dimensions,region.localMin,region.localMax,regionGrid]);
+        const key=JSON.stringify([worldGeometry,source.dimensions,region.localMin,region.localMax,regionGrid]);
         let current=regions.get(name);
         if(!current||current.key!==key){
           const next=createVolumeGather(device,{geometry,receivers:[],volumeGrid:regionGrid,sourceDimensions:source.dimensions,
             receiverBounds:{lo:region.localMin,hi:region.localMax},smokeRefinement:refinement,directions,angularPattern:'source',worldGeometry,exteriorMedium:true,exteriorIntegrationGrid:grid});
-          beforeReplace();current?.gather.destroy();current={key,gather:next};regions.set(name,current);builds++;
+          beforeReplace();current?.gather.destroy();current={key,revision,gather:next};regions.set(name,current);builds++;
         }
         const {gather}=current;
+        if(current.revision!==revision){gather.setGeometry(geometry);current.revision=revision;}
         if(worldGeometry)gather.setGeometryTransforms(geometry.matrices);
         gather.setDirections(directions);
         const frame=gather.encode(source,{gain,sourceSoftness,environment,sceneLights});

@@ -92,7 +92,9 @@ export async function createMountedGenerationPrompt({document,workshop,camera,on
  // Establish the material graph once while the workshop is opening. A neutral
  // nonindexed carrier matches glyph attributes; zero occupancy makes it inert.
  if(createFire&&createBurnBody&&!body){
-  const seed=prepared?.geometry??new BoxGeometry(2,1,.035).toNonIndexed();seed.computeBoundingBox();
+  let seed=prepared?.geometry;
+  if(!seed){const carrier=new BoxGeometry(2,1,.035);seed=carrier.toNonIndexed();carrier.dispose();}
+  seed.computeBoundingBox();
   if(!prepared){mesh.geometry.dispose();mesh.geometry=seed;}
   bodyBounds=seed.boundingBox.clone();
   body=await createBurnBody({entry:{id:handle.id,object:root,burnable:{enabled:true,appearance:{profile:'composed',glow:1},structure:false,fracture:false}},surfaceMask:prepared?.surfaceMask??createLogSurfaceMask(seed,bodyBounds,LIVE_LOG_GRID,{filled:true}),surfacePresentation:strip.attachSurface});

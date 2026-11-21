@@ -27,22 +27,25 @@ export function createPreparedSmoke(device,{nodes,triangles,nodeCount,source,coa
     const planes=storage('certified planar smoke boundaries',plan.planeBytes);
     const texture=device.createTexture({label:'prepared geometry-aware smoke incident radiance',dimension:'3d',size:plan.dimensions,format:'rgba32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});owned.push(texture);
     const grid=plan.dimensions[0],coarse=coarseDimensions[0],width=device.limits.maxComputeWorkgroupsPerDimension*64;
+    const countBuffer=device.createBuffer({label:'prepared smoke geometry count',size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});owned.push(countBuffer);
+    const countEntry={binding:7,resource:{buffer:countBuffer}};
+    device.queue.writeBuffer(countBuffer,0,new Uint32Array([nodeCount,0,0,0]));
     const constants=`const FINE:vec3<u32>=vec3<u32>(${plan.dimensions.map(n=>n+'u').join(',')});
       const COARSE:vec3<u32>=vec3<u32>(${coarseDimensions.map(n=>n+'u').join(',')});
       const FINE_COUNT:u32=${plan.sampleCount}u; const BIN_COUNT:u32=${plan.binCount}u;
-      const NODE_COUNT:u32=${nodeCount}u; const DISPATCH_WIDTH:u32=${width}u;
+      @group(0) @binding(7) var<uniform> geometryCount:vec4<u32>;fn nodeCount()->u32{return geometryCount.x;} const DISPATCH_WIDTH:u32=${width}u;
       const DOMAIN_LO:vec3<f32>=vec3<f32>(${localMin.join(',')});
       const FINE_PITCH:f32=${pitch/factor}; const COARSE_PITCH:f32=${pitch};`;
     let pipelines=deviceCache.get(constants);
     if(!pipelines){
-      const module=device.createShaderModule({label:'prepare and update smoke lighting',code:constants+PREPARED_SMOKE_WGSL});
+      const module=device.createShaderModule({label:'prepare and update smoke lighting',code:constants+PREPARED_SMOKE_WGSL_BODY});
       const prepare=device.createComputePipeline({label:'static smoke stencil and boundary preparation',layout:'auto',compute:{module,entryPoint:'prepareSmoke'}});
       const update=device.createComputePipeline({label:'update prepared smoke lighting from live receivers',layout:'auto',compute:{module,entryPoint:'updateSmoke'}});
       pipelines={module,prepare,update};
       deviceCache.set(constants,pipelines);
     }
     const {prepare,update}=pipelines;
-    const prepareGroup=device.createBindGroup({layout:prepare.getBindGroupLayout(0),entries:[... [nodes,triangles,weights,masks].map((b,binding)=>({binding,resource:{buffer:b}})),{binding:6,resource:{buffer:planes}}]});
+    let prepareGroup=device.createBindGroup({layout:prepare.getBindGroupLayout(0),entries:[... [nodes,triangles,weights,masks].map((b,binding)=>({binding,resource:{buffer:b}})),{binding:6,resource:{buffer:planes}},countEntry]});
     const updateGroup=device.createBindGroup({layout:update.getBindGroupLayout(0),entries:[{binding:2,resource:{buffer:weights}},{binding:4,resource:source.createView()},{binding:5,resource:texture.createView()}]});
     const dispatch=count=>{const groups=Math.ceil(count/64),limit=device.limits.maxComputeWorkgroupsPerDimension;
       if(groups>limit*limit)throw new Error('prepared smoke dispatch exceeds device capacity');
@@ -56,11 +59,14 @@ export function createPreparedSmoke(device,{nodes,triangles,nodeCount,source,coa
     return {texture,metadata,encode(encoder){
       if(!prepared){const pass=encoder.beginComputePass({label:'prepare static smoke interpolation'});pass.setPipeline(prepare);pass.setBindGroup(0,prepareGroup);pass.dispatchWorkgroups(...dispatch(plan.sampleCount));pass.end();prepared=true;metadata.staticPreparations++;}
       const pass=encoder.beginComputePass({label:'reconstruct live smoke illumination once per volume'});pass.setPipeline(update);pass.setBindGroup(0,updateGroup);pass.dispatchWorkgroups(...dispatch(plan.sampleCount));pass.end();metadata.updates=++updates;
+    },setGeometry(nextNodes,nextTriangles,count){
+      const next=device.createBindGroup({layout:prepare.getBindGroupLayout(0),entries:[...[nextNodes,nextTriangles,weights,masks].map((buffer,binding)=>({binding,resource:{buffer}})),{binding:6,resource:{buffer:planes}},countEntry]});
+      device.queue.writeBuffer(countBuffer,0,new Uint32Array([count,0,0,0]));prepareGroup=next;prepared=false;
     },invalidateGeometry(){prepared=false;},destroy(){for(const r of owned)r.destroy();}};
   } catch(error){for(const r of owned)r.destroy();throw error;}
 }
 
-export const PREPARED_SMOKE_WGSL=`
+const PREPARED_SMOKE_WGSL_BODY=`
 struct SmokeNode {lo:vec4<f32>,hi:vec4<f32>,range:vec4<u32>}
 struct SmokeTriangle {a:vec4<f32>,e1:vec4<f32>,e2:vec4<f32>}
 struct SmokeWeights {values:array<f32,8>}
@@ -93,7 +99,7 @@ fn triangleBox(t:SmokeTriangle,lo:vec3<f32>,hi:vec3<f32>)->bool {
 }
 fn occupiedBox(lo:vec3<f32>,hi:vec3<f32>)->bool {
   var n=0u;
-  loop {if(n>=NODE_COUNT){break;}let node=nodes[n];
+  loop {if(n>=nodeCount()){break;}let node=nodes[n];
     if(!boxesOverlap(lo-vec3<f32>(0.000002),hi+vec3<f32>(0.000002),node.lo.xyz,node.hi.xyz)){n=node.range.x;continue;}
     if(node.range.z==0u){n++;continue;}
     for(var t=node.range.y;t<node.range.y+node.range.z;t++){if(triangleBox(triangles[t],lo,hi)){return true;}}
@@ -107,7 +113,7 @@ fn occupiedBox(lo:vec3<f32>,hi:vec3<f32>)->bool {
 fn planarBoundary(p:vec3<f32>,extent:f32)->vec4<f32>{
   var result=vec4<f32>(0);var found=false;var n=0u;
   let lo=p-vec3<f32>(extent);let hi=p+vec3<f32>(extent);
-  loop{if(n>=NODE_COUNT){break;}let node=nodes[n];
+  loop{if(n>=nodeCount()){break;}let node=nodes[n];
     if(!boxesOverlap(lo-vec3<f32>(0.000002),hi+vec3<f32>(0.000002),node.lo.xyz,node.hi.xyz)){n=node.range.x;continue;}
     if(node.range.z==0u){n++;continue;}
     for(var t=node.range.y;t<node.range.y+node.range.z;t++){
@@ -132,7 +138,7 @@ fn segmentBox(p:vec3<f32>,d:vec3<f32>,lo:vec3<f32>,hi:vec3<f32>)->bool {
 }
 fn visibleReceiver(p:vec3<f32>,receiver:vec3<f32>)->bool {
   let d=receiver-p;if(dot(d,d)==0.0){return true;}var n=0u;
-  loop {if(n>=NODE_COUNT){break;}let node=nodes[n];
+  loop {if(n>=nodeCount()){break;}let node=nodes[n];
     if(!segmentBox(p,d,node.lo.xyz-vec3<f32>(0.000002),node.hi.xyz+vec3<f32>(0.000002))){n=node.range.x;continue;}
     if(node.range.z==0u){n++;continue;}
     for(var i=node.range.y;i<node.range.y+node.range.z;i++){
@@ -211,3 +217,5 @@ fn updateSmoke(@builtin(global_invocation_id) gid:vec3<u32>){
   textureStore(preparedIncident,vec3<i32>(cell),vec4<f32>(sum,1));
 }
 `;
+
+export const PREPARED_SMOKE_WGSL='fn nodeCount()->u32{return NODE_COUNT;}'+PREPARED_SMOKE_WGSL_BODY;

@@ -35,11 +35,14 @@ export function createSourceSoftening(device,{nodes,triangles,nodeCount,dimensio
   try {
     const masks=device.createBuffer({label:'source softening solid cells',size:count*4,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC});owned.push(masks);
     const textures=[0,1].map(i=>{const t=device.createTexture({label:`lighting-only softened coefficients ${i}`,dimension:'3d',size:dimensions,format:'rgba32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});owned.push(t);return t;});
-    const code=`const DIMS:vec3<u32>=vec3<u32>(${dimensions.map(n=>n+'u').join(',')});const COUNT:u32=${count}u;const NODE_COUNT:u32=${nodeCount}u;const WIDTH:u32=${limit*64}u;const PITCH:f32=${2/dimensions[0]};`+SOURCE_SOFTENING_WGSL;
+    const countBuffer=device.createBuffer({label:'source softening geometry count',size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});owned.push(countBuffer);
+    const countEntry={binding:5,resource:{buffer:countBuffer}};
+    device.queue.writeBuffer(countBuffer,0,new Uint32Array([nodeCount,0,0,0]));
+    const code=`const DIMS:vec3<u32>=vec3<u32>(${dimensions.map(n=>n+'u').join(',')});const COUNT:u32=${count}u;@group(0) @binding(5) var<uniform> geometryCount:vec4<u32>;fn nodeCount()->u32{return geometryCount.x;}const WIDTH:u32=${limit*64}u;const PITCH:f32=${2/dimensions[0]};`+SOURCE_SOFTENING_WGSL_BODY;
     const module=device.createShaderModule({label:'lighting-only emission softening',code});
     const prepare=device.createComputePipeline({label:'source solid-cell preparation',layout:'auto',compute:{module,entryPoint:'prepareSourceCells'}});
     const filter=device.createComputePipeline({label:'conservative emission diffusion',layout:'auto',compute:{module,entryPoint:'softenSource'}});
-    const prepGroup=device.createBindGroup({layout:prepare.getBindGroupLayout(0),entries:[nodes,triangles,masks].map((b,binding)=>({binding,resource:{buffer:b}}))});
+    let prepGroup=device.createBindGroup({layout:prepare.getBindGroupLayout(0),entries:[...[nodes,triangles,masks].map((b,binding)=>({binding,resource:{buffer:b}})),countEntry]});
     let source=null,bindings=null,prepared=false;
     const metadata={identity:'solid-bounded-emission-diffusion-v1',passes:0,staticPreparations:0,updates:0,dimensions:dimensions.slice(),bytes:count*36,extinction:'unchanged',boundary:'occupied-cells-isolated-no-flux-domain',rawSourceMutated:false};
     return {metadata,masks,encode(encoder,input,passes){
@@ -53,11 +56,14 @@ export function createSourceSoftening(device,{nodes,triangles,nodeCount,dimensio
       if(!prepared){const p=encoder.beginComputePass({label:'cache source solid boundaries'});p.setPipeline(prepare);p.setBindGroup(0,prepGroup);p.dispatchWorkgroups(...dispatch);p.end();prepared=true;metadata.staticPreparations++;}
       for(let i=0;i<passes;i++){const p=encoder.beginComputePass({label:'soften lighting emission'});p.setPipeline(filter);p.setBindGroup(0,bindings[i===0?0:i%2===1?1:2]);p.dispatchWorkgroups(...dispatch);p.end();}
       metadata.updates++;return textures[(passes-1)%2];
+    },setGeometry(nextNodes,nextTriangles,count){
+      const next=device.createBindGroup({layout:prepare.getBindGroupLayout(0),entries:[...[nextNodes,nextTriangles,masks].map((buffer,binding)=>({binding,resource:{buffer}})),countEntry]});
+      device.queue.writeBuffer(countBuffer,0,new Uint32Array([count,0,0,0]));prepGroup=next;prepared=false;
     },invalidateGeometry(){prepared=false;},destroy(){for(const r of owned)r.destroy();}};
   }catch(error){for(const r of owned)r.destroy();throw error;}
 }
 
-export const SOURCE_SOFTENING_WGSL=`
+const SOURCE_SOFTENING_WGSL_BODY=`
 struct Node {lo:vec4<f32>,hi:vec4<f32>,range:vec4<u32>}
 struct Triangle {a:vec4<f32>,e1:vec4<f32>,e2:vec4<f32>}
 @group(0) @binding(0) var<storage,read> nodes:array<Node>;
@@ -83,7 +89,7 @@ fn triangleCell(t:Triangle,lo:vec3<f32>,hi:vec3<f32>)->bool{
 fn prepareSourceCells(@builtin(global_invocation_id) gid:vec3<u32>){
   let id=gid.x+gid.y*WIDTH;if(id>=COUNT){return;}
   let lo=vec3<f32>(-1)+vec3<f32>(cellOf(id))*PITCH;let hi=lo+vec3<f32>(PITCH);var n=0u;var blocked=0u;
-  loop{if(n>=NODE_COUNT){break;}let node=nodes[n];
+  loop{if(n>=nodeCount()){break;}let node=nodes[n];
     if(any(hi+vec3<f32>(0.000002)<node.lo.xyz)||any(lo-vec3<f32>(0.000002)>node.hi.xyz)){n=node.range.x;continue;}
     if(node.range.z==0u){n++;continue;}
     for(var i=node.range.y;i<node.range.y+node.range.z;i++){if(triangleCell(triangles[i],lo,hi)){blocked=1u;break;}}
@@ -104,3 +110,5 @@ fn softenSource(@builtin(global_invocation_id) gid:vec3<u32>){
   textureStore(destination,c,vec4<f32>(rgb,original.a));
 }
 `;
+
+export const SOURCE_SOFTENING_WGSL='fn nodeCount()->u32{return NODE_COUNT;}'+SOURCE_SOFTENING_WGSL_BODY;
