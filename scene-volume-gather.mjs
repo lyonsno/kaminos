@@ -176,8 +176,12 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
         cache=device.createComputePipeline({label:'cache static solid ray intersections',layout:'auto',compute:{module,entryPoint:'cacheGeometry',constants:{CACHE_START:cacheStart}}});
         compiled.cacheByStart.set(cacheStart,cache);
       }
+      // Layout requirements belong to this variant, even while another family
+      // is selected and retained comparison states are rebound after an edit.
+      const cacheGuideEntries=angularPattern==='regions'?[{binding:10,resource:{buffer:regionsBuffer}}]:[];
+      const cacheNoiseEntries=['blue','importance'].includes(angularPattern)?[{binding:18,resource:samplingNoise.createView()}]:[];
       const bindGeometry=()=>{
-        const cacheGroup=device.createBindGroup({layout:cache.getBindGroupLayout(0),entries:[geometryEntry,...[nodes,triangles,receiverBuffer,directionBuffer,distances].map((b,binding)=>({binding,resource:{buffer:b}})),...(angularPattern==='regions'?guideEntries():[]),...(['blue','importance'].includes(angularPattern)?[{binding:18,resource:samplingNoise.createView()}]:[])]});
+        const cacheGroup=device.createBindGroup({layout:cache.getBindGroupLayout(0),entries:[geometryEntry,...[nodes,triangles,receiverBuffer,directionBuffer,distances].map((b,binding)=>({binding,resource:{buffer:b}})),...cacheGuideEntries,...cacheNoiseEntries]});
         let fullCache=cache;
       if(prefix){
         fullCache=compiled.cacheByStart.get(0);
@@ -186,7 +190,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
           compiled.cacheByStart.set(0,fullCache);
         }
       }
-        const fullCacheGroup=prefix?device.createBindGroup({layout:fullCache.getBindGroupLayout(0),entries:[geometryEntry,...[nodes,triangles,receiverBuffer,directionBuffer,distances].map((b,binding)=>({binding,resource:{buffer:b}})),...(angularPattern==='regions'?guideEntries():[]),...(['blue','importance'].includes(angularPattern)?[{binding:18,resource:samplingNoise.createView()}]:[])]}):cacheGroup;
+        const fullCacheGroup=prefix?device.createBindGroup({layout:fullCache.getBindGroupLayout(0),entries:[geometryEntry,...[nodes,triangles,receiverBuffer,directionBuffer,distances].map((b,binding)=>({binding,resource:{buffer:b}})),...cacheGuideEntries,...cacheNoiseEntries]}):cacheGroup;
         const environmentCacheGroup=environmentCache?device.createBindGroup({layout:environmentCache.getBindGroupLayout(0),entries:[
         geometryEntry,{binding:0,resource:{buffer:nodes}},{binding:1,resource:{buffer:triangles}},{binding:2,resource:{buffer:receiverBuffer}},
         {binding:12,resource:{buffer:environmentParams}},{binding:13,resource:{buffer:environmentDirections}},{binding:14,resource:{buffer:environmentHits}}]}):null;

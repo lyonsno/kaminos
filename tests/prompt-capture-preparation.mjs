@@ -15,3 +15,13 @@ test('native editor presentation keeps the same prepared shadow topology at admi
   mesh.visible=false;assert.throws(()=>casters.withCapture(()=>{assert.equal(mesh.visible,true);throw Error('capture failed');}),/capture failed/);assert.equal(mesh.visible,false);
  }finally{casters.dispose();}
 });
+import {borrowSceneCaptureVisibility} from '../scene-capture-visibility.mjs';
+test('explicit cold preparation borrows a hidden prompt only inside capture, with failure restoration',()=>{
+ const scene=new THREE.Scene(),root=new THREE.Group(),mesh=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshStandardMaterial());scene.add(root);root.add(mesh);root.visible=false;mesh.visible=false;
+ let borrowed=0;root.userData.kaminosCaptureVisibility=()=>{borrowed++;const before=[root.visible,mesh.visible];root.visible=mesh.visible=true;return()=>{[root.visible,mesh.visible]=before;};};
+ const ordinary=borrowSceneCaptureVisibility(scene);assert.equal(borrowed,0);ordinary();
+ root.userData.kaminosCaptureHiddenPreparation=true;
+ const restore=borrowSceneCaptureVisibility(scene);assert.equal(borrowed,1);assert.equal(root.visible,true);assert.equal(mesh.visible,true);restore();assert.equal(root.visible,false);assert.equal(mesh.visible,false);
+ delete root.userData.kaminosCaptureHiddenPreparation;
+ const hidden=borrowSceneCaptureVisibility(scene);assert.equal(borrowed,1);hidden();
+});

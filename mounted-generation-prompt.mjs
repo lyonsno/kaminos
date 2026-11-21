@@ -28,9 +28,9 @@ export async function createMountedGenerationPrompt({document,workshop,camera,on
  const emptyMask=()=>{const mask=new Uint32Array(LIVE_LOG_GRID**3);mask.samples=new Float32Array(mask.length*8);mask.surface=new Uint32Array(mask.length);return mask;};
  let handle=null,stop=()=>{},body=null,installation=Promise.resolve(),fire=null,firePreparation=null,burnWindow=null,active=false,startedRequest=null,finishResolve=null;
  root.userData.kaminosCaptureVisibility=()=>{
-  if(!body||disposed||workshop.read().amount!==1)return()=>{};
-  const prior=mesh.visible;mesh.visible=true;const restore=body.borrowPreparationVisibility?.();
-  return()=>{restore?.();mesh.visible=prior;};
+  if(!body||disposed||(!root.userData.kaminosCaptureHiddenPreparation&&workshop.read().amount!==1))return()=>{};
+  const priorRoot=root.visible,prior=mesh.visible;root.visible=mesh.visible=true;const restore=body.borrowPreparationVisibility?.();
+  return()=>{restore?.();mesh.visible=prior;root.visible=priorRoot;};
  };
  const failure=e=>{if(!disposed){error=e.message;active=false;editor.setBurning(false);changed();}};
  function advance(){
@@ -102,7 +102,7 @@ export async function createMountedGenerationPrompt({document,workshop,camera,on
   body.setMounted(false);
  }
  await prepare({prompt,request});signal.throwIfAborted();
- if(createFire){fire=await createFire({root,body:()=>body,burning:()=>active&&visible,signal});firePreparation=fire.prepare();firePreparation.catch(failure);}
+ if(createFire){fire=await createFire({root,body:()=>body,burning:()=>active&&visible,signal});root.userData.kaminosCaptureHiddenPreparation=true;firePreparation=fire.prepare().finally(()=>{delete root.userData.kaminosCaptureHiddenPreparation;});firePreparation.catch(failure);}
  stop=onFrame(()=>{
   const mounted=workshop.read().amount>0&&root.parent!==null&&root.visible&&workshop.handles().some(h=>h.id===handle.id);
   visible=mounted;if(fire)fire.present(mounted&&workshop.read().amount===1,presentation()).catch(failure);advance();if(statusSlot)statusSlot.hidden=workshop.read().amount===0;if(controls)controls.hidden=!mounted;layer.hidden=!mounted;layer.style.opacity=String(workshop.read().amount);

@@ -24,7 +24,8 @@ test('production retained lighting sees changed solid topology on Metal without 
    const outputs=[];let warm=null;
    for(const triangles of [0,20,2,0]){
     if(source.frame)gather.setGeometry(wall(triangles));
-    const frame=gather.encode({...source,frame:++source.frame,sourceSoftness:1});assert.equal(frame.geometryTriangles,triangles);
+    const frame=gather.encode({...source,frame:++source.frame},{sourceSoftness:1});assert.equal(frame.geometryTriangles,triangles);
+    assert.equal(frame.sourceSoftness,1);assert.equal(frame.sourceSoftening.passes,1);assert.equal(frame.sourceSoftening.staticPreparations,source.frame);
     const encoder=device.createCommandEncoder();encoder.copyTextureToBuffer({texture:gather.smoke},{buffer:read,bytesPerRow:256,rowsPerImage:2},[2,2,2]);device.queue.submit([encoder.finish()]);
     await read.mapAsync(GPUMapMode.READ);const data=new Float32Array(read.getMappedRange()),red=[];for(let row=0;row<4;row++)for(let x=0;x<2;x++)red.push(data[row*64+x*4]);read.unmap();outputs.push(red);
     if(!warm)warm={...counts};else assert.deepEqual(counts,warm,'edited topology must reuse the compiled pipelines and volume textures');
@@ -38,4 +39,19 @@ test('production retained lighting sees changed solid topology on Metal without 
    console.log('retained-lighting-numerics: '+JSON.stringify({route:'native Metal',adapter:ctx.adapterInfo,counts,outputs}));
   });
  }finally{gather?.destroy();for(const r of owned)r.destroy();ctx.destroy();}
+});
+test('retained angular families rebind only their own geometry layout after topology edits',async()=>{
+ const ctx=await createGpuTestContext();let gather;const owned=[];
+ try{await withGpuErrorScopes(ctx.device,'retained angular family geometry bindings',async()=>{
+  const device=ctx.device,texture=device.createTexture({dimension:'3d',size:[2,2,2],format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING});owned.push(texture);
+  const atlas=device.createTexture({size:[1024,512],format:'rgba8unorm',usage:GPUTextureUsage.TEXTURE_BINDING});owned.push(atlas);
+  gather=createVolumeGather(device,{geometry:wall(0),receivers:[],volumeGrid:2,sourceDimensions:[2,2,2],smokeRefinement:1,directions:2,worldGeometry:true,samplingNoise:atlas});
+  const source={status:'encoded',texture,dimensions:[2,2,2],generation:1,frame:0};gather.setRetainComparisons(true);
+  for(const pattern of ['fixed','regions','blue']){gather.setAngularPattern(pattern);gather.encode({...source,frame:++source.frame});}
+  for(const count of [20,0]){
+   gather.setGeometry(wall(count));
+   for(const pattern of ['fixed','regions','blue']){gather.setAngularPattern(pattern);const frame=gather.encode({...source,frame:++source.frame});assert.equal(frame.geometryTriangles,count);assert.equal(frame.angularPattern,pattern);assert.equal(frame.angularCache.variants.length,3);}
+  }
+  await device.queue.onSubmittedWorkDone();
+ });}finally{gather?.destroy();for(const r of owned)r.destroy();ctx.destroy();}
 });

@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import {OrthographicCamera,Group} from '../lib/three.core.js';
 import {createMountedGenerationPrompt} from '../mounted-generation-prompt.mjs';
 import {installGenerationFlame} from '../authoring-generation-flame.mjs';
+import {createMountedWorkshopFire} from '../mounted-workshop-fire.mjs';
+import {borrowSceneCaptureVisibility} from '../scene-capture-visibility.mjs';
 const tick=()=>new Promise(r=>setImmediate(r));
 class Element extends EventTarget {
  constructor(){super();this.children=[];this.style={};this.dataset={};this.classList={add(){},remove(){}};this.value='';this.scrollTop=0;this.scrollHeight=180;this.clientWidth=1024;this.clientHeight=768;this.placeholder='';}
@@ -189,14 +191,21 @@ test('Return settles the pending finish waiter but preserves the admitted burn f
 });
 test('typing replaces voxel data on one prewarmed body without requesting lighting compilation',async()=>{
  const f=fixture();let built=0,replaced=0,warmed=0;const surfaceWarm=[];const body={replaceSurface(){replaced++;},setMounted(){},reset(){},read:()=>({}),dispose(){}};
- const fire={prepareSurface:async options=>{surfaceWarm.push(options);},prepare:async()=>{warmed++;},setActive:async()=>{},present:async()=>{},setEmission(){},dispose:async()=>{},read:()=>({})};
- const consumer=await createMountedGenerationPrompt({...f,signal:new AbortController().signal,createBurnBody:async()=>{built++;return body;},createFire:async()=>fire});
+ f.workshop.read=()=>({amount:0});
+ const attach=f.workshop.attach;f.workshop.attach=async root=>{const handle=await attach(root);root.visible=false;return handle;};
+ const resource={prepareSurface:async(options={compile:true})=>{surfaceWarm.push(options);},setActive:async()=>{},setFrame(){},setEmission(){},dispose:async()=>{}};
+ const consumer=await createMountedGenerationPrompt({...f,signal:new AbortController().signal,createBurnBody:async()=>{built++;return body;},createFire:async({root})=>createMountedWorkshopFire({ordinary:()=>false,epoch:()=>1,acquire:async()=>{
+  warmed++;assert.equal(root.visible,false);assert.equal(root.userData.kaminosCaptureHiddenPreparation,true);
+  const restore=borrowSceneCaptureVisibility(f.frame);assert.equal(root.visible,true);assert.equal(root.children[0].visible,true);restore();assert.equal(root.visible,false);
+  await resource.prepareSurface();return resource;
+ }})});
  const answer=async(text)=>{const work=consumer.prepare({prompt:text});await tick();const w=f.worker();w.onmessage({data:{id:w.last.id,attributes:{position:{array:new Float32Array([0,0,0,1,0,0,0,1,.1]),itemSize:3,normalized:false}},groups:[],mask:{},samples:[],surface:[]}});await work;};
  try{
+  await tick();assert.equal(f.frame.children[0].userData.kaminosCaptureHiddenPreparation,undefined,'cold preparation borrow must expire');
   assert.equal(built,1,'initial workshop preparation must create the reusable body before typing');
   await answer('FIRST');await answer('SECOND');
   await consumer.prepare({prompt:'SECOND',request:{id:'admission',prompt:'SECOND'}});
-  assert.deepEqual(surfaceWarm,[{compile:false},{compile:false}],'changed voxel data warms without scene compile; admission performs no warmup');
+  assert.deepEqual(surfaceWarm,[{compile:true},{compile:false},{compile:false}],'production wrapper preserves cold compile and skips it for data edits; admission performs no warmup');
   await consumer.prepare({prompt:''});
   assert.equal(built,1);assert.ok(replaced>=3);assert.equal(warmed,1);assert.equal(consumer.thermalBody,body,'empty drafts retain the warmed resources');
  }finally{await consumer.dispose();}

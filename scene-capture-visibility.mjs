@@ -4,7 +4,11 @@
 export function borrowSceneCaptureVisibility(scene){
  const restores=[];
  const restore=()=>{for(const undo of restores.splice(0).reverse())undo?.();};
- try{scene.traverseVisible(node=>{const borrow=node.userData?.kaminosCaptureVisibility;if(typeof borrow==='function')restores.push(borrow());});}
+ try{scene.traverse(node=>{
+   const borrow=node.userData?.kaminosCaptureVisibility;if(typeof borrow!=='function')return;
+   let visible=true;for(let parent=node;parent;parent=parent.parent)if(!parent.visible){visible=false;break;}
+   if(visible||node.userData.kaminosCaptureHiddenPreparation===true)restores.push(borrow());
+ });}
  catch(error){restore();throw error;}
  return restore;
 }
