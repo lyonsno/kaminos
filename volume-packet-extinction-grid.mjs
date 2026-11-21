@@ -58,7 +58,7 @@ fn cellId(c:vec3<i32>)->u32{return u32(c.x)+grid.dims.x*(u32(c.y)+grid.dims.y*u3
  let cells=null;
  const bind=(pipeline,entries)=>device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:entries.map(([binding,b])=>({binding,resource:b.createView?b.createView():{buffer:b}}))});
  return {
-  encode(encoder,{material,width,plan,resources:r,bundleBuffer,profileWrites,retire}){
+  encode(encoder,{material,width,plan,resources:r,bundleBuffer,profileWrites,retire,gridOnly}){
    const {dims,pitch,origin}=material.domain;
    if(!Number.isSafeInteger(width)||width<1||dims.length!==3||!dims.every(n=>Number.isSafeInteger(n)&&n>0)||origin.length!==3||!origin.every(Number.isFinite)||!(pitch>0&&Number.isFinite(pitch)))throw Error('Invalid fixed extinction domain');
    const shape=dims.map(n=>Math.ceil(n*width/dims[0])),cell=dims.map((n,i)=>n*pitch/shape[i]),bytes=4*shape.reduce((a,b)=>a*b,1);
@@ -71,7 +71,7 @@ fn cellId(c:vec3<i32>)->u32{return u32(c.x)+grid.dims.x*(u32(c.y)+grid.dims.y*u3
    const p=encoder.beginComputePass({label:'particle extinction to fixed cells',...profileWrites('grid-deposit')});
    p.setPipeline(deposit);p.setBindGroup(0,bind(deposit,[[0,material.particles],[1,material.options],[4,r.plan],[13,params],[14,cells]]));
    p.dispatchWorkgroups(Math.ceil(plan.slots/64));p.end();
-   const pass=encoder.beginRenderPass({label:'fixed cells to ordered extinction',...profileWrites('grid-march'),colorAttachments:[{view:r.atlas.createView(),loadOp:'load',storeOp:'store'}]});
+   const pass=encoder.beginRenderPass({label:'fixed cells to ordered extinction',...profileWrites('grid-march'),colorAttachments:[{view:r.atlas.createView(),loadOp:gridOnly?'clear':'load',clearValue:{r:0,g:0,b:0,a:0},storeOp:'store'}]});
    pass.setPipeline(march);pass.setBindGroup(0,bind(march,[[2,bundleBuffer],[4,r.plan],[5,r.solids],[13,params],[15,cells]]));pass.draw(3);pass.end();
    return {shape,bytes:bytes+48,slots:plan.slots,measure:'center-owned reference XY area times acquired interval; Fine-domain centers only'};
   },

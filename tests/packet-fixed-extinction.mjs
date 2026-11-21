@@ -21,10 +21,10 @@ test('fixed cells replace fine attenuation, refresh from current material, and l
    p.set([.5,.5,1.5,1],24);p[32]=1;p.set([.2,0,0,.25],40);
    const rays=[[.5,.5,0],[1.5,.5,0],[1,1,1]].map((origin,i)=>finitePacketBundle({
     origin,target:i===2?[0,0,0]:[origin[0],origin[1],2],halfSize:[.02,.02],far:i===2?Math.sqrt(3):2,weight:1}));
-   async function sample(gridWidth){
+   async function sample(gridWidth,extinctionOnly=false){
     device.queue.writeBuffer(particles,0,p);
     const e=device.createCommandEncoder();
-    transport.encode(e,{material,bundles:rays,width:1,height:1,sections:4,receivers:1,cull:false,extinctionGridWidth:gridWidth});
+    transport.encode(e,{material,bundles:rays,width:1,height:1,sections:4,receivers:1,cull:false,extinctionGridWidth:gridWidth,extinctionOnly});
     e.copyBufferToBuffer(transport.buffers.rays,0,read,0,48);device.queue.submit([e.finish()]);
     await read.mapAsync(GPUMapMode.READ);const v=new Float32Array(read.getMappedRange().slice(0));read.unmap();return v;
    }
@@ -35,6 +35,8 @@ test('fixed cells replace fine attenuation, refresh from current material, and l
    p[0]=1.5;material.identity.step++;
    const moved=await sample(2);near(moved[3],1);near(moved[7],Math.exp(-sigma));near(moved[11],1);
    const fine=await sample(0);near(moved[0],fine[0]);assert.ok(moved[0]>.2);near(first[0],moved[0]*first[3]);
+   for(const width of [0,2]){const probe=await sample(width,true);near(probe[0],0);near(probe[7],width?moved[7]:fine[7]);}
+   assert.equal(transport.read().work.submittedInstances,0);
   }finally{transport.dispose();particles.destroy();options.destroy();read.destroy();}
  });
 });

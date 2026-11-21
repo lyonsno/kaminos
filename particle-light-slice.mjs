@@ -82,7 +82,7 @@ export function createLightSliceProbe({runtime,onChange=()=>{},createTransport=c
     const origin=toFine(emitter),target=toFine(receiver),distance=Math.hypot(...target.map((v,c)=>v-origin[c]));
     const bundle=finitePacketBundle({origin,target,halfSize:[halfWidth/transform.scale,halfWidth/transform.scale],far:distance,weight:1});
     const bundles=attached?[bundle,{...bundle,sourceSlot:carrier.slot}]:[bundle];
-    const args={material:frame,bundles,width,height:width,sections,receivers:1,momentsOnly:true,cull:compareGridWidth>0};
+    const args={material:frame,bundles,width,height:width,sections,receivers:1,momentsOnly:true,cull:compareGridWidth>0,extinctionOnly:compareGridWidth>0&&source==='probe'};
     const encoded=transport.encode(encoder,args);
     const paired=compareGridWidth?(gridTransport??=createTransport(device)).encode(encoder,{...args,extinctionGridWidth:compareGridWidth}):null;
     const layout=encoded.receipt,rowBytes=Math.ceil(layout.atlasWidth*8/256)*256;

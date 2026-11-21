@@ -81,7 +81,7 @@ fn splatPair(vertex:u32,instance:u32)->Splat{
  if(depth+interval*.5<=b.origin.w||depth-interval*.5>=b.forward.w){return out;}
  let fade=select(1.0,particleLifeFade(p.motion.w,material.lifeControl.y),material.lifeControl.x>0);
  var source=particleLightIntrinsic(p)*material.gain.x*fade;
- if((b.ids.y!=0xffffffffu&&membership[pi]!=b.ids.y)||(b.ids.w!=0u&&pi!=b.ids.w-1u)){source=vec3<f32>(0);}
+ if(plan.count.w!=0u||(b.ids.y!=0xffffffffu&&membership[pi]!=b.ids.y)||(b.ids.w!=0u&&pi!=b.ids.w-1u)){source=vec3<f32>(0);}
  let tau=select(particleLightExtinction(p,material)*fade,0.0,plan.solid.w!=0u);
  if(max(max(source.x,source.y),max(source.z,tau))<=0){return out;}
  let radius=particleLightBaseRadius(p,material);
@@ -152,7 +152,7 @@ export function createPacketBundleTransport(device){
    device.createRenderPipelineAsync(solidDescriptor).then(p=>{pipelines.solid=p;}),
    device.createRenderPipelineAsync(splatDescriptor).then(p=>{pipelines.splat=p;}),
   ]);},
-  encode(encoder,{material,bundles,width,height,sections,receivers,membership=null,triangles=null,triangleCount=0,momentsOnly=false,cull=false,extinctionGridWidth=0,profileWrites=()=>({})}){
+  encode(encoder,{material,bundles,width,height,sections,receivers,membership=null,triangles=null,triangleCount=0,momentsOnly=false,cull=false,extinctionGridWidth=0,extinctionOnly=false,profileWrites=()=>({})}){
    if(!Number.isSafeInteger(extinctionGridWidth)||extinctionGridWidth<0)throw Error('Invalid fixed extinction width');
    if(!material?.particles||!material.options||!material.identity)throw Error('Packet bundles require current native material');
    const list=Array.isArray(bundles),bundleCount=list?bundles.length:bundles?.count;
@@ -173,13 +173,15 @@ export function createPacketBundleTransport(device){
    if(!bundleBuffer||bundleBuffer.size<plan.bundleBytes)throw Error('Bundle descriptors are incomplete');
    if(membership&&membership.size<material.slots*4)throw Error('Bundle source membership is incomplete');
    if(list)device.queue.writeBuffer(r.bundles,0,packPacketBundles(bundles));
-   device.queue.writeBuffer(r.plan,0,new Uint32Array([width,height,plan.columns,sections,material.slots,bundleCount,receivers,triangleCount,plan.solidColumns,plan.atlasWidth,plan.atlasHeight,extinctionGridWidth]));
-   const selection=cull?(candidates??=createPacketCandidates(device,PACKET_BUNDLE_STRUCT_WGSL)).encode(encoder,{material,bundleBuffer,plan,profileWrites}):null;
+   const gridOnly=extinctionGridWidth>0&&extinctionOnly;
+   device.queue.writeBuffer(r.plan,0,new Uint32Array([width,height,plan.columns,sections,material.slots,bundleCount,receivers,Number(extinctionOnly),plan.solidColumns,plan.atlasWidth,plan.atlasHeight,extinctionGridWidth]));
+   const selection=cull&&!gridOnly?(candidates??=createPacketCandidates(device,PACKET_BUNDLE_STRUCT_WGSL)).encode(encoder,{material,bundleBuffer,plan,profileWrites}):null;
    pipelines.solid??=device.createRenderPipeline(solidDescriptor);
    let pass=encoder.beginRenderPass({label:'packet current finite solid visibility',...profileWrites('packet-solid'),colorAttachments:[],depthStencilAttachment:{view:r.solids.createView(),depthLoadOp:'clear',depthStoreOp:'store',depthClearValue:1}});
    if(triangleCount){pass.setPipeline(pipelines.solid);pass.setBindGroup(0,bind(pipelines.solid,[[2,bundleBuffer],[10,triangles]]));
     for(let bi=0;bi<bundleCount;bi++){const x=bi%plan.solidColumns*width,y=Math.floor(bi/plan.solidColumns)*height;pass.setViewport(x,y,width,height,0,1);pass.setScissorRect(x,y,width,height);pass.draw(triangleCount*3,1,0,bi);}}
    pass.end();
+   if(!gridOnly){
    const raster=selection
     ?pipelines.splatCandidates??=device.createRenderPipeline({...splatDescriptor,vertex:{module,entryPoint:'splatCandidates'}})
     :pipelines.splat??=device.createRenderPipeline(splatDescriptor);
@@ -191,7 +193,8 @@ export function createPacketBundleTransport(device){
    pass.setPipeline(raster);pass.setBindGroup(0,bind(raster,entries));
    if(selection)pass.drawIndirect(selection.draw,0);else pass.draw(6,plan.instances);
    pass.end();
-   const fixed=extinctionGridWidth?(grid??=createFixedExtinctionGrid(device,DECL)).encode(encoder,{material,width:extinctionGridWidth,plan,resources:r,bundleBuffer,profileWrites,retire}):null;
+   }
+   const fixed=extinctionGridWidth?(grid??=createFixedExtinctionGrid(device,DECL)).encode(encoder,{material,width:extinctionGridWidth,plan,resources:r,bundleBuffer,profileWrites,retire,gridOnly}):null;
    if(!momentsOnly)for(const [entry,entries,groups] of [
     ['integrate',[[4,r.plan],[6,r.atlas],[7,r.rays]],Math.ceil(plan.rays/64)],
     ['average',[[2,bundleBuffer],[4,r.plan],[7,r.rays],[8,r.means]],Math.ceil(bundleCount/64)],
@@ -199,11 +202,12 @@ export function createPacketBundleTransport(device){
     const p=pipeline(entry);pass=encoder.beginComputePass({label:'packet bundle '+entry,...profileWrites('packet-'+entry)});pass.setPipeline(p);pass.setBindGroup(0,bind(p,entries));pass.dispatchWorkgroups(groups);pass.end();
    }
    receipt={...plan,bytes:plan.bytes+(selection?.bytes??0),identity:{...material.identity},coverage:{...material.coverage},measure:'projected-base-support-with-acquired-axial-interval',visibility:triangleCount?'current-finite-triangle-depth':'empty-solid-scene',history:'fresh-only',source:'intrinsic-emission-only',quantity:momentsOnly?'ordered-emission-and-extinction-slabs':'spherical-mean-incoming-radiance',depth:'explicit-axial-distance; center-slice mixture',work:{
-    rasterSubmission:selection?'gpu-current-support-index':'dense',
-    submittedInstances:selection?null:plan.instances,denseInstances:plan.instances,
+    rasterSubmission:gridOnly?'none-grid-only':selection?'gpu-current-support-index':'dense',
+    submittedInstances:gridOnly?0:selection?null:plan.instances,denseInstances:plan.instances,
     indexedSlots:selection?plan.slots:0,indexedCells:selection?.cellCount??0,
     subrays:plan.rays,sectionReads:plan.rays*sections,solidTriangles:triangleCount*bundleCount}};
    receipt.extinction=fixed?'fixed-particle-grid':'directional-particle-splats';
+   if(extinctionOnly)receipt.source='none-extinction-only';
    if(fixed){receipt.fixedGrid=fixed;receipt.bytes+=fixed.bytes;}
    return {buffer:momentsOnly?null:r.incident,count:momentsOnly?0:receivers,identity:{...material.identity},submission:selection?.draw??null,receipt};
   },
