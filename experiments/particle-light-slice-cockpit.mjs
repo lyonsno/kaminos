@@ -6,9 +6,9 @@ import {bindParticleNumber} from '../particle-number-control.mjs';
 
 const initial=Object.freeze({enabled:false,mode:'ray',source:'probe',view:'fine',halfWidth:.15,offsets:7,sweepOffsets:17,sections:32,
  gain:1,refreshSteps:4,depthStride:4,acrossStride:3,correctionStart:.25,correctionExtent:.25,sharingRadius:.18,depth:1,showGeometry:true,smokeView:false,previewGain:12,followReceiver:false,followRadius:1});
-const discrete=new Set(['offsets','sweepOffsets','sections','refreshSteps','depthStride','acrossStride']);
+const discrete=new Set(['offsets','sweepOffsets','sections','refreshSteps','depthStride','acrossStride','extinctionGridWidth']);
 const ratios=new Set(['correctionStart','correctionExtent','sharingRadius','depth']);
-const choices={mode:['ray','bundle','sweep'],source:['probe','flame'],view:['fine','coarse','shared','held','advected']};
+const choices={mode:['ray','bundle','sweep'],source:['probe','flame'],view:['fine','coarse','shared','held','advected','paired-fine','paired-grid']};
 const vectors=new Set(['emitter','receiver']);
 function checked(settings,patch){
  const result={...settings};
@@ -26,7 +26,7 @@ function checked(settings,patch){
 }
 
 export function createParticleLightSliceCockpit({runtime,session,select,refresh,host,onSettings=()=>{},record=()=>{},inputs={}}){
- let settings=checked(initial,inputs),refs=null,mounting=null,disposed=false,view=null,held=null,observed=null,comparison=null,comparisonKey=null,lastWorld=null,error=null,previewOwner=null,previewSnapshot=null,previewProfiles=null,previewGain=null,followReceiverPosition=null,followWorldKey=null;
+ let settings=checked({...initial,extinctionGridWidth:16},inputs),refs=null,mounting=null,disposed=false,view=null,held=null,observed=null,comparison=null,comparisonKey=null,lastWorld=null,error=null,previewOwner=null,previewSnapshot=null,previewProfiles=null,previewGain=null,followReceiverPosition=null,followWorldKey=null;
  const controls=[],disposers=[];
  let historyTarget=null,historyKey=null,history=null,prediction=null,score=null,historyStatus=null;
  const sourceFollow=createLightSliceReceiverFollow({runtime,onRead:()=>{if(!disposed){draw();session.redraw();}}});
@@ -110,7 +110,8 @@ export function createParticleLightSliceCockpit({runtime,session,select,refresh,
  function updateVisibility(){if(refs){refs.emitter.visible=settings.enabled;refs.receiver.visible=settings.enabled;refs.lines.visible=settings.enabled&&settings.showGeometry;}}
  function read(){const a=reader.read(),r=a.result;return {settings:structuredClone(settings),follow:follow.read(),sourceHistory:historyRead(),probe:{prepared:a.prepared,inFlight:a.inFlight,error:error??a.error,reason:a.reason,
   ...(r?{identity:r.identity,route:r.route,source:r.source,model:r.model,width:r.width,sections:r.sections,emitter:r.emitter,receiver:r.receiver}:{}),
-  center:r?.profiles[Math.floor(r.width/2)*(r.width+1)]?.at(-1)??null,heldIdentity:held?.identity??null},handles:refs?{emitter:refs.a.id,receiver:refs.b.id}:null};}
+  center:r?.profiles[Math.floor(r.width/2)*(r.width+1)]?.at(-1)??null,pairedGrid:r?.fixedGrid??null,
+  gridCenter:r?.gridProfiles?.[Math.floor(r.width/2)*(r.width+1)]?.at(-1)??null,heldIdentity:held?.identity??null},handles:refs?{emitter:refs.a.id,receiver:refs.b.id}:null};}
  async function configure(patch){
   const wasFollowing=settings.followReceiver&&settings.enabled;
   const next=checked(settings,patch);
@@ -158,6 +159,7 @@ export function createParticleLightSliceCockpit({runtime,session,select,refresh,
   try{
    reader.tick({emitter,receiver,halfWidth:settings.halfWidth,sections:settings.sections,
     width:settings.mode==='ray'?1:settings.mode==='bundle'?settings.offsets:settings.sweepOffsets,
+    compareGridWidth:settings.view.startsWith('paired-')?settings.extinctionGridWidth:0,
     refreshSteps:settings.refreshSteps,source:settings.source,gain:settings.gain,carrier:historyTarget?sourceFollow.read():null,bindSource:!!historyTarget&&!history});
   }catch(e){error=e.message;}
  }
@@ -234,7 +236,8 @@ export function createParticleLightSliceCockpit({runtime,session,select,refresh,
     correctionExtent:settings.correctionExtent,sharingRadius:settings.sharingRadius,source:snapshot.source,gain:snapshot.gain};
    const key=JSON.stringify(quality);
    if(settings.view!=='advected'&&(observed!==snapshot||comparisonKey!==key)){observed=snapshot;comparisonKey=key;comparison=compareSliceSections(snapshot.moments,quality);}
-   profiles=settings.view==='advected'?(prediction?.available?prediction.profiles:null):comparison[settings.view==='held'?'fine':settings.view];
+   profiles=settings.view.startsWith('paired-')?(snapshot.fixedGrid?settings.view==='paired-grid'?snapshot.gridProfiles:snapshot.profiles:null):
+    settings.view==='advected'?(prediction?.available?prediction.profiles:null):comparison[settings.view==='held'?'fine':settings.view];
   }
   try{preview(snapshot,profiles);}catch(e){error=e.message;clearPreview();}
   geometry(snapshot,profiles);
@@ -274,7 +277,7 @@ export function createParticleLightSliceCockpit({runtime,session,select,refresh,
   const checkbox=(parent,key,label)=>{const row=document.createElement('label'),e=document.createElement('input');e.type='checkbox';e.checked=settings[key];row.append(e,' '+label);parent.append(row);controls.push([key,e]);e.addEventListener('change',()=>call('setLightSlice',{[key]:e.checked}));};
   checkbox(fieldset,'enabled','Inspect native light through particles');fieldset.append(panel);
   const labels={mode:['Paths',['One ray','Bundle patch','One-direction sweep']],source:['Source',['Diagnostic emitter','Native flame']],
-   view:['Display',['Fresh fine profile','Coarse patch','Shared correction','Held measurement','Advected source · held transmission']]};
+   view:['Display',['Fresh fine profile','Coarse patch','Shared correction','Held measurement','Advected source · held transmission','Paired: culled particles','Paired: fixed extinction grid']]};
   for(const [key,[title,names]] of Object.entries(labels)){
    const label=document.createElement('label'),e=document.createElement('select');label.style.cssText='display:flex;justify-content:space-between;gap:5px;margin:6px 0';
    choices[key].forEach((v,i)=>{const option=document.createElement('option');option.value=v;option.textContent=names[i];e.append(option);});
@@ -283,7 +286,7 @@ export function createParticleLightSliceCockpit({runtime,session,select,refresh,
   const plots=document.createElement('div');panel.append(plots);
   const advanced=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Sampling and correction controls';advanced.append(summary);
   for(const [key,title,step] of [['previewGain','Smoke display gain',.5],['followRadius','Receiver attachment radius',.05],['halfWidth','Beam half-width',.01],['offsets','Bundle rays across',1],['sweepOffsets','Sweep rays across',1],['sections','Depth sections',1],
-   ['gain','Probe light',.05],['refreshSteps','Refresh every N sim steps (0 holds)',1],['depthStride','Coarse depth grouping',1],['acrossStride','Coarse offset grouping',1],
+   ['gain','Probe light',.05],['extinctionGridWidth','Extinction grid width (cells)',1],['refreshSteps','Refresh every N sim steps (0 holds)',1],['depthStride','Coarse depth grouping',1],['acrossStride','Coarse offset grouping',1],
    ['correctionStart','Correction starts (0–1)',.025],['correctionExtent','Correction length (0–1)',.025],['sharingRadius','Sharing radius (0–1)',.025],['depth','Cross-section depth (0–1)',.025]]){
    const row=document.createElement('label'),input=document.createElement('input'),grip=document.createElement('span');
    row.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) 86px;align-items:center;gap:5px;margin:5px 0';grip.textContent=title;input.type='number';input.step=step===1?'1':'any';input.setAttribute('aria-label',title);

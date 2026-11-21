@@ -4,13 +4,15 @@ import {packetCandidateProfilePasses} from './volume-packet-candidates.mjs';
 
 export const RESIDENT_VOLUME_ROUTE='whole-fine-six-direction-resident-light';
 const directions=[['+X','-X'],['+Y','-Y'],['+Z','-Z']];
-export const residentVolumeProfilePasses=Object.freeze([...packetCandidateProfilePasses,'packet-solid','packet-raster',...directions.flat().flatMap(
+export const residentVolumeProfilePasses=Object.freeze([...packetCandidateProfilePasses,'packet-solid','packet-raster','grid-deposit','grid-march',...directions.flat().flatMap(
  d=>[...['seedTau','carry','refresh','bin','gather','resolve'].map(p=>d+' '+p),'merge '+d])]);
 
-const allowed={mode:['off','held','advected'],presentation:['smoke','flame']};
+const allowed={mode:['off','held','advected'],presentation:['smoke','flame'],attenuation:['seed','fine','fixed-grid']};
 export function residentVolumeSettings(patch={}){
- const next={mode:'off',presentation:'smoke',width:12,stride:3,refreshEvery:2,gain:1,cullFresh:false,...patch};
- for(const k of Object.keys(patch))if(!['mode','presentation','width','stride','refreshEvery','gain','cullFresh'].includes(k))throw Error('Unknown light history setting '+k);
+ const defaults={mode:'off',presentation:'smoke',width:12,stride:3,refreshEvery:2,gain:1,cullFresh:false,attenuation:'seed',extinctionGridWidth:16};
+ const next={...defaults,...patch};
+ for(const k of Object.keys(patch))if(!Object.hasOwn(defaults,k))throw Error('Unknown light history setting '+k);
+ if(!Number.isSafeInteger(next.extinctionGridWidth)||next.extinctionGridWidth<1)throw Error('Invalid extinction grid width');
  for(const [k,values] of Object.entries(allowed))if(!values.includes(next[k]))throw Error('Invalid light history '+k);
  residentBeamPlan({...next,sections:next.width});
  if(!Number.isSafeInteger(next.refreshEvery)||next.refreshEvery<0||!Number.isFinite(next.gain)||next.gain<0||!Number.isFinite(Math.fround(next.gain)))throw Error('Invalid light history cadence or gain');
@@ -87,10 +89,10 @@ export function createResidentVolume(device,requested,dims){
    if(!seed&&seedAtlas){seedAtlas.dispose();seedAtlas=null;}
    if(seed||refresh){
     const transport=seed?seedAtlas:freshAtlas,width=seed?n:1;
-    receipt=transport.encode(encoder,{material,bundles:requests.map(q=>q.request),width,height:width,sections:n,receivers:1,momentsOnly:true,cull:!seed&&cullFresh,profileWrites}).receipt;
+    receipt=transport.encode(encoder,{material,bundles:requests.map(q=>q.request),width,height:width,sections:n,receivers:1,momentsOnly:true,cull:!seed&&(cullFresh||s.attenuation!=='seed'),extinctionGridWidth:s.attenuation==='fixed-grid'?s.extinctionGridWidth:0,profileWrites}).receipt;
     shared={atlas:transport.buffers.atlas,receipt};
    }
-   const fields=owners.map((o,i)=>o.encode(encoder,material,{refresh,stepDelta,shared:shared?{...shared,index:i}:null,profileWrites:k=>profileWrites(sweeps[i].direction+' '+k)}));
+   const fields=owners.map((o,i)=>o.encode(encoder,material,{refresh,stepDelta,refreshTau:s.attenuation!=='seed',shared:shared?{...shared,index:i}:null,profileWrites:k=>profileWrites(sweeps[i].direction+' '+k)}));
    encoder.clearBuffer(combinedHeld);encoder.clearBuffer(combinedAdvected);
    for(let i=0;i<fields.length;i++){
     const {held,advected}=fields[i].views;
@@ -106,7 +108,7 @@ export function createResidentVolume(device,requested,dims){
     work:{updates,stepDelta,directions:sweeps.map(s=>s.direction),seedRays:seed?plan.receiverRays*sweeps.length:0,
      freshRays:refresh?sweeps.length:0,freshRasterInstances:receipt?receipt.work.submittedInstances:0,
      freshRasterDenseInstances:receipt?.work.denseInstances??0,freshRasterSubmission:receipt?.work.rasterSubmission??null,
-     freshIndexSlots:receipt?.work.indexedSlots??0,freshAtlasPasses:receipt?1:0,
+     attenuation:s.attenuation,fixedGrid:receipt?.fixedGrid??null,freshIndexSlots:receipt?.work.indexedSlots??0,freshAtlasPasses:receipt?1:0,
      freshSlots:fields.map(f=>f.work.refreshedSlot),retainedSections:plan.sampleCount*sweeps.length,receiverPoints:plan.points,
      reuseBufferBytes:fields.reduce((n,f)=>n+f.work.reuseBufferBytes,2*bytes+mapping.length*32),
      packetWorkspaceBytes:((seed?receipt:freshAtlas.read())?.bytes??0),readbacks:0}};

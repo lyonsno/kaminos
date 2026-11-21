@@ -78,6 +78,7 @@ fn atlasCell(z:u32,xy:vec2<u32>)->vec4<f32>{
  let i=id.x;let length=layers();if(i>=select(length,arrayLength(&samples),init)){return;}
  let ray=select(beam.schedule.y,i/length,init);let z=i%length;let q=nominal(ray,z);
  let fresh=atlasCell(z,select(vec2<u32>(0),vec2<u32>(q.xy),init));
+ if(beam.schedule.w==2u){tau[(u32(q.x)+cells()*u32(q.y))*length+z]=fresh.w;}
  let finite=all((bitcast<vec3<u32>>(fresh.xyz)&vec3<u32>(0x7f800000u))!=vec3<u32>(0x7f800000u))&&max(max(abs(fresh.x),abs(fresh.y)),abs(fresh.z))<65504.0;
  samples[ray*length+z]=Sample(vec4<f32>(toWorld(q),select(0.0,1.0,finite)),vec4<f32>(select(vec3<f32>(0),fresh.rgb,finite),select(0.0,1.0,finite)));
 }
@@ -177,7 +178,7 @@ export function createResidentBeam(device,requested){
  }
  return {
   acquisition,
-  encode(encoder,material,{refresh=true,stepDelta=1,profileWrites=()=>({}),shared=null}={}){
+  encode(encoder,material,{refresh=true,stepDelta=1,refreshTau=false,profileWrites=()=>({}),shared=null}={}){
    const q=acquisition(material,{refresh,stepDelta});
    const {init,id,key,origin,far,half,halfY,bundle,cadence,request,width}=q;
    if(!init&&seedTransport){seedTransport.dispose();seedTransport=null;}
@@ -195,11 +196,11 @@ export function createResidentBeam(device,requested){
    }else if(shared)throw Error('Unscheduled beam atlas');
    const axis=new Float32Array([...origin,half,...bundle.forward,far,...bundle.right,plan.width,...bundle.up,plan.sections]);
    const config=new ArrayBuffer(96),f=new Float32Array(config),u=new Uint32Array(config);
-   f.set(axis);u.set([plan.stride,cadence?.slot??0,receipt?.columns??0,Number(init)],16);f.set([g.gain??1,halfY,stepDelta,offset],20);
+   f.set(axis);u.set([plan.stride,cadence?.slot??0,receipt?.columns??0,init?1:refreshTau?2:0],16);f.set([g.gain??1,halfY,stepDelta,offset],20);
    device.queue.writeBuffer(cfg,0,config);
    if(init)pass(encoder,'seedTau',[[0,cfg],[2,r.tau],[3,atlas]],plan.points,profileWrites);
    else pass(encoder,'carry',[[0,cfg],[1,r.samples],[4,material.fine],[5,material.sourceOptions],[6,material.options]],plan.sampleCount,profileWrites);
-   if(atlas)pass(encoder,'refresh',[[0,cfg],[1,r.samples],[3,atlas]],init?plan.sampleCount:plan.sections,profileWrites);
+   if(atlas)pass(encoder,'refresh',[[0,cfg],[1,r.samples],[2,r.tau],[3,atlas]],init?plan.sampleCount:plan.sections,profileWrites);
    encoder.clearBuffer(r.heads);
    pass(encoder,'bin',[[0,cfg],[1,r.samples],[7,r.heads],[8,r.links]],plan.sampleCount,profileWrites);
    pass(encoder,'gather',[[0,cfg],[1,r.samples],[7,r.heads],[8,r.links],[9,r.held],[10,r.advected]],plan.points,profileWrites);
@@ -209,7 +210,7 @@ export function createResidentBeam(device,requested){
    return {identity,views:{held:view(r.held),advected:view(r.advected)},plan,
     work:{seedRays:init?plan.receiverRays:0,refreshRays:cadence?1:0,refreshedSlot:cadence?.slot??null,sectionsMoved:init?0:plan.sampleCount,receiverPoints:plan.points,rasterInstances:g.batched?0:receipt?.instances??0,
      reuseBufferBytes:Object.values(sizes).reduce((a,b)=>a+b,96),packetWorkspaceBytes:(g.batched?0:(init?receipt:refreshTransport.read())?.bytes??0),readbacks:0},
-    tau:r.tau,authority:'resident equal-budget finite patch; seed extinction and one shared fresh emission column'};
+    tau:r.tau,authority:refreshTau?'resident finite patch; refresh source and extinction column':'resident equal-budget finite patch; seed extinction and one shared fresh emission column'};
   },
   dispose(){
    if(disposed)return;disposed=true;seedTransport?.dispose();refreshTransport?.dispose();

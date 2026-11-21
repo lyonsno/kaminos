@@ -672,7 +672,7 @@ export function createOpticalParticles(device,{transparent=false,indexedQuads=tr
   }else{
    try{
     const epoch=materialHandoff.reserveEpoch(),domain={origin:[-1,-1,-1],pitch:2/dims[0],dims:[...dims],worldFromFine:materialTransform};
-    const fieldKey=JSON.stringify([epoch,materialStamp,domain.dims,materialTransform,residentVolume.revision,volumeSettings.width,volumeSettings.stride,volumeSettings.gain]);
+    const fieldKey=JSON.stringify([epoch,materialStamp,domain.dims,materialTransform,residentVolume.revision,volumeSettings.width,volumeSettings.stride,volumeSettings.gain,volumeSettings.attenuation,volumeSettings.extinctionGridWidth]);
     if(!residentOwner||residentKey!==fieldKey){clearVolume();residentOwner=residentVolume.create(device,volumeSettings,dims);residentKey=fieldKey;}
     const field=residentOwner.encode(encoder,{particles,slots,options,fine,sourceOptions:source.uniform,domain,identity:{epoch,step,frame,materialStamp}},{refreshEvery:volumeSettings.refreshEvery,cullFresh:volumeSettings.cullFresh,profileWrites});
     const next=field.views[volumeSettings.mode],includeIntrinsic=volumeSettings.presentation==='flame';

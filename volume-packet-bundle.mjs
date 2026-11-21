@@ -1,6 +1,7 @@
 import {PARTICLE_LIGHT_MATERIAL_WGSL} from './volume-optical-particles.mjs';
 import {PARTICLE_KERNEL_WGSL,PARTICLE_STATE_WGSL} from './volume-particle-state.mjs';
 import {createPacketCandidates} from './volume-packet-candidates.mjs';
+import {createFixedExtinctionGrid} from './volume-packet-extinction-grid.mjs';
 
 const vector=(v,n,name)=>{if(!Array.isArray(v)||v.length!==n||v.some(x=>!Number.isFinite(x)||!Number.isFinite(Math.fround(x))))throw Error('Invalid bundle '+name);return [...v];};
 const count=(v,name)=>{if(!Number.isSafeInteger(v)||v<1||v>0xffffffff)throw Error('Invalid bundle '+name);return v;};
@@ -81,7 +82,7 @@ fn splatPair(vertex:u32,instance:u32)->Splat{
  let fade=select(1.0,particleLifeFade(p.motion.w,material.lifeControl.y),material.lifeControl.x>0);
  var source=particleLightIntrinsic(p)*material.gain.x*fade;
  if((b.ids.y!=0xffffffffu&&membership[pi]!=b.ids.y)||(b.ids.w!=0u&&pi!=b.ids.w-1u)){source=vec3<f32>(0);}
- let tau=particleLightExtinction(p,material)*fade;
+ let tau=select(particleLightExtinction(p,material)*fade,0.0,plan.solid.w!=0u);
  if(max(max(source.x,source.y),max(source.z,tau))<=0){return out;}
  let radius=particleLightBaseRadius(p,material);
  var axisY=vec3<f32>(0,1,0);if(material.raster.z>0){let v=mix(axisY,particleDirectionDecode(p.shape.yz),material.raster.z);if(dot(v,v)>1e-10){axisY=normalize(v);}}
@@ -138,7 +139,7 @@ fn splatPair(vertex:u32,instance:u32)->Splat{
 
 export function createPacketBundleTransport(device){
  const module=device.createShaderModule({label:'finite orthographic particle bundles',code:PACKET_BUNDLE_WGSL});
- const pipelines={};let resources=null,key=null,receipt=null,candidates=null;const retired=[];
+ const pipelines={};let resources=null,key=null,receipt=null,candidates=null,grid=null;const retired=[];
  const retire=items=>{retired.push(...items.filter(Boolean));queueMicrotask(()=>{const old=retired.splice(0);device.queue.onSubmittedWorkDone().catch(()=>{}).then(()=>old.forEach(b=>b.destroy()));});};
  function pipeline(entry){return pipelines[entry]??=device.createComputePipeline({label:'packet bundle '+entry,layout:'auto',compute:{module,entryPoint:entry}});}
  function bind(p,entries){return device.createBindGroup({layout:p.getBindGroupLayout(0),entries:entries.map(([binding,resource])=>({binding,resource:resource?.createView?resource.createView():{buffer:resource}}))});}
@@ -151,7 +152,8 @@ export function createPacketBundleTransport(device){
    device.createRenderPipelineAsync(solidDescriptor).then(p=>{pipelines.solid=p;}),
    device.createRenderPipelineAsync(splatDescriptor).then(p=>{pipelines.splat=p;}),
   ]);},
-  encode(encoder,{material,bundles,width,height,sections,receivers,membership=null,triangles=null,triangleCount=0,momentsOnly=false,cull=false,profileWrites=()=>({})}){
+  encode(encoder,{material,bundles,width,height,sections,receivers,membership=null,triangles=null,triangleCount=0,momentsOnly=false,cull=false,extinctionGridWidth=0,profileWrites=()=>({})}){
+   if(!Number.isSafeInteger(extinctionGridWidth)||extinctionGridWidth<0)throw Error('Invalid fixed extinction width');
    if(!material?.particles||!material.options||!material.identity)throw Error('Packet bundles require current native material');
    const list=Array.isArray(bundles),bundleCount=list?bundles.length:bundles?.count;
    const plan=packetBundlePlan(device.limits,{width,height,sections,bundles:bundleCount,slots:material.slots,receivers});
@@ -171,7 +173,7 @@ export function createPacketBundleTransport(device){
    if(!bundleBuffer||bundleBuffer.size<plan.bundleBytes)throw Error('Bundle descriptors are incomplete');
    if(membership&&membership.size<material.slots*4)throw Error('Bundle source membership is incomplete');
    if(list)device.queue.writeBuffer(r.bundles,0,packPacketBundles(bundles));
-   device.queue.writeBuffer(r.plan,0,new Uint32Array([width,height,plan.columns,sections,material.slots,bundleCount,receivers,triangleCount,plan.solidColumns,plan.atlasWidth,plan.atlasHeight,0]));
+   device.queue.writeBuffer(r.plan,0,new Uint32Array([width,height,plan.columns,sections,material.slots,bundleCount,receivers,triangleCount,plan.solidColumns,plan.atlasWidth,plan.atlasHeight,extinctionGridWidth]));
    const selection=cull?(candidates??=createPacketCandidates(device,PACKET_BUNDLE_STRUCT_WGSL)).encode(encoder,{material,bundleBuffer,plan,profileWrites}):null;
    pipelines.solid??=device.createRenderPipeline(solidDescriptor);
    let pass=encoder.beginRenderPass({label:'packet current finite solid visibility',...profileWrites('packet-solid'),colorAttachments:[],depthStencilAttachment:{view:r.solids.createView(),depthLoadOp:'clear',depthStoreOp:'store',depthClearValue:1}});
@@ -189,6 +191,7 @@ export function createPacketBundleTransport(device){
    pass.setPipeline(raster);pass.setBindGroup(0,bind(raster,entries));
    if(selection)pass.drawIndirect(selection.draw,0);else pass.draw(6,plan.instances);
    pass.end();
+   const fixed=extinctionGridWidth?(grid??=createFixedExtinctionGrid(device,DECL)).encode(encoder,{material,width:extinctionGridWidth,plan,resources:r,bundleBuffer,profileWrites,retire}):null;
    if(!momentsOnly)for(const [entry,entries,groups] of [
     ['integrate',[[4,r.plan],[6,r.atlas],[7,r.rays]],Math.ceil(plan.rays/64)],
     ['average',[[2,bundleBuffer],[4,r.plan],[7,r.rays],[8,r.means]],Math.ceil(bundleCount/64)],
@@ -200,10 +203,12 @@ export function createPacketBundleTransport(device){
     submittedInstances:selection?null:plan.instances,denseInstances:plan.instances,
     indexedSlots:selection?plan.slots:0,indexedCells:selection?.cellCount??0,
     subrays:plan.rays,sectionReads:plan.rays*sections,solidTriangles:triangleCount*bundleCount}};
+   receipt.extinction=fixed?'fixed-particle-grid':'directional-particle-splats';
+   if(fixed){receipt.fixedGrid=fixed;receipt.bytes+=fixed.bytes;}
    return {buffer:momentsOnly?null:r.incident,count:momentsOnly?0:receivers,identity:{...material.identity},submission:selection?.draw??null,receipt};
   },
   read:()=>receipt,
   get buffers(){return resources;},
-  dispose(){if(resources)retire(Object.values(resources));candidates?.dispose();candidates=null;resources=null;key=null;receipt=null;},
+  dispose(){if(resources)retire(Object.values(resources));candidates?.dispose();grid?.dispose(retire);grid=null;candidates=null;resources=null;key=null;receipt=null;},
  };
 }

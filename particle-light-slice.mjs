@@ -41,19 +41,19 @@ export function readOpticalAtlas(bytes, layout, rowBytes,bundle=0){
 
 export function createLightSliceProbe({runtime,onChange=()=>{},createTransport=createPacketBundleTransport}){
  let owner=null,device=null,transport=null,prepared=false,preparing=false,inFlight=false,disposed=false,generation=0,lastKey=null;
- let result=null,error=null,reason=null;
+ let result=null,error=null,reason=null,gridTransport=null;
  const read=()=>({result,error,reason,inFlight,prepared});
  function resetTransport(){
-  generation++;transport?.dispose();transport=null;device=null;prepared=false;preparing=false;
+  generation++;transport?.dispose();gridTransport?.dispose();gridTransport=null;transport=null;device=null;prepared=false;preparing=false;
   lastKey=null;result=null;error=null;reason=null;
  }
- function tick({emitter,receiver,halfWidth,sections,width,refreshSteps,source,gain,carrier=null,bindSource=false}){
+ function tick({emitter,receiver,halfWidth,sections,width,refreshSteps,source,gain,carrier=null,bindSource=false,compareGridWidth=0}){
   if(disposed)return;
   const next=runtime();
   if(owner!==next){owner=next;resetTransport();}
   if(!owner?.submitOpticalParticleMaterial){reason='Current volume has no native particle material';return;}
   if(inFlight||preparing)return;
-  const key=JSON.stringify([emitter,receiver,halfWidth,sections,width,source,gain]);
+  const key=JSON.stringify([emitter,receiver,halfWidth,sections,width,source,gain,compareGridWidth]);
   let pending=null,submitted=null;
   try{
    submitted=owner.submitOpticalParticleMaterial((encoder,frame,currentDevice)=>{
@@ -82,13 +82,15 @@ export function createLightSliceProbe({runtime,onChange=()=>{},createTransport=c
     const origin=toFine(emitter),target=toFine(receiver),distance=Math.hypot(...target.map((v,c)=>v-origin[c]));
     const bundle=finitePacketBundle({origin,target,halfSize:[halfWidth/transform.scale,halfWidth/transform.scale],far:distance,weight:1});
     const bundles=attached?[bundle,{...bundle,sourceSlot:carrier.slot}]:[bundle];
-    const encoded=transport.encode(encoder,{material:frame,bundles,width,height:width,sections,receivers:1});
+    const args={material:frame,bundles,width,height:width,sections,receivers:1,momentsOnly:true,cull:compareGridWidth>0};
+    const encoded=transport.encode(encoder,args);
+    const paired=compareGridWidth?(gridTransport??=createTransport(device)).encode(encoder,{...args,extinctionGridWidth:compareGridWidth}):null;
     const layout=encoded.receipt,rowBytes=Math.ceil(layout.atlasWidth*8/256)*256;
-    const bytes=rowBytes*layout.atlasHeight;if(bytes>device.limits.maxBufferSize)throw Error('Selected optical atlas exceeds readback capacity');
-    const staging=device.createBuffer({label:'selected light slice optical sections',size:bytes,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
-    try{encoder.copyTextureToBuffer({texture:transport.buffers.atlas},{buffer:staging,bytesPerRow:rowBytes},{width:layout.atlasWidth,height:layout.atlasHeight});}
+    const bytes=rowBytes*layout.atlasHeight,size=bytes*(paired?2:1);if(size>device.limits.maxBufferSize)throw Error('Selected optical atlas exceeds readback capacity');
+    const staging=device.createBuffer({label:'selected light slice optical sections',size,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+    try{for(const [i,t] of (paired?[transport,gridTransport]:[transport]).entries())encoder.copyTextureToBuffer({texture:t.buffers.atlas},{buffer:staging,offset:i*bytes,bytesPerRow:rowBytes},{width:layout.atlasWidth,height:layout.atlasHeight});}
     catch(e){staging.destroy();throw e;}
-    pending={staging,layout,rowBytes,transform:structuredClone(transform),frameIdentity:{...frame.identity},isolatedCarrier:attached?{slot:carrier.slot,birth:carrier.birth}:null};
+    pending={staging,layout,rowBytes,paired:paired?.receipt.fixedGrid,transform:structuredClone(transform),frameIdentity:{...frame.identity},isolatedCarrier:attached?{slot:carrier.slot,birth:carrier.birth}:null};
    });
    if(!submitted.available){reason=submitted.reason;pending?.staging.destroy();return;}
   }catch(e){pending?.staging.destroy();error=e.message;onChange(read());return;}
@@ -102,8 +104,10 @@ export function createLightSliceProbe({runtime,onChange=()=>{},createTransport=c
    const moments=readOpticalAtlas(bytes,layout,rowBytes);
    const injection=source==='probe'?[gain,gain*.82,gain*.56]:[0,0,0];
    const profiles=moments.map(ray=>resolveDirectionalProfile(ray,{incoming:injection,native:source==='flame'}));
+   const gridMoments=pending.paired?readOpticalAtlas(bytes.subarray(rowBytes*layout.atlasHeight),layout,rowBytes):null;
+   const gridProfiles=gridMoments?.map(ray=>resolveDirectionalProfile(ray,{incoming:injection,native:source==='flame'}));
    const isolatedMoments=isolatedCarrier?readOpticalAtlas(bytes,layout,rowBytes,1):null;
-   result={identity:frameIdentity,key,source,gain,transform,isolatedCarrier,isolatedMoments,emitter:[...emitter],receiver:[...receiver],halfWidth,sections,width,profiles,moments,
+   result={identity:frameIdentity,key,source,gain,transform,isolatedCarrier,isolatedMoments,emitter:[...emitter],receiver:[...receiver],halfWidth,sections,width,profiles,moments,gridProfiles,gridMoments,fixedGrid:pending.paired,
     route:'native-particle-bundle-ordered-deposition',model:'projected particle support, center-slice axial interval; no scene solids'};
    error=null;lastKey=key;
   }).catch(e=>{if(token===generation)error=e.message;}).finally(()=>{

@@ -286,14 +286,13 @@ export default {
    function section(label){const fieldset=document.createElement('fieldset'),legend=document.createElement('legend');legend.textContent=label;fieldset.style.cssText='min-width:0;border:1px solid #555;border-radius:6px;padding:8px;margin:12px 0';fieldset.append(legend);root.append(fieldset);controlRoot=fieldset;}
    lightSlice.mount(root,document,invoke);
    section('Whole-volume light history');
-   const residentHelp=document.createElement('p');residentHelp.textContent='Six directions cover the Fine volume. Held and carried views share fresh rays. Extinction stays at the seeded state.';controlRoot.append(residentHelp);
-   for(const [key,label,choices] of [['mode','History',[['off','Off'],['held','Held light'],['advected','Carried light']]],['presentation','Show',[['smoke','Lit smoke only'],['flame','Flame and lit smoke']]]]){
+   for(const [key,label,choices] of [['mode','History',[['off','Off'],['held','Held light'],['advected','Carried light']]],['presentation','Show',[['smoke','Lit smoke only'],['flame','Flame and lit smoke']]],['attenuation','Extinction',[['seed','Hold seed'],['fine','Culled particles'],['fixed-grid','Fixed particle grid']]]]){
     const row=document.createElement('label'),input=document.createElement('select');input.setAttribute('aria-label',label);
     for(const [value,name] of choices){const op=document.createElement('option');op.value=value;op.textContent=name;input.append(op);}
     row.append(label+' ',input);controlRoot.append(row);residentFields.push([key,input]);
     input.addEventListener('change',()=>void invoke('setResidentVolume',{[key]:input.value}).catch(e=>text(residentStatus,e.message)));
    }
-   for(const [key,label,delta] of [['refreshEvery','Refresh every N updates (0 holds)',1],['width','Receiver samples per axis',3],['gain','Volume light gain',.05]]){
+   for(const [key,label,delta] of [['refreshEvery','Refresh every N updates (0 holds)',1],['width','Receiver samples per axis',3],['extinctionGridWidth','Extinction grid width (cells)',1],['gain','Volume light gain',.05]]){
     const row=document.createElement('label'),grip=document.createElement('span'),input=document.createElement('input');
     row.style.cssText='display:grid;grid-template-columns:1fr 6em;gap:8px;margin:5px 0';grip.textContent=label;input.type='number';input.step=delta;input.setAttribute('aria-label',label);
     input.value=String(source().opticalParticleResidentVolume?.()?.[key]??'');
@@ -301,7 +300,7 @@ export default {
     drags.push(host.controls.installNumberDrag({input,grip,step:delta,...(delta>=1?{snap:Math.round}:{})}));
     drags.push(bindParticleNumber({input,read:()=>source().opticalParticleResidentVolume?.()?.[key],apply:value=>invoke('setResidentVolume',{[key]:value}),onAccepted:()=>syncResident(source().opticalParticleState()),onError:e=>text(residentStatus,e.message)}));
    }
-   const seedVolume=document.createElement('button');seedVolume.textContent='Reseed held extinction';seedVolume.addEventListener('click',()=>void invoke('reseedResidentVolume',{}));
+   const seedVolume=document.createElement('button');seedVolume.textContent='Reseed history';seedVolume.addEventListener('click',()=>void invoke('reseedResidentVolume',{}));
    residentStatus=document.createElement('p');residentStatus.style.cssText='font:12px monospace';
    controlRoot.append(seedVolume,residentStatus);syncResident(source().opticalParticleState());
    section('Packet illumination');
