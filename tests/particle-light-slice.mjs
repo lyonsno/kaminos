@@ -58,3 +58,7 @@ test('signed native RGB is retained through optical composition while negative e
  new DataView(bytes.buffer).setUint16(2,0xb000,true);
  assert.equal(readOpticalAtlas(bytes,{width:1,height:1,sections:1,columns:1,atlasWidth:1,atlasHeight:1},256)[0][1],-.125);
 });
+test('paired profiles use exactly one source snapshot and replace only interval extinction',()=>{
+ const result=resolveDirectionalProfile([2,3,4,2],{extinctionMoments:[0,0,0,0]});
+ assert.deepEqual(result[0].light,[2,3,4]);assert.equal(result[0].transmission,1);
+});

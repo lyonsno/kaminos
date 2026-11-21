@@ -1,12 +1,14 @@
 import {createPacketBundleTransport, finitePacketBundle} from './volume-packet-bundle.mjs';
 
-export function resolveDirectionalProfile(moments,{incoming=[0,0,0],native=true}={}) {
+export function resolveDirectionalProfile(moments,{incoming=[0,0,0],native=true,extinctionMoments=moments}={}) {
  if(!moments?.length||moments.length%4||!Array.from(moments).every((v,i)=>Number.isFinite(v)&&(i%4!==3||v>=0)))throw Error('Invalid optical moments');
+ if(extinctionMoments.length!==moments.length)throw Error('Unmatched extinction intervals');
  if(incoming.length!==3||!incoming.every(v=>Number.isFinite(v)&&v>=0))throw Error('Invalid incident source');
  let light=[...incoming],transmission=1;
  const result=[];
  for(let i=0;i<moments.length;i+=4){
-  const tau=moments[i+3],t=Math.exp(-tau),factor=tau===0?1:-Math.expm1(-tau)/tau;
+  const tau=extinctionMoments[i+3];if(!Number.isFinite(tau)||tau<0)throw Error('Invalid optical moments');
+  const t=Math.exp(-tau),factor=tau===0?1:-Math.expm1(-tau)/tau;
   const added=Array.from(moments.slice(i,i+3),v=>native?v*factor:0);
   light=light.map((v,c)=>added[c]+t*v);transmission*=t;
   result.push({light,added,tau,transmission});
@@ -84,7 +86,7 @@ export function createLightSliceProbe({runtime,onChange=()=>{},createTransport=c
     const bundles=attached?[bundle,{...bundle,sourceSlot:carrier.slot}]:[bundle];
     const args={material:frame,bundles,width,height:width,sections,receivers:1,momentsOnly:true,cull:compareGridWidth>0,extinctionOnly:compareGridWidth>0&&source==='probe'};
     const encoded=transport.encode(encoder,args);
-    const paired=compareGridWidth?(gridTransport??=createTransport(device)).encode(encoder,{...args,extinctionGridWidth:compareGridWidth}):null;
+    const paired=compareGridWidth?(gridTransport??=createTransport(device)).encode(encoder,{...args,extinctionGridWidth:compareGridWidth,extinctionOnly:true}):null;
     const layout=encoded.receipt,rowBytes=Math.ceil(layout.atlasWidth*8/256)*256;
     const bytes=rowBytes*layout.atlasHeight,size=bytes*(paired?2:1);if(size>device.limits.maxBufferSize)throw Error('Selected optical atlas exceeds readback capacity');
     const staging=device.createBuffer({label:'selected light slice optical sections',size,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
@@ -105,7 +107,7 @@ export function createLightSliceProbe({runtime,onChange=()=>{},createTransport=c
    const injection=source==='probe'?[gain,gain*.82,gain*.56]:[0,0,0];
    const profiles=moments.map(ray=>resolveDirectionalProfile(ray,{incoming:injection,native:source==='flame'}));
    const gridMoments=pending.paired?readOpticalAtlas(bytes.subarray(rowBytes*layout.atlasHeight),layout,rowBytes):null;
-   const gridProfiles=gridMoments?.map(ray=>resolveDirectionalProfile(ray,{incoming:injection,native:source==='flame'}));
+   const gridProfiles=gridMoments?.map((ray,i)=>resolveDirectionalProfile(moments[i],{extinctionMoments:ray,incoming:injection,native:source==='flame'}));
    const isolatedMoments=isolatedCarrier?readOpticalAtlas(bytes,layout,rowBytes,1):null;
    result={identity:frameIdentity,key,source,gain,transform,isolatedCarrier,isolatedMoments,emitter:[...emitter],receiver:[...receiver],halfWidth,sections,width,profiles,moments,gridProfiles,gridMoments,fixedGrid:pending.paired,
     route:'native-particle-bundle-ordered-deposition',model:'projected particle support, center-slice axial interval; no scene solids'};
