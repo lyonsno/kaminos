@@ -189,7 +189,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       }
       if(revision!==geometryRevision){
         gather.setGeometry(packed);geometryRevision=revision;
-        status.visibilityBuilds++;status.lastGeometryBuildMs=performance.now()-started;status.staticTriangles=packed.triangleCount;
+        status.geometryBuilds++;status.visibilityBuilds++;status.lastGeometryBuildMs=performance.now()-started;status.staticTriangles=packed.triangleCount;
       }
       gather.setGeometryTransforms(packed.matrices);
       gather.setDirections(directions);gather.setAngularPattern(angularPattern,angularRotation);gather.setRetainComparisons(retainComparisons);
