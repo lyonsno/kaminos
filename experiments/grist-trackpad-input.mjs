@@ -21,7 +21,7 @@ export function createGripPressure({down = 1, forceDown = 2} = {}) {
   };
 }
 
-export function installGristTrackpadGrip({canvas, camera, grip, move, setGain, changed}) {
+export function installGristTrackpadGrip({canvas, camera, grip, occluders, admit, move, setGain, changed}) {
   const document = canvas.ownerDocument, window = document.defaultView;
   const controller = new AbortController();
   const options = {capture:true, signal:controller.signal};
@@ -41,10 +41,18 @@ export function installGristTrackpadGrip({canvas, camera, grip, move, setGain, c
     return raycaster.ray;
   };
   const onGrip = event => {
-    if (event.target !== canvas || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return null;
+    if (event.target !== canvas || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey || !admit()) return null;
     ray(event);
     grip.updateWorldMatrix(true, true);
-    return raycaster.intersectObject(grip, true)[0]?.point ?? null;
+    const gripHit = raycaster.intersectObject(grip, true)[0];
+    if (!gripHit) return null;
+    for (const mesh of occluders) {
+      if (!mesh.visible) continue;
+      mesh.updateWorldMatrix(true, false);
+      const hit = raycaster.intersectObject(mesh, false)[0];
+      if (hit && hit.distance < gripHit.distance) return null;
+    }
+    return gripHit.point;
   };
   const consume = event => { event.preventDefault(); event.stopImmediatePropagation(); };
   function finish(event) {
