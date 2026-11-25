@@ -57,7 +57,7 @@ export async function createGristRegions({host,inputs={},record},{slab=false,tra
    const input=directGrip.read();
    status.textContent=input.source==='webkit-force'
     ? 'Trackpad pressure '+Math.round(input.normalized*100)+'%'
-    : 'Drag the corner grip to peel. Press harder on a Force Touch trackpad to tighten the grip.';
+    : 'Drag the corner grip to peel.';
    return;
   }
   status.textContent=failure??(slab?'Move the corner grip to peel. The far edge is held.':'Left edge held · select the right grip to pull, or the translucent tool to press');}
