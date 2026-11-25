@@ -77,7 +77,9 @@ export function installGristTrackpadGrip({canvas, camera, grip, move, setGain, c
     pressure.start();
     setGain(pressure.read().gain);
     changed();
-    consume(event);
+    // WebKit force events use mouse dispatch. Claim the drag without
+    // canceling pointerdown, which can suppress compatibility mouse events.
+    event.stopImmediatePropagation();
   }, options);
   document.addEventListener('pointermove', event => {
     if (event.pointerId !== pointerId) return;
