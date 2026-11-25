@@ -30,7 +30,7 @@ function inactiveControls(settings){
     ...(!settings.depthMode||!settings.fillExtinction&&!settings.extinctionView?['extinctionSlack']:[]),
     ...(settings.enabled&&!settings.showRaymarch?['sourceRaySteps']:[]),
     ...(!settings.showRaymarch||!settings.showParticles?['referenceEmission']:[]),
-    ...(settings.phaseFilter||settings.debugView===9||settings.lockIntegrationView?['showRaymarch','referenceEmission','fillExtinction','extinctionView','extinctionSlack']:[]),
+    ...(settings.visiblePercent<100||settings.phaseFilter||settings.debugView===9||settings.lockIntegrationView?['showRaymarch','referenceEmission','fillExtinction','extinctionView','extinctionSlack']:[]),
     ...(!settings.phaseFilter?['phaseBurnThreshold','phaseGlowThreshold']:[]),
     ...(!settings.projection?['flowAlignment']:[]),
     ...(!settings.profileMode?['emissionFalloff','extinctionFalloff']:[]),
@@ -358,6 +358,7 @@ export default {
    control('Particle spacing (source px)','spacing','1 keeps one particle slot per fire-target pixel. 2 keeps one per 2 × 2 block: about one quarter of the particle storage/update/draw work. Each update selects a source within its block. The one-evaluation source image stays full size. This affects automatic population dimensions; changing their size clears the pool. Explicit dimensions override spacing. Lower density can change brightness.',{step:1,digits:0,min:1});
    diagnostics.append(measure,timing);root.append(diagnostics);
    section('Display and output');
+   control('Carriers shown (%)','visiblePercent','Display a stable fraction of live carriers at their original optical weights and footprints. The full population continues to evolve. Set to 100 to see all carriers.',{step:1,digits:2,min:0,max:100});
    const phaseRow=document.createElement('label'),phase=document.createElement('select'),phaseLabel=document.createElement('span');
    phaseLabel.textContent='Reaction phase';phase.dataset.particle='phaseFilter';phase.setAttribute('aria-label','Reaction phase');
    phase.title='Solo particles by their last measured burn rate and their own emission. Changes display only; the grid underlay and grid extinction fill are suspended during a solo.';

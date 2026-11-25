@@ -198,6 +198,38 @@ test('optically negligible carriers cannot dilute an overlapping live carrier',a
   for(let y=0;y<4;y++)for(let x=0;x<16;x++)assert.ok(Math.abs(together[256*y+x]-alone[256*y+x])<=1,'near-empty optical state must not erase existing light or extinction');
  },{state:[1,1,0,3]}));
 });
+test('sparse carrier display restores the same held population and draws a repeatable subset',async()=>{
+ await withKaminosGpu(async({device})=>opticalFixture(device,async({owner,seed,draw})=>{
+  const rows=new Float32Array(16*16);
+  for(let slot=0;slot<16;slot++){
+   const x=(slot%4-1.5)/2,y=(Math.floor(slot/4)-1.5)/2;
+   rows.set([1,.5,.25,.1,x,y,0,1,-.5,.5,1,1,1,.5,.25,0],slot*16);
+  }
+  seed(rows);
+  for(const depthMode of [0,2]){
+   const show=visiblePercent=>draw(0,{depthMode,visiblePercent,depthScale:1,depthSlices:4});
+   const full=await show(100),records=(await owner.sample()).records;
+   assert.ok(full.some(v=>v>0));
+   assert.ok((await show(0)).every(v=>v===0),'zero percent removes all optical contributions');
+   const half=await show(50);
+   assert.ok(half.some(v=>v>0));assert.notDeepEqual(half,full);
+   assert.deepEqual(await show(100),full);
+   assert.deepEqual(await show(50),half);
+   assert.deepEqual((await owner.sample()).records,records);
+  }
+  let kept=0,omitted=0;
+  for(let slot=0;slot<16;slot++){
+   const isolated=new Float32Array(rows.length);
+   isolated.set(rows.subarray(slot*16,slot*16+16),slot*16);
+   seed(isolated);
+   const full=await draw(0,{visiblePercent:100}),half=await draw(0,{visiblePercent:50});
+   assert.ok(full.some(v=>v>0));
+   if(half.every(v=>v===0))omitted++;
+   else {assert.deepEqual(half,full,'a selected carrier keeps its full optical contribution');kept++;}
+  }
+  assert.ok(kept>0&&omitted>0,'thinning keeps whole carriers and drops others');
+ }));
+});
 test('reaction-phase solo changes the held optical draw without changing its carrier records',async()=>{
  await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw,upload})=>{
   const rows=new Float32Array(16*16);rows.set([4,2,1,1,0,0,0,1,-.5,.5,1,1,4,2,1,0]);seed(rows);

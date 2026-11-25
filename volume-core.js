@@ -13678,7 +13678,7 @@ export function createKaminosVolumePrototype({
 
   const liveLightingMode=()=>sceneSourcePolicy?.mode()??'strict';
   const liveLightingDomain=()=>JSON.stringify([state.thermalFluidAllocationId,gridSize,gridHeight,productTransform,worldSmokeKey,intermediateKey,uniforms[368]]);
-  const needsParticleGridSource=()=>particleSettings.enabled&&!particleSettings.phaseFilter&&particleSettings.debugView!==9&&(particleSettings.fillExtinction>0||particleSettings.extinctionView>0);
+  const needsParticleGridSource=()=>particleSettings.enabled&&!particleSettings.phaseFilter&&particleSettings.visiblePercent===100&&particleSettings.debugView!==9&&(particleSettings.fillExtinction>0||particleSettings.extinctionView>0);
   const lightingGridDimensions=width=>sceneLightGridDimensions(width,gridSize,gridHeight,device?.limits);
   function opticalParticleMaterialContext() {
     return [state.active,deviceRetired,state.particleSourceGeneration,state.thermalFluidAllocationId,state.fluidStateResetCount,
@@ -14102,7 +14102,7 @@ export function createKaminosVolumePrototype({
     pass.end();
     }
     let referenceReceipt=null;
-    if(particleSourceFrame&&particleSettings.showRaymarch&&!particleInspectionView&&!particleSettings.lockIntegrationView&&!particleSettings.phaseFilter&&particleSettings.debugView!==9){
+    if(particleSourceFrame&&particleSettings.showRaymarch&&!particleInspectionView&&!particleSettings.lockIntegrationView&&!particleSettings.phaseFilter&&particleSettings.visiblePercent===100&&particleSettings.debugView!==9){
       const sourceReceipt={stepping:state.opticalStepping,split:state.splitIntegral};
       encodeDraw(encoder,view,label+' reference image',targetPipeline,{...options,particleReference:true,timestampWrites:null,referenceProfileWrites:activeParticleProfileWrites});
       referenceReceipt={stepping:state.opticalStepping,raySteps:controlsSnapshot.raySteps,extraDraw:true,mode:particleSettings.showParticles?'hybrid-underlay':'full-reference',intrinsicEmission:particleSettings.showParticles?particleSettings.referenceEmission:1};
