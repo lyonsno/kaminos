@@ -114,5 +114,5 @@ export function installGristTrackpadGrip({canvas, camera, grip, occluders, admit
     setGain(pressure.read().gain);
     changed();
   }, options);
-  return {read:pressure.read, dispose() { controller.abort(); finish(); }};
+  return {read:pressure.read, cancel:finish, dispose() { controller.abort(); finish(); }};
 }

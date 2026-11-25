@@ -17,7 +17,9 @@ struct RegionControl{law:vec4f,gripDelta:vec4f,gripGain:f32}
 @compute @workgroup_size(64) fn regionDamage(@builtin(global_invocation_id) id:vec3u){
  let i=id.x;if(i>=arrayLength(&regionLinks)){return;}var c=regionLinks[i];if(c.extra.y!=1u){return;}
  let strain=max(0.0,distance(bodies[c.ids.x].p.xyz,bodies[c.ids.y].p.xyz)/c.law.y-1.0);
- c.law.z=regionDamageNext(c.law.z,strain,p.domain.w,regionControl.law.y);regionLinks[i]=c;
+ // Above the original stiffness range, extend the strain tolerance.
+ let toughness=max(1.0,regionControl.law.x);
+ c.law.z=regionDamageNext(c.law.z,strain/toughness,p.domain.w,regionControl.law.y);regionLinks[i]=c;
 }
 @compute @workgroup_size(64) fn regionConstraints(@builtin(global_invocation_id) id:vec3u){
  let i=id.x;if(i>=arrayLength(&regionLinks)){return;}let c=regionLinks[i];let a=c.ids.x;
@@ -30,7 +32,7 @@ struct RegionControl{law:vec4f,gripDelta:vec4f,gripGain:f32}
  }
  if(c.extra.y==1u){
   let b=c.ids.y;let d=bodies[a].p.xyz-bodies[b].p.xyz;let len=length(d);if(len<1e-20){return;}
-  let shift=regionCorrection(d/len*(len-c.law.y),bodies[a].p.w+bodies[b].p.w,c.law.x*regionControl.law.x*(1.0-c.law.z)*(1.0-c.law.z));
+  let shift=regionCorrection(d/len*(len-c.law.y),bodies[a].p.w+bodies[b].p.w,c.law.x*min(1.0,regionControl.law.x)*(1.0-c.law.z)*(1.0-c.law.z));
   addDelta(a,shift*bodies[a].p.w,vec3f(0));addDelta(b,-shift*bodies[b].p.w,vec3f(0));return;
  }
  let ids=vec4u(c.ids.yzw,c.extra.x);var destination=vec3f(0);var inverseMass=bodies[a].p.w;

@@ -1,6 +1,8 @@
 import {REGION_WGSL} from './region-shader.mjs';
 import {SLAB_WGSL,packSlabDispatch} from './slab-shader.mjs';
 import {retainRegionState} from './regions.mjs';
+export const MAX_CONNECTEDNESS=16;
+
 export async function createRegionSolver({device,state,bodyBuffer=null,iterations=6,dt=1/480,gravity=9.81,friction=.65,damping=1.5,shaderCode=state.slabSize?SLAB_WGSL:REGION_WGSL}){
  if(!device||!Number.isSafeInteger(iterations)||iterations<1||!(dt>0&&Number.isFinite(dt))||![gravity,friction,damping].every(x=>Number.isFinite(x)&&x>=0))throw Error('Valid GPU device and physical solver settings required');
  const owned=[],count=state.floats.length/24,grainCount=state.grainCount,cell=state.radius*4.2,materialColors=state.materialColors??0,slots=materialColors+1;
@@ -32,7 +34,7 @@ export async function createRegionSolver({device,state,bodyBuffer=null,iteration
   const encodeStage=(encoder,name,n,step)=>{if(!n)return;const pass=encoder.beginComputePass({label:'Earth '+name});pass.setPipeline(pipelines[name]);pass.setBindGroup(0,group,[step*256]);const groups=Math.ceil(n/64),limit=device.limits.maxComputeWorkgroupsPerDimension;if(groups>limit)throw Error('Earth dispatch exceeds GPU one-dimensional workgroups');pass.dispatchWorkgroups(groups);pass.end();};
   async function copy(buffer){const read=allocate(buffer.size,'Earth explicit snapshot readback',GPUBufferUsage.MAP_READ);try{const encoder=device.createCommandEncoder();encoder.copyBufferToBuffer(buffer,0,read,0,buffer.size);device.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);return new Float32Array(read.getMappedRange()).slice();}finally{read.unmap();read.destroy();owned.splice(owned.indexOf(read),1);}}
   return {bodies,tets,
-   control(value={}){if(value.strength!==undefined){if(!Number.isFinite(value.strength)||value.strength<0||value.strength>1)throw Error('Connection strength is a fraction');strength=value.strength;}if(value.gripDelta!==undefined){if(value.gripDelta.length!==3||!value.gripDelta.every(Number.isFinite))throw Error('Finite grip displacement required');gripDelta=[...value.gripDelta];}if(value.gripGain!==undefined){if(!Number.isFinite(value.gripGain)||value.gripGain<.5||value.gripGain>1.25)throw Error('Grip gain must be between 0.5 and 1.25');gripGain=value.gripGain;}updateControls();},
+   control(value={}){if(value.strength!==undefined){if(!Number.isFinite(value.strength)||value.strength<0||value.strength>MAX_CONNECTEDNESS)throw Error('Connectedness must be between 0 and '+MAX_CONNECTEDNESS);strength=value.strength;}if(value.gripDelta!==undefined){if(value.gripDelta.length!==3||!value.gripDelta.every(Number.isFinite))throw Error('Finite grip displacement required');gripDelta=[...value.gripDelta];}if(value.gripGain!==undefined){if(!Number.isFinite(value.gripGain)||value.gripGain<.5||value.gripGain>1.25)throw Error('Grip gain must be between 0.5 and 1.25');gripGain=value.gripGain;}updateControls();},
    async connectionState(){await completion;const links=await copy(regionLinks);const result=[];for(let j=0;j<state.connections.length;j++){const i=state.attachments.length+j;result.push({damage:links[i*16+14],rest:links[i*16+13]});}return result;},
    configuration:{dt,iterations,gravity,friction,damping,cell,dims},
    advance({steps=1,tool=null}={}){
@@ -61,6 +63,16 @@ export async function createRegionSolver({device,state,bodyBuffer=null,iteration
     }
     device.queue.submit([encoder.finish()]);lastTool=nextTool;pending=true;
     completion=device.queue.onSubmittedWorkDone().then(()=>{stepsDone+=steps;}).catch(e=>{failure=String(e);}).finally(()=>{pending=false;});return true;
+   },
+   restart(){
+    if(disposed||failure)throw Error(failure||'Earth GPU disposed');
+    if(pending||capturing)throw Error('Finish the active solve or inspection before restarting');
+    device.queue.writeBuffer(bodies,0,state.floats);
+    device.queue.writeBuffer(tets,0,state.tets);
+    device.queue.writeBuffer(regionLinks,0,state.linkWords);
+    stepsDone=state.physicalSteps??0;
+    lastTool=state.lastTool?[...state.lastTool]:[0,0,0,0];
+    gripDelta=[0,0,0];gripGain=1;updateControls();
    },
    async wait(){await completion;if(failure)throw Error(failure);},
    async capture(){if(disposed||failure)throw Error(failure||'Earth GPU disposed');capturing++;await completion;if(failure){capturing--;throw Error(failure);}const read=allocate(bodies.size+tets.size,'Earth complete state snapshot',GPUBufferUsage.MAP_READ);try{const encoder=device.createCommandEncoder();encoder.copyBufferToBuffer(bodies,0,read,0,bodies.size);encoder.copyBufferToBuffer(tets,0,read,bodies.size,tets.size);device.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);const bytes=read.getMappedRange(),floats=new Float32Array(bytes.slice(0,bodies.size)),plastic=new Float32Array(bytes.slice(bodies.size));if(failure)throw Error(failure);if(!floats.every(Number.isFinite)||!plastic.every(Number.isFinite))throw Error('Nonfinite GPU material state');return {...retainRegionState(state,floats,plastic,await copy(regionLinks)),physicalSteps:stepsDone,physicalTime:stepsDone*dt,lastTool:[...lastTool]};}finally{capturing--;read.unmap();read.destroy();owned.splice(owned.indexOf(read),1);}},
