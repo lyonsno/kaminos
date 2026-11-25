@@ -43,10 +43,11 @@ export async function createGristRegions({host,inputs={},record},{slab=false,tra
   gripGain=gain;
   record({kind:'grist.grip-gain',value:gain});
  }
+ function requiresPageRecovery(){return Boolean(solver?.read().failure);}
  function update(){
   if (resetButton) {
    resetButton.disabled=restarting;
-   resetButton.textContent=restarting?'Restarting…':'Start again';
+   resetButton.textContent=restarting?'Restarting…':requiresPageRecovery()?'Reload page':'Start again';
   }
   if (!status) return;
   if (restartError || restarting) {
@@ -99,7 +100,10 @@ export async function createGristRegions({host,inputs={},record},{slab=false,tra
    admit:()=>!restarting&&host.scene.admitsViewportGrip(),move:moveGrip,setGain:setGripGain,changed:update,
   });
   stop=session.onFrame(()=>{if(disposed)return;try{if(!paused&&!restarting){solver.control({gripDelta:gripDelta(),gripGain});solver.advance({steps:2,tool:toolPose()});session.redraw();}if(++frames%15===0)update();const f=solver.read().failure;if(f){failure=f;paused=true;update();}}catch(e){failure=e.message;paused=true;update();}});
-  return {read,operations:ops,mount({document,invoke}){uiDocument=document;css=document.createElement('style');css.textContent='body.grist-region-study{grid-template-columns:0 minmax(0,1fr) 316px!important}body.grist-region-study #experiment-instruments{display:none!important}.grist-region-tools{position:absolute;bottom:85px;left:18px;z-index:40;color:#eee;background:#24271fdc;padding:9px 12px;border-radius:9px;font:13px system-ui;max-width:600px}.grist-region-tools button{margin-right:12px;padding:5px 9px}.grist-region-tools input{width:64px;margin:0 8px}.grist-region-tools p{margin:7px 0 0;line-height:1.35}';document.head.append(css);document.body.classList.add('grist-region-study');ui=document.createElement('div');ui.className='grist-region-tools';const play=document.createElement('button');play.textContent=paused?'Play':'Pause';play.onclick=()=>{ops.pause(!paused);play.textContent=paused?'Play':'Pause';};ui.append(play);resetButton=document.createElement('button');resetButton.onclick=()=>{void invoke('restart').catch(()=>{});};ui.append(resetButton);
+  return {read,operations:ops,mount({document,invoke}){uiDocument=document;css=document.createElement('style');css.textContent='body.grist-region-study{grid-template-columns:0 minmax(0,1fr) 316px!important}body.grist-region-study #experiment-instruments{display:none!important}.grist-region-tools{position:absolute;bottom:85px;left:18px;z-index:40;color:#eee;background:#24271fdc;padding:9px 12px;border-radius:9px;font:13px system-ui;max-width:600px}.grist-region-tools button{margin-right:12px;padding:5px 9px}.grist-region-tools input{width:64px;margin:0 8px}.grist-region-tools p{margin:7px 0 0;line-height:1.35}';document.head.append(css);document.body.classList.add('grist-region-study');ui=document.createElement('div');ui.className='grist-region-tools';const play=document.createElement('button');play.textContent=paused?'Play':'Pause';play.onclick=()=>{ops.pause(!paused);play.textContent=paused?'Play':'Pause';};ui.append(play);resetButton=document.createElement('button');resetButton.onclick=()=>{
+   if(requiresPageRecovery()) location.reload();
+   else void invoke('restart').catch(()=>{});
+  };ui.append(resetButton);
   if(slab){
    const label=document.createElement('label');
    label.textContent='Slab ';
@@ -116,6 +120,6 @@ export async function createGristRegions({host,inputs={},record},{slab=false,tra
    label.append(select);
    ui.append(label);
   }
-  const label=document.createElement('label');label.textContent='Connectedness ';const input=document.createElement('input');input.type='number';input.min='0';input.max=String(MAX_CONNECTEDNESS);input.step='.05';input.value=String(solver.read().connectionStrength);input.setAttribute('aria-label','Connectedness');input.title='Above 1, seams tolerate more stretch before damage';input.oninput=()=>{const x=input.valueAsNumber;if(Number.isFinite(x)&&x>=0&&x<=MAX_CONNECTEDNESS)ops.connection(x);};label.append(input);ui.append(label);disposeDrag=host.controls.installNumberDrag?.({input,grip:label,step:.05});status=document.createElement('p');ui.append(status);document.getElementById('viewport').append(ui);update();},async dispose(){disposed=true;stop?.();directGrip?.dispose();disposeDrag?.dispose();ui?.remove();css?.remove();uiDocument?.body.classList.remove('grist-region-study');await solver?.wait();solver?.dispose();view?.dispose();tool.geometry.dispose();tool.material.dispose();tray.geometry.dispose();tray.material.dispose();jawMaterial.dispose();grip.traverse(o=>o.geometry?.dispose());hold.geometry.dispose();await session.dispose();}};
+  const label=document.createElement('label');label.textContent='Connectedness ';const input=document.createElement('input');input.type='number';input.min='0';input.max=String(MAX_CONNECTEDNESS);input.step='.05';input.value=String(solver.read().connectionStrength);input.setAttribute('aria-label','Connectedness');label.title='Above 1, seams tolerate more stretch before damage';input.setAttribute('aria-description',label.title);input.oninput=()=>{const x=input.valueAsNumber;if(Number.isFinite(x)&&x>=0&&x<=MAX_CONNECTEDNESS)ops.connection(x);};label.append(input);ui.append(label);disposeDrag=host.controls.installNumberDrag?.({input,grip:label,step:.05});status=document.createElement('p');ui.append(status);document.getElementById('viewport').append(ui);update();},async dispose(){disposed=true;stop?.();directGrip?.dispose();disposeDrag?.dispose();ui?.remove();css?.remove();uiDocument?.body.classList.remove('grist-region-study');await solver?.wait();solver?.dispose();view?.dispose();tool.geometry.dispose();tool.material.dispose();tray.geometry.dispose();tray.material.dispose();jawMaterial.dispose();grip.traverse(o=>o.geometry?.dispose());hold.geometry.dispose();await session.dispose();}};
  }catch(e){disposed=true;stop?.();directGrip?.dispose();solver?.dispose();view?.dispose();await session.dispose();throw e;}
 }
