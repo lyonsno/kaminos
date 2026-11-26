@@ -2,6 +2,7 @@ import {
   BoxGeometry, BufferGeometry, DoubleSide, Float32BufferAttribute, Group, Mesh,
   MeshStandardMaterial,
 } from './lib/three.core.js';
+import {registerExportGeometrySnapshot} from './scene-export-geometry.mjs';
 import {
   handlePoint, materialBands, surfaceBounds, surfaceEdge, surfacePatch,
 } from './surface-separation.mjs';
@@ -102,6 +103,10 @@ export function makeFixture(spec) {
   }
   const originalFront = front.geometry;
   const originalBack = back.geometry;
+  if (spec.cuttable) {
+    registerExportGeometrySnapshot(front, () => originalFront);
+    registerExportGeometrySnapshot(back, () => originalBack);
+  }
   const pickMeshes = [...root.children];
   function clearCut() {
     if (front.geometry !== originalFront) {
@@ -122,6 +127,7 @@ export function makeFixture(spec) {
       front.geometry = meshGeometry(bands.flatMap(band => surfacePatch(spec, band)));
       back.geometry = meshGeometry(bands.flatMap(band => surfacePatch(spec, band, -spec.thickness)));
       rim = add(meshGeometry(skinBetween(spec, rect, 0, -spec.thickness)), body);
+      rim.userData.kaminosEditorHelper = true;
     },
     clearCut,
   };

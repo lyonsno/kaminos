@@ -59,8 +59,13 @@ function makeOverlay() {
   const pivot = new Mesh(sphere, materials.pivot);
   pivot.scale.setScalar(1.45);
   group.add(fill, obstruction, outline, axis, rear, ...handles, pivot);
-  group.traverse(node => {node.raycast = () => {};});
-  return {group, materials, fill, obstruction, outline, axis, rear, handles, pivot, sphere};
+  group.traverse(node => {
+    node.raycast = () => {};
+    node.userData.kaminosEditorHelper = true;
+  });
+  group.matrixAutoUpdate = false;
+  group.visible = false;
+  return {group, materials, fill, obstruction, outline, axis, rear, handles, pivot};
 }
 
 function edgeAt(rect, edge) {
@@ -72,7 +77,7 @@ function instanceVisible(object) {
   return true;
 }
 
-export function installSurfaceSeparation({host, record, session, fixtures}) {
+export async function installSurfaceSeparation({host, record, session, fixtures}) {
   const document = host.controls.document;
   const browser = document.defaultView;
   const canvas = host.scene.renderer().domElement;
@@ -83,6 +88,8 @@ export function installSurfaceSeparation({host, record, session, fixtures}) {
   const targets = fixtures.flatMap(item => item.pickMeshes);
   const owners = new Map(fixtures.flatMap(item => item.pickMeshes.map(mesh => [mesh, item])));
   const overlay = makeOverlay();
+  await session.attach(overlay.group, {owned: true, presentation: true});
+  const stopPose = session.onFrame(syncOverlayPose);
   const priorCursor = canvas.style.cursor;
   let active = true;
   let selected = null;
@@ -133,12 +140,18 @@ export function installSurfaceSeparation({host, record, session, fixtures}) {
       });
     });
   }
+  function syncOverlayPose() {
+    overlay.group.visible = Boolean(rect && selected?.root.parent && instanceVisible(selected.root));
+    if (!overlay.group.visible) return;
+    selected.root.updateWorldMatrix(true, false);
+    overlay.group.matrix.copy(selected.root.matrixWorld);
+    overlay.group.matrixWorldNeedsUpdate = true;
+  }
   function redraw() {
+    syncOverlayPose();
     const visible = rect && selected;
-    overlay.group.visible = Boolean(visible);
     if (visible) {
       const {spec} = selected;
-      if (overlay.group.parent !== selected.root) selected.root.add(overlay.group);
       const outlining = !motion;
       const depth = inspectSeparation(spec, rect);
       const obstruction = spec.brace && intersectRect(rect, spec.brace);
@@ -199,7 +212,8 @@ export function installSurfaceSeparation({host, record, session, fixtures}) {
     return true;
   }
   function preview(action) {
-    if (!rect || inspectSeparation(selected.spec, rect) !== 'through') return false;
+    if (!rect || inspectSeparation(selected.spec, rect) !== 'through' ||
+        (action === 'swing' && selected.spec.kind !== 'plane')) return false;
     clearMotion();
     if (action === 'swing' && hinge === null) setHinge();
     const inset = PIECE_INSET;
@@ -210,6 +224,7 @@ export function installSurfaceSeparation({host, record, session, fixtures}) {
     piece = new Mesh(buildShellPiece(spec, [a + inset, b + inset, c - inset, d - inset]), selected.material);
     piece.name = 'Separated shell preview';
     piece.raycast = () => {};
+    piece.userData.kaminosEditorHelper = true;
     selected.root.add(piece);
     motion = action;
     if (action === 'lift') {
@@ -217,7 +232,7 @@ export function installSurfaceSeparation({host, record, session, fixtures}) {
       redraw();
     } else {
       const span = hinge % 2 === 0 ? d - b : c - a;
-      const limit = spec.kind === 'plane' ? flatSwingLimit(span, spec.thickness, inset) : null;
+      const limit = flatSwingLimit(span, spec.thickness, inset);
       swing = {requested: 0, angle: 0, limit, blocked: false};
       requestSwing(.63);
     }
@@ -509,16 +524,15 @@ export function installSurfaceSeparation({host, record, session, fixtures}) {
         const canPreview = depth === 'through' && !motion;
         lift.style.display = canPreview ? '' : 'none';
         hingeButton.style.display = canPreview && hinge === null ? '' : 'none';
-        swingButton.style.display = canPreview && hinge !== null ? '' : 'none';
+        swingButton.style.display = canPreview && hinge !== null && selected.spec.kind === 'plane'
+          ? '' : 'none';
         close.style.display = motion ? '' : 'none';
         if (motion) {
           status.textContent = motion === 'lift'
             ? 'The shell piece and opening are previewed together.'
             : swing.blocked
               ? `The far rim stops the swing at ${Math.round(swing.angle * 180 / Math.PI)}°. Drag the piece back to close it.`
-              : selected.spec.kind === 'plane'
-                ? 'Drag the piece to swing it on the gold axis.'
-                : 'Drag the piece to preview its swing. Curved rim clearance is unchecked.';
+              : 'Drag the piece to swing it. The gold edge stays attached.';
         } else if (missed) {
           status.textContent = 'Outline held at the last hit on its original face.';
         } else if (depth === 'brace') {
@@ -530,7 +544,9 @@ export function installSurfaceSeparation({host, record, session, fixtures}) {
         } else if (depth === 'footprint') {
           status.textContent = 'Surface outline only. Cut depth through this solid is undecided.';
         } else if (hinge !== null) {
-          status.textContent = 'Drag the gold hinge handle along the boundary.';
+          status.textContent = selected.spec.kind === 'plane'
+            ? 'Drag the gold handle to choose the edge that stays attached.'
+            : 'The gold handle marks a straight hinge axis. Lift preview is available on this shell.';
         } else if (depth === 'through') {
           status.textContent = 'Clear through this shell. The blue dashes show the rear exit.';
         } else {
@@ -544,10 +560,8 @@ export function installSurfaceSeparation({host, record, session, fixtures}) {
       listeners.abort();
       canvas.style.cursor = priorCursor;
       clearMotion();
-      overlay.group.removeFromParent();
-      for (const object of [overlay.fill, overlay.obstruction, overlay.outline, overlay.axis, overlay.rear]) object.geometry.dispose();
-      overlay.sphere.dispose();
-      Object.values(overlay.materials).forEach(material => material.dispose());
+      stopPose();
+      overlay.group.visible = false;
     },
   };
 }

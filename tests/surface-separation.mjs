@@ -77,3 +77,61 @@ test('thick flush patches hit the far rim before clearing the shell', async () =
   near((.55 - .008) * Math.cos(angle) + .13 * Math.sin(angle), .55);
   assert.equal(flatSwingLimit(1.3, .13, .008), null);
 });
+
+test('normal selection and export retain the intact fixture during experimental previews', async () => {
+  const {Box3, Group} = await import('../lib/three.core.js');
+  const {exportCloneInWorld} = await import('../scene-export.mjs');
+  const {createSelectionFeedback} = await import('../scene-selection-feedback.mjs');
+  const {makeFixture} = await import('../surface-separation-fixtures.mjs');
+  const {installSurfaceSeparation} = await import('../surface-separation-view.mjs');
+  const fixture = makeFixture({ ...plane, id: 'shell', label: 'Shell', at: [0, 0, 0],
+    thickness: .13, cuttable: true });
+  fixture.asset = {id: 'shell'};
+  const scene = new Group();
+  scene.add(fixture.root);
+  const browser = new EventTarget();
+  const canvas = {style: {}, parentElement: new EventTarget()};
+  const host = {controls: {document: {defaultView: browser}}, scene: {renderer: () => ({domElement: canvas})}};
+  const session = {attach: async object => { scene.add(object); }, onFrame: () => () => {}, redraw() {}};
+  function exportPositions() {
+    return exportCloneInWorld(fixture.root).children.map(mesh => mesh.geometry
+      ? Array.from(mesh.geometry.getAttribute('position').array) : mesh.name);
+  }
+  const before = exportPositions();
+  const originalBounds = new Box3().setFromObject(fixture.root).max.toArray();
+  const study = await installSurfaceSeparation({host, session, fixtures: [fixture], record() {}});
+  try {
+    study.operations.sketch({fixture: 'shell', first: [-1.4, -.6], last: [-.4, .6]});
+    const masks = createSelectionFeedback.maskProxies(new Group(), {});
+    masks.update([{id:'shell', object:fixture.root}], ['shell']);
+    assert.equal(masks.proxies().length, before.length);
+    assert.deepEqual(new Box3().setFromObject(fixture.root).max.toArray(), originalBounds);
+    assert.deepEqual(exportPositions(), before);
+    study.operations.lift();
+    assert.ok(fixture.front.geometry.getAttribute('position').count > before[0].length / 3);
+    assert.deepEqual(exportPositions(), before);
+  } finally {
+    study.dispose();
+  }
+});
+
+test('curved cut supports lift and hinge placement without implying checked swing', async () => {
+  const {makeFixture} = await import('../surface-separation-fixtures.mjs');
+  const {installSurfaceSeparation} = await import('../surface-separation-view.mjs');
+  const fixture = makeFixture({ ...curve, id: 'curved-shell', label: 'Curved shell',
+    at: [0, 0, 0], thickness: .11, cuttable: true });
+  fixture.asset = {id: 'curved-shell'};
+  const canvas = {style: {}, parentElement: new EventTarget()};
+  const host = {controls: {document: {defaultView: new EventTarget()}},
+    scene: {renderer: () => ({domElement: canvas})}};
+  const session = {attach: async () => {}, onFrame: () => () => {}, redraw() {}};
+  const study = await installSurfaceSeparation({host, session, fixtures: [fixture], record() {}});
+  try {
+    study.operations.sketch({fixture: 'curved-shell', first: [-1.4, -.6], last: [-.4, .6]});
+    assert.ok(study.operations.placeHinge().hinge !== null);
+    assert.equal(study.operations.swing().motion, null);
+    assert.equal(study.operations.lift().motion, 'lift');
+  } finally {
+    study.dispose();
+  }
+});

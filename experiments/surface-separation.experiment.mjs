@@ -17,7 +17,7 @@ export default {
         });
       }
       host.controls.document.defaultView.kaminosSelection.clear();
-      controller = installSurfaceSeparation({host, record, session, fixtures});
+      controller = await installSurfaceSeparation({host, record, session, fixtures});
       session.setView({position: [.95, height + 4.8, 11.6], target: [0, height + 2.18, 0]});
       return {
         ...controller,
