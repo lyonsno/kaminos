@@ -17,15 +17,21 @@ export function createPacketView(renderer,state){
  }
  function phase(fine){const offset=fine?state.grainCount:0,count=fine?state.packetCount:state.grainCount*2;
   const sphereFn=wgslFn(`fn packet_lobe(instance:u32,data:ptr<storage,array<vec4f>,read>)->vec4f{let id=${fine?'instance+'+offset+'u':'instance/2u'};let l=${fine?'0u':'instance%2u'};let i=id*6u;let s=(*data)[i+4u];let q=(*data)[i+1u];let r=select((*data)[i+2u].w,(*data)[i+3u].w,l==1u);return vec4f((*data)[i].xyz+qrotate(q,vec3f(select(s.x,s.y,l==1u),0,0)),r);}\n${EARTH_GPU_MATH_WGSL}`);
-  const colorFn=wgslFn(`fn packet_color(instance:u32,data:ptr<storage,array<vec4f>,read>)->vec3f{let i=${fine?'instance+'+offset+'u':'instance/2u'};let s=(*data)[i*6u+4u].w;${fine?'return mix(vec3f(.12,.061,.026),vec3f(.21,.12,.055),s);':'if(s<.18){return vec3f(.38,.30,.19);}if(s<.45){return vec3f(.10,.075,.045);}return vec3f(.23,.15,.075);'}}`);
+  const mineralPigment=state.mixing?'if(i>='+state.ingredients[0].count+'u){return mix(vec3f(.20,.14,.073),vec3f(.38,.29,.15),s);}'
+    +'return mix(vec3f(.066,.071,.059),vec3f(.17,.155,.124),s);'
+    :'if(s<.18){return vec3f(.38,.30,.19);}if(s<.45){return vec3f(.10,.075,.045);}return vec3f(.23,.15,.075);';
+  const finePigment=(state.mixing?'if(instance<'+state.crumbCount+'u){return mix(vec3f(.22,.105,.039),vec3f(.37,.215,.095),s);}':'')
+    +(state.mixing?'return mix(vec3f(.064,.036,.020),vec3f(.113,.066,.034),s);':'return mix(vec3f(.12,.061,.026),vec3f(.21,.12,.055),s);');
+  const colorFn=wgslFn(`fn packet_color(instance:u32,data:ptr<storage,array<vec4f>,read>)->vec3f{let i=${fine?'instance+'+offset+'u':'instance/2u'};let s=(*data)[i*6u+4u].w;${fine?finePigment:mineralPigment}}`);
   const sphere=varying(sphereFn({instance:instanceIndex,data:words}),'packet_sphere'),right=modelWorldMatrixInverse.mul(cameraWorldMatrix.mul(vec4(1,0,0,0))).xyz.normalize(),up=modelWorldMatrixInverse.mul(cameraWorldMatrix.mul(vec4(0,1,0,0))).xyz.normalize(),billboard=sphere.xyz.add(right.mul(positionGeometry.x).add(up.mul(positionGeometry.y)).mul(sphere.w).mul(1.12)),point=varying(billboard,'packet_billboard'),eye=modelWorldMatrixInverse.mul(vec4(cameraPosition,1)).xyz,ray=point.sub(eye).normalize();
   const hitFn=wgslFn('fn packet_hit(eye:vec3f,ray:vec3f,sphere:vec4f)->vec4f{let d=eye-sphere.xyz;let b=dot(d,ray);let h=b*b-dot(d,d)+sphere.w*sphere.w;if(h<0.0){return vec4f(0,0,1,-1);}let t=-b-sqrt(h);return vec4f((eye+ray*t-sphere.xyz)/sphere.w,t);}'),hit=hitFn({eye,ray,sphere}).toVar('packet_exact_hit'),material=new THREE.MeshStandardNodeMaterial({roughness:fine?.96:.86,side:THREE.DoubleSide});material.positionNode=billboard;
   material.colorNode=Fn(()=>{If(hit.w.lessThan(0),()=>Discard());const pigment=colorFn({instance:instanceIndex,data:words});
    if(fine&&packingTets){
-    const index=packetTets.element(instanceIndex).mul(5).add(3);
+    const isAttached=instanceIndex.greaterThanEqual(state.crumbCount??0);
+    const index=packetTets.element(instanceIndex).min(state.tets.length/20-1).mul(5).add(3);
     const closure=packingTets.element(index).z.oneMinus().div(.28).clamp(0,1);
     const diagnostic=mix(vec3(.075,.24,.49),vec3(.95,.29,.055),closure);
-    return varying(mix(pigment,diagnostic,packing),'packet_pigment');
+    return varying(mix(pigment,diagnostic,packing.mul(isAttached.toFloat())),'packet_pigment');
    }
    return varying(pigment,'packet_pigment');})();material.normalNode=transformNormalToView(hit.xyz);material.depthNode=Fn(()=>{const clip=cameraProjectionMatrix.mul(modelViewMatrix.mul(vec4(eye.add(ray.mul(hit.w)),1)));return clip.z.div(clip.w);})();
   const base=new THREE.PlaneGeometry(2,2),geometry=new THREE.InstancedBufferGeometry().copy(base);base.dispose();geometry.instanceCount=count;geometry.boundingBox=new THREE.Box3(new THREE.Vector3(-state.width/2,0,-state.depth/2),new THREE.Vector3(state.width/2,state.preparationHeight,state.depth/2));geometry.boundingSphere=geometry.boundingBox.getBoundingSphere(new THREE.Sphere());const mesh=new THREE.Mesh(geometry,material);mesh.name=fine?'Cohesive fine aggregate packets':'Rigid two-sphere grit';mesh.frustumCulled=false;mesh.receiveShadow=true;

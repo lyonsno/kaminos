@@ -81,6 +81,15 @@ export const SLAB_WGSL = REGION_WGSL
 // surface while grains and support still have finite floor slip.
 export const COMPACTION_WGSL = SLAB_WGSL.replace('const ROUGH_TRAY = false;', 'const ROUGH_TRAY = true;');
 
+// The loose charge can mix at either side of the continuous bed boundary.
+// Single-sphere crumbs still use the same reciprocal face contact as grit.
+export const MIXING_WGSL = COMPACTION_WGSL
+  .replace('for(var lobe=0u;lobe<2u;lobe++)', 'for(var lobe=0u;lobe<select(2u,1u,b.shape.z>1.5);lobe++)')
+  .replace('let lobes=select(1u,2u,i<p.counts.y);', 'let lobes=select(1u,2u,i<p.counts.y&&b.shape.z<1.5);')
+  .replace('let difference=vec3f(0.0,max(0.0,lower.y-center.y),0.0);',
+    'let difference=clamp(center,lower,upper)-center;');
+
+
 // Faces, range records and the element dispatch list share one readonly binding.
 // Keep Tet order canonical so plastic state can be captured without remapping.
 export function packSlabDispatch(state) {

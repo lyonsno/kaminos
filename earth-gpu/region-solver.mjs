@@ -1,15 +1,17 @@
+import {mixingContactCell} from './mixing-recipe.mjs';
 import {REGION_WGSL} from './region-shader.mjs';
-import {COMPACTION_WGSL,SLAB_WGSL,packSlabDispatch} from './slab-shader.mjs';
+import {COMPACTION_WGSL,MIXING_WGSL,SLAB_WGSL,packSlabDispatch} from './slab-shader.mjs';
 import {retainRegionState} from './regions.mjs';
 export const MAX_CONNECTEDNESS=16;
 
-export async function createRegionSolver({device,state,bodyBuffer=null,tetBuffer=null,iterations=6,dt=1/480,gravity=9.81,friction=.65,damping=1.5,shaderCode=state.compaction?COMPACTION_WGSL:state.slabSize?SLAB_WGSL:REGION_WGSL}){
+export async function createRegionSolver({device,state,bodyBuffer=null,tetBuffer=null,iterations=6,dt=1/480,gravity=9.81,friction=.65,damping=1.5,shaderCode=state.mixing?MIXING_WGSL:state.compaction?COMPACTION_WGSL:state.slabSize?SLAB_WGSL:REGION_WGSL}){
  if(!device||!Number.isSafeInteger(iterations)||iterations<1||!(dt>0&&Number.isFinite(dt))||![gravity,friction,damping].every(x=>Number.isFinite(x)&&x>=0))throw Error('Valid GPU device and physical solver settings required');
- const owned=[],count=state.floats.length/24,grainCount=state.grainCount,cell=state.radius*4.2,materialColors=state.materialColors??0,slots=materialColors+1;
+ const owned=[],count=state.floats.length/24,grainCount=state.grainCount,cell=state.mixing?mixingContactCell(state.floats,grainCount):state.radius*4.2,materialColors=state.materialColors??0,slots=materialColors+1;
  const slab=state.slabSize||state.compaction?packSlabDispatch(state):null;
+ const mobileCount=state.mobileCount??state.mineralCount;
  const faceWords=slab?.words??state.triangles;
  let maxGritReach=0;
- if(slab)for(let i=0;i<state.mineralCount;i++){
+ if(slab)for(let i=0;i<mobileCount;i++){
   const o=i*24,f=state.floats;
   maxGritReach=Math.max(maxGritReach,Math.abs(f[o+16])+f[o+11],Math.abs(f[o+17])+f[o+15]);
  }
@@ -22,8 +24,8 @@ export async function createRegionSolver({device,state,bodyBuffer=null,tetBuffer
  try{
   device.pushErrorScope('validation');
   bodies??=allocate(state.floats.byteLength,'Earth resident Lagrangian bodies');device.queue.writeBuffer(bodies,0,state.floats);
-  const regionLinks=allocate(state.linkWords.byteLength,'Persistent regional connection history'),regionControl=allocate(48,'Regional hand and connection controls',GPUBufferUsage.UNIFORM);device.queue.writeBuffer(regionLinks,0,state.linkWords);let strength=1,gripDelta=[0,0,0],gripGain=1,damageRate=18;const updateControls=()=>device.queue.writeBuffer(regionControl,0,new Float32Array([strength,damageRate,1,maxGritReach,...gripDelta,state.mineralCount,gripGain,0,0,0]));updateControls();
-  const before=allocate(state.floats.byteLength,'Earth preceding bodies'),heads=allocate(cells*(slab?8:4),'Earth complete grain spatial buckets'),next=allocate(Math.max(1,grainCount+(slab?state.mineralCount:0))*4,'Earth bucket linked list'),delta=allocate(count*32,'Earth reciprocal contact corrections'),tets=tetBuffer??allocate(state.tets.byteLength,'Earth retained plastic material'),faces=allocate(faceWords.byteLength,'Earth actual boundary triangles'),ties=allocate(state.ties.byteLength,'Earth coarse fine transitions');
+  const regionLinks=allocate(state.linkWords.byteLength,'Persistent regional connection history'),regionControl=allocate(48,'Regional hand and connection controls',GPUBufferUsage.UNIFORM);device.queue.writeBuffer(regionLinks,0,state.linkWords);let strength=1,gripDelta=[0,0,0],gripGain=1,damageRate=18;const updateControls=()=>device.queue.writeBuffer(regionControl,0,new Float32Array([strength,damageRate,1,maxGritReach,...gripDelta,mobileCount,gripGain,0,0,0]));updateControls();
+  const before=allocate(state.floats.byteLength,'Earth preceding bodies'),heads=allocate(cells*(slab?8:4),'Earth complete grain spatial buckets'),next=allocate(Math.max(1,grainCount+(slab?mobileCount:0))*4,'Earth bucket linked list'),delta=allocate(count*32,'Earth reciprocal contact corrections'),tets=tetBuffer??allocate(state.tets.byteLength,'Earth retained plastic material'),faces=allocate(faceWords.byteLength,'Earth actual boundary triangles'),ties=allocate(state.ties.byteLength,'Earth coarse fine transitions');
   device.queue.writeBuffer(tets,0,state.tets);device.queue.writeBuffer(faces,0,faceWords);device.queue.writeBuffer(ties,0,state.ties);
   const layout=device.createBindGroupLayout({entries:[0,1,2,3,4,5,6,7,8,9].map(binding=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:binding===7||binding===9?'uniform':binding===6?'read-only-storage':'storage',...(binding===7?{hasDynamicOffset:true,minBindingSize:96}:{})}}))}),pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]});
   const mod=device.createShaderModule({label:'Live earth contacts and yielding material',code:shaderCode});const errors=(await mod.getCompilationInfo()).messages.filter(m=>m.type==='error');if(errors.length)throw Error(errors.map(m=>m.lineNum+': '+m.message).join('\n'));
@@ -52,7 +54,7 @@ export async function createRegionSolver({device,state,bodyBuffer=null,tetBuffer
       }
       encodeStage(encoder,'clear',Math.max(count,cells*(slab?2:1)),step);
       encodeStage(encoder,'index',grainCount,step);
-      if(slab)encodeStage(encoder,'indexHard',state.mineralCount,step);
+      if(slab)encodeStage(encoder,'indexHard',mobileCount,step);
       encodeStage(encoder,'grainContacts',grainCount,step);
       encodeStage(encoder,'materialContacts',slab?state.faceCount:grainCount,step);
       encodeStage(encoder,'formingContacts',state.faceCount,step);
@@ -77,7 +79,7 @@ export async function createRegionSolver({device,state,bodyBuffer=null,tetBuffer
    async wait(){await completion;if(failure)throw Error(failure);},
    async capture(){if(disposed||failure)throw Error(failure||'Earth GPU disposed');capturing++;await completion;if(failure){capturing--;throw Error(failure);}const read=allocate(bodies.size+tets.size,'Earth complete state snapshot',GPUBufferUsage.MAP_READ);try{const encoder=device.createCommandEncoder();encoder.copyBufferToBuffer(bodies,0,read,0,bodies.size);encoder.copyBufferToBuffer(tets,0,read,bodies.size,tets.size);device.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);const bytes=read.getMappedRange(),floats=new Float32Array(bytes.slice(0,bodies.size)),plastic=new Float32Array(bytes.slice(bodies.size));if(failure)throw Error(failure);if(!floats.every(Number.isFinite)||!plastic.every(Number.isFinite))throw Error('Nonfinite GPU material state');return {...retainRegionState(state,floats,plastic,await copy(regionLinks)),physicalSteps:stepsDone,physicalTime:stepsDone*dt,lastTool:[...lastTool]};}finally{capturing--;read.unmap();read.destroy();owned.splice(owned.indexOf(read),1);}},
 
-   read(){return {route:state.compaction?'webgpu/grist-compaction/local-face-contact':slab?'webgpu/peelable-slab/local-face-contact':'webgpu/two-local-material-lattices/compliant-particulates',regions:state.regionCount,connectionStrength:strength,bodies:count,grains:grainCount,materialPoints:state.material.nodes.length,tetrahedra:state.material.tets.length,surfaceTriangles:state.faceCount,transitionConstraints:state.tieCount,generation:state.material.generation,steps:stepsDone,simulatedSeconds:stepsDone*dt,pending,failure,configuration:this.configuration,runtimeReadbacks:0};},
+   read(){return {route:state.mixing?'webgpu/grist-mixing/local-face-contact':state.compaction?'webgpu/grist-compaction/local-face-contact':slab?'webgpu/peelable-slab/local-face-contact':'webgpu/two-local-material-lattices/compliant-particulates',regions:state.regionCount,connectionStrength:strength,bodies:count,grains:grainCount,materialPoints:state.material.nodes.length,tetrahedra:state.material.tets.length,surfaceTriangles:state.faceCount,transitionConstraints:state.tieCount,generation:state.material.generation,steps:stepsDone,simulatedSeconds:stepsDone*dt,pending,failure,configuration:this.configuration,runtimeReadbacks:0};},
    dispose(){if(disposed)return;disposed=true;device.removeEventListener?.('uncapturederror',uncaptured);for(const b of owned)b.destroy();}
   };
  }catch(error){try{await device.popErrorScope();}catch{}device.removeEventListener?.('uncapturederror',uncaptured);for(const b of owned)b.destroy();throw error;}
