@@ -51,7 +51,8 @@ export function mountHandInput({document,input,before}) {
     const component=load.component==='hand-detector'?'Detector':load.component==='mobrecon'?'Mesh':null;
     const percent=load.progressRatio===null?null:`${Math.floor(load.progressRatio*100)}%`;
     const waiting=load.stalled&&load.phase!=='camera-permission';
-    const headline=percent&&component?`${component} ${percent}`:step;
+    const progressLabel=component??(load.phase==='native-check'?'Files':step);
+    const headline=percent?`${progressLabel} ${percent}`:step;
     setText(label,waiting?`${headline} · No update`:headline);
     setText(elapsed,seconds(load.elapsedMs));
     root.dataset.silent=String(waiting);
