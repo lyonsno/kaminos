@@ -1,12 +1,12 @@
 import {REGION_WGSL} from './region-shader.mjs';
-import {SLAB_WGSL,packSlabDispatch} from './slab-shader.mjs';
+import {COMPACTION_WGSL,SLAB_WGSL,packSlabDispatch} from './slab-shader.mjs';
 import {retainRegionState} from './regions.mjs';
 export const MAX_CONNECTEDNESS=16;
 
-export async function createRegionSolver({device,state,bodyBuffer=null,iterations=6,dt=1/480,gravity=9.81,friction=.65,damping=1.5,shaderCode=state.slabSize?SLAB_WGSL:REGION_WGSL}){
+export async function createRegionSolver({device,state,bodyBuffer=null,iterations=6,dt=1/480,gravity=9.81,friction=.65,damping=1.5,shaderCode=state.compaction?COMPACTION_WGSL:state.slabSize?SLAB_WGSL:REGION_WGSL}){
  if(!device||!Number.isSafeInteger(iterations)||iterations<1||!(dt>0&&Number.isFinite(dt))||![gravity,friction,damping].every(x=>Number.isFinite(x)&&x>=0))throw Error('Valid GPU device and physical solver settings required');
  const owned=[],count=state.floats.length/24,grainCount=state.grainCount,cell=state.radius*4.2,materialColors=state.materialColors??0,slots=materialColors+1;
- const slab=state.slabSize?packSlabDispatch(state):null;
+ const slab=state.slabSize||state.compaction?packSlabDispatch(state):null;
  const faceWords=slab?.words??state.triangles;
  let maxGritReach=0;
  if(slab)for(let i=0;i<state.mineralCount;i++){
@@ -77,7 +77,7 @@ export async function createRegionSolver({device,state,bodyBuffer=null,iteration
    async wait(){await completion;if(failure)throw Error(failure);},
    async capture(){if(disposed||failure)throw Error(failure||'Earth GPU disposed');capturing++;await completion;if(failure){capturing--;throw Error(failure);}const read=allocate(bodies.size+tets.size,'Earth complete state snapshot',GPUBufferUsage.MAP_READ);try{const encoder=device.createCommandEncoder();encoder.copyBufferToBuffer(bodies,0,read,0,bodies.size);encoder.copyBufferToBuffer(tets,0,read,bodies.size,tets.size);device.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);const bytes=read.getMappedRange(),floats=new Float32Array(bytes.slice(0,bodies.size)),plastic=new Float32Array(bytes.slice(bodies.size));if(failure)throw Error(failure);if(!floats.every(Number.isFinite)||!plastic.every(Number.isFinite))throw Error('Nonfinite GPU material state');return {...retainRegionState(state,floats,plastic,await copy(regionLinks)),physicalSteps:stepsDone,physicalTime:stepsDone*dt,lastTool:[...lastTool]};}finally{capturing--;read.unmap();read.destroy();owned.splice(owned.indexOf(read),1);}},
 
-   read(){return {route:slab?'webgpu/peelable-slab/local-face-contact':'webgpu/two-local-material-lattices/compliant-particulates',regions:state.regionCount,connectionStrength:strength,bodies:count,grains:grainCount,materialPoints:state.material.nodes.length,tetrahedra:state.material.tets.length,surfaceTriangles:state.faceCount,transitionConstraints:state.tieCount,generation:state.material.generation,steps:stepsDone,simulatedSeconds:stepsDone*dt,pending,failure,configuration:this.configuration,runtimeReadbacks:0};},
+   read(){return {route:state.compaction?'webgpu/grist-compaction/local-face-contact':slab?'webgpu/peelable-slab/local-face-contact':'webgpu/two-local-material-lattices/compliant-particulates',regions:state.regionCount,connectionStrength:strength,bodies:count,grains:grainCount,materialPoints:state.material.nodes.length,tetrahedra:state.material.tets.length,surfaceTriangles:state.faceCount,transitionConstraints:state.tieCount,generation:state.material.generation,steps:stepsDone,simulatedSeconds:stepsDone*dt,pending,failure,configuration:this.configuration,runtimeReadbacks:0};},
    dispose(){if(disposed)return;disposed=true;device.removeEventListener?.('uncapturederror',uncaptured);for(const b of owned)b.destroy();}
   };
  }catch(error){try{await device.popErrorScope();}catch{}device.removeEventListener?.('uncapturederror',uncaptured);for(const b of owned)b.destroy();throw error;}

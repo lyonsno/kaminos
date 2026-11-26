@@ -77,6 +77,10 @@ export const SLAB_WGSL = REGION_WGSL
   .replace('262144.0/p.domain.x', '262144.0/.026')
   .replace('p.domain.x/262144.0', '.026/262144.0');
 
+// The compaction bed is prepared on a rough tray so a shear can work the
+// surface while grains and support still have finite floor slip.
+export const COMPACTION_WGSL = SLAB_WGSL.replace('const ROUGH_TRAY = false;', 'const ROUGH_TRAY = true;');
+
 // Faces, range records and the element dispatch list share one readonly binding.
 // Keep Tet order canonical so plastic state can be captured without remapping.
 export function packSlabDispatch(state) {
