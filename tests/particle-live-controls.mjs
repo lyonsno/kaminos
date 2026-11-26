@@ -77,6 +77,31 @@ test('the seed tool holds on pick, consumes the complete gesture, and can reseed
  }finally{await x.dispose();}
 });
 
+test('abandoning an armed pick restores only the playback hold it acquired',async()=>{
+ const x=await mounted({cohort:true});
+ let paused=false;
+ const calls=[];
+ x.document.defaultView.kaminosScenePlayback={read:()=>({paused}),setPaused:value=>{paused=value;calls.push(value);}};
+ const button=()=>x.nodes().find(el=>['Pick a seed','Cancel seed pick'].includes(el.textContent));
+ try{
+  button().fire('click');
+  x.owner.operations.setLiveCohortView({view:'off'});
+  assert.deepEqual(calls,[true,false]);
+  button().fire('click');
+  button().fire('click');
+  assert.deepEqual(calls,[true,false,true,false]);
+  paused=true;
+  button().fire('click');
+  button().fire('click');
+  assert.equal(paused,true,'cancellation preserves an existing pause');
+  assert.deepEqual(calls,[true,false,true,false]);
+  paused=false;
+  button().fire('click');
+  await x.dispose();
+  assert.equal(paused,false,'leaving the experiment releases its unconsumed hold');
+ }finally{await x.dispose();}
+});
+
 test('legacy proxy soot settings cannot silently rewrite the shared simulation on reopening',async()=>{
  const old=await mounted({shared:true,inputs:{particles:{sootYield:5,smokeLife:7}}});try{assert.equal(old.owner.read().effective.simulationReaction.sootYield,.1);assert.equal(old.owner.read().effective.simulationReaction.smokeLife,90);assert.equal(old.owner.read().settings.sootYield,.1,'versioned persistence captures the effective shared law');assert.equal(old.owner.read().settings.smokeLife,90);old.owner.operations.setReaction({sootYield:.3,smokeLife:70});assert.equal(old.owner.read().effective.simulationReaction.sootYield,.3);}finally{await old.dispose();}
  const current=await mounted({shared:true,inputs:{particles:{materialStateVersion:1,sootYield:.6,smokeLife:80}}});try{assert.equal(current.owner.read().effective.simulationReaction.sootYield,.6);assert.equal(current.owner.read().effective.simulationReaction.smokeLife,80);}finally{await current.dispose();}

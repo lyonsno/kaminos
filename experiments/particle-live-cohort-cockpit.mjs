@@ -2,8 +2,16 @@ export function createLiveCohortCockpit({runtime,session,document,record,playbac
  const viewport=document.getElementById('viewport');
  let armed=false,pointer=null,ui=null,lastPick=null,suppressClick=false,resumeOnCancel=false;
  function state(){return runtime().opticalParticleState().liveCohort??{view:'off',phase:'off'};}
+ function cancelPick(){
+  if(!armed)return;
+  armed=false;
+  const shouldResume=resumeOnCancel&&playback().paused;
+  resumeOnCancel=false;
+  if(shouldResume)setPaused(false);
+ }
  function update(){
   if(!ui)return;
+  if(armed&&!playback().paused)cancelPick();
   const current=state();
   ui.view.disabled=armed||current.view==='off';
   ui.view.value=current.view;
@@ -37,13 +45,13 @@ export function createLiveCohortCockpit({runtime,session,document,record,playbac
   return next;
  }
  function setLiveCohortView({view}){
-  armed=false;
+  cancelPick();
   if(view!=='off'&&state().view==='off')throw Error('Pick a seed first');
   const next=inspect({view});
   update();return next;
  }
  function acquire(pick,view){
-  armed=false;
+  armed=false;resumeOnCancel=false;
   if(!playback().paused)setPaused(true);
   const next=inspect({view,pick});
   lastPick=structuredClone(pick);
@@ -86,6 +94,7 @@ export function createLiveCohortCockpit({runtime,session,document,record,playbac
   suppressClick=true;
   consume(event);
   if(!armed||distance>4)return;
+  if(!playback().paused){cancelPick();update();return;}
   const r=viewport.getBoundingClientRect();
   if(!r.width||!r.height)return;
   const point=[2*(event.clientX-r.left)/r.width-1,1-2*(event.clientY-r.top)/r.height];
@@ -107,8 +116,7 @@ export function createLiveCohortCockpit({runtime,session,document,record,playbac
    }
    pick.addEventListener('click',()=>{
     if(armed){
-     armed=false;
-     if(resumeOnCancel)setPaused(false);
+     cancelPick();
     }else{
      resumeOnCancel=!playback().paused;
      if(resumeOnCancel)setPaused(true);
@@ -133,6 +141,7 @@ export function createLiveCohortCockpit({runtime,session,document,record,playbac
    update();
   },
   dispose(){
+   if(armed)try{cancelPick();}catch{}
    for(const [name,handler] of Object.entries(listeners))viewport?.removeEventListener(name,handler,true);
    ui?.marker.remove();
    if(ui)try{runtime().setOpticalParticleLiveCohort({view:'off'});}catch{}
