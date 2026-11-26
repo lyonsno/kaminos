@@ -59,7 +59,8 @@ export default {
    view:session.readView()});
   const sync=()=>{
    const wallStops=Object.values(last?.wallStops??{}).reduce((total,count)=>total+count,0);
-   if(status)status.textContent=error??((pending?'Advancing · ':playing?'Live · ':'Paused · ')+(last?.completedSteps??0)+' material steps · t '+(last?.time??0).toFixed(3)+' normalized · Δt '+config.dt+' per step · '+(last?.splitNodes??0)+' split grid nodes · '+wallStops+' wall stops since reset');
+   const floorStops=config.floor&&!config.fixedBase?` · ${last?.floorStops??0} floor stops since reset`:'';
+   if(status)status.textContent=error??((pending?'Advancing · ':playing?'Live · ':'Paused · ')+(last?.completedSteps??0)+' material steps · t '+(last?.time??0).toFixed(3)+' normalized · Δt '+config.dt+' per step · '+(last?.splitNodes??0)+' split grid nodes · '+wallStops+' wall stops since reset'+floorStops);
    if(playButton)playButton.textContent=playing?'Pause':'Run';
    if(boxControl)boxControl.checked=config.boxWalls;
    if(baseControl)baseControl.value=config.fixedBase?'pinned':config.floor?'floor':'free';
