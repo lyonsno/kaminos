@@ -15,3 +15,15 @@
 .hand-input-hint{font-size:10px;color:#90969d;margin:3px 0 14px}.hand-input-status{font-size:11px;color:#aab5b2;line-height:1.5;overflow-wrap:anywhere}
 .hand-input-status[data-error=true]{color:#ecb59e}
 @media(max-width:600px){.hand-input-popover{position:fixed;top:44px;left:8px;right:8px;width:auto}.hand-input{order:-1;margin-right:4px}.hand-input-model{max-width:65px;overflow:hidden}}
+.hand-input-elapsed{font-size:10px;color:#d7dadc;font-variant-numeric:tabular-nums;min-width:3.3em;text-align:right}
+.hand-input-elapsed:empty{display:none}
+.hand-input-load{position:absolute;bottom:-3px;left:4px;width:calc(100% - 8px);height:2px;appearance:none;border:0;background:#303f3d;overflow:hidden;border-radius:1px}
+.hand-input-load[hidden]{display:none}
+.hand-input-load::-webkit-progress-bar{background:#303f3d}
+.hand-input-load::-webkit-progress-value{background:#99d7c1}
+.hand-input-load:not([value])::after{content:'';display:block;position:absolute;inset:0 auto 0 0;width:30%;background:#99d7c1;animation:hand-input-sweep .9s ease-in-out infinite alternate}
+.hand-input[data-silent=true] .hand-input-elapsed{color:#f1c283}
+.hand-input[data-silent=true] .hand-input-status{color:#f1c283}
+.hand-input-announcement{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+@keyframes hand-input-sweep{to{transform:translateX(233%)}}
+@media(prefers-reduced-motion:reduce){.hand-input-load:not([value])::after{animation:none;width:100%;opacity:.4}}

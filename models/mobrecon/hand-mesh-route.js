@@ -55,6 +55,7 @@ export async function createBrowserHandMeshRoute({ session, routeId, mobreconPac
       onProgress: event => onProgress?.({ model: 'mobrecon', ...event }) });
     detector = await loadHandDetector({ route: detectorRoute, packageUrl: detectorPackageUrl, packageSource: detectorPackageSource, signal,
       onProgress: event => onProgress?.({ model: 'hand-detector', ...event }) });
+    onProgress?.({ phase: 'finishing' });
     crop = createMobReconCrop({ device, input: mobrecon.network.input });
   } catch (error) {
     teardown();

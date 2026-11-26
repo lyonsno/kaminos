@@ -24,45 +24,54 @@ def identifier(value, label='session'):
 class NativeWorker:
     def __init__(self, config, output):
         self.config=config;self.output=Path(output);self.process=None
-        self.lock=threading.Lock();self.log=None;self.closed=False
+        self.lock=threading.Lock();self.lifecycle=threading.Lock();self.log=None;self.closed=False
     def report(self, **value):
         self.output.mkdir(parents=True,exist_ok=True)
         (self.output/'report.json').write_text(json.dumps(value,indent=2)+'\n')
-    def open(self):
+    def open(self, on_progress=None):
         phase='launch'
         try:
-            self.output.mkdir(parents=True,exist_ok=True)
-            self.log=(self.output/'worker.stderr.log').open('a')
-            env={**os.environ,'PYTHONPATH':str(Path(self.config.get('source','.'))/'src'),
-                 'HF_HUB_OFFLINE':'1','PYTHONUNBUFFERED':'1'}
-            self.process=subprocess.Popen([self.config['python'],'-u',str(Path(__file__).parent/'tools/hand-input-worker.py')],
-                stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=self.log,text=True,env=env)
+            with self.lifecycle:
+                if self.closed:raise RuntimeError('WiLoR session closed')
+                self.output.mkdir(parents=True,exist_ok=True)
+                self.log=(self.output/'worker.stderr.log').open('a')
+                env={**os.environ,'PYTHONPATH':str(Path(self.config.get('source','.'))/'src'),
+                     'HF_HUB_OFFLINE':'1','PYTHONUNBUFFERED':'1'}
+                self.process=subprocess.Popen([self.config['python'],'-u',str(Path(__file__).parent/'tools/hand-input-worker.py')],
+                    stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=self.log,text=True,env=env)
             phase='model-load'
-            result=self.request({'action':'load','config':self.config})
+            result=self.request({'action':'load','config':self.config}, on_progress)
             if result.get('identity',{}).get('backend')!='mlx-metal' or result.get('identity',{}).get('model')!='wilor':
                 raise RuntimeError('WiLoR worker returned a different effective route')
             self.report(status='loaded',phase=phase,identity=result['identity'])
             return result
         except Exception as error:
-            self.report(status='failed',phase=phase,error=str(error))
-            self.close();raise
-    def request(self, payload):
+            try:self.report(status='failed',phase=phase,error=str(error))
+            finally:self.close()
+            raise
+    def request(self, payload, on_progress=None):
         with self.lock:
             if self.closed:raise RuntimeError('WiLoR session closed')
             self.process.stdin.write(json.dumps(payload)+'\n');self.process.stdin.flush()
-            line=self.process.stdout.readline()
-            if not line:raise RuntimeError('WiLoR worker ended before its response; inspect worker.stderr.log')
-            result=json.loads(line)
-            if result.get('error'):raise RuntimeError(result['error'])
-            return result
+            while True:
+                line=self.process.stdout.readline()
+                if not line:raise RuntimeError('WiLoR worker ended before its response; inspect worker.stderr.log')
+                result=json.loads(line)
+                if 'progress' in result:
+                    if on_progress is not None:on_progress(result['progress'])
+                    continue
+                if result.get('error'):raise RuntimeError(result['error'])
+                return result
     def close(self):
-        self.closed=True
-        if self.process is not None:
-            if self.process.poll() is None:self.process.terminate()
-            self.process.wait()
-            for stream in (self.process.stdin,self.process.stdout):
-                if stream:stream.close()
-        if self.log:self.log.close()
+        with self.lifecycle:
+            if self.closed:return
+            self.closed=True
+            if self.process is not None:
+                if self.process.poll() is None:self.process.terminate()
+                self.process.wait()
+                for stream in (self.process.stdin,self.process.stdout):
+                    if stream:stream.close()
+            if self.log:self.log.close()
 
 class HandInputService:
     def __init__(self, path=None):
@@ -117,7 +126,7 @@ class HandInputService:
         value={**previous,**payload,'request':request,'source':source}
         metadata.write_text(json.dumps(value,allow_nan=False)+'\n')
         return {'retained':True,'sessionId':payload['sessionId'],'captureId':capture,'source':source}
-    def open(self, session):
+    def open(self, session, on_progress=None):
         identifier(session)
         if not self.status()['wilor']['available']:raise ValueError('WiLoR installation is unavailable')
         # Reserve before model load so an overlapping Stop owns the late worker.
@@ -127,7 +136,7 @@ class HandInputService:
             if session in self.workers:raise ValueError('WiLoR session already open')
             self.workers[session]=worker
         try:
-            result=worker.open()
+            result=worker.open(on_progress)
             with self.lock:
                 if session in self.closed:raise RuntimeError('WiLoR session closed during load')
             return result
@@ -165,11 +174,34 @@ def service():
     if _service is None:_service=HandInputService()
     return _service
 
+def stream_open(handler, owner, session):
+    handler.close_connection=True
+    handler.send_response(200)
+    handler.send_header('Content-Type','application/x-ndjson')
+    handler.send_header('Connection','close')
+    handler.end_headers()
+    def send(event):
+        handler.wfile.write((json.dumps(event)+'\n').encode())
+        handler.wfile.flush()
+    opened=False
+    try:
+        try:
+            result=owner.open(session, lambda progress: send({**progress,'type':'progress'}))
+            opened=True
+        except (ValueError,TypeError,KeyError,OSError,RuntimeError) as error:
+            result={'error':str(error)}
+        send({'type':'result','result':result})
+    except (BrokenPipeError,ConnectionResetError):
+        if opened:owner.close(session)
+
 def handle(handler, action):
     try:
         payload=json.loads(handler.rfile.read(int(handler.headers.get('Content-Length','0'))))
         if not isinstance(payload,dict):raise ValueError('Hand input requires a JSON object')
         owner=service()
+        if action=='open' and 'application/x-ndjson' in handler.headers.get('Accept',''):
+            session=identifier(payload.get('sessionId'))
+            return stream_open(handler,owner,session)
         if action=='record':result=owner.retain(payload)
         elif action=='open':result=owner.open(payload.get('sessionId'))
         elif action=='infer':result=owner.infer(payload)

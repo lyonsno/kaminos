@@ -1,29 +1,13 @@
-// Reading a server pipeline run from the Generate drawer (queued TRELLIS): the streamed
-// progress and final result of /api/run-pipeline, and the mesh artifact's read URL.
-// Restored from the page's former pipeline GUI, whose retirement removed them.
+import {readNdjsonResult} from './ndjson-result.mjs';
 
-export async function readPipelineRunStream(response, onProgress) {
-  const contentType = response.headers.get('Content-Type') || '';
-  if (!contentType.includes('application/x-ndjson') || !response.body) return response.json();
-  const reader = response.body.getReader(), decoder = new TextDecoder();
-  let buffer = '', finalResult = null;
-  const take = line => {
-    if (!line.trim()) return;
-    const event = JSON.parse(line);
-    if (event.schema === 'kaminos.pipeline-progress.v0') onProgress?.(event);
-    else if (event.schema === 'kaminos.pipeline-run-result.v0') finalResult = event;
-  };
-  while (true) {
-    const { value, done } = await reader.read();
-    if (value) buffer += decoder.decode(value, { stream: !done });
-    const lines = buffer.split(/\r?\n/);
-    buffer = lines.pop() || '';
-    lines.forEach(take);
-    if (done) break;
-  }
-  take(buffer);
-  if (!finalResult) throw new Error('Pipeline stream ended without a run result');
-  return finalResult;
+// Progress and final result of /api/run-pipeline.
+export function readPipelineRunStream(response, onProgress) {
+  return readNdjsonResult(response, {
+    isProgress: event => event.schema === 'kaminos.pipeline-progress.v0',
+    isResult: event => event.schema === 'kaminos.pipeline-run-result.v0',
+    onProgress,
+    missingResult: 'Pipeline stream ended without a run result',
+  });
 }
 
 function normalizeArtifactCollection(collection) {

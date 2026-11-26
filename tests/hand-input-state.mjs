@@ -85,3 +85,39 @@ console.log('shared hand input lifecycle passed');
   await input.setAuto('left',true);assert.equal(calls.schedules.length,1);
   await input.dispose();
 }
+{
+  let time=0;
+  const entered=deferred(), gate=deferred();
+  let progress;
+  const {input,camera}=fixture({
+    now:()=>time,
+    openCamera:async ({onProgress}={})=>{onProgress?.({phase:'camera-permission'});return camera;},
+    loadModel:async (model,{onProgress})=>{
+      progress=onProgress;
+      progress({phase:'weights',model:'mobrecon',loadedBytes:0,totalBytes:100});
+      entered.resolve();
+      await gate.promise;
+      return {identity:{model},async destroy(){}};
+    },
+  });
+  const begin=input.setEnabled(true);
+  await Promise.race([entered.promise,begin.then(()=>{throw Error('did not expose a live loading stage');})]);
+  assert.equal(input.read().loading?.phase,'weights','loading stage is readable while the loader is outstanding');
+  time=200;progress({phase:'weights',model:'mobrecon',loadedBytes:20,totalBytes:100});
+  assert.equal(input.read().loading.progressRatio,.2);
+  assert.equal(input.read().loading.estimatedMs,null,'one sample cannot predict how fast the read is going');
+  time=400;progress({phase:'weights',model:'mobrecon',loadedBytes:40,totalBytes:100});
+  assert.equal(input.read().loading.estimatedMs,600);
+  time=6100;
+  assert.equal(input.read().loading.silentMs,5700,'the clock advances without inventing progress');
+  assert.equal(input.read().loading.estimatedMs,null);
+  progress({phase:'building',model:'mobrecon'});
+  assert.equal(input.read().loading.progressRatio,null,'a later unknown-duration step clears the old percentage');
+  const stop=input.setEnabled(false);
+  progress({phase:'weights',model:'hand-detector',loadedBytes:50,totalBytes:100});
+  assert.equal(input.read().loading,null,'callbacks from a stopped generation cannot resurrect loading');
+  gate.resolve();
+  await Promise.all([begin,stop]);
+  assert.equal(input.read().lastLoad,null,'cancel is not a successful load');
+  await input.dispose();
+}

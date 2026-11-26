@@ -32,19 +32,27 @@ export async function loadMobRecon({ route, packageUrl, packageSource, signal, o
   if (!route?.runtime?.device || typeof route.loadModelResourcesFromSource !== 'function') {
     throw new Error('MobRecon requires a registered kit session route');
   }
+  onProgress?.({ phase: 'package' });
   const { metadata: weightPackage, source, row } = await readModelPackage({ packageUrl, packageSource, schema: MOBRECON_PACKAGE_SCHEMA, signal });
   const started = performance.now();
+  const totalBytes = row.manifest.bundle.byteLength;
+  onProgress?.({ phase: 'weights', loadedBytes: 0, totalBytes });
   const lease = await route.loadModelResourcesFromSource({
     manifest: defineWebGpuModelResourceManifest(row.manifest), source, signal,
-    onProgress: event => onProgress?.({ phase: 'weights', loadedBytes: event.loadedBytes, totalBytes: event.totalBytes }),
+    onProgress: ({ loadedBytes }) => {
+      onProgress?.({ phase: 'weights', loadedBytes, totalBytes });
+      if (loadedBytes === totalBytes) onProgress?.({ phase: 'preparing-weights' });
+    },
   });
   let network;
   try {
+    onProgress?.({ phase: 'building' });
     const device = route.runtime.device;
     const modelId = row.manifest.modelId;
     const decoder = { 'mobrecon.densestack-spiralconv': 'spiralconv', 'mobrecon.densestack-dsconv': 'dsconv' }[modelId];
     if (!decoder) throw new Error(`unsupported MobRecon model ${modelId}`);
     network = createMobReconNetwork({ device, tensors: lease.tensors, decoder });
+    onProgress?.({ phase: 'topology' });
     const faces = await readU32(device, lease.tensors['topology.faces']);
     if (faces.length !== 1538 * 3 || faces.some(v => v >= MOBRECON_VERTICES) || new Set(faces).size !== MOBRECON_VERTICES) {
       throw new Error('MobRecon faces must index all 778 vertices in 1538 triangles');

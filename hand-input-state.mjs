@@ -1,3 +1,5 @@
+import {createLoadingTelemetryTracker} from './asset-arrival.mjs';
+
 export const HAND_MODELS = Object.freeze({spiralconv:'SpiralConv',dsconv:'DSConv',wilor:'WiLoR'});
 
 // One owner across workspace/experiment changes. The injected camera schedules
@@ -7,11 +9,41 @@ export function createHandInput({openCamera,loadModel,present,clear,record,now=(
   let auto={left:true,right:true},camera=null,backend=null,flight=null,tail=Promise.resolve();
   let generation=0,disposed=false,abort=null,last=null,sequence=0;
   const subscribers=new Set();
+  const telemetry=createLoadingTelemetryTracker();
+  const operation='hands';
+  let leg=null,lastLoad=null;
+
+  function readLoading() {
+    if(!leg)return null;
+    const current=telemetry.read(now()).primary;
+    const bytes=current.loadedBytes-leg.firstBytes;
+    const interval=current.lastProgressAtMs-leg.firstAt;
+    const remaining=current.totalBytes-current.loadedBytes;
+    const estimatedMs=bytes>0&&interval>0&&remaining>0&&current.silentMs<2000
+      ?remaining*interval/bytes:null;
+    return {...current,component:leg.component,estimatedMs};
+  }
+
+  function progress(event,ticket) {
+    if(!leg||ticket!==generation||phase!=='loading')return;
+    const {phase:step,model:component=null,loadedBytes=0,totalBytes=0}=event;
+    const changed=step!==leg.phase||component!==leg.component;
+    if(!changed&&loadedBytes<=leg.loadedBytes&&totalBytes===leg.totalBytes)return;
+    const t=now();
+    if(changed)Object.assign(leg,{phase:step,component,firstAt:null});
+    if(loadedBytes>0&&leg.firstAt===null)Object.assign(leg,{firstAt:t,firstBytes:loadedBytes});
+    Object.assign(leg,{loadedBytes,totalBytes});
+    telemetry.progress(operation,{phase:step,loadedBytes,totalBytes,token:leg.token,now:t});
+    notify();
+  }
   const read=()=>({enabled,model,effectiveModel,auto:{...auto},phase,error,identity:backend?.identity??null,
-    last,lastAgeMs:last?now()-last.presentedAt:null});
+    last,lastAgeMs:last?now()-last.presentedAt:null,loading:readLoading(),lastLoad});
   const notify=()=>{const value=read();for(const fn of subscribers)fn(value);};
   const hide=()=>{last=null;clear();};
-  const invalidate=()=>{generation++;abort?.abort();backend?.stop?.();hide();};
+  const invalidate=()=>{
+    generation++;abort?.abort();backend?.stop?.();hide();
+    if(leg){telemetry.cancel(operation,{token:leg.token,now:now()});leg=null;}
+  };
   function schedule() {
     if(enabled&&camera&&backend&&!disposed&&Object.values(auto).some(Boolean))camera.schedule(sample);
   }
@@ -51,33 +83,48 @@ export function createHandInput({openCamera,loadModel,present,clear,record,now=(
   }
   async function releaseBackend(){const old=backend;backend=null;effectiveModel=null;if(old)await old.destroy();}
   function reconcile() {
+    const ticket=generation;
+    if(enabled&&!disposed&&(!camera||!backend||effectiveModel!==model)){
+      const step=flight||backend||abort?'finishing-previous':'checking';
+      const {token}=telemetry.start(operation,{label:HAND_MODELS[model],phase:step,now:now()});
+      leg={token,phase:step,component:null,firstAt:null,firstBytes:0,loadedBytes:0,totalBytes:0};
+      lastLoad=null;phase='loading';error=null;notify();
+    }
+    const onProgress=event=>progress(event,ticket);
     const task=tail.catch(()=>{}).then(async()=>{
+      if(ticket!==generation)return read();
       if(disposed||!enabled){
         camera?.stop();camera=null;
         if(flight)await flight;
         await releaseBackend();await record?.close?.();phase='off';notify();return read();
       }
-      const ticket=generation;
       try {
-        phase='loading';error=null;notify();
         if(flight)await flight;
         if(backend&&effectiveModel!==model)await releaseBackend();
         if(!enabled||disposed||ticket!==generation)return read();
         if(!camera){
-          const acquired=await openCamera();
+          onProgress({phase:'checking'});
+          const acquired=await openCamera({onProgress});
           if(!enabled||disposed||ticket!==generation){acquired.stop();return read();}
           camera=acquired;
         }
         if(!backend){
           abort=new AbortController();const wanted=model;
-          const loaded=await loadModel(wanted,{signal:abort.signal,onProgress:()=>notify()});
+          const loaded=await loadModel(wanted,{signal:abort.signal,onProgress});
           if(!enabled||disposed||ticket!==generation){await loaded.destroy();return read();}
           backend=loaded;effectiveModel=wanted;abort=null;
+        }
+        if(leg){
+          const {lastCompleted}=telemetry.complete(operation,{token:leg.token,now:now()});
+          lastLoad={model,durationMs:lastCompleted.durationMs};
+          leg=null;
         }
         phase='waiting';notify();schedule();return read();
       }catch(cause){
         if(ticket!==generation||disposed)return read();
         camera?.stop();camera=null;await releaseBackend();await record?.close?.().catch(()=>{});
+        abort=null;
+        if(leg){telemetry.fail(operation,cause,{token:leg.token,now:now()});leg=null;}
         enabled=false;error=String(cause?.message??cause);phase='error';hide();notify();throw cause;
       }
     });

@@ -15,13 +15,20 @@ export async function loadHandDetector({ route, packageUrl, packageSource, signa
   if (!route?.runtime?.device || typeof route.loadModelResourcesFromSource !== 'function') {
     throw new Error('hand detector requires a registered kit session route');
   }
+  onProgress?.({ phase: 'package' });
   const { metadata: weightPackage, source, row } = await readModelPackage({ packageUrl, packageSource, schema: HAND_DETECTOR_PACKAGE_SCHEMA, signal });
   const started = performance.now();
+  const totalBytes = row.manifest.bundle.byteLength;
+  onProgress?.({ phase: 'weights', loadedBytes: 0, totalBytes });
   const lease = await route.loadModelResourcesFromSource({
     manifest: defineWebGpuModelResourceManifest(row.manifest), source, signal,
-    onProgress: event => onProgress?.({ phase: 'weights', loadedBytes: event.loadedBytes, totalBytes: event.totalBytes }),
+    onProgress: ({ loadedBytes }) => {
+      onProgress?.({ phase: 'weights', loadedBytes, totalBytes });
+      if (loadedBytes === totalBytes) onProgress?.({ phase: 'preparing-weights' });
+    },
   });
   try {
+    onProgress?.({ phase: 'building' });
     const device = route.runtime.device;
     const network = createHandDetectorNetwork({ device, tensors: lease.tensors });
     const letterbox = createDetectorLetterbox({ device, input: network.input });

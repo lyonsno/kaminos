@@ -11,11 +11,30 @@ import subprocess
 import sys
 import traceback
 
-def digest(path):
-    with open(path,'rb') as stream:return hashlib.file_digest(stream,'sha256').hexdigest()
+# Keep the real wire writer even while library prints are redirected to stderr.
+wire = sys.stdout
+
+def progress(phase, **detail):
+    print(json.dumps({'progress':{'phase':phase, **detail}}), file=wire, flush=True)
+
+def file_identities(paths):
+    total = sum(Path(path).stat().st_size for path in paths.values())
+    loaded = 0
+    progress('native-check',loadedBytes=loaded,totalBytes=total)
+    hashes = {}
+    for key, path in paths.items():
+        digest = hashlib.sha256()
+        with open(path, 'rb') as stream:
+            while chunk := stream.read(8 * 1024 * 1024):
+                digest.update(chunk)
+                loaded += len(chunk)
+                progress('native-check',loadedBytes=loaded,totalBytes=total)
+        hashes[key] = digest.hexdigest()
+    return hashes
 
 class WiLoRRoute:
     def __init__(self,config):
+        progress('native-imports')
         import mlx.core as mx
         from wilor_mlx import WiLoR
         from wilor_mlx.detector import HandDetector
@@ -23,14 +42,17 @@ class WiLoRRoute:
         if not mx.metal.is_available():raise RuntimeError('WiLoR requires the configured MLX Metal route')
         mx.set_default_device(mx.gpu)
         self.mx=mx;self.crop=_crop_and_resize_mlx
+        progress('native-pose')
         self.pose=WiLoR.from_pretrained(weights_path=config['weights'],mano_path=config['mano'])
+        progress('native-detector')
         self.detector=HandDetector.from_pretrained(weights_path=config['detector'])
         self.pipeline=HandPosePipeline(self.detector,self.pose)
         self.identity={'model':'wilor','backend':'mlx-metal','sourceRoot':config['source'],
             'sourceCommit':subprocess.check_output(['git','-C',config['source'],'rev-parse','HEAD'],text=True).strip(),
-            'weightsSha256':digest(config['weights']),'manoSha256':digest(config['mano']),
-            'detectorSha256':digest(config['detector']),'placement':'camera-plane display; uncalibrated'}
+            **file_identities({key+'Sha256':config[key] for key in ('weights','mano','detector')}),
+            'placement':'camera-plane display; uncalibrated'}
     def loaded(self):
+        progress('native-topology')
         import numpy as np
         faces=np.array(self.pose.mano.faces).reshape(-1).tolist()
         if len(faces)!=1538*3:raise ValueError('WiLoR MANO topology is incomplete')

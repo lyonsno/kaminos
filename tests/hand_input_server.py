@@ -21,7 +21,7 @@ class HandInputServerTests(unittest.TestCase):
             config.write_text(json.dumps({'schema':'kaminos.hand-input-installation.v1','packages':{'spiralconv':str(package)}}))
             service=module.HandInputService(config)
             self.assertIsNone(service.package_file('spiralconv','../hands.json'))
-            self.assertEqual(service.package_file('spiralconv','package.json'),package/'package.json')
+            self.assertEqual(service.package_file('spiralconv','package.json'),(package/'package.json').resolve())
             self.assertIsNone(service.package_file('unknown','package.json'))
             with self.assertRaisesRegex(ValueError,'session'):
                 service.retain({'sessionId':'../escape','captureId':'a'})
@@ -52,6 +52,62 @@ class HandInputFailures(unittest.TestCase):
         for payload in [[],None,3,{'sessionId':'safe','captureId':'one','request':None}]:
             handler=Handler();body=json.dumps(payload).encode();handler.rfile=io.BytesIO(body);handler.headers={'Content-Length':str(len(body))}
             module.handle(handler,'record');self.assertEqual(handler.result[0],400)
+    def test_native_open_progress_is_flushed_before_the_terminal_result(self):
+        import http.client
+        import http.server
+        import threading
+        module=self.module()
+        release=threading.Event()
+        result={'identity':{'model':'wilor','backend':'mlx-metal'},'faces':[0,1,2]}
+        calls=[]
+        class Service:
+            def open(self, session, on_progress=None):
+                calls.append(session)
+                if on_progress is not None:
+                    on_progress({'phase':'native-pose'})
+                    if not release.wait(3):raise RuntimeError('test never received progress')
+                return result
+        module._service=Service()
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                module.handle(self,'open')
+            def send_json(self,data,status=200):
+                body=json.dumps(data).encode()
+                self.send_response(status);self.send_header('Content-Length',str(len(body)))
+                self.end_headers();self.wfile.write(body)
+        with http.server.ThreadingHTTPServer(('127.0.0.1',0),Handler) as server:
+            thread=threading.Thread(target=server.serve_forever);thread.start()
+            conn=http.client.HTTPConnection(*server.server_address,timeout=4)
+            try:
+                conn.request('POST','/api/hand-input/open',json.dumps({'sessionId':'stream'}),
+                             {'Accept':'application/x-ndjson'})
+                response=conn.getresponse()
+                self.assertEqual(response.getheader('Content-Type'),'application/x-ndjson')
+                self.assertEqual(json.loads(response.readline()),{'type':'progress','phase':'native-pose'})
+                release.set()
+                self.assertEqual(json.loads(response.readline()),{'type':'result','result':result})
+                self.assertEqual(response.read(),b'')
+                conn.request('POST','/api/hand-input/open',json.dumps({'sessionId':'legacy'}))
+                self.assertEqual(json.loads(conn.getresponse().read()),result)
+                self.assertEqual(calls,['stream','legacy'])
+            finally:
+                release.set();conn.close();server.shutdown();thread.join()
+    def test_worker_open_distinguishes_progress_from_result(self):
+        import io
+        from types import SimpleNamespace
+        module=self.module()
+        worker=module.NativeWorker({},ENTRY.parent)
+        result={'identity':{'model':'wilor','backend':'mlx-metal'}}
+        event={'phase':'native-check','loadedBytes':8,'totalBytes':16}
+        worker.process=SimpleNamespace(stdin=io.StringIO(), stdout=io.StringIO(
+            json.dumps({'progress':event})+'\n'+json.dumps(result)+'\n'))
+        seen=[]
+        self.assertEqual(worker.request({'action':'load'}, seen.append),result)
+        self.assertEqual(seen,[event])
+        self.assertEqual(json.loads(worker.process.stdin.getvalue()),{'action':'load'})
+        worker.process.stdout=io.StringIO(json.dumps({'progress':event})+'\n')
+        with self.assertRaisesRegex(RuntimeError,'ended before its response'):
+            worker.request({'action':'load'},seen.append)
     def test_png_is_single_canonical_source(self):
         import base64,hashlib
         module=self.module()
@@ -66,6 +122,7 @@ class HandInputFailures(unittest.TestCase):
             d=json.loads(path.read_text());self.assertEqual(d['source'],first['source']);self.assertEqual(d['outcome']['state'],'presented')
             class Worker:
                 def request(self,payload):return payload
+                def close(self):pass
             service.workers['native']=Worker()
             result=service.infer({'sessionId':'native','captureSessionId':'camera','captureId':'camera_1','frameId':1})
             self.assertEqual(result['image'],image,'native inference consumes the retained exact source')

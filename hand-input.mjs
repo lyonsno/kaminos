@@ -2,14 +2,21 @@ import {createHandInput} from './hand-input-state.mjs';
 import {mountHandInput} from './hand-input-ui.mjs';
 import {createHandInputView} from './hand-input-view.mjs';
 import {createHandMeshApp} from './models/mobrecon/hand-mesh-app.js';
+import {readNdjsonResult} from './ndjson-result.mjs';
 import {openBrowserCaptureStore} from './hand-input-retention.mjs';
 
-async function api(action,body,signal) {
+async function api(action,body,signal,onProgress) {
   const response=await fetch('/api/hand-input'+(action?'/'+action:''),body?{
-    method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal,
+    method:'POST',headers:{'Content-Type':'application/json',...(onProgress?{Accept:'application/x-ndjson'}:{})},body:JSON.stringify(body),signal,
   }:{cache:'no-store',signal});
-  const value=await response.json();
-  if(!response.ok)throw Error(value.error??`Hand input HTTP ${response.status}`);
+  const envelope=onProgress?await readNdjsonResult(response,{
+    isProgress:event=>event.type==='progress',
+    isResult:event=>event.type==='result',
+    onProgress,
+    missingResult:'WiLoR load ended before a result arrived',
+  }):await response.json();
+  const value=envelope.type==='result'?envelope.result:envelope;
+  if(!response.ok||value.error)throw Error(value.error??`Hand input HTTP ${response.status}`);
   return value;
 }
 export function installHandInput({document,scene,camera,onFrame,redraw,getGpu}) {
@@ -28,12 +35,14 @@ export function installHandInput({document,scene,camera,onFrame,redraw,getGpu}) 
     async close(){const old=retention;retention=null;await old?.close();},
   };
   const input=createHandInput({record,
-    async openCamera(){
+    async openCamera({onProgress}){
       config=await api('');
       if(config.error)throw Error(config.error);
       if(!retention){sessionId=crypto.randomUUID();retention=await openBrowserCaptureStore({onFailure:error=>{void input.fail(error).catch(()=>{});}});}
       const video=document.createElement('video');video.muted=true;video.playsInline=true;
+      onProgress({phase:'camera-permission'});
       const stream=await navigator.mediaDevices.getUserMedia({video:true,audio:false});
+      onProgress({phase:'camera-start'});
       let callback=null,stopped=false;
       try{video.srcObject=stream;await video.play();}
       catch(error){stream.getTracks().forEach(track=>track.stop());throw error;}
@@ -46,11 +55,12 @@ export function installHandInput({document,scene,camera,onFrame,redraw,getGpu}) 
     async loadModel(model,{signal,onProgress}){
       if(model==='wilor'){
         if(!config.wilor.available)throw Error(config.wilor.reason);
+        onProgress({phase:'native-start'});
         const nativeId=crypto.randomUUID();let closed=false;
         const close=async()=>{if(closed)return;closed=true;await api('close',{sessionId:nativeId});};
         const cancel=()=>{void close().catch(()=>{});};signal.addEventListener('abort',cancel,{once:true});
         try{
-          const loaded=await api('open',{sessionId:nativeId},signal);
+          const loaded=await api('open',{sessionId:nativeId},signal,onProgress);
           if(loaded.identity?.backend!=='mlx-metal'||loaded.identity?.model!=='wilor')throw Error('Unexpected native hand model route');
           if(signal.aborted)throw new DOMException('Hand loading stopped','AbortError');
           const route={model,identity:loaded.identity,faces:loaded.faces,
@@ -65,6 +75,7 @@ export function installHandInput({document,scene,camera,onFrame,redraw,getGpu}) 
       }
       const chosen=config.packages[model],detector=config.packages.detector;
       if(!chosen?.available||!detector?.available)throw Error(`${model} and the hand detector must be installed in ${config.installationFile}`);
+      onProgress({phase:'gpu'});
       const gpu=await getGpu();if(!gpu)throw Error('Hand input requires the page WebGPU device');
       // Use the host's run entry so it installs the foreground frame requester.
       const foreground=Object.create(gpu.foreground,{beginRun:{value:gpu.beginRun.bind(gpu)}});
