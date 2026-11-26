@@ -2,7 +2,7 @@ import * as T from './lib/three.core.js';
 import {MarchingCubes} from './vendor/StockroomMarchingCubes.js';
 import {planPlace,placeBounds,samplePlace,regionDistance,receiverRegion} from './stockroom-place-state.mjs';
 
-export function createPlaceView(){
+export function createPlaceView({showRegionGuides=true,showInsert=true}={}){
  const root=new T.Group();root.name='Establish / Work - prepared deck composition';
  const cube=new T.BoxGeometry(1,1,1),sphere=new T.SphereGeometry(.065,12,8),matrix=new T.Matrix4(),q=new T.Quaternion(),s=new T.Vector3(),p=new T.Vector3();
  const mat=(color,metalness=0,roughness=.7)=>new T.MeshStandardMaterial({color,metalness,roughness});
@@ -38,7 +38,8 @@ export function createPlaceView(){
   for(const [key,mesh]of handles)if(!wanted.has(key)){mesh.removeFromParent();handles.delete(key);}for(const [id,line]of outlines)if(!value.regions.some(r=>r.id===id)){line.geometry.dispose();line.removeFromParent();outlines.delete(id);}
  }
  function update(value){model=structuredClone(value);plan=planPlace(value);const resolved=value.realization==='deck'?plan:planPlace({...value,regions:value.regions.filter(r=>r.role!=='material'||r.id==='dock')});
-  deckMeshes=[instances('Deck boards',resolved.boards,timber),instances('Deck structure',resolved.frame,frame),instances('Member ends',resolved.edges,ends),proxy];unresolved(value);boundaries(value);
+  deckMeshes=[instances('Deck boards',resolved.boards,timber),instances('Deck structure',resolved.frame,frame),instances('Member ends',resolved.edges,ends),proxy];unresolved(value);if(showRegionGuides)boundaries(value);
+  insert.visible=showInsert;insertHandle.visible=false;receiver.visible=false;if(!showInsert){root.updateMatrixWorld(true);return;}
   const a=value.insert,x=a.half[0],z=a.half[1];insert.position.set(a.center[0]-x,value.height+.045,a.center[1]);insert.rotation.z=a.angle;panel.scale.set(2*x,.055,2*z);panel.position.set(x,0,0);pins.forEach((pin,i)=>pin.position.set(0,0,(i?1:-1)*z*.7));
   insertHandle.position.set(2*x,0,0).applyMatrix4(insert.matrix.clone().compose(insert.position,insert.quaternion,insert.scale));insertHandle.visible=value.mode==='work';
   receiver.visible=a.fitted;receiver.position.set(a.center[0],value.height-.015,a.center[1]);const r=receiverRegion(value),u=r.half[0],v=r.half[1];
