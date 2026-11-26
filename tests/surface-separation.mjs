@@ -68,3 +68,12 @@ test('hinge handle travels along its selected side without changing the axis', a
   near(hingeFraction(patch, 2, [-.55, .73]), .75);
   near(hingeFraction(patch, 2, [-3, .73]), 1);
 });
+
+
+test('thick flush patches hit the far rim before clearing the shell', async () => {
+  const {flatSwingLimit} = await import('../surface-separation.mjs');
+  const angle = flatSwingLimit(.55, .13, .008);
+  assert.ok(angle > 0 && angle < .15);
+  near((.55 - .008) * Math.cos(angle) + .13 * Math.sin(angle), .55);
+  assert.equal(flatSwingLimit(1.3, .13, .008), null);
+});

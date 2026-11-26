@@ -105,3 +105,14 @@ export function hingeFraction(rect, side, point) {
   const axis = side % 2;
   return clamp((point[axis] - a[axis]) / (b[axis] - a[axis]), 0, 1);
 }
+
+
+// In a flat cross-section, the first point to reach the far jamb is
+// the back corner opposite the axle. It is still behind the front
+// surface at first contact. The two axial sides retain their clearance.
+export function flatSwingLimit(width, thickness, inset) {
+  const reach = width - inset;
+  const diagonal = Math.hypot(reach, thickness);
+  if (diagonal <= width) return null;
+  return Math.atan2(thickness, reach) - Math.acos(width / diagonal);
+}
