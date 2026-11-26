@@ -14,7 +14,7 @@ export default {
   const session=await host.scene.open(),renderer=host.scene.renderer(),device=renderer?.backend?.device;
   if(!device){await session.dispose();throw Error('Thermal stone requires the shared WebGPU renderer');}
   const root=new Group();root.name='Cooling stone — persistent material';root.position.y=host.scene.ground().height;
-  let solver,attribute,mesh,asset,status,playButton,boxControl,baseControl,debounce,draft={},controls=[],fields=[],stop;
+  let solver,attribute,mesh,asset,status,playButton,viewControl,boxControl,baseControl,debounce,draft={},controls=[],fields=[],stop;
   const mode=uniform(viewMode,'uint');
   const persist=()=>updateInputs?.({material:thermalOptions(config),batch,viewMode});
   const release=()=>{
@@ -62,6 +62,7 @@ export default {
    const floorStops=config.floor&&!config.fixedBase?` · ${last?.floorStops??0} floor stops since reset`:'';
    if(status)status.textContent=error??((pending?'Advancing · ':playing?'Live · ':'Paused · ')+(last?.completedSteps??0)+' material steps · t '+(last?.time??0).toFixed(3)+' normalized · Δt '+config.dt+' per step · '+(last?.splitNodes??0)+' split grid nodes · '+wallStops+' wall stops since reset'+floorStops);
    if(playButton)playButton.textContent=playing?'Pause':'Run';
+   if(viewControl)viewControl.value=String(viewMode);
    if(boxControl)boxControl.checked=config.boxWalls;
    if(baseControl)baseControl.value=config.fixedBase?'pinned':config.floor?'floor':'free';
    for(const [field,key,factor] of fields)if(field.ownerDocument.activeElement!==field&&!(key in draft))field.value=String(key==='batch'?batch:config[key]*factor);
@@ -116,8 +117,11 @@ export default {
    const failed=e=>{error=e.message;playing=false;sync();};
    const button=(title,operation,arg)=>{const b=document.createElement('button');b.textContent=title;b.onclick=()=>invoke(operation,typeof arg==='function'?arg():arg).catch(failed);panel.append(b);return b;};
    playButton=button('Run','play',()=>!playing);button('Advance 20 steps','advance',{steps:20});button('Reset hot solid','reset');button('Frame stone','frame');
-   const select=document.createElement('select');select.setAttribute('aria-label','Material view');
-   for(const [i,name] of ['Stone','Temperature','Damage','Tensile history'].entries()){const option=document.createElement('option');option.value=i;option.textContent=name;select.append(option);}select.value=viewMode;select.onchange=()=>invoke('display',Number(select.value)).catch(failed);panel.append(select);
+   viewControl=document.createElement('select');viewControl.setAttribute('aria-label','Material view');
+   for(const [i,name] of ['Stone','Temperature','Damage','Tensile history'].entries()){
+    const option=document.createElement('option');option.value=i;option.textContent=name;viewControl.append(option);
+   }
+   viewControl.onchange=()=>invoke('display',Number(viewControl.value)).catch(failed);panel.append(viewControl);
    const field=(title,key,step,min,help,factor=1)=>{
     const label=document.createElement('label'),grip=document.createElement('span'),input=document.createElement('input');grip.textContent=title;
     input.type='number';input.min=String(min);input.step='any';input.className='transform-input';input.setAttribute('aria-label',title);label.append(grip,input);panel.append(label);fields.push([input,key,factor]);
