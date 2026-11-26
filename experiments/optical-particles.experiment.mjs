@@ -267,7 +267,7 @@ export default {
    text(residentStatus,s.mode==='off'?'Off':v.effective===RESIDENT_VOLUME_ROUTE&&v.requested===s.mode&&w?
     'Step '+v.identity.step+' · '+w.retainedSections+' retained sections · '+(w.seedRays?'seed '+w.seedRays+' rays':w.freshRays?w.freshRays+' fresh rays / one batch':'reuse only')+' · '+(v.coverage.kind==='emitter-born'?'Emitter-born':'Camera-acquired')+' material; unsampled unknown · solids excluded' : v.reason??'Waiting for a current native material frame');
   }
-  const cohortCockpit=createLiveCohortCockpit({runtime:source,session,document:host.controls.document,record});
+  const cohortCockpit=createLiveCohortCockpit({runtime:source,session,document:host.controls.document,record,playback,setPaused});
   const operations={...cohortCockpit.operations,setResidentVolume,reseedResidentVolume,setLightSlice:lightSlice.configure,pickLightSliceHandle:lightSlice.pick,holdLightSlice:lightSlice.hold,trackLightSliceSource:lightSlice.trackSource,inspectLightSlice:lightSlice.inspect,setPacketLighting,inspectPackets,setIntegralDirection,setPaused,setAmbientBoundary,setOptions,setReaction,setSource,setCoverage,setLighting,samplePopulation,async measure(options={}){measurement=await source().measureOpticalParticleFrame(options);sync();return measurement;},reset(){source().resetOpticalParticles();session.redraw();sync(true);return read();},
    setRadius({axis,value:v}){if(!['horizontal','vertical'].includes(axis))throw Error('Unknown radius axis');if(!Number.isFinite(v)||v<=0)throw Error('Radius must be positive');const vertical=settings.radius*settings.stretch;return axis==='vertical'?setOptions({stretch:v/settings.radius}):setOptions({radius:v,stretch:vertical/v});}
   };

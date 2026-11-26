@@ -6,7 +6,7 @@ import {bindParticleNumber} from "../particle-number-control.mjs";
 import {opticalParticleSettings} from '../volume-optical-particles.mjs';
 import {createSceneEdits} from '../scene-edit-session.mjs';
 
-async function mounted({shared=false,inputs={},viewport=false,edits,preview=false}={}){
+async function mounted({shared=false,inputs={},viewport=false,edits,preview=false,cohort=false}={}){
  const document=new EventTarget();document.activeElement=null;
  class Element extends EventTarget{
   constructor(tag){super();this.ownerDocument=document;this.tagName=tag.toUpperCase();this.children=[];this.dataset={};this.style={};this.value='';this.min='';this.max='';const classes=new Set();this.classList={add:v=>classes.add(v),remove:v=>classes.delete(v),contains:v=>classes.has(v)};}
@@ -17,18 +17,22 @@ async function mounted({shared=false,inputs={},viewport=false,edits,preview=fals
  }
  document.createElement=t=>new Element(t);if(viewport)document.body=new Element('body');const native=new Map();document.getElementById=id=>native.get(id)??null;
  let accepted=opticalParticleSettings(),reaction=shared?{burnTime:3,cooling:50,heatRelease:6,sootYield:.1,smokeLife:90}:null,writes=[];
+ if(cohort){
+  const el=new Element('div');el.getBoundingClientRect=()=>({left:0,top:0,width:800,height:600});native.set('viewport',el);
+ }
  let sourceControls={renderScale:1,raySteps:8};
- const trace={settings:[],reaction:[],records:[],redraw:[],nativeEvents:[],reset:[]};
- const runtime={...(viewport?{opticalParticleViewport:()=>({getBoundingClientRect:()=>({left:0,top:0,right:800,bottom:600,width:800,height:600})})}:{}),opticalParticleSettings:()=>accepted,setOpticalParticles:s=>{trace.settings.push(s);accepted=opticalParticleSettings(s);},setControls:patch=>{sourceControls={...sourceControls,...patch};},splitIntegralSettings:()=>({mode:'off'}),setSplitIntegral(){},opticalParticleState:()=>({effective:'world-optical-particles',settings:accepted,simulationReaction:reaction,sourceRenderScale:preview?.5:sourceControls.renderScale,sourceRaySteps:preview?12:sourceControls.raySteps}),setParticleSimulationReaction:p=>{trace.reaction.push(p);reaction={...reaction,...p};return reaction;},resetOpticalParticles(){trace.reset.push(true);}};
+ let liveCohort={view:'off',phase:'off'};
+ const trace={cohort:[],settings:[],reaction:[],records:[],redraw:[],nativeEvents:[],reset:[]};
+ const runtime={...(viewport?{opticalParticleViewport:()=>({getBoundingClientRect:()=>({left:0,top:0,right:800,bottom:600,width:800,height:600})})}:{}),opticalParticleSettings:()=>accepted,setOpticalParticles:s=>{trace.settings.push(s);accepted=opticalParticleSettings(s);},setControls:patch=>{sourceControls={...sourceControls,...patch};},splitIntegralSettings:()=>({mode:'off'}),setSplitIntegral(){},setOpticalParticleLiveCohort:r=>{trace.cohort.push(r);liveCohort={view:r.view,phase:r.view==='off'?'off':'tracking'};return liveCohort;},opticalParticleState:()=>({liveCohort,effective:'world-optical-particles',settings:accepted,simulationReaction:reaction,sourceRenderScale:preview?.5:sourceControls.renderScale,sourceRaySteps:preview?12:sourceControls.raySteps}),setParticleSimulationReaction:p=>{trace.reaction.push(p);reaction={...reaction,...p};return reaction;},resetOpticalParticles(){trace.reset.push(true);}};
  for(const [key,id] of [['burnTime','volume-reactant-mixing-time'],['cooling','volume-reactant-cooling-time'],['sootYield','volume-reactant-soot-yield']]){
   const input=new Element('input'),label=new Element('span');input.value=String(reaction?.[key]??accepted[key]);input.addEventListener('input',()=>{trace.nativeEvents.push(key);runtime.setParticleSimulationReaction({[key]:Number(input.value)});});native.set(id,input);native.set(id+'-val',label);
  }
  document.defaultView={__kaminosVolumePrototype:runtime,Event,crypto:globalThis.crypto,kaminosSceneEdits:edits};
  const owner=await definition.create({host:{controls:{document,installNumberDrag:()=>({dispose(){}})},scene:{open:async()=>({onFrame:()=>()=>{},redraw(){trace.redraw.push(true);},dispose(){}})}},inputs:{...inputs,particles:{acquisitionMode:1,...inputs.particles}},record:r=>trace.records.push(r),updateInputs:s=>writes.push(s)});
  const root=new Element('div');owner.mount({root,document,invoke:async(op,v)=>owner.operations[op](v)});
- const all=el=>[el,...el.children.flatMap(all)];const field=key=>all(root).find(el=>el.dataset.particle===key);
+ const all=el=>[el,...el.children.flatMap(all)];const nodes=()=>all(root);const field=key=>all(root).find(el=>el.dataset.particle===key);
  Object.values(trace).forEach(rows=>{rows.length=0;});
- return {owner,document,field,writes,trace,native,accepted:()=>accepted,dispose:()=>owner.dispose()};
+ return {owner,document,field,nodes,writes,trace,native,accepted:()=>accepted,dispose:()=>owner.dispose()};
 }
 const settle=()=>new Promise(resolve=>setTimeout(resolve,220));
 test('enabling the neighborhood view requests a real simulation pause even with Look Freeze already displayed',async()=>{
@@ -42,6 +46,37 @@ test('enabling the neighborhood view requests a real simulation pause even with 
   assert.deepEqual(calls,[true]);assert.equal(x.accepted().showSeedNeighbors,false);
  }finally{await x.dispose();}
 });
+test('the seed tool holds on pick, consumes the complete gesture, and can reseed the same spot',async()=>{
+ const x=await mounted({cohort:true});
+ let paused=false;
+ const holds=[];
+ x.document.defaultView.kaminosScenePlayback={read:()=>({paused}),setPaused:value=>{paused=value;holds.push(value);}};
+ const viewport=x.native.get('viewport');
+ function pointer(type,pointerId=1){
+  const e=new Event(type,{cancelable:true});
+  Object.assign(e,{button:0,pointerId,clientX:300,clientY:240,isPrimary:true});
+  viewport.dispatchEvent(e);
+  return e;
+ }
+ try{
+  x.nodes().find(el=>el.textContent==='Pick a seed').fire('click');
+  assert.equal(paused,false,'arming leaves the running flame visible');
+  assert.equal(pointer('pointerdown').defaultPrevented,true,'camera does not acquire the pick pointer');
+  assert.equal(pointer('pointerup').defaultPrevented,true,'camera does not receive an unmatched release');
+  assert.equal(paused,true);
+  assert.equal(x.trace.cohort.length,1);
+  const first=x.trace.cohort[0];
+  assert.deepEqual(first.pick.point,[-.25,1-480/600]);
+  assert.equal(pointer('pointerdown',2).defaultPrevented,false,'next pointer can navigate normally');
+  assert.equal(pointer('pointerup',2).defaultPrevented,false);
+  x.owner.operations.setPaused(false);
+  x.owner.operations.setLiveCohortView({view:'fresh'});
+  x.owner.operations.reseedLiveCohort();
+  assert.deepEqual(holds,[true,false,true]);
+  assert.deepEqual(x.trace.cohort.at(-1),{...first,view:'fresh'});
+ }finally{await x.dispose();}
+});
+
 test('legacy proxy soot settings cannot silently rewrite the shared simulation on reopening',async()=>{
  const old=await mounted({shared:true,inputs:{particles:{sootYield:5,smokeLife:7}}});try{assert.equal(old.owner.read().effective.simulationReaction.sootYield,.1);assert.equal(old.owner.read().effective.simulationReaction.smokeLife,90);assert.equal(old.owner.read().settings.sootYield,.1,'versioned persistence captures the effective shared law');assert.equal(old.owner.read().settings.smokeLife,90);old.owner.operations.setReaction({sootYield:.3,smokeLife:70});assert.equal(old.owner.read().effective.simulationReaction.sootYield,.3);}finally{await old.dispose();}
  const current=await mounted({shared:true,inputs:{particles:{materialStateVersion:1,sootYield:.6,smokeLife:80}}});try{assert.equal(current.owner.read().effective.simulationReaction.sootYield,.6);assert.equal(current.owner.read().effective.simulationReaction.smokeLife,80);}finally{await current.dispose();}
