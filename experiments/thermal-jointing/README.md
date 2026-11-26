@@ -31,6 +31,16 @@ A matrix-free, lumped-mass preconditioned conjugate-gradient solve updates the
 phase field. Its configurable iteration count is an approximation; irreversible
 particle history and intact fraction survive transfer.
 
+Width and thickness set the starting block or slab dimensions at a fixed
+spacing of half a mechanical cell. Box walls remove outward grid velocity at
+the original six faces. Grid padding adds storage beyond those faces at the
+same coordinates and resolution. Disable Box walls to let material move into
+the padded region. An open run still needs a full transfer stencil inside the
+allocated grid. Base support can pin the lower grid layers, stop downward
+motion with a frictionless floor, or leave the base free. Wall and floor stop
+counts sum the velocity components stopped since reset. Split grid nodes
+counts the nodes carrying two motion fields on the latest step.
+
 Heat evolves directly on the persistent reference material lattice, with six
 neighbors at spacing0.5 and an exposed upper-layer cooling condition. The
 explicit stability check uses dt*(24*diffusivity+cooling)<=0.8. Ambient is

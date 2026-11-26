@@ -184,3 +184,90 @@ test('a six-iteration thermal step shares compute passes and fuses phase work', 
   }
  });
 });
+
+test('open sides let material cross the original box while its transfer remains supported', async () => {
+ await withKaminosGpu(async ({device}) => {
+  const run = async boxWalls => {
+   const solver = await createThermalMpm({device, options: {
+    particlesPerAxis:8, gridPadding:4, boxWalls, fixedBase:false,
+    cooling:0, contraction:0, damping:0, damage:false,
+   }});
+   try {
+    const {particles} = await solver.snapshot();
+    for (let j=0;j<particles.length;j+=PARTICLE_WORDS) {
+     particles[j]+=7;
+     particles[j+4]=1;
+    }
+    device.queue.writeBuffer(solver.particles,0,particles);
+    solver.advance(1);
+    return await solver.snapshot();
+   } finally {solver.dispose();}
+  };
+  const boxed = await run(true);
+  const open = await run(false);
+  assert.equal(boxed.state.fault,null);
+  assert.equal(open.state.fault,null);
+  assert.equal(boxed.state.completedSteps,1);
+  assert.equal(open.state.completedSteps,1);
+  assert.ok(boxed.state.wallStops.xHigh>0);
+  assert.equal(open.state.wallStops.xHigh,0);
+  for (let j=0;j<open.particles.length;j+=PARTICLE_WORDS) {
+   assert.ok(Math.abs(open.particles[j+4]-1)<.001);
+   assert.ok(open.particles[j]>boxed.particles[j]);
+  }
+ });
+});
+
+test('floor arrests downward motion at contact while letting the solid slide and lift', async () => {
+ await withKaminosGpu(async ({device}) => {
+  for (const vy of [-1,1]) {
+   const solver = await createThermalMpm({device, options:{
+    particlesPerAxis:4, gridPadding:2, boxWalls:false, floor:true, fixedBase:false,
+    cooling:0, contraction:0, damage:false, damping:0,
+   }});
+   try {
+    const {particles} = await solver.snapshot();
+    for (let j=0;j<particles.length;j+=PARTICLE_WORDS) {
+     particles[j+4]=1;
+     particles[j+5]=vy;
+    }
+    device.queue.writeBuffer(solver.particles,0,particles);
+    solver.advance(1);
+    const result = await solver.snapshot();
+    assert.equal(result.state.fault,null);
+    assert.ok(Math.abs(result.particles[4]-1)<.001);
+    if (vy<0) {
+     assert.ok(result.particles[5]>-.75 && result.particles[5]<=0);
+     assert.ok(result.state.floorStops>0);
+    } else {
+     assert.ok(Math.abs(result.particles[5]-1)<.001);
+     assert.equal(result.state.floorStops,0);
+    }
+   } finally {solver.dispose();}
+  }
+ });
+});
+
+test('a shallow slab occupies its requested extent and only its original top cools directly', async () => {
+ await withKaminosGpu(async ({device}) => {
+  const solver = await createThermalMpm({device, options:{
+   particlesPerAxis:12, thicknessPoints:6, gridPadding:2, boxWalls:false,
+   fixedBase:false, cooling:12, diffusivity:0, contraction:0, damage:false,
+  }});
+  try {
+   solver.advance(1);
+   const {state,particles} = await solver.snapshot();
+   assert.equal(state.fault,null);
+   assert.equal(state.completedSteps,1);
+   assert.equal(state.count,12*6*12);
+   let cooled=0;
+   for (let j=0;j<particles.length;j+=PARTICLE_WORDS) {
+    const isTop = particles[j+37]===5.75;
+    assert.equal(particles[j+7]<.999,isTop);
+    if(isTop) cooled++;
+   }
+   assert.equal(cooled,12*12);
+   assert.equal(particles.at(-6),8.75);
+  } finally {solver.dispose();}
+ });
+});

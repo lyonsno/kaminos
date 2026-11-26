@@ -8,7 +8,7 @@ struct Particle {
 }
 struct Node {v:vec4f, damage:vec4f, normal:vec4f, phase:vec4f}
 struct Choice {norm:atomic<u32>, seed:atomic<u32>}
-struct Params {dims:vec4u, time:vec4f, heat:vec4f, fracture:vec4f, motion:vec4f, init:vec4f}
+struct Params {dims:vec4u, time:vec4f, heat:vec4f, fracture:vec4f, motion:vec4f, init:vec4f, domain:vec4u}
 @group(0) @binding(0) var<storage,read_write> particles:array<Particle>;
 @group(0) @binding(1) var<storage,read_write> acc:array<atomic<i32>>;
 @group(0) @binding(2) var<storage,read_write> nodes:array<Node>;
@@ -24,17 +24,34 @@ struct Params {dims:vec4u, time:vec4f, heat:vec4f, fracture:vec4f, motion:vec4f,
 @group(0) @binding(12) var<storage,read_write> next:array<u32>;
 @group(0) @binding(13) var<storage,read_write> diagnostics:array<atomic<u32>>;
 const FP:f32=1048576.;
-fn nodeId(p:vec3i)->u32 {return u32((p.z*i32(params.dims.x)+p.y)*i32(params.dims.x)+p.x);}
-fn inside(p:vec3i)->bool {return all(p>=vec3i(0))&&all(p<vec3i(i32(params.dims.x)));}
-fn positionOfNode(i:u32)->vec3i {let n=params.dims.x;return vec3i(i32(i%n),i32((i/n)%n),i32(i/(n*n)));}
+// Padding extends storage around the same material and wall coordinates.
+fn gridShape()->vec3i {return vec3i(i32(params.dims.x),i32(params.domain.x),i32(params.dims.x));}
+fn gridPadding()->vec3i {return vec3i(i32(params.domain.y));}
+fn nodeId(p:vec3i)->u32 {
+ let q=p+gridPadding();let shape=gridShape();
+ return u32((q.z*shape.y+q.y)*shape.x+q.x);
+}
+fn inside(p:vec3i)->bool {
+ let q=p+gridPadding();
+ return all(q>=vec3i(0))&&all(q<gridShape());
+}
+fn positionOfNode(i:u32)->vec3i {
+ let width=params.dims.x;let height=params.domain.x;
+ return vec3i(i32(i%width),i32((i/width)%height),i32(i/(width*height)))-gridPadding();
+}
+fn materialIndex(i:u32)->vec3u {
+ let width=params.dims.y;let height=params.dims.w;
+ return vec3u(i%width,(i/width)%height,i/(width*height));
+}
 fn particleF(p:Particle)->mat3x3f{return mat3x3f(p.f0.xyz,p.f1.xyz,p.f2.xyz);}
 fn particleC(p:Particle)->mat3x3f{return mat3x3f(p.c0.xyz,p.c1.xyz,p.c2.xyz);}
 @compute @workgroup_size(128) fn initialize(@builtin(global_invocation_id) id:vec3u) {
  let i=id.x;if(i>=params.dims.z){return;}
- let n=params.dims.y;let v=vec3f(f32(i%n),f32((i/n)%n),f32(i/(n*n)));
+ let n=params.dims.y;let v=vec3f(materialIndex(i));
  let center=3.+f32(n)*.25;let rest=vec3f(3.25)+v*.5;
+ let centerOfSlab=vec3f(center,3.+f32(params.dims.w)*.25,center);
  let stretch=1.+params.init.x;
- let x=vec3f(center)+(rest-vec3f(center))*stretch;
+ let x=centerOfSlab+(rest-centerOfSlab)*stretch;
  let split=params.init.y>0.;
  let intact=select(1.,0.,split&&abs(rest.x-center)<.76);
  let velocity=select(vec3f(0),vec3f(select(-params.init.z,params.init.z,rest.x>=center),0,0),split);
@@ -138,7 +155,7 @@ fn nodeFrom(j:u32)->Node {
  n.phase=vec4f(bitcast<f32>(atomicLoad(&acc[a+11u])),bitcast<f32>(atomicLoad(&acc[a+12u])),bitcast<f32>(atomicLoad(&acc[a+13u])),0);return n;
 }
 @compute @workgroup_size(128) fn reconcile(@builtin(global_invocation_id) gid:vec3u){
- let i=gid.x;if(i>=params.dims.x*params.dims.x*params.dims.x||broken()){return;}
+ let i=gid.x;if(i>=params.dims.x*params.domain.x*params.dims.x||broken()){return;}
  var a=nodeFrom(i*2u);var b=nodeFrom(i*2u+1u);
  let separate=a.v.w>0.&&b.v.w>0.&&max(a.damage.w,b.damage.w)>=params.motion.w&&min(a.damage.z/a.v.w,b.damage.z/b.v.w)>.03;
  if(!separate){a.v+=b.v;a.damage.z+=b.damage.z;a.phase+=b.phase;a.normal+=b.normal;b=Node(vec4f(0),vec4f(0),vec4f(0),vec4f(0));}
@@ -153,12 +170,29 @@ fn nodeFrom(j:u32)->Node {
   a.normal.w=1.;b.normal.w=1.;atomicAdd(&diagnostics[4],1u);
  }
  let pos=positionOfNode(i);
+ let wallHigh=gridShape()-2*gridPadding()-vec3i(2);
  for(var k=0;k<2;k++){
   var n=a;if(k==1){n=b;}
   if(n.v.w>0.){
    n.v.y-=params.time.x*params.motion.x;n.v=vec4f(n.v.xyz*exp(-params.motion.y*params.time.x),n.v.w);
-   if(params.heat.w>.5&&pos.y<=3){n.v=vec4f(0,0,0,n.v.w);}
-   for(var axis=0;axis<3;axis++){if((pos[axis]<2&&n.v[axis]<0.)||(pos[axis]>=i32(params.dims.x)-2&&n.v[axis]>0.)){n.v[axis]=0.;}}
+   if(pos.y<=3){
+    if(params.heat.w>.5){n.v=vec4f(0,0,0,n.v.w);}
+    else if(params.domain.w!=0u&&n.v.y<0.){
+     n.v.y=0.;
+     atomicAdd(&diagnostics[14],1u);
+    }
+   }
+   if(params.domain.z!=0u){
+    for(var axis=0u;axis<3u;axis++){
+     if(pos[axis]<2&&n.v[axis]<0.){
+      n.v[axis]=0.;
+      atomicAdd(&diagnostics[8u+2u*axis],1u);
+     }else if(pos[axis]>=wallHigh[axis]&&n.v[axis]>0.){
+      n.v[axis]=0.;
+      atomicAdd(&diagnostics[9u+2u*axis],1u);
+     }
+    }
+   }
   }else{n.phase=vec4f(1,0,1,0);}
   nodes[i*2u+u32(k)]=n;
  }
@@ -166,14 +200,15 @@ fn nodeFrom(j:u32)->Node {
 // Diffusion on the persistent reference material lattice (spacing .5).
 // Reference thermal connectivity is retained after mechanical separation.
 @compute @workgroup_size(128) fn heatStep(@builtin(global_invocation_id) gid:vec3u){
- let i=gid.x;if(i>=params.dims.z||broken()){return;}let n=params.dims.y;
- let coordinates=vec3i(i32(i%n),i32((i/n)%n),i32(i/(n*n)));let strides=vec3u(1u,n,n*n);
+ let i=gid.x;if(i>=params.dims.z||broken()){return;}let n=params.dims.y;let height=params.dims.w;
+ let coordinates=materialIndex(i);let strides=vec3u(1u,n,n*height);
+ let extent=vec3u(n,height,n);
  let T=particles[i].v.w;var rate=0.;
  for(var axis=0;axis<3;axis++){
   if(coordinates[axis]>0){rate+=4.*params.heat.x*(particles[i-strides[axis]].v.w-T);}
-  if(coordinates[axis]<i32(n)-1){rate+=4.*params.heat.x*(particles[i+strides[axis]].v.w-T);}
+  if(coordinates[axis]+1u<extent[axis]){rate+=4.*params.heat.x*(particles[i+strides[axis]].v.w-T);}
  }
- if(coordinates.y==i32(n)-1){rate+=params.heat.y*(params.heat.z-T);}
+ if(coordinates.y+1u==height){rate+=params.heat.y*(params.heat.z-T);}
  let delta=params.time.x*rate;let nextT=T+delta;
  if(!(nextT>=-.000001&&nextT<=1.000001)){atomicAdd(&diagnostics[2],1u);return;}
  thermalDelta[i]=delta;
