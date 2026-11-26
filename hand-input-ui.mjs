@@ -50,11 +50,13 @@ export function mountHandInput({document,input,before}) {
     const step=STEP_LABELS[load.phase]??'Loading';
     const component=load.component==='hand-detector'?'Detector':load.component==='mobrecon'?'Mesh':null;
     const percent=load.progressRatio===null?null:`${Math.floor(load.progressRatio*100)}%`;
-    setText(label,percent&&component?`${component} ${percent}`:step);
+    const waiting=load.stalled&&load.phase!=='camera-permission';
+    const headline=percent&&component?`${component} ${percent}`:step;
+    setText(label,waiting?`${headline} · No update`:headline);
     setText(elapsed,seconds(load.elapsedMs));
-    root.dataset.silent=String(load.stalled&&load.phase!=='camera-permission');
+    root.dataset.silent=String(waiting);
     const estimate=load.estimatedMs===null?null:`~${seconds(load.estimatedMs)} left`;
-    const lag=load.stalled&&load.phase!=='camera-permission'?`No update for ${seconds(load.silentMs)}`:null;
+    const lag=waiting?`No update for ${seconds(load.silentMs)}`:null;
     setText(status,[component,step,percent,estimate,lag].filter(Boolean).join(' · '));
     setText(announcement,[component,step,lag?'No recent update':null].filter(Boolean).join(' · '));
     if(load.progressRatio===null){if(meter.hasAttribute('value'))meter.removeAttribute('value');}

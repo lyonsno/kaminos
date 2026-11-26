@@ -15,6 +15,11 @@ export function createHandInput({openCamera,loadModel,present,clear,record,now=(
 
   function readLoading() {
     if(!leg)return null;
+    if(leg.dirty){
+      telemetry.progress(operation,{phase:leg.phase,loadedBytes:leg.loadedBytes,
+        totalBytes:leg.totalBytes,token:leg.token,now:leg.observedAt});
+      leg.dirty=false;
+    }
     const current=telemetry.read(now()).primary;
     const bytes=current.loadedBytes-leg.firstBytes;
     const interval=current.lastProgressAtMs-leg.firstAt;
@@ -32,12 +37,16 @@ export function createHandInput({openCamera,loadModel,present,clear,record,now=(
     const t=now();
     if(changed)Object.assign(leg,{phase:step,component,firstAt:null});
     if(loadedBytes>0&&leg.firstAt===null)Object.assign(leg,{firstAt:t,firstBytes:loadedBytes});
-    Object.assign(leg,{loadedBytes,totalBytes});
-    telemetry.progress(operation,{phase:step,loadedBytes,totalBytes,token:leg.token,now:t});
-    notify();
+    Object.assign(leg,{loadedBytes,totalBytes,observedAt:t,dirty:true});
+    // Resource streams may produce thousands of chunks per paint. Keep the
+    // actual latest counters readable while coalescing subscriber updates.
+    if(changed||t-leg.notifiedAt>=1000/60){
+      leg.notifiedAt=t;
+      notify();
+    }
   }
   const read=()=>({enabled,model,effectiveModel,auto:{...auto},phase,error,identity:backend?.identity??null,
-    last,lastAgeMs:last?now()-last.presentedAt:null,loading:readLoading(),lastLoad});
+    last,lastAgeMs:last?now()-last.presentedAt:null,loading:readLoading(),lastLoad:lastLoad&&{...lastLoad}});
   const notify=()=>{const value=read();for(const fn of subscribers)fn(value);};
   const hide=()=>{last=null;clear();};
   const invalidate=()=>{
@@ -45,10 +54,10 @@ export function createHandInput({openCamera,loadModel,present,clear,record,now=(
     if(leg){telemetry.cancel(operation,{token:leg.token,now:now()});leg=null;}
   };
   function schedule() {
-    if(enabled&&camera&&backend&&!disposed&&Object.values(auto).some(Boolean))camera.schedule(sample);
+    if(enabled&&camera&&backend&&phase!=='loading'&&!disposed&&Object.values(auto).some(Boolean))camera.schedule(sample);
   }
   async function sample() {
-    if(!enabled||!backend||flight||disposed)return;
+    if(!enabled||!backend||phase==='loading'||flight||disposed)return;
     const ticket=generation,current=backend,sides=Object.keys(auto).filter(side=>auto[side]);
     if(!sides.length){phase='waiting';hide();notify();schedule();return;}
     let capture,modelResult;
@@ -86,8 +95,9 @@ export function createHandInput({openCamera,loadModel,present,clear,record,now=(
     const ticket=generation;
     if(enabled&&!disposed&&(!camera||!backend||effectiveModel!==model)){
       const step=flight||backend||abort?'finishing-previous':'checking';
-      const {token}=telemetry.start(operation,{label:HAND_MODELS[model],phase:step,now:now()});
-      leg={token,phase:step,component:null,firstAt:null,firstBytes:0,loadedBytes:0,totalBytes:0};
+      const t=now();
+      const {token}=telemetry.start(operation,{label:HAND_MODELS[model],phase:step,now:t});
+      leg={token,phase:step,component:null,firstAt:null,firstBytes:0,loadedBytes:0,totalBytes:0,observedAt:t,notifiedAt:t,dirty:false};
       lastLoad=null;phase='loading';error=null;notify();
     }
     const onProgress=event=>progress(event,ticket);
@@ -100,6 +110,7 @@ export function createHandInput({openCamera,loadModel,present,clear,record,now=(
       }
       try {
         if(flight)await flight;
+        if(ticket!==generation)return read();
         if(backend&&effectiveModel!==model)await releaseBackend();
         if(!enabled||disposed||ticket!==generation)return read();
         if(!camera){
