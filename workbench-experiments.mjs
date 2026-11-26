@@ -10,13 +10,14 @@ function validateDefinition(definition, source='experiment') {
 
 // The catalogue contains data only. Import the implementation at activation,
 // preserving source identity before allowing its factory to touch the host.
-export async function loadExperimentContributions(entries, {loadModule=url=>import(url)}={}) {
+export async function loadExperimentContributions(entries, {loadModule=url=>import(url),worker=false}={}) {
   if(!Array.isArray(entries))throw Error('Experiment catalogue requires an entries array');
   const definitions=entries.map(entry=>{
     const {id,title,moduleUrl,error}=entry??{};
     const problem=error || (typeof id!=='string'||!id.trim()||typeof title!=='string'||!title.trim()||typeof moduleUrl!=='string'||!moduleUrl.trim()
       ? 'Experiment metadata requires id, title and moduleUrl' : null);
-    return {id,title,moduleUrl,...(problem?{error:`${moduleUrl??'experiment'}: ${problem}`}:{})};
+    const unavailable=worker && entry?.worker!==true ? 'Requires the page scene host' : null;
+    return {id,title,moduleUrl,unavailable,...(problem?{error:`${moduleUrl??'experiment'}: ${problem}`}:{})};
   });
   const ids=new Map();
   for(const entry of definitions)if(typeof entry.id==='string'){
@@ -28,13 +29,16 @@ export async function loadExperimentContributions(entries, {loadModule=url=>impo
   }
   return definitions.map(entry=>({...entry,async create(context){
     if(entry.error)throw Error(entry.error);
+    if(entry.unavailable)throw Error(entry.title+' is unavailable in the worker viewport: '+entry.unavailable);
     let definition;
     try {
       definition=(await loadModule(entry.moduleUrl)).default;
       validateDefinition(definition,entry.moduleUrl);
       if(definition.id!==entry.id || definition.title!==entry.title)throw Error('catalogue identity differs from implementation; refresh metadata and reload');
     } catch(error){throw Error(`Experiment ${entry.moduleUrl}: ${error.message}`,{cause:error});}
-    return definition.create(context);
+    if(!worker)return definition.create(context);
+    if(typeof definition.createWorker!=='function')throw Error(entry.title+' has no worker experiment factory');
+    return definition.createWorker(context);
   }}));
 }
 

@@ -32,7 +32,7 @@ function fixture({route={},realLoader=false,waterHost=null}={}){
   registerSceneObject(object,metadata){const record=createSceneObjectRecord(object,metadata,{id:metadata.id});objects.push(record);return record;},lightingPreparation:{setExternalHold(){},request:async change=>change?.()},
   surfaceLighting:{},readSettings:()=>({gi:{mode:'combined',view:'scene'}}),bloom:{read:()=>({settings:{composeFlame:false}})},decorateOutput:node=>node,rebuildDisplay(){calls.push('display');}};
  const ctx={signal:new AbortController().signal,assertCurrent(){},report(){}};
- const volume={setSceneCompositionPresentation(value){assert.equal(active,false);calls.push(['transparent',value]);},isActive:()=>active,debugState:()=>({simulationPaused:false}),setControls:c=>calls.push(['controls',c]),
+ const volume={setSceneCompositionPresentation(value){assert.equal(active,false);calls.push(['transparent',value]);},isActive:()=>active,isSimulationPaused:()=>false,debugState:()=>({simulationPaused:false}),setControls:c=>calls.push(['controls',c]),
   setActive:async value=>{calls.push(['active',value]);active=value;},setVolumePrimitives:value=>calls.push(['primitives',value]),restoreWorldFrame:value=>calls.push(['world',value]),
   setImmersedSources:value=>calls.push(['sources',value]),relocateOrdinaryDomain:(...args)=>calls.push(['domain',...args]),setRaymarchSmokePresentationMode:mode=>({effectiveMode:mode}),
   setSceneTransportConsumer:value=>calls.push(['transport',value]),emissiveCameraState:()=>null};
@@ -188,4 +188,21 @@ test('water transport uses its own visibility and opt-out rather than bloom comp
   for(const composeFlame of [false,true]){f.ordinary.bloom.read=()=>({settings:{composeFlame}});hidden.add('water-field');assert.equal(f.resources.readFrameState().transportRequired,false);assert.equal(f.resources.readFrameState().simInputs.water.active,false);assert.equal(f.resources.readUi().surfaces.volume.visible,true,'hidden water must return fire to its native canvas');hidden.delete('water-field');assert.equal(f.resources.readFrameState().transportRequired,true);}
   hidden.delete('water-field');f.document.composition.route.volume_light_field_water_transport='0';await f.resources.document.afterReplace(f.document,planSceneRestore(f.document),{context:f.ctx});assert.equal(f.resources.readFrameState().transportRequired,false,'explicit optical opt-out remains authoritative');
  }finally{await f.resources.retire(f.ctx);}
+});
+
+test('Workbench playback follows the active volume and can hold and release it',async()=>{
+ const f=fixture();let paused=false;
+ f.volume.isSimulationPaused=()=>paused;
+ f.volume.setSimulationPaused=value=>({paused:paused=value});
+ const pause=f.resources.foregroundCommands['fire.pause'];
+ assert.equal(typeof pause,'function');
+ assert.throws(()=>pause({paused:true},f.ctx),/active flame/i);
+ await f.resources.initialize(f.ctx);await f.resources.prepareVolume({volume:f.volume,context:f.ctx});
+ await f.resources.document.afterReplace(f.document,f.plan,{context:f.ctx});
+ assert.throws(()=>pause({paused:'false'},f.ctx),/Boolean/);
+ for(const value of [true,false]){
+  assert.equal(pause({paused:value},f.ctx).paused,value);
+  assert.deepEqual(f.resources.readUi().firePlayback,{active:true,paused:value});
+ }
+ await f.resources.retire(f.ctx);
 });

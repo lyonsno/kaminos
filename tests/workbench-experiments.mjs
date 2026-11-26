@@ -116,3 +116,17 @@ test('material numeric drafts do not apply empty zero or erase a decimal during 
     f.input.focus();f.input.value='0';f.input.fire('input');await Promise.resolve();assert.equal(f.owner.read().roughness,0,'explicit zero remains valid');
   } finally {f.close();}
 });
+
+test('worker chooser lists page experiments but never runs their factories',async()=>{
+ const entries=[{id:'old',title:'Old',moduleUrl:'/old'},{id:'shared',title:'Shared',moduleUrl:'/shared',worker:true}];
+ const imported=[];
+ const definitions=await loadExperimentContributions(entries,{worker:true,loadModule:async url=>{
+  imported.push(url);
+  return {default:{...entries[1],create(){assert.fail('page factory executed in worker workspace');},
+   createWorker:({host})=>({read:()=>host.id,operations:{}})}};
+ }});
+ await assert.rejects(openExperiment(definitions[0]),/worker/i);
+ assert.deepEqual(imported,[]);
+ const active=await openExperiment(definitions[1],{host:{id:'active scene'}});
+ assert.equal(await active.read(),'active scene');
+});

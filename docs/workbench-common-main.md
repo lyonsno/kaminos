@@ -220,3 +220,18 @@ changing its authored settings. Existing `postprocessing.ao` and browser-local
 settings remain supported, including legacy intensity-from-scale and
 falloff-from-farBlend restoration. GTAO/combined-GI shading keeps its existing
 rendering owner. Depth-of-field remains the existing placeholder.
+
+### Experiments in the worker viewport
+
+The worker viewport uses the shared experiment chooser. Declare `"worker": true`
+in the adjacent experiment JSON and export `createWorker({host, inputs})` on
+the experiment definition to supply controls for that viewport. The factory
+runs on the page and sends operations to the active scene worker. Experiments
+with only a page-scene factory appear as **page only**.
+
+The Flame control calls `await host.flame.setPaused(true)` to hold the active
+simulation while rendering and navigation continue. Pass `false` to resume.
+The returned worker receipt contains `paused`, `frameCount` and `simStepCount`.
+Use `host.flame.read()` for projected `{active, paused}` and
+`host.flame.subscribe(listener)` for changes. A missing flame gives
+`{active: false, paused: null}`. Playback is a live control.

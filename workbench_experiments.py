@@ -38,7 +38,10 @@ def experiment_catalogue(repo_root, modules):
             value = json.loads(metadata.read_text())
             if not isinstance(value, dict) or any(not isinstance(value.get(k), str) or not value[k].strip() for k in ('id', 'title')):
                 raise ValueError('Metadata requires nonempty id and title')
-            entries.append({'id': value['id'], 'title': value['title'], 'moduleUrl': url})
+            entry = {'id': value['id'], 'title': value['title'], 'moduleUrl': url}
+            if value.get('worker') is True:
+                entry['worker'] = True
+            entries.append(entry)
         except (OSError, ValueError) as error:
             entries.append({'moduleUrl': url, 'error': f'{metadata.name}: {error}'})
     return entries

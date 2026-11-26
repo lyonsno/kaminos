@@ -13,6 +13,7 @@ import {readVolumeRuntimeControlValues,volumeAperturePatternValue,createInitialV
 import {ADAPTIVE_MATERIAL_FIELDS,readAdaptiveMaterialControls} from './volume-adaptive-material-controls.mjs';
 import {resolveFlameLightingRoute} from './scene-authoring.mjs';
 import {chooseSavedSceneFromLibrary} from './scene-library-client.mjs';
+import {installOwnerExperimentEntry,readOwnerExperimentAddress,writeOwnerExperimentAddress} from './owner-experiment-entry.mjs';
 import {pickSavedScene} from './scene-load-picker.mjs';
 
 // Plain current input values only; geometry, simulation, loading and canonical
@@ -65,7 +66,20 @@ export async function startSceneWorkerPage({document=globalThis.document,window=
    if(event.key.toLowerCase()==='s'){event.preventDefault();void(event.shiftKey?owner.editor.save({saveAs:true,promptName:true}):owner.editor.save());}
    if(event.key.toLowerCase()==='o'){event.preventDefault();void window.openSavedScene();}});
   await owner.start();void owner.image.refresh().catch(error=>report('Image status unavailable: '+error.message));
-  if(owner.mesh)void owner.mesh.refresh().catch(error=>report('Mesh status unavailable: '+error.message));return owner;
+  if(owner.mesh)void owner.mesh.refresh().catch(error=>report('Mesh status unavailable: '+error.message));
+  // Discovery and optional experiment activation follow the admitted viewport.
+  // A failed catalogue fetch must leave the scene usable.
+  const root=document.createElement('div');
+  document.querySelector('#sidebar .tab-bar').before(root);
+  void installOwnerExperimentEntry({document,root,worker:true,host:{flame:owner.flame},
+   discover:async()=>{const response=await fetch('/api/workbench-experiments',{cache:'no-store'});if(!response.ok)throw Error('Experiment discovery HTTP '+response.status);return (await response.json()).experiments;},
+   onChange:({id,inputs})=>window.history.replaceState(window.history.state,'',writeOwnerExperimentAddress(location.href,{id,inputs})),
+  }).then(async entry=>{
+   window.kaminosWorkbenchExperiments=entry;
+   const {id,inputsText}=readOwnerExperimentAddress(location);
+   if(id)await entry.open(id,JSON.parse(inputsText));
+  }).catch(error=>report('Workbench experiments: '+error.message));
+  return owner;
  })();
  try{return await settleStartupVeil(document,initialization);}catch(error){report('Scene worker startup failed: '+error.message);throw error;}
 }

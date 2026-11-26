@@ -20,7 +20,7 @@ export function writeOwnerExperimentAddress(href,{id,inputs}) {
 }
 
 /** Discovery is metadata only; opening is explicit and serialized with disposal. */
-export async function installOwnerExperimentEntry({document,root,host,discover,onOpen=()=>{},onChange=()=>{}}) {
+export async function installOwnerExperimentEntry({document,root,host,discover,worker=false,onOpen=()=>{},onChange=()=>{}}) {
  const section=document.createElement('section');section.className='owner-experiment-entry';
  section.innerHTML='<label>Experiment<select aria-label="Workbench experiment"><option value="">Choose an experiment…</option></select></label><button type="button">Refresh experiments</button><div class="owner-experiment-status" role="status"></div><div class="owner-experiment-diagnostics"></div><div class="owner-experiment-content"></div>';
  root.append(section);
@@ -31,16 +31,16 @@ export async function installOwnerExperimentEntry({document,root,host,discover,o
  const fail=error=>{status.textContent=error.message||String(error);};
  async function close(){if(current){const old=current;current=null;selected=null;currentModuleUrl=null;await old.dispose();}content.replaceChildren();}
  const api={
-  list:()=>definitions.map(({id,title,moduleUrl,error})=>({id,title,moduleUrl,...(error?{error}:{})})),
+  list:()=>definitions.map(({id,title,moduleUrl,error,unavailable})=>({id,title,moduleUrl,...(error?{error}:{}),...(unavailable?{unavailable}:{})})),
   state:()=>({id:current?.id??null,selected,moduleUrl:currentModuleUrl}),
   async refresh(){
    const request=++catalogueRequest;
    refresh.disabled=true;refresh.textContent='Refreshing…';
    try{
-    const next=await loadExperimentContributions(await discover());
+    const next=await loadExperimentContributions(await discover(),{worker});
     if(request!==catalogueRequest)return api.list();
     definitions=next;
-    select.replaceChildren(new Option('Choose an experiment…',''),...definitions.map(d=>{const option=new Option(d.title??d.moduleUrl??'Unavailable experiment',d.id??'');option.disabled=Boolean(d.error);return option;}));
+    select.replaceChildren(new Option('Choose an experiment…',''),...definitions.map(d=>{const option=new Option(d.unavailable?d.title+' · page only':d.title??d.moduleUrl??'Unavailable experiment',d.id??'');option.disabled=Boolean(d.error||d.unavailable);return option;}));
     diagnostics.textContent=definitions.filter(d=>d.error).map(d=>d.error).join('\n');
     select.value=current?.id??'';
     if(!definitions.length)diagnostics.textContent='No owner experiments found';
@@ -53,7 +53,7 @@ export async function installOwnerExperimentEntry({document,root,host,discover,o
    }
   },
   open(id,inputs={}){return serial(async()=>{
-   const definition=definitions.find(d=>d.id===id);if(!definition)throw Error('Unknown experiment: '+id);if(definition.error)throw Error(definition.error);
+   const definition=definitions.find(d=>d.id===id);if(!definition)throw Error('Unknown experiment: '+id);if(definition.error||definition.unavailable)throw Error(definition.error||definition.unavailable);
    await close();status.textContent='Opening '+definition.title+'…';
    try{await onOpen(definition,inputs);current=await openExperiment(definition,{host,inputs,onInputsChange:value=>onChange({id,inputs:value,moduleUrl:definition.moduleUrl})});selected=id;currentModuleUrl=definition.moduleUrl;await current.mount({root:content,document});select.value=id;status.textContent=definition.title;onChange({id,inputs,moduleUrl:definition.moduleUrl});return current.read();}
    catch(error){await close();select.value='';onChange({id:null,inputs:null});fail(error);throw error;}

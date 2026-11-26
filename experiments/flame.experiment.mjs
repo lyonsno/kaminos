@@ -1,5 +1,27 @@
 export default {
   id:'flame',title:'Flame',
+  createWorker({host,inputs}) {
+    if(Object.keys(inputs).length)throw Error('Flame inputs cannot replace the existing scene');
+    const playback=host.flame;
+    let stop;
+    return {read:playback.read,operations:{setPaused:playback.setPaused},
+      mount({root,document,invoke}){
+        const label=document.createElement('label'),pause=document.createElement('input'),status=document.createElement('div');
+        pause.type='checkbox';pause.setAttribute('aria-label','Pause flame');label.append(pause,' Pause flame');
+        status.setAttribute('role','status');root.append(label,status);
+        let busy=false;
+        function sync(){
+          const {active,paused}=playback.read();if(!busy)pause.checked=paused===true;pause.disabled=busy||!active;
+          status.textContent=active?'':'No active flame';
+        }
+        pause.onchange=async()=>{
+          const value=pause.checked;busy=true;sync();
+          try{await invoke('setPaused',value);busy=false;sync();}
+          catch(error){busy=false;sync();status.textContent=error.message;}
+        };
+        stop=playback.subscribe(sync);sync();
+      },dispose(){stop?.();}};
+  },
   async create({host,inputs}) {
     if(Object.keys(inputs).length)throw Error('Flame inputs cannot replace the existing scene; apply a preset explicitly');
     if(!host.flame?.open)throw Error('Flame Workbench host is unavailable');

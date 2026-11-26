@@ -18053,6 +18053,7 @@ export function createKaminosVolumePrototype({
         authority: 'witness-owned-presented-frame-pause-release-v0',
       };
     },
+    isSimulationPaused() { return simulationPaused; },
     setSimulationPaused(paused) {
       if(paused!==true)assertIntegralSourceEditable('simulation playback');
       simulationPaused = paused === true;

@@ -1,4 +1,5 @@
 {
   "id": "flame",
-  "title": "Flame"
+  "title": "Flame",
+  "worker": true
 }

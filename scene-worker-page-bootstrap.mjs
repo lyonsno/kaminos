@@ -20,6 +20,14 @@ export function mountSceneWorkerPage({document,window,THREE,createControls,insta
  admission,preferences,readFlameControls,entryUrl='/scene-worker.entry.bundle.mjs',createWorker,
  report=()=>{},onProgress=()=>{},createPage=createSceneWorkerPage}={}){
  const viewport=document.getElementById('viewport');
+ let ui=null,closed=false;
+ const playbackListeners=new Set();
+ const playbackState=()=>ui?.firePlayback??{active:false,paused:null};
+ function updateUi(next){
+  const previous=playbackState();ui=next;
+  const current=playbackState();
+  if(current.active!==previous.active||current.paused!==previous.paused)for(const listener of playbackListeners)listener();
+ }
  const canvases={};let controls,navigation,editor,waterControls,pointerSelection;
  try {
  for(const id of ['kaminos-host-renderer-canvas','kaminos-volume-canvas'])if(document.getElementById(id))throw Error(`Worker page canvas already mounted: ${id}`);
@@ -46,7 +54,6 @@ export function mountSceneWorkerPage({document,window,THREE,createControls,insta
  navigationInput.value=preferences?.navigationInput??(['trackpad','mouse'].includes(savedInput)?savedInput:/Mac/i.test(window.navigator.userAgentData?.platform||window.navigator.platform)?'trackpad':'mouse');
  const navigationHint=document.getElementById('navigation-hint');
  const hint=text=>{navigationHint.textContent=text||'Click geometry to select · Shift-click extends selection · navigation uses the current camera pivot';navigationHint.dataset.active=String(!!text);};hint('');
- let ui=null,closed=false;
  function boundsFrame(value){
   if(!value){report('Scene bounds have not been reported by the worker');return false;}
   if(![value.min,value.max].every(row=>Array.isArray(row)&&row.length===3&&row.every(Number.isFinite)))throw Error('Worker scene bounds are malformed');
@@ -74,12 +81,12 @@ export function mountSceneWorkerPage({document,window,THREE,createControls,insta
    }
    if(value.environmentLoading){const state=value.environmentLoading,label=document.getElementById('env-loading');if(label){label.style.display=state.quality==='full'?'none':'block';label.textContent=state.pending?`${state.name??'Environment'} · lighting loading…`:`${state.name??'Environment'} · ${state.quality==='preview'?'preview lighting':'neutral fallback'} · full map unavailable`;}}
    if(value.fireSettingsWarning&&value.fireSettingsWarning!==ui?.fireSettingsWarning)report(value.fireSettingsWarning);
-   ui=next;if(Object.keys(value).some(key=>['objects','selection','groups','history','document'].includes(key)))editor?.render(ui);waterControls?.render(ui);
+   updateUi(next);if(Object.keys(value).some(key=>['objects','selection','groups','history','document'].includes(key)))editor?.render(ui);waterControls?.render(ui);
   },
   onPhase(value){
    for(const canvas of Object.values(canvases))canvas.dataset.sceneWorkerState=value;
    if(value==='active')report(ui?.fireSettingsWarning??'Scene loaded');
-   if(['held','retiring','retired','closed'].includes(value)){ui=null;pointerSelection?.clear();editor?.render(null);waterControls?.render(null);report(`Worker scene ${value}; previous scene metadata is unavailable`);}
+   if(['held','retiring','retired','closed'].includes(value)){updateUi(null);pointerSelection?.clear();editor?.render(null);waterControls?.render(null);report(`Worker scene ${value}; previous scene metadata is unavailable`);}
   },
   onProgress,onError:error=>report(`Worker scene: ${error.message}`)});
  if(document.getElementById('scene-object-list'))editor=mountSceneWorkerEditor({document,window,page,readCamera:()=>captureSceneWorkerCamera(camera,controls.target),readUi:()=>ui,report});
@@ -90,7 +97,17 @@ export function mountSceneWorkerPage({document,window,THREE,createControls,insta
  function detach(){if(closed)return;closed=true;pointerSelection?.dispose();waterControls?.dispose();editor?.dispose();navigation.dispose();controls.dispose();navigationInput.removeEventListener('change',navigationChanged);}
  const pagehide=()=>{page.holdFrames('Page leaving; resource retirement requested');void page.retire().then(detach,error=>report(`Worker cleanup held: ${error.message}`));};
  window.addEventListener('pagehide',pagehide,{once:true});
- return Object.freeze({page,image,mesh,editor,frameSelected:()=>boundsFrame(ui?.selectionBounds),camera,controls,navigation,canvases,
+ const flame=Object.freeze({
+  read:()=>({...playbackState()}),
+  subscribe(listener){playbackListeners.add(listener);return ()=>playbackListeners.delete(listener);},
+  async setPaused(paused){
+   if(page.read().phase!=='active')throw Error('Worker scene playback is unavailable');
+   const {output}=await page.request('fire.pause',{paused}).completion;
+   if(output?.mutationApplied!==true||output.value?.paused!==paused)throw Error('Worker did not confirm requested flame playback');
+   return output.value;
+  },
+ });
+ return Object.freeze({page,image,mesh,editor,flame,frameSelected:()=>boundsFrame(ui?.selectionBounds),camera,controls,navigation,canvases,
   start:()=>page.start(),
   async retire(){const result=await page.retire();detach();window.removeEventListener('pagehide',pagehide);for(const canvas of Object.values(canvases))canvas.remove();return result;},
   read:()=>({worker:page.read(),ui,navigation:navigation.state()}),
