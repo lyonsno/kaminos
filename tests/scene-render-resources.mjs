@@ -94,3 +94,17 @@ test('failed renderer retirement revokes use immediately and retains accepted re
  assert.equal(next.renderer.toneMapping,77,'half-retired renderer settings cannot replace the retained accepted snapshot');
  await f.shell.retire();
 });
+
+
+test('lighting-only release is retryable and leaves renderer and shared device alive',async()=>{
+ const f=fixture();await f.shell.initialize(context);const renderer=f.shell.renderer,pmrem=f.shell.pmremGenerator;
+ assert.equal(typeof f.shell.retireLighting,'function');
+ let denied=true;const dispose=f.gi.dispose;f.gi.dispose=()=>{if(denied)throw Error('GI cleanup denied');dispose();};
+ await assert.rejects(f.shell.retireLighting(context),/GI cleanup denied/);assert(f.shell.lighting);
+ assert.throws(()=>f.shell.initializeLighting(context),/already retained/);
+ denied=false;await f.shell.retireLighting(context);assert.equal(f.shell.lighting,null);
+ assert.equal(f.shell.renderer,renderer);assert.equal(f.shell.pmremGenerator,pmrem);
+ assert.equal(f.events.filter(e=>e[0]==='renderer-dispose').length,0);
+ f.shell.initializeLighting(context);assert.equal(f.shell.lighting.renderPipeline.renderer,renderer);
+ await f.shell.retire();
+});
