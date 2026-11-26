@@ -1,6 +1,6 @@
 export function createLiveCohortCockpit({runtime,session,document,record,playback,setPaused}) {
  const viewport=document.getElementById('viewport');
- let armed=false,pointer=null,ui=null,lastPick=null,suppressClick=false;
+ let armed=false,pointer=null,ui=null,lastPick=null,suppressClick=false,resumeOnCancel=false;
  function state(){return runtime().opticalParticleState().liveCohort??{view:'off',phase:'off'};}
  function update(){
   if(!ui)return;
@@ -17,7 +17,7 @@ export function createLiveCohortCockpit({runtime,session,document,record,playbac
   }
   const outside=point?.some(v=>Math.abs(v)>1);
   const clock=playback().paused?' Held. Use Play to follow it.':'';
-  ui.status.textContent=armed?'Click a visible sparse carrier in the flame.':
+  ui.status.textContent=armed?'Flame held. Click a visible sparse carrier.':
    current.phase==='tracking'?counts(current)+(outside?' The seed moved out of view.':'')+clock:
    current.phase==='seed-lost'?counts(current)+' The seed expired. The original survivors are still available.':
    current.phase==='no-seed'?'No eligible seed near that point. Use Normal view to find one, or play and reseed here.':
@@ -105,7 +105,17 @@ export function createLiveCohortCockpit({runtime,session,document,record,playbac
    for(const [value,label] of [['off','Normal view'],['original','Original members'],['fresh','Fresh neighborhood']]){
     const option=document.createElement('option');option.value=value;option.textContent=label;view.append(option);
    }
-   pick.addEventListener('click',()=>{armed=!armed;update();});
+   pick.addEventListener('click',()=>{
+    if(armed){
+     armed=false;
+     if(resumeOnCancel)setPaused(false);
+    }else{
+     resumeOnCancel=!playback().paused;
+     if(resumeOnCancel)setPaused(true);
+     armed=true;
+    }
+    update();
+   });
    reseed.addEventListener('click',()=>void invoke('reseedLiveCohort').catch(error=>{status.textContent=error.message;}));
    view.addEventListener('change',()=>void invoke('setLiveCohortView',{view:view.value}).catch(error=>{
     update();status.textContent=error.message;

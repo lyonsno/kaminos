@@ -60,7 +60,7 @@ test('the seed tool holds on pick, consumes the complete gesture, and can reseed
  }
  try{
   x.nodes().find(el=>el.textContent==='Pick a seed').fire('click');
-  assert.equal(paused,false,'arming leaves the running flame visible');
+  assert.equal(paused,true,'arming holds the visible target before the pointer arrives');
   assert.equal(pointer('pointerdown').defaultPrevented,true,'camera does not acquire the pick pointer');
   assert.equal(pointer('pointerup').defaultPrevented,true,'camera does not receive an unmatched release');
   assert.equal(paused,true);
