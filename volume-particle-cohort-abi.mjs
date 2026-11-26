@@ -34,4 +34,3 @@ fn sampleMember(member: ParticleCohortMember) -> ParticleCohortSample {
 }
 
 `;
-
