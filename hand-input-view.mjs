@@ -8,7 +8,7 @@ export function createHandInputView({scene,camera,onFrame,redraw}) {
   const captureRoot=new Group();captureRoot.name='Hand input overlay';
   captureRoot.userData.handInputOverlay=true;captureRoot.userData.kaminosEditorOnly=true;scene.add(captureRoot);
   const root=new Group();root.name='Tracked hands';root.visible=false;captureRoot.add(root);
-  const meshes=new Map();let last=null,geometryDirty=false,previousPose=null;
+  const meshes=new Map(),palms=new Map();let last=null,geometryDirty=false,previousPose=null;
   const updateView=()=>{
     if(!last?.hands?.length){root.visible=false;return;}
     camera.updateMatrixWorld();
@@ -47,11 +47,17 @@ export function createHandInputView({scene,camera,onFrame,redraw}) {
         mesh.geometry.setIndex(new BufferAttribute(indices,1));
         const palm=palmFrame(values,wristBoundary(faces),hand.handedness);
         if(!palm)throw Error('Tracked hand has no valid palm frame');
+        palms.set(hand.handedness,palm);
         const positions=mesh.geometry.attributes.position.array;
         for(let i=0;i<values.length;i++)positions[i]=values[i]*HAND_VIEW[i%3]-palm.center.getComponent(i%3);
         mesh.geometry.attributes.position.needsUpdate=true;mesh.geometry.computeVertexNormals();
       }
       last=result;geometryDirty=true;updateView();
+    },
+    palmFrame(side){
+      if(!last?.hands.some(hand=>hand.handedness===side))return null;
+      const palm=palms.get(side);
+      return {width:palm.width,quaternion:palm.quaternion.clone()};
     },
     read:()=>({visible:captureRoot.visible&&root.visible,sides:[...meshes].filter(([,m])=>m.visible&&root.visible&&captureRoot.visible).map(([s])=>s),placement:'camera-plane; uncalibrated'}),
     dispose(){off();scene.remove(captureRoot);for(const mesh of meshes.values()){mesh.geometry.dispose();mesh.material.dispose();}},

@@ -87,6 +87,6 @@ export function installHandInput({document,scene,camera,onFrame,redraw,getGpu}) 
   });
   const ui=mountHandInput({document,input,before:document.getElementById('authoring-search')});
   const gone=()=>{void input.dispose();};document.defaultView.addEventListener('pagehide',gone,{once:true});
-  return {...input,openSettings:ui.open,closeSettings:ui.close,visualization:view.read,
+  return {...input,openSettings:ui.open,closeSettings:ui.close,visualization:view.read,palmFrame:view.palmFrame,
     async dispose(){document.defaultView.removeEventListener('pagehide',gone);await input.dispose();ui.dispose();view.dispose();}};
 }
