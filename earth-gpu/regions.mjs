@@ -29,7 +29,7 @@ export function makeRegionState({samplesPerRegion=1536,gritCount=24,seed=71,slab
    for(const local of [[0,5,1,6],[0,1,2,6],[0,2,3,6],[0,3,7,6],[0,7,4,6],[0,4,5,6]]){const ids=local.map(i=>corners[i]);if(tetVolume(...ids.map(i=>nodes[i].p))<0)[ids[1],ids[2]]=[ids[2],ids[1]];const p=ids.map(i=>nodes[i].p);tets.push({ids,rest:tetVolume(...p),plastic:metric(p),damage:0,group:g,level:0,...(compaction?{packing:1}:{})});}
   }
  }
- const material={nodes,tets,density:1600,ties:[],generation:0},mass=materialMasses(material),referenceMatrixMass=mass.reduce((a,b)=>a+b,0);
+ const material={nodes,tets,density:1600,supportMassFraction:.5,ties:[],generation:0},mass=materialMasses(material),referenceMatrixMass=mass.reduce((a,b)=>a+b,0);
  const sampleCount=samplesPerRegion*regionCount,grainCount=gritCount+sampleCount,temporary=new Float32Array(grainCount*24);temporary.set(base.floats);
  const packed=packMaterial({...base,floats:temporary,grainCount,material}),floats=packed.floats,attachments=[],connections=[];
  // Move hard inclusions into the matrix. Their physical contact remains the
@@ -42,16 +42,17 @@ export function makeRegionState({samplesPerRegion=1536,gritCount=24,seed=71,slab
    continue;
   }
   floats[o]=x+Math.sin(i*2.4)*.0018;floats[o+1]=.0012+((slabSize===null?i:Math.floor(i/regionCount))%4)*.0011;floats[o+2]=z+Math.cos(i*1.9)*.0025;}
- for(let i=0;i<nodes.length;i++){floats[(grainCount+i)*24+3]*=2;}
  let rng=seed>>>0;const rand=()=>((rng=(Math.imul(rng,1664525)+1013904223)>>>0)/4294967296);
+ const packetTets=compaction?new Uint32Array(sampleCount):null;
  const tetsPerRegion=nx*ny*nz*6;
  for(let g=0;g<regionCount;g++){
-  const localTets=tets.slice(g*tetsPerRegion,(g+1)*tetsPerRegion),totalVolume=localTets.reduce((v,t)=>v+t.rest,0),m=totalVolume*material.density*.5/samplesPerRegion,r=Math.cbrt(3*m/(4*Math.PI*material.density));
+  const localTets=tets.slice(g*tetsPerRegion,(g+1)*tetsPerRegion),totalVolume=localTets.reduce((v,t)=>v+t.rest,0),m=totalVolume*material.density*(1-material.supportMassFraction)/samplesPerRegion,r=Math.cbrt(3*m/(4*Math.PI*material.density));
   const cumulative=[];let v=0;for(const t of localTets){v+=t.rest;cumulative.push(v);}
   for(let j=0;j<samplesPerRegion;j++){
    const quantile=(j+.5)/samplesPerRegion*totalVolume,index=cumulative.findIndex(v=>v>=quantile),t=localTets[index],cuts=[rand(),rand(),rand()].sort((a,b)=>a-b),weights=[cuts[0],cuts[1]-cuts[0],cuts[2]-cuts[1],1-cuts[2]],p=[0,1,2].map(k=>t.ids.reduce((a,id,i)=>a+nodes[id].p[k]*weights[i],0)),body=gritCount+g*samplesPerRegion+j,o=body*24;
    const inv=base.massScale/m;
    floats.set([...p,inv,0,0,0,1,0,0,0,r,0,0,0,r,0,0,2,.15+.7*rand(),inv/(.4*r*r),inv/(.4*r*r),inv/(.4*r*r),m],o);
+   if(packetTets)packetTets[g*samplesPerRegion+j]=g*tetsPerRegion+index;
    attachments.push({body,nodeIds:t.ids.map(i=>i+grainCount),weights,region:g});
   }
  }
@@ -98,12 +99,16 @@ export function makeRegionState({samplesPerRegion=1536,gritCount=24,seed=71,slab
  attachments.forEach((a,i)=>{u.set([a.body,...a.nodeIds.slice(0,3)],i*16);u.set([a.nodeIds[3],0,a.region,0],i*16+4);linkWords.set(a.weights,i*16+8);linkWords.set([.42,0,0,0],i*16+12);});
  connections.forEach((c,j)=>{const i=attachments.length+j;u.set([c.a,c.b,0,0,0,1,2,0],i*16);linkWords.set([.75,c.rest,0,0],i*16+12);});
  grips.forEach((a,j)=>{const i=attachments.length+connections.length+j;u.set([a.node,0,0,0,0,2,a.region,0],i*16);linkWords.set(Array.from(floats.subarray(a.node*24,a.node*24+3)),i*16+8);linkWords.set([.8,0,0,0],i*16+12);});
- return {...packed,preparationHeight:.008,floats,grips,mineralCount:gritCount,sampleCount,samplesPerRegion,regionCount,referenceMatrixMass,compaction,attachments,connections,linkWords,slabSize,notch,bands,faceBands,patchPitch:[pitchX,pitchZ]};
+ return {...packed,preparationHeight:.008,floats,grips,mineralCount:gritCount,sampleCount,samplesPerRegion,regionCount,referenceMatrixMass,compaction,attachments,connections,linkWords,slabSize,notch,bands,faceBands,packetTets,patchPitch:[pitchX,pitchZ]};
 }
 export function regionSummary(state){
  const f=state.floats;let matrixMass=0;for(let i=state.mineralCount;i<state.grainCount;i++)matrixMass+=f[i*24+23];
- const masses=materialMasses(state.material);matrixMass+=masses.reduce((a,b)=>a+b,0)*.5;
+ const masses=materialMasses(state.material);matrixMass+=masses.reduce((a,b)=>a+b,0)*(state.material.supportMassFraction??.5);
  return {matrixMass,regions:state.regionCount,samples:state.sampleCount,connections:state.connections.length};
 }
 
-export function retainRegionState(state,floats,plastic,links){return {...retainMaterial(state,floats,plastic),tets:plastic.slice(),linkWords:links.slice()};}
+export function retainRegionState(state,floats,plastic,links){
+ const retained=retainMaterial(state,floats,plastic);
+ retained.material.supportMassFraction??=.5;
+ return {...retained,tets:plastic.slice(),linkWords:links.slice()};
+}

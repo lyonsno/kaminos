@@ -65,7 +65,8 @@ export function makeEarthState({count=16384,radius=.00011,width=.024,depth=.018,
 }
 export function packMaterial(state){
  const {material,grainCount,massScale}=state,masses=materialMasses(material),bodies=new Float32Array((grainCount+material.nodes.length)*BODY_WORDS);bodies.set(state.floats.subarray(0,grainCount*BODY_WORDS));
- for(const [i,n]of material.nodes.entries()){const mass=masses[i];if(!(mass>0))throw Error('Material point has no represented mass');bodies.set([...n.p,massScale/mass,0,0,0,1,...n.v,0,0,0,0,0,0,0,1,0,0,0,0,mass],(grainCount+i)*BODY_WORDS);}
+ const supportMassFraction=material.supportMassFraction??1;
+ for(const [i,n]of material.nodes.entries()){const mass=masses[i]*supportMassFraction;if(!(mass>0))throw Error('Material point has no represented mass');bodies.set([...n.p,massScale/mass,0,0,0,1,...n.v,0,0,0,0,0,0,0,1,0,0,0,0,mass],(grainCount+i)*BODY_WORDS);}
  const degrees=new Uint32Array(material.nodes.length);for(const t of material.tets)for(const i of t.ids)degrees[i]++;for(let i=0;i<degrees.length;i++)bodies[(grainCount+i)*24+23]=Math.max(1,degrees[i]);
  const tets=new Float32Array(Math.max(1,material.tets.length)*20),u=new Uint32Array(tets.buffer);
  const nodeColors=material.nodes.map(()=>new Set());let materialColors=0;

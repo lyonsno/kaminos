@@ -14,7 +14,7 @@ export async function createGristRegions({host,inputs={},record},{slab=false,tra
  const width=state.width*100,depth=state.depth*100;
  const footprint=slab||compaction?Math.max(width,depth)/2.6:1;
  const session=await host.scene.open(),renderer=host.scene.renderer(),device=renderer.backend.device;
- let solver,view,stop,paused=inputs.paused??false,disposed=false,failure=null,ui,css,uiDocument,status,disposeDrag,directGrip,gripGain=1,frames=0,restarting=false,resetButton,restartError=null;
+ let solver,view,stop,paused=inputs.paused??false,disposed=false,failure=null,ui,css,uiDocument,status,disposeDrag,directGrip,gripGain=1,frames=0,restarting=false,packingVisible=false,packingButton,resetButton,restartError=null;
  const root=new THREE.Group();root.name=compaction?'Loose earth bed':slab?'Peelable material slab':'Two connected material regions';root.scale.setScalar(100);
  const toolRadius=compaction?.0034:.0022;
  const tool=new THREE.Mesh(new THREE.SphereGeometry(toolRadius*100,24,16),new THREE.MeshStandardMaterial({color:0x9abbb7,roughness:.3,transparent:true,opacity:.28,depthWrite:false}));tool.name='Forming tool — move to press and drag';tool.position.set(0,.94,.25);
@@ -31,6 +31,7 @@ export async function createGristRegions({host,inputs={},record},{slab=false,tra
  const gripDelta=()=>grip.position.clone().sub(gripStart).multiplyScalar(.01).toArray();
  const read=()=>({restarting,route:compaction?'grist/compaction-bed':trackpad?'grist/trackpad-peel':slab?'grist/peelable-slab':'grist/two-fixed-local-lattices',paused,failure,solver:solver?.read(),population,
   slabSize:size,notch:slab?state.notch:null,tool:toolPose(),gripDelta:gripDelta(),
+  ...(compaction?{packingVisible}:{}),
   ...(trackpad?{gripInput:directGrip?.read(),gripGain}:{}),
   limits:compaction?'One continuous matrix, retained local pore closure and analytical grit.':slab?'Breakable patch boundaries; each patch retains its own material history.':'Fixed two-region yielding-lattice surrogate; fine particles have compliant local response.',
   adapter:renderer.backend.adapter?.info??device.adapterInfo??null});
@@ -51,6 +52,7 @@ export async function createGristRegions({host,inputs={},record},{slab=false,tra
    resetButton.disabled=restarting;
    resetButton.textContent=restarting?'Restarting…':requiresPageRecovery()?'Reload page':'Start again';
   }
+  if(packingButton){packingButton.textContent=packingVisible?'Hide packing':'Show packing';packingButton.setAttribute('aria-pressed',String(packingVisible));}
   if (!status) return;
   if (restartError || restarting) {
    status.textContent=restartError??'Restoring the specimen…';
@@ -63,7 +65,7 @@ export async function createGristRegions({host,inputs={},record},{slab=false,tra
     : 'Drag the corner grip to peel.';
    return;
   }
-  status.textContent=failure??(compaction?'Lower the forming tool to press. Lift it, then drag across the bed.':slab?'Move the corner grip to peel. The far edge is held.':'Left edge held · select the right grip to pull, or the translucent tool to press');}
+  status.textContent=failure??(compaction?(packingVisible?'Packing cue · blue is loose, orange is packed.':'Lower the forming tool to press. Lift it, then drag across the bed.'):slab?'Move the corner grip to peel. The far edge is held.':'Left edge held · select the right grip to pull, or the translucent tool to press');}
  async function restart(){
   if(restarting||disposed) return read();
   restarting=true;
@@ -91,10 +93,14 @@ export async function createGristRegions({host,inputs={},record},{slab=false,tra
   }
   return read();
  }
- const ops={restart,pause(value){if(typeof value!=='boolean')throw Error('Boolean pause required');paused=value;record({kind:'grist.pause',value});update();return read();},connection(value){solver.control({strength:value});record({kind:'grist.connection',value});return read();},tool({position,radius}={}){if(position){if(position.length!==3||!position.every(Number.isFinite))throw Error('Finite tool position required');tool.position.fromArray(position.map(x=>x*100));}if(radius!==undefined){if(!(radius>0&&Number.isFinite(radius)))throw Error('Positive radius required');tool.scale.setScalar(radius/toolRadius);}host.scene.refreshPresentation(toolAsset);record({kind:'grist.tool',value:toolPose()});return read();},grip(value){if(compaction)throw Error('The compaction bed uses the forming tool');if(value.length!==3||!value.every(Number.isFinite))throw Error('Finite grip displacement required');moveGrip(new THREE.Vector3(...value).multiplyScalar(100).add(gripStart));return read();},async advance({steps=1}={}){await solver.wait();if(restarting)throw Error('Specimen is restarting');solver.control({gripDelta:gripDelta(),gripGain});if(!solver.advance({steps,tool:toolPose()}))throw Error('Material step not admitted');await solver.wait();session.redraw();return read();},async snapshot(){const s=await solver.capture(),connections=await solver.connectionState();return {...s,floats:Array.from(s.floats),tets:Array.from(s.tets),triangles:Array.from(s.triangles),ties:Array.from(s.ties),linkWords:Array.from(s.linkWords),connections,solver:solver.read()};},frame(){session.setView({position:[2.5*footprint,(compaction?2.6:1.9)*footprint,3.1*footprint],target:[0,.22,0],fov:35});return read();}};
+ function showPacking(value){
+  if(!compaction||typeof value!=='boolean')throw Error('Packing display requires the compaction bed and a boolean');
+  packingVisible=value;view.packing(value);session.redraw();update();return read();
+ }
+ const ops={restart,...(compaction?{packing:showPacking}:{}),pause(value){if(typeof value!=='boolean')throw Error('Boolean pause required');paused=value;record({kind:'grist.pause',value});update();return read();},connection(value){solver.control({strength:value});record({kind:'grist.connection',value});return read();},tool({position,radius}={}){if(position){if(position.length!==3||!position.every(Number.isFinite))throw Error('Finite tool position required');tool.position.fromArray(position.map(x=>x*100));}if(radius!==undefined){if(!(radius>0&&Number.isFinite(radius)))throw Error('Positive radius required');tool.scale.setScalar(radius/toolRadius);}host.scene.refreshPresentation(toolAsset);record({kind:'grist.tool',value:toolPose()});return read();},grip(value){if(compaction)throw Error('The compaction bed uses the forming tool');if(value.length!==3||!value.every(Number.isFinite))throw Error('Finite grip displacement required');moveGrip(new THREE.Vector3(...value).multiplyScalar(100).add(gripStart));return read();},async advance({steps=1}={}){await solver.wait();if(restarting)throw Error('Specimen is restarting');solver.control({gripDelta:gripDelta(),gripGain});if(!solver.advance({steps,tool:toolPose()}))throw Error('Material step not admitted');await solver.wait();session.redraw();return read();},async snapshot(){const s=await solver.capture(),connections=await solver.connectionState();return {...s,floats:Array.from(s.floats),tets:Array.from(s.tets),triangles:Array.from(s.triangles),ties:Array.from(s.ties),linkWords:Array.from(s.linkWords),connections,solver:solver.read()};},frame(){session.setView({position:[2.5*footprint,(compaction?2.6:1.9)*footprint,3.1*footprint],target:[0,.22,0],fov:35});return read();}};
  try{
   view=createPacketView(renderer,{...state,grainCount:state.mineralCount,packetCount:state.sampleCount});root.add(view.group);
-  solver=await createRegionSolver({device,state,bodyBuffer:view.bodyBuffer,iterations:6,dt:1/480});
+  solver=await createRegionSolver({device,state,bodyBuffer:view.bodyBuffer,tetBuffer:view.tetBuffer,iterations:6,dt:1/480});
   await session.attach(root,{owned:true,metadata:{label:root.name,source:'kaminos:'+source,type:'experiment'}});await session.attach(tray,{owned:true,metadata:{label:'Material tray',source:'kaminos:grist-tray',type:'experiment'}});if(!compaction)await session.attach(hold,{owned:true,metadata:{label:hold.name,source:'kaminos:grist-hold',type:'experiment'}});
   toolAsset=await session.attach(tool,{owned:true,metadata:{label:tool.name,source:'kaminos:grist-forming-tool',type:'experiment'}});if(!compaction)gripAsset=await session.attach(grip,{owned:true,presentation:trackpad,metadata:{label:grip.name,source:'kaminos:grist-grip',type:'experiment'}});ops.frame();
   if (trackpad) directGrip=installGristTrackpadGrip({
@@ -110,6 +116,11 @@ export async function createGristRegions({host,inputs={},record},{slab=false,tra
    if(requiresPageRecovery()) location.reload();
    else void invoke('restart').catch(()=>{});
   };ui.append(resetButton);
+  if(compaction){
+   packingButton=document.createElement('button');
+   packingButton.onclick=()=>showPacking(!packingVisible);
+   ui.append(packingButton);
+  }
   if(slab){
    const label=document.createElement('label');
    label.textContent='Slab ';
