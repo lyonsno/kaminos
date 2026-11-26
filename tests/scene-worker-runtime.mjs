@@ -175,3 +175,27 @@ test('worker composition registers TRELLIS on the same host and retains its owne
   await runtime.retire(f.context);assert.equal(retirements,2);assert.equal(f.calls.filter(x=>x==='device.dispose').length,1);
  }finally{if(!f.calls.includes('device.dispose'))await runtime.retire(f.context);}
 });
+
+test('native loss of the shared rendering device invalidates the worker frame epoch',async()=>{
+ const f=fixture(),epochs=[];
+ const loss=Promise.withResolvers();
+ f.device.lost=loss.promise;
+ const runtime=factory(f.options)({payload:f.payload,lifecycle:{invalidate:part=>epochs.push(part)}});
+ await runtime.initialize(f.context);
+ loss.resolve({reason:'unknown',message:'Device removed'});
+ await loss.promise;
+ assert.deepEqual(epochs,['device']);
+ await runtime.retire(f.context);
+});
+
+test('intentional destruction during retirement leaves epoch advancement to the host',async()=>{
+ const f=fixture(),epochs=[];
+ const loss=Promise.withResolvers();
+ f.device.lost=loss.promise;
+ f.device.destroy=()=>loss.resolve({reason:'destroyed',message:'Device destroyed'});
+ const runtime=factory(f.options)({payload:f.payload,lifecycle:{invalidate:part=>epochs.push(part)}});
+ await runtime.initialize(f.context);
+ await runtime.retire(f.context);
+ await loss.promise;
+ assert.deepEqual(epochs,[]);
+});

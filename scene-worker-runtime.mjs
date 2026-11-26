@@ -60,6 +60,11 @@ export function createSceneWorkerRuntimeFactory({THREE,createSceneResources,imag
     shared=await (services.requestDevice??api.requestKaminosSharedWebGpuDevice)({hostRequirements:sharedDeviceHostRequirements({sam:samRequirements})});
     ctx.assertCurrent();
     if(!shared?.device||shared.queue&&shared.queue!==shared.device.queue)throw Error('scene worker acquisition did not return one shared device and queue');
+    const device=shared.device;
+    device.lost?.then(()=>{
+     // A retired device may deliver its loss after its owner has released it.
+     if(shared?.device===device)lifecycle.invalidate('device');
+    });
     const objects=(services.createRenderObjects??createSceneRenderObjects)({THREE,viewport});
     renderResources=(services.createRenderResources??createSceneRenderResources)({THREE,...objects,canvas:payload.sceneCanvas,
      readViewport:viewport,readSharedGpu:()=>shared,readRendererOptions:()=>({exposure:payload.exposure??1}),
