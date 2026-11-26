@@ -1,6 +1,6 @@
 import {PARTICLE_LIGHT_MATERIAL_WGSL} from './volume-optical-particles.mjs';
 import {PARTICLE_KERNEL_WGSL,PARTICLE_STATE_WGSL} from './volume-particle-state.mjs';
-import {createPacketCandidates} from './volume-packet-candidates.mjs';
+import {createPacketCandidates, PACKET_BUNDLE_STRUCT_WGSL} from './volume-packet-candidates.mjs';
 import {createFixedExtinctionGrid} from './volume-packet-extinction-grid.mjs';
 
 const vector=(v,n,name)=>{if(!Array.isArray(v)||v.length!==n||v.some(x=>!Number.isFinite(x)||!Number.isFinite(Math.fround(x))))throw Error('Invalid bundle '+name);return [...v];};
@@ -41,7 +41,7 @@ export function packetBundlePlan(limits,{width,height,sections,bundles,slots,rec
 // Provisional directional measure: project the inspected support onto a fresh
 // orthographic plane; retain the acquired interval along this straight query.
 // This is neither a normalized 3D Gaussian nor camera transfer reused as light.
-export const PACKET_BUNDLE_STRUCT_WGSL=/* wgsl */`struct Bundle {origin:vec4<f32>,forward:vec4<f32>,right:vec4<f32>,up:vec4<f32>,weight:vec4<f32>,ids:vec4<u32>}`;
+export {PACKET_BUNDLE_STRUCT_WGSL} from './volume-packet-candidates.mjs';
 const DECL=/* wgsl */`${PARTICLE_LIGHT_MATERIAL_WGSL}
 ${PARTICLE_KERNEL_WGSL}${PARTICLE_STATE_WGSL}${PACKET_BUNDLE_STRUCT_WGSL}
 struct BundlePlan {image:vec4<u32>,count:vec4<u32>,solid:vec4<u32>}

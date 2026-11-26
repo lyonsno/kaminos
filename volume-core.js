@@ -13678,7 +13678,7 @@ export function createKaminosVolumePrototype({
 
   const liveLightingMode=()=>sceneSourcePolicy?.mode()??'strict';
   const liveLightingDomain=()=>JSON.stringify([state.thermalFluidAllocationId,gridSize,gridHeight,productTransform,worldSmokeKey,intermediateKey,uniforms[368]]);
-  const needsParticleGridSource=()=>particleSettings.enabled&&!particleSettings.phaseFilter&&particleSettings.visiblePercent===100&&!showingSeedNeighbors(particleSettings,simulationPaused)&&particleSettings.debugView!==9&&(particleSettings.fillExtinction>0||particleSettings.extinctionView>0);
+  const needsParticleGridSource=()=>particleSettings.enabled&&!particleSettings.phaseFilter&&particleSettings.visiblePercent===100&&!showingSeedNeighbors(particleSettings,simulationPaused)&&(opticalParticles?.liveCohortState().view??'off')==='off'&&particleSettings.debugView!==9&&(particleSettings.fillExtinction>0||particleSettings.extinctionView>0);
   const lightingGridDimensions=width=>sceneLightGridDimensions(width,gridSize,gridHeight,device?.limits);
   function opticalParticleMaterialContext() {
     return [state.active,deviceRetired,state.particleSourceGeneration,state.thermalFluidAllocationId,state.fluidStateResetCount,
@@ -14102,7 +14102,7 @@ export function createKaminosVolumePrototype({
     pass.end();
     }
     let referenceReceipt=null;
-    if(particleSourceFrame&&particleSettings.showRaymarch&&!particleInspectionView&&!particleSettings.lockIntegrationView&&!particleSettings.phaseFilter&&particleSettings.visiblePercent===100&&!showingSeedNeighbors(particleSettings,simulationPaused)&&particleSettings.debugView!==9){
+    if(particleSourceFrame&&particleSettings.showRaymarch&&!particleInspectionView&&!particleSettings.lockIntegrationView&&!particleSettings.phaseFilter&&particleSettings.visiblePercent===100&&!showingSeedNeighbors(particleSettings,simulationPaused)&&(opticalParticles?.liveCohortState().view??'off')==='off'&&particleSettings.debugView!==9){
       const sourceReceipt={stepping:state.opticalStepping,split:state.splitIntegral};
       encodeDraw(encoder,view,label+' reference image',targetPipeline,{...options,particleReference:true,timestampWrites:null,referenceProfileWrites:activeParticleProfileWrites});
       referenceReceipt={stepping:state.opticalStepping,raySteps:controlsSnapshot.raySteps,extraDraw:true,mode:particleSettings.showParticles?'hybrid-underlay':'full-reference',intrinsicEmission:particleSettings.showParticles?particleSettings.referenceEmission:1};
@@ -18489,9 +18489,14 @@ export function createKaminosVolumePrototype({
     sampleOpticalParticleWork(){return opticalParticles?.workStatistics()??Promise.resolve({available:false,reason:"No current carrier field"});},
     setOpticalParticleView(view){particleInspectionView=checkedParticleInspectionView(view);return this.opticalParticleView();},
     opticalParticleView(){return particleInspectionView?structuredClone(particleInspectionView):null;},
+    setOpticalParticleLiveCohort(request) {
+      if (!opticalParticles && request.view!=='off') throw Error('Wait for the live particle view before picking a seed');
+      opticalParticles?.setLiveCohort(request);
+      return opticalParticles?.liveCohortState()??{view:'off',phase:'off'};
+    },
     opticalParticleViewport(){return canvas;},
     opticalParticleSettings(){return {...particleSettings};},
-    opticalParticleState(){return {...state.opticalParticles,timings:!particleSettings.liveTimings?{ok:false,reason:"Passive GPU intervals off"}:particleTimings?.read()??{ok:false,reason:"Waiting for a fresh particle frame"},budgets:particleSettings.enabled?particleBudget():null,sourceRenderScale:controlsSnapshot.renderScale,sourceRaySteps:controlsSnapshot.raySteps,simulationReaction:particleReactionFromSimulation(state.reactantCombustion),reactionLaw:state.reactantCombustion?.effective?.law??null};},
+    opticalParticleState(){return {...state.opticalParticles,liveCohort:opticalParticles?.liveCohortState(),timings:!particleSettings.liveTimings?{ok:false,reason:"Passive GPU intervals off"}:particleTimings?.read()??{ok:false,reason:"Waiting for a fresh particle frame"},budgets:particleSettings.enabled?particleBudget():null,sourceRenderScale:controlsSnapshot.renderScale,sourceRaySteps:controlsSnapshot.raySteps,simulationReaction:particleReactionFromSimulation(state.reactantCombustion),reactionLaw:state.reactantCombustion?.effective?.law??null};},
     ambientBoundaryState(){return resolveAmbientBoundary(controlsSnapshot,{scale:productTransform.scale,translate:productTransform.translate,dims:[gridSize,gridHeight,gridSize],reactant:state.reactantCombustion?.effective?.admitted,joined:state.joinedBoundary?.admitted,open:uniforms[OPEN_WORLD_UNIFORM_OFFSET]>.5});},
     setAmbientBoundary(patch){
       for(const key of Object.keys(patch))if(!AMBIENT_BOUNDARY_KEYS.includes(key))throw Error('Unknown ambient boundary control '+key);

@@ -1,5 +1,7 @@
 import {PARTICLE_LIGHT_MATERIAL_WGSL} from './volume-optical-particles.mjs';
 
+export const PACKET_BUNDLE_STRUCT_WGSL=/* wgsl */`struct Bundle {origin:vec4<f32>,forward:vec4<f32>,right:vec4<f32>,up:vec4<f32>,weight:vec4<f32>,ids:vec4<u32>}`;
+
 export const PACKET_CANDIDATE_WGSL = /* wgsl */`
 struct CandidateGrid {
   origin: vec4<f32>,
@@ -146,6 +148,42 @@ export const packetCandidateProfilePasses = Object.freeze([
   'packet-current-index', 'packet-cell-cull', 'packet-candidates', 'packet-draw-count',
 ]);
 
+function retireBuffers(device, old) {
+  if (!old) return;
+  queueMicrotask(() => device.queue.onSubmittedWorkDone().catch(()=>{}).then(() => {
+    for (const buffer of Object.values(old)) buffer.destroy();
+  }));
+}
+
+export function createPacketCandidateIndex(device) {
+  let buffers, indexedFrame;
+  return {
+    prepare(encoder, material, cellBytes, slotBytes, encodeIndex) {
+      if (!buffers || buffers.cells.size !== cellBytes || buffers.slotCells.size !== slotBytes) {
+        retireBuffers(device, buffers);
+        const usage = GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST;
+        buffers = {
+          cells: device.createBuffer({label:'candidate cells',size:cellBytes,usage}),
+          slotCells: device.createBuffer({label:'current address per particle',size:slotBytes,usage}),
+        };
+        indexedFrame = null;
+      }
+      const {particles, options, identity} = material;
+      // The shared owner offers its single index to consumers of one encoded
+      // material frame. Independent callers without an identity rebuild.
+      const current = identity && [particles, options, identity.epoch, identity.frame, identity.materialStamp];
+      const reused = !!(current && indexedFrame && current.every((v,i) => v === indexedFrame[i]));
+      if (!reused) {
+        encoder.clearBuffer(buffers.cells);
+        encodeIndex(buffers);
+        indexedFrame = current;
+      }
+      return {...buffers, reused};
+    },
+    dispose() { retireBuffers(device,buffers); buffers = indexedFrame = null; },
+  };
+}
+
 export function createPacketCandidates(device, bundleStruct) {
   const module = device.createShaderModule({
     label: 'current particle support index',
@@ -155,12 +193,7 @@ export function createPacketCandidates(device, bundleStruct) {
     device.createComputePipeline({layout:'auto', compute:{module,entryPoint}}));
   const usage = GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST;
   let workspace = null;
-  function retire(old) {
-    if (!old) return;
-    queueMicrotask(() => device.queue.onSubmittedWorkDone().catch(()=>{}).then(() => {
-      for (const buffer of Object.values(old)) buffer.destroy();
-    }));
-  }
+  const localIndex = createPacketCandidateIndex(device);
   function dispatch(n) {
     const groups = Math.ceil(n / 64), max = device.limits.maxComputeWorkgroupsPerDimension;
     const x = Math.min(groups, max), y = Math.ceil(groups / x);
@@ -193,27 +226,23 @@ export function createPacketCandidates(device, bundleStruct) {
       // Workspace overflow takes the complete dense draw.
       const slotBytes = plan.slots * 4;
       const pairBytes = 4 * Math.min(plan.instances, 2 * plan.slots, Math.floor(limit / 4));
-      if (!workspace || workspace.cells.size !== cellBytes || workspace.slotCells.size !== slotBytes ||
-          workspace.masks.size !== maskBytes || workspace.ids.size !== pairBytes) {
+      if (!workspace || workspace.masks.size !== maskBytes || workspace.ids.size !== pairBytes) {
         const buffer = (label,size,extra=0) => device.createBuffer({label,size,usage:usage|extra});
-        retire(workspace);
+        retireBuffers(device,workspace);
         workspace = {
           grid: device.createBuffer({label:'current candidate grid',size:48,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST}),
-          cells: buffer('candidate cells',cellBytes),
-          slotCells: buffer('current address per particle',slotBytes),
           masks: buffer('bundle admission bits per cell',maskBytes),
           ids: buffer('current bundle and slot pairs',pairBytes),
           draw: buffer('bundle indirect draw and candidate count',24,GPUBufferUsage.INDIRECT|GPUBufferUsage.COPY_SRC),
         };
       }
-      const {grid,cells,slotCells,masks,ids,draw} = workspace;
+      const {grid,masks,ids,draw} = workspace;
       const data = new ArrayBuffer(48);
       new Float32Array(data).set([...domain.origin,domain.pitch*4]);
       const u = new Uint32Array(data);
       u.set([...dims,cellCount-1],4);
       u.set([indexWork.x*64,gatherWork.x*64,plan.bundles,words],8);
       device.queue.writeBuffer(grid,0,data);
-      encoder.clearBuffer(cells);
       encoder.clearBuffer(masks);
       encoder.clearBuffer(draw);
       function compute(i, bindings, x, y=1) {
@@ -227,12 +256,17 @@ export function createPacketCandidates(device, bundleStruct) {
         pass.dispatchWorkgroups(x,y);
         pass.end();
       }
-      compute(0,[[0,grid],[1,cells],[2,slotCells],[5,material.particles],[6,material.options]],indexWork.x,indexWork.y);
+      // Private callers get a fresh build. A shared index is explicitly
+      // supplied by the owner of the current optical-particle frame.
+      const {cells,slotCells,reused} = (material.candidateIndex ?? localIndex).prepare(
+        encoder, material.candidateIndex ? material : {...material,identity:null}, cellBytes, slotBytes,
+        ({cells,slotCells}) => compute(0,[[0,grid],[1,cells],[2,slotCells],[5,material.particles],[6,material.options]],indexWork.x,indexWork.y));
+
       compute(1,[[0,grid],[1,cells],[7,bundleBuffer],[8,masks]],gatherWork.x,gatherWork.y);
       compute(2,[[0,grid],[2,slotCells],[3,ids],[4,draw],[5,material.particles],[6,material.options],[7,bundleBuffer],[8,masks]],indexWork.x,indexWork.y);
       compute(3,[[0,grid],[2,slotCells],[3,ids],[4,draw]],1);
-      return {ids,draw,cellCount,bytes:cellBytes+maskBytes+slotBytes+pairBytes+72};
+      return {ids,draw,cellCount,reusedIndex:reused,bytes:cellBytes+maskBytes+slotBytes+pairBytes+72};
     },
-    dispose() { retire(workspace); workspace = null; },
+    dispose() { localIndex.dispose(); retireBuffers(device,workspace); workspace = null; },
   };
 }

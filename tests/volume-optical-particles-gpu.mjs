@@ -259,6 +259,25 @@ test('paused seed neighborhoods recover nearby original material and exclude an 
   }
  },view));
 });
+test('live source comparison isolates the picked neighborhood at native optical weight',async()=>{
+ await withKaminosGpu(async({device})=>opticalFixture(device,async({seed,draw,owner})=>{
+  const rows=new Float32Array(16*16);
+  rows.set([1,.2,0,.2,0,0,0,1,-.1,.1,1,1,1,.2,0,0],16);
+  seed(rows);
+  const settings={visiblePercent:5,seedRadiusCells:.1,radius:.04,stretch:1};
+  const isolated=await draw(0,settings);
+  assert.ok(isolated.some(x=>x>0));
+  rows.set([0,1,.2,.2,.75,0,0,1,-.1,.1,1,1,0,1,.2,0],16*2);
+  seed(rows);
+  assert.notDeepEqual(await draw(0,{...settings,visiblePercent:100}),isolated);
+  const picked={point:[0,0],pixelScale:[16,16],radiusPixels:2};
+  assert.equal(typeof owner.setLiveCohort,'function','the optical renderer accepts an inspection pick');
+  owner.setLiveCohort({view:'original',pick:picked});
+  assert.deepEqual(await draw(0,settings),isolated);
+  owner.setLiveCohort({view:'fresh'});
+  assert.deepEqual(await draw(0,settings),isolated);
+ }));
+});
 test('reaction-phase solo changes the held optical draw without changing its carrier records',async()=>{
  await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw,upload})=>{
   const rows=new Float32Array(16*16);rows.set([4,2,1,1,0,0,0,1,-.5,.5,1,1,4,2,1,0]);seed(rows);
