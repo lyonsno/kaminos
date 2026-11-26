@@ -57,7 +57,7 @@ export function createPlaceAuthoring(input=initialPlace()){
  const apply=fn=>{idle();const before=copy(model),next=copy(model);fn(next);model=checkedPlace(next);history.push(before);return read();};
  const read=()=>({...copy(model),stage:gesture?.kind==='fit'?'fitting':gesture?'shaping':'idle',depth:history.length});
  const id=()=>{let n=1;while(model.regions.some(r=>r.id===`region:${n}`))n++;return `region:${n}`;};
- return {read,model:()=>copy(model),
+ return {read,isEditing:()=>gesture!==null,model:()=>copy(model),
   mode(value){return apply(p=>p.mode=value);},realize(value){return apply(p=>p.realization=value);},height(value){return apply(p=>p.height=value);},
   select(value){idle();if(value!==null&&!model.regions.some(r=>r.id===value))throw Error('Unknown region');model.selected=value;return read();},
   add(role,{center,half,shape='ellipse'}){const name=id();return apply(p=>{p.regions.push(region({id:name,role,center,half,shape}));p.selected=name;});},

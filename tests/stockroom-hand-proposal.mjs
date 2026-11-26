@@ -83,3 +83,33 @@ test('nomination is explicit and is consumed by the next grasp', () => {
   assert.equal(p.read().mode, 'held');
   assert.equal(p.read().nominated, false);
 });
+
+test('turning preserves the working plane even when an oblique palm frame tilts', () => {
+  const p = createHandProposal(initial);
+  p.observe([hand()]);
+  p.observe([hand({closed: true})]);
+  const angled = hand({closed: true, yaw: .55});
+  angled.frame.premultiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), .62));
+  p.observe([angled]);
+  const {rotation, position} = p.read().pose;
+  assert.equal(position[1], 1);
+  assert.equal(rotation[0], 0);
+  assert.equal(rotation[2], 0);
+  assert.ok(rotation[1] > .2);
+});
+
+test('returning to the accepted dimensions does not add an undo step', () => {
+  const p = createHandProposal(initial);
+  p.beginPointer();
+  p.refine({width: .8});
+  p.endPointer();
+  p.accept();
+  p.beginPointer();
+  p.refine({width: .95});
+  p.refine({width: .8});
+  p.endPointer();
+  assert.equal(p.read().pending, false);
+  p.accept();
+  p.back();
+  assert.deepEqual(p.read().pose, initial);
+});

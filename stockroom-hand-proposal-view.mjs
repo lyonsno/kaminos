@@ -6,7 +6,7 @@ const THUMB = 744, INDEX = 320;
 const MAX_CAPTURE_AGE_MS = 1000;
 const HEIGHT = .52, DEPTH = .42;
 
-export async function installHandProposal({host, session, placeView, record}) {
+export async function installHandProposal({host, session, placeView, isPlaceEditing, record}) {
   const doc = host.controls.document;
   const win = doc.defaultView;
   const canvas = host.scene.renderer().domElement;
@@ -40,7 +40,7 @@ export async function installHandProposal({host, session, placeView, record}) {
 
   const plane = new T.Plane(new T.Vector3(0, 1, 0), -HEIGHT);
   let drag = null, lastFrame = null, previousCamera = '', signal = null;
-  let signature = '', previousStatus = '';
+  let signature = '', previousStatus = '', consumedPress = null;
   const listeners = [];
   function listen(target, type, fn, capture = false) {
     target.addEventListener(type, fn, capture);
@@ -68,7 +68,7 @@ export async function installHandProposal({host, session, placeView, record}) {
     return target && target.distance < cover ? target.object : null;
   }
   function trackingBlocked() {
-    return navigation.state().gesture || win.kaminosSceneEdits?.state().active;
+    return navigation.state().gesture || win.kaminosSceneEdits?.state().active || isPlaceEditing();
   }
   function emit(action, observation) {
     record?.({kind: 'stockroom-hand-proposal.' + action, target: 'loose-wood',
@@ -154,7 +154,15 @@ export async function installHandProposal({host, session, placeView, record}) {
   }
 
   const pointer = event => rayFor(xy(event.clientX, event.clientY));
+  const containsPointer = event => !!hit(pointer(event));
   const stop = event => {event.preventDefault(); event.stopImmediatePropagation();};
+  listen(win, 'pointerdown', () => {consumedPress = null;}, true);
+  listen(win, 'click', event => {
+    if (consumedPress !== null && event.pointerId === consumedPress) {
+      consumedPress = null;
+      stop(event);
+    }
+  }, true);
   listen(canvas.parentElement, 'pointerdown', event => {
     if (event.target !== canvas || event.button !== 0 || event.shiftKey || trackingBlocked()) return;
     const ray = pointer(event);
@@ -169,6 +177,7 @@ export async function installHandProposal({host, session, placeView, record}) {
     drag = {id: event.pointerId, x: event.clientX, y: event.clientY, pose, origin,
       width: target === handle, dx: b.x - a.x, dy: b.y - a.y, moved: false, view: previousCamera};
     proposal.beginPointer();
+    consumedPress = event.pointerId;
     canvas.setPointerCapture(event.pointerId);
     emit('pointer-takeover');
     stop(event);
@@ -219,7 +228,7 @@ export async function installHandProposal({host, session, placeView, record}) {
   let over = false;
   listen(canvas, 'pointermove', event => {over = !!hit(pointer(event));});
   listen(canvas, 'pointerleave', () => {over = false;});
-  listen(doc, 'keydown', event => {
+  listen(win, 'keydown', event => {
     if (!over || trackingBlocked() ||
         event.target?.closest?.('input,textarea,select,button,[contenteditable="true"]')) return;
     if (event.key !== 'Enter' && event.key !== 'Escape') return;
@@ -233,7 +242,13 @@ export async function installHandProposal({host, session, placeView, record}) {
   }
   render();
   const off = session.onFrame(onFrame);
-  return {read, operations, dispose() {
+  return {read, operations, containsPointer,
+    backAt(event) {
+      if (!containsPointer(event)) return false;
+      operations.backLooseWood();
+      return true;
+    },
+    dispose() {
     endDrag(false);
     off();
     for (const remove of listeners) remove();

@@ -11,13 +11,16 @@ export function createHandProposal(initial) {
   let armed = null;
   let nominated = false;
 
+  const pending = () => pose.width !== accepted.width ||
+    pose.position.some((value, i) => value !== accepted.position[i]) ||
+    pose.rotation.some((value, i) => value !== accepted.rotation[i]);
   const read = () => ({
     mode: pointer ? 'pointer' : held ? 'held' : 'parked',
     pose: structuredClone(pose),
     armed,
     holding: held?.side ?? null,
     nominated,
-    pending: pose !== accepted,
+    pending: pending(),
   });
 
   function park() {
@@ -41,8 +44,12 @@ export function createHandProposal(initial) {
       const base = held.base;
       const movement = hand.point.clone().sub(base.point);
       const position = new Vector3().fromArray(base.pose.position).add(movement).toArray();
-      const rotation = hand.frame.clone().multiply(base.inverse)
-        .multiply(new Quaternion().fromArray(base.pose.rotation)).normalize().toArray();
+      // Extract the twist around the world up axis from the relative palm pose.
+      const delta = hand.frame.clone().multiply(base.inverse);
+      const twist = new Quaternion(0, delta.y, 0, delta.w);
+      const rotation = twist.lengthSq() > 1e-8
+        ? twist.normalize().multiply(new Quaternion().fromArray(base.pose.rotation)).normalize().toArray()
+        : pose.rotation;
       if (position.some((value, i) => value !== pose.position[i])
           || rotation.some((value, i) => value !== pose.rotation[i])) {
         pose = {...pose, position, rotation};
@@ -91,14 +98,14 @@ export function createHandProposal(initial) {
     endPointer() {pointer = false;},
     nominate() {nominated = true;},
     accept() {
-      if (pose !== accepted) history.push(accepted);
+      if (pending()) history.push(accepted);
       accepted = pose;
       pointer = false;
       nominated = false;
       park();
     },
     back() {
-      if (pose === accepted && history.length) accepted = history.pop();
+      if (!pending() && history.length) accepted = history.pop();
       pose = accepted;
       pointer = false;
       nominated = false;

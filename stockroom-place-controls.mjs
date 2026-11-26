@@ -1,7 +1,7 @@
 import * as T from './lib/three.core.js';
 import {createPlaceAuthoring} from './stockroom-place-state.mjs';
 
-export function installPlaceControls({host,session,view,asset,record,inputs}){
+export function installPlaceControls({host,session,view,asset,record,inputs,proposal}){
  const document=host.controls.document,window=document.defaultView,canvas=host.scene.renderer().domElement,viewport=canvas.parentElement,camera=host.scene.camera(),navigation=host.scene.navigation(),author=createPlaceAuthoring(inputs);
  const listeners=[],listen=(node,name,fn,opts)=>{node.addEventListener(name,fn,opts);listeners.push(()=>node.removeEventListener(name,fn,opts));};
  let tool='material',reach=.48,drag=null,secondary=null,middle=false,hover=null,lastCamera='',pendingEvent=null,raf=null,domainPress=false;
@@ -52,8 +52,8 @@ export function installPlaceControls({host,session,view,asset,record,inputs}){
  listen(viewport,'pointerdown',event=>{if(event.target!==canvas&&!overlay.contains(event.target))return;if(event.button===2){secondary={x:event.clientX,y:event.clientY,id:event.pointerId,moved:false};if(drag){drag.start=null;drag.screen=null;}gizmo.visible=false;}if(event.button===1){middle=true;if(drag){drag.start=null;drag.screen=null;}}},true);
  // Native gizmos install their canvas listeners first and may acquire the edit.
  listen(canvas,'pointerdown',left);
- listen(viewport,'pointermove',event=>{if(secondary){if(Math.hypot(event.clientX-secondary.x,event.clientY-secondary.y)>5)secondary.moved=true;return;}if(middle||navigation.state().gesture)return;if(drag){pendingEvent={clientX:event.clientX,clientY:event.clientY};if(raf===null)raf=window.requestAnimationFrame(()=>{raf=null;flush();});}else if(event.target===canvas){hover=hit(event);canvas.title=hover?.userData.placeHandle?`Take up ${hover.userData.placeHandle.id??'insert'}`:'';previewAt(event);session.redraw();}},true);
- listen(window,'pointerup',event=>{if(event.button===0&&event.target!==canvas)domainPress=false;if(event.button===2&&secondary?.id===event.pointerId){const click=!secondary.moved;secondary=null;if(click&&(author.read().depth||drag)){navigation.cancel();goBack();event.preventDefault();event.stopImmediatePropagation();}}if(event.button===1)middle=false;},true);
+ listen(viewport,'pointermove',event=>{if(secondary){if(Math.hypot(event.clientX-secondary.x,event.clientY-secondary.y)>5)secondary.moved=true;return;}if(middle||navigation.state().gesture)return;if(drag){pendingEvent={clientX:event.clientX,clientY:event.clientY};if(raf===null)raf=window.requestAnimationFrame(()=>{raf=null;flush();});}else if(event.target===canvas){if(proposal?.containsPointer(event)){gizmo.visible=false;canvas.style.cursor='pointer';canvas.title='';session.redraw();return;}hover=hit(event);canvas.title=hover?.userData.placeHandle?`Take up ${hover.userData.placeHandle.id??'insert'}`:'';previewAt(event);session.redraw();}},true);
+ listen(window,'pointerup',event=>{if(event.button===0&&event.target!==canvas)domainPress=false;if(event.button===2&&secondary?.id===event.pointerId){const click=!secondary.moved;secondary=null;if(click){const proposalBack=!drag&&proposal?.backAt(event);if(proposalBack||author.read().depth||drag){navigation.cancel();if(!proposalBack)goBack();event.preventDefault();event.stopImmediatePropagation();}}}if(event.button===1)middle=false;},true);
  listen(window,'pointercancel',()=>{domainPress=false;},true);
  listen(canvas,'pointerup',event=>{if(event.button===0&&domainPress){event.preventDefault();event.stopImmediatePropagation();}});
  listen(canvas,'click',event=>{if(domainPress){domainPress=false;event.preventDefault();event.stopImmediatePropagation();}});
@@ -69,7 +69,7 @@ export function installPlaceControls({host,session,view,asset,record,inputs}){
   });
   return {place:author.model(),interaction:author.read(),plan:view.plan(),view:session.readView(),screen:{handles,insert:project(view.handlePoint({kind:'insert'}))},prepared:true,objectId:asset.id};
  }
- sync();return {operations,read,
+ sync();return {operations,read,isEditing:author.isEditing,
   mount(panel){const title=document.createElement('h3');title.textContent='Place';panel.append(title);const make=(label,value,fn)=>{const row=document.createElement('label');row.textContent=label+' ';const input=document.createElement('input');input.type='number';input.value=String(value);input.step='any';input.style.width='90px';row.append(input);panel.append(row);listen(input,'change',()=>act(()=>fn(Number(input.value))));return host.controls.installNumberDrag({input,grip:row,step:.02});};const controls=[make('Deck height',author.model().height,value=>operations.height({value})),make('Reach',reach,value=>{if(!Number.isFinite(value)||value<=.04)throw Error('Reach must exceed four centimetres');reach=value;})];return ()=>controls.forEach(c=>c.dispose());},
   dispose(){if(raf!==null)window.cancelAnimationFrame(raf);unsubscribe();listeners.forEach(fn=>fn());overlay.remove();gizmo.removeFromParent();gizmo.traverse(m=>{m.geometry?.dispose();if(m.material)m.material.dispose();});canvas.style.cursor='';canvas.title='';},
  };

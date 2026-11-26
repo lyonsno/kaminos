@@ -9,8 +9,9 @@ export default {
     const proposalSession = await host.scene.open();
     let proposal, place;
     try {
-      place = await placeExperiment.create({...context, attachProposal: async ({view}) => {
-        proposal = await installHandProposal({host, session: proposalSession, placeView: view, record});
+      place = await placeExperiment.create({...context, attachProposal: async ({view, isPlaceEditing}) => {
+        proposal = await installHandProposal({host, session: proposalSession, placeView: view, isPlaceEditing, record});
+        return proposal;
       }});
       return {
         ...place,
