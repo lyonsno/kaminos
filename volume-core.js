@@ -4,7 +4,7 @@ import {immersedSourceIntegerBounds} from './volume-immersed-source-geometry-gpu
 import {createGPUImmersedCollection} from './volume-immersed-source-gpu.mjs';
 import {createGPUImmersedWorldSources} from './volume-immersed-world-source-gpu.mjs';
 import {createDeferredPipelines} from './deferred-pipelines.mjs';
-import {createOpticalParticles,opticalParticleSettings,particleReactionFromSimulation} from './volume-optical-particles.mjs';
+import {createOpticalParticles,showingSeedNeighbors,opticalParticleSettings,particleReactionFromSimulation} from './volume-optical-particles.mjs';
 import {createResidentVolume,residentVolumeSettings,residentVolumeProfilePasses} from './particle-resident-volume.mjs';
 import {createSplitIntegral,splitIntegralSettings,SPLIT_OPTICAL_OFF_WGSL,splitOpticalShader} from './volume-split-integral.mjs';
 import {EMPTY_SPACE_WGSL} from './volume-empty-space.mjs';
@@ -13678,7 +13678,7 @@ export function createKaminosVolumePrototype({
 
   const liveLightingMode=()=>sceneSourcePolicy?.mode()??'strict';
   const liveLightingDomain=()=>JSON.stringify([state.thermalFluidAllocationId,gridSize,gridHeight,productTransform,worldSmokeKey,intermediateKey,uniforms[368]]);
-  const needsParticleGridSource=()=>particleSettings.enabled&&!particleSettings.phaseFilter&&particleSettings.visiblePercent===100&&particleSettings.debugView!==9&&(particleSettings.fillExtinction>0||particleSettings.extinctionView>0);
+  const needsParticleGridSource=()=>particleSettings.enabled&&!particleSettings.phaseFilter&&particleSettings.visiblePercent===100&&!showingSeedNeighbors(particleSettings,simulationPaused)&&particleSettings.debugView!==9&&(particleSettings.fillExtinction>0||particleSettings.extinctionView>0);
   const lightingGridDimensions=width=>sceneLightGridDimensions(width,gridSize,gridHeight,device?.limits);
   function opticalParticleMaterialContext() {
     return [state.active,deviceRetired,state.particleSourceGeneration,state.thermalFluidAllocationId,state.fluidStateResetCount,
@@ -14102,7 +14102,7 @@ export function createKaminosVolumePrototype({
     pass.end();
     }
     let referenceReceipt=null;
-    if(particleSourceFrame&&particleSettings.showRaymarch&&!particleInspectionView&&!particleSettings.lockIntegrationView&&!particleSettings.phaseFilter&&particleSettings.visiblePercent===100&&particleSettings.debugView!==9){
+    if(particleSourceFrame&&particleSettings.showRaymarch&&!particleInspectionView&&!particleSettings.lockIntegrationView&&!particleSettings.phaseFilter&&particleSettings.visiblePercent===100&&!showingSeedNeighbors(particleSettings,simulationPaused)&&particleSettings.debugView!==9){
       const sourceReceipt={stepping:state.opticalStepping,split:state.splitIntegral};
       encodeDraw(encoder,view,label+' reference image',targetPipeline,{...options,particleReference:true,timestampWrites:null,referenceProfileWrites:activeParticleProfileWrites});
       referenceReceipt={stepping:state.opticalStepping,raySteps:controlsSnapshot.raySteps,extraDraw:true,mode:particleSettings.showParticles?'hybrid-underlay':'full-reference',intrinsicEmission:particleSettings.showParticles?particleSettings.referenceEmission:1};
@@ -14115,7 +14115,7 @@ export function createKaminosVolumePrototype({
       const lightField=emitterGridSupported&&distributedFrameIsUsable(sceneSource)&&(liveLightingMode()==='paced'||distributedFrame.frame===sceneSource.frame)&&!distributedFrame.previewStale?distributedFrame.smokeReconstruction:null;
       const emitter=emitterParticles&&lastParticleEmitter?.allocation===state.thermalFluidAllocationId&&lastParticleEmitter?.sourceStep===state.simStepCount-1?lastParticleEmitter:null;
       const materialContext=opticalParticleMaterialContext();
-      state.opticalParticles=opticalParticles.encode(encoder,{view,emitter,residentVolume:{settings:residentParticleVolume,create:createResidentVolume,revision:residentParticleVolumeRevision},
+      state.opticalParticles=opticalParticles.encode(encoder,{view,emitter,inspectionPaused:simulationPaused,residentVolume:{settings:residentParticleVolume,create:createResidentVolume,revision:residentParticleVolumeRevision},
         incident:lightField?{texture:lightField.texture,masks:lightField.masks,planes:lightField.planes,generation:distributedFrame.generation,frame:distributedFrame.frame,appearanceEdit:distributedFrame.appearanceEdit??null}:null,
         materialTransform:productTransform,materialSourceIsCurrent:()=>opticalParticleMaterialContext().every((value,index)=>value===materialContext[index]),afterMaterialSubmit:after=>thermalSubmissions.record(encoder,after),opticalView:particleInspectionView?particleInspectionProjection(particleInspectionView,productTransform,state.width/state.height,camera.coordinateSystem):null,allowUnavailableGridExtinction:true,gridExtinction:particleSettings.fillExtinction>0||particleSettings.extinctionView>0?{...(particleExtinctionSource??sceneVolumeSource)?.describe(),expectedFrame:state.frameCount}:null,format:targetPipeline===readbackPipeline?'rgba8unorm':format,source:{...particleSourceFrame,held:simulationPaused||normalizeLookFreeze(controlsSnapshot.lookFreeze),reactionStepScale:resolveTimeStepConfig(controlsSnapshot).effective.dtScale},fine:fluidBuffers[currentFluid],reactants:reactantTextures[currentFluid],model:state.reactantCombustion.effective.model,material:{sharedIncidentEnabled:liveLightingMode()==='strict'||!!lightField,sharedIncidentOff:liveLightingMode()==='off',captureDistributedScatter:!!distributedGroup,density:uniforms[23],extinction:uniforms[EMISSIVE_UNIFORM_OFFSET],albedo:uniforms[EMISSIVE_UNIFORM_OFFSET+1],smokeVisible:uniforms[306]>.5?0:1,kelvinPerHeat:state.physicsAppearance.kelvinPerHeat,thermalGain:uniforms[371],cleanGain:uniforms[372],sootBurnoutRate:state.physicsAppearance.effective.sootBurnout?state.physicsAppearance.sootBurnoutRate:0,sootBurnoutKelvin:state.physicsAppearance.sootBurnoutKelvin},dims:[gridSize,gridHeight,gridSize],invViewProj:invViewProj.elements,settings:{...particleSettings,...particleReactionFromSimulation(state.reactantCombustion)},profileWrites:activeParticleProfileWrites??(()=>({})),cameraValues,depthZeroToOne:camera.coordinateSystem===THREE.WebGPUCoordinateSystem,depth:ordinarySceneDepthTexture??ordinarySceneDepthFallback,identity:JSON.stringify(emitterParticles?[productTransform,state.thermalFluidAllocationId]:[worldSmokeKey,intermediateKey,productTransform,state.particleSourceGeneration])});
       if(captureFresh)particleCaptureClock.mark(state.simStepCount,captureIdentity);

@@ -13,7 +13,7 @@ import {packetNetworkSettings} from '../volume-packet-network.mjs';
 const SOURCE_FIELDS={renderScale:'volume-render-scale',raySteps:'volume-steps'};
 const BOUNDARY_FIELDS={ambientWidthWorld:'widthWorld',ambientExchangeTime:'exchangeTime',ambientVelocityDamping:'velocityDamping'};
 const REACTION_KEYS=['burnTime','cooling','heatRelease','sootYield','smokeLife'];
-function inactiveControls(settings){
+function inactiveControls(settings,inspectingNeighbors){
    const mode=settings.acquisitionMode,emitter=mode===2,focused=mode===1,ray=mode!==2;
    const acquiring=ray&&settings.acquisitionEnabled,following=focused&&acquiring&&settings.groupingEnabled;
    return new Set([
@@ -30,7 +30,7 @@ function inactiveControls(settings){
     ...(!settings.depthMode||!settings.fillExtinction&&!settings.extinctionView?['extinctionSlack']:[]),
     ...(settings.enabled&&!settings.showRaymarch?['sourceRaySteps']:[]),
     ...(!settings.showRaymarch||!settings.showParticles?['referenceEmission']:[]),
-    ...(settings.visiblePercent<100||settings.phaseFilter||settings.debugView===9||settings.lockIntegrationView?['showRaymarch','referenceEmission','fillExtinction','extinctionView','extinctionSlack']:[]),
+    ...(inspectingNeighbors||settings.visiblePercent<100||settings.phaseFilter||settings.debugView===9||settings.lockIntegrationView?['showRaymarch','referenceEmission','fillExtinction','extinctionView','extinctionSlack']:[]),
     ...(!settings.phaseFilter?['phaseBurnThreshold','phaseGlowThreshold']:[]),
     ...(!settings.projection?['flowAlignment']:[]),
     ...(!settings.profileMode?['emissionFalloff','extinctionFalloff']:[]),
@@ -123,7 +123,7 @@ export default {
   }
   const value=(key,e,boundary)=>key in BOUNDARY_FIELDS?(key==='ambientWidthWorld'?boundary?.effective.widthWorld:boundary?.settings[BOUNDARY_FIELDS[key]]):key==='sourceRenderScale'?authoredSourceValue('renderScale')??e.sourceRenderScale:key==='sourceRaySteps'?authoredSourceValue('raySteps')??e.sourceRaySteps:key==='verticalRadius'?settings.radius*settings.stretch:key==='radius'?settings.radius:e.simulationReaction&&REACTION_KEYS.includes(key)?e.simulationReaction[key]:settings[key];
   const text=(el,next)=>{if(el.textContent!==next)el.textContent=next;};
-  let controlPolicy,manualPolicy,unavailable,stretchLegend;
+  let controlPolicy,manualPolicy,neighborhoodPolicy,unavailable,stretchLegend;
   function sync(force=false){if(!panel)return;let e;try{e=read().effective;}catch(err){error=err.message;e={};}
    if(packetStatus){const state=packetOwner?.read(),r=state?.receipt;const actual=packetInspection?.available?` · ${packetInspection.activePackets} occupied / ${r?.packetCapacity??'?'} · ${packetInspection.emittingPackets} emitting · supports at step ${packetInspection.identity.step}`:'';packetStatus.textContent=state?.error??`${state?.phase??'off'}${r?.available?(state.settings.mode==='material-packets'?` · ${r.packetDims.join(' × ')} packet capacity · ${r.settings.materialSubdivisions}³ material strata/packet`:' · '+r.settings.receivers+' material receivers · '+r.settings.sources+' source groups')+' · '+r.settings.width+'² transverse rays · '+r.settings.sections+' sections · step '+r.identity.step:''}${actual}`;}
    for(const {key,input,row,role} of packetFields){row.hidden=role==='common'&&packetSettings.mode!=='material-packets'||role==='reference'&&packetSettings.mode!=='fine-reference';row.style.display=row.hidden?'none':'grid';if(host.controls.document.activeElement===input||input.classList.contains('scrubbing'))continue;if(input.type==='checkbox')input.checked=packetSettings[key];else input.value=String(packetSettings[key]);}
@@ -149,7 +149,7 @@ export default {
    if(renewalLabel){const r=population;const count=v=>Number.isFinite(v)?v.toLocaleString():'—';text(renewalLabel,r?.available?`Read at step ${r.state.step}; renewal at step ${r.renewal?.step??"—"}: ${count(r.active)} active / ${count(r.state.slots)} slots · ${count(r.evaluated)} current anchored evaluations · ${count(r.valid)} valid · ${count(r.placed)} placed · ${r.droppedBirths==null?count(r.overwritten)+' overwritten':count(r.droppedBirths)+' dropped at capacity'} · ${count(r.expired)} expired · ${count(r.escaped)} outside. Age ${r.age.min.toFixed(2)}–${r.age.max.toFixed(2)}, mean ${r.age.mean.toFixed(2)} reaction steps. Last population update Δsim ${r.renewal?.stepDelta??"—"}, Δreaction ${r.reactionDelta.toFixed(3)}. ${r.renewal?.tracked?"":"Renewal detail was not tracked at that update."} Pool turnover ${r.overwriteUpdates===null?'—':r.overwriteUpdates.toFixed(1)+' updates at this placed-birth rate'}.`:r?.reason??'Population has not been read. Read once or enable live renewal readouts.');}
 
    const boundary=current?.ambientBoundaryState?.();
-   if(controlPolicy!==settings||!!e.opticalView?.manual!==manualPolicy){controlPolicy=settings;manualPolicy=!!e.opticalView?.manual;unavailable=inactiveControls({...settings,lockIntegrationView:settings.lockIntegrationView||!!e.opticalView?.manual});}
+   if(controlPolicy!==settings||!!e.opticalView?.manual!==manualPolicy||e.seedNeighborhood!==neighborhoodPolicy){neighborhoodPolicy=e.seedNeighborhood;controlPolicy=settings;manualPolicy=!!e.opticalView?.manual;unavailable=inactiveControls({...settings,lockIntegrationView:settings.lockIntegrationView||!!e.opticalView?.manual},neighborhoodPolicy==='paused-gather');}
    for(const [key,{input,digits}] of fields){const disabled=(key in BOUNDARY_FIELDS&&!boundary)||unavailable.has(key);if(input.disabled!==disabled){input.disabled=disabled;input.style.opacity=disabled?'.4':'1';}if(key==='targetScale'&&e.budgets)input.max=String(e.budgets.maxTargetScale);if(key==='capacity'&&e.budgets)input.max=String(e.budgets.maxCapacity);if(host.controls.document.activeElement===input||input.classList.contains('scrubbing'))continue;const v=value(key,e,boundary);if(input.type==='checkbox'){input.checked=!!v;continue;}const next=Number.isFinite(v)?(key==='fillExtinction'&&v>0&&v<10**-digits?String(v):v.toFixed(digits)):'';if(input.value!==next)input.value=next;}
   }
   function snapshotInputs(){
@@ -210,6 +210,7 @@ export default {
    if(coverageEdit)edits.assertCanRecordApplied(coverageTarget);
    const runtime=source(),shared=!!runtime.opticalParticleState().simulationReaction;
    runtime.validateOpticalParticleBudget?.(next);runtime.setOpticalParticles(next);
+   if(patch.showSeedNeighbors===true)setPaused(true);
    if(shared&&Object.keys(reaction).length)runtime.setParticleSimulationReaction(reaction);
    settings=next;reactionOverrides={...reactionOverrides,...reaction};
    if(coverageEdit)edits.recordApplied(coverageTarget,before,coverageSlice(settings),'Edit particle coverage');
@@ -323,7 +324,7 @@ export default {
    for(const [key,label] of [['target','Acquisition batch (px)'],['fresh','Fresh sample budget'],['output','Fire output (px)'],['particleTarget','Particle target (px)'],['depth','Depth field (px × slices)'],['population','Population grid'],['slots','Particle slots'],['memory','Optical buffers'],['step','Simulation step']]){const name=document.createElement('span'),v=document.createElement('span');name.textContent=label;v.dataset.particleStat=key;v.style.cssText='white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;font-family:monospace;min-width:0';status.append(name,v);stats.set(key,v);}diagnostics.append(status);
    const measure=document.createElement('button'),timing=document.createElement('pre');measure.textContent='Measure particle passes';measure.title='GPU timestamps for one native frame. Includes acquisition, update, births, raster, resolve and presentation. These are GPU intervals and may overlap or include waits for inputs; they are not additive exclusive costs. A running simulation advances one real step; a paused one stays paused.';timing.style.cssText='font-size:.75em;white-space:pre;overflow:auto;min-height:1.2em';measure.addEventListener('click',async()=>{measure.disabled=true;try{const r=await invoke('measure');timing.textContent=r.ok?Object.entries(r.passes).map(([name,ms])=>name.padEnd(12)+ms.toFixed(3)+' ms').join('\n')+'\n'+(r.paused?'Held draw (no simulation advance)':'Advancing draw')+'; intervals may include waits':r.reason;}catch(e){timing.textContent=e.message;}finally{measure.disabled=false;}});
    notice=document.createElement('p');notice.setAttribute('role','status');notice.style.cssText='font-size:.85em';root.append(notice);
-   function control(label,key,tooltip,{step=.1,digits=3,min=0,max,operation='setOptions'}={}){const row=document.createElement('label'),grip=document.createElement('span'),input=document.createElement('input');grip.textContent=label;input.className='transform-input';input.dataset.particle=key;input.setAttribute('aria-label',label);input.type=['enabled','showParticles','showRaymarch','renewalDiagnostics',...PARTICLE_WORK_FLAGS].includes(key)?'checkbox':'number';
+   function control(label,key,tooltip,{step=.1,digits=3,min=0,max,operation='setOptions'}={}){const row=document.createElement('label'),grip=document.createElement('span'),input=document.createElement('input');grip.textContent=label;input.className='transform-input';input.dataset.particle=key;input.setAttribute('aria-label',label);input.type=['showSeedNeighbors','enabled','showParticles','showRaymarch','renewalDiagnostics',...PARTICLE_WORK_FLAGS].includes(key)?'checkbox':'number';
     const fractions=['refresh','filmJitter','fineCoverage','coarseCoverage','sourceBias','fineAcquisition','flowAlignment','referenceEmission','fillExtinction','exchangeStrength','stateLife','lifeFade','followFraction','emissionEdgeSoftness','extinctionEdgeSoftness','largeSupportFade'];
     if(input.type==='number'){input.step='any';input.min=String(min);if(max!==undefined||fractions.includes(key))input.max=String(max??1);drags.push(host.controls.installNumberDrag({input,grip,step}));}input.title=tooltip+' · Drag to adjust; click to type; Shift for fine; Esc to cancel.';grip.title=tooltip;row.title=tooltip;
     fields.set(key,{input,digits});
@@ -359,6 +360,8 @@ export default {
    diagnostics.append(measure,timing);root.append(diagnostics);
    section('Display and output');
    control('Carriers shown (%)','visiblePercent','Display a stable fraction of live carriers at their original optical weights and footprints. The full population continues to evolve. Set to 100 to see all carriers.',{step:1,digits:2,min:0,max:100});
+   control('Gather neighbors while paused','showSeedNeighbors','Enabling this pauses the flame to show all live carrier centers within the radius of any seed. Overlapping neighborhoods draw each carrier once. Resume to see the seeds again.');
+   control('Gather radius (fine cells)','seedRadiusCells','3D distance from the seed center in fine-grid cell widths. Reaction phase selects seeds. Gathered neighbors include all phases.',{min:.001,step:.25});
    const phaseRow=document.createElement('label'),phase=document.createElement('select'),phaseLabel=document.createElement('span');
    phaseLabel.textContent='Reaction phase';phase.dataset.particle='phaseFilter';phase.setAttribute('aria-label','Reaction phase');
    phase.title='Solo particles by their last measured burn rate and their own emission. Changes display only; the grid underlay and grid extinction fill are suspended during a solo.';

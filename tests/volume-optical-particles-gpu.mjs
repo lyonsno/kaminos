@@ -188,7 +188,7 @@ async function opticalFixture(d,run,view={}){
  const target=d.createTexture({size:[4,4],format:'rgba8unorm',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC});const depth=d.createTexture({size:[1,1],format:'depth32float',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.TEXTURE_BINDING});
  const camera=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,1,1,0,0,0,1,0]);const source={buffer:births,uniform,width:4,height:4,pixels:n,step:0,backtrace:view.backtrace??0,reactionStepScale:view.stepScale??1,viewProj:view.vp??identity};
  const seed=rows=>{d.queue.writeBuffer(births,0,rows);owner.reset();};
- const draw=async(step=0,settings={})=>{source.step=step;let publish;const e=d.createCommandEncoder();const dp=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthClearValue:view.depth??1,depthStoreOp:'store'}});dp.end();const measured=view.trace||view.passTrace?new Proxy(e,{get(target,key){if(key==='beginRenderPass')return desc=>{view.passTrace?.push(desc.label);const pass=target.beginRenderPass(desc);return desc.label==='spatial material support'?new Proxy(pass,{get(p,k){const value=p[k];return typeof value==='function'?function(...args){if(k==='draw'||k==='drawIndexed')view.trace?.push({method:k,args});return value.apply(p,args);}:value;}}):pass;};const value=target[key];return typeof value==='function'?value.bind(target):value;}}):e;owner.encode(measured,{view:target.createView(),format:'rgba8unorm',source,fine,reactants,dims:[2,2,2],invViewProj:view.inverse??identity,depthZeroToOne:view.depthZeroToOne??false,settings:{enabled:true,refresh:0,exchangeStrength:0,stateLife:0,...settings},cameraValues:camera,depth,identity:'fixture',gridExtinction:view.gridExtinction,allowUnavailableGridExtinction:view.allowUnavailableGridExtinction,...(view.materialQuery?{materialTransform:{scale:1,translate:[0,0,0]},afterMaterialSubmit:fn=>{publish=fn;}}:{}),profileWrites:label=>{view.profiles?.push(label);return {};}});const read=d.createBuffer({size:1024,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});e.copyTextureToBuffer({texture:target},{buffer:read,bytesPerRow:256},[4,4]);d.queue.submit([e.finish()]);publish?.();await read.mapAsync(GPUMapMode.READ);const pixels=new Uint8Array(read.getMappedRange().slice(0));read.unmap();read.destroy();return pixels;};
+ const draw=async(step=0,settings={})=>{source.step=step;let publish;const e=d.createCommandEncoder();const dp=e.beginRenderPass({colorAttachments:[],depthStencilAttachment:{view:depth.createView(),depthLoadOp:'clear',depthClearValue:view.depth??1,depthStoreOp:'store'}});dp.end();const measured=view.trace||view.passTrace?new Proxy(e,{get(target,key){if(key==='beginRenderPass')return desc=>{view.passTrace?.push(desc.label);const pass=target.beginRenderPass(desc);return desc.label==='spatial material support'?new Proxy(pass,{get(p,k){const value=p[k];return typeof value==='function'?function(...args){if(k==='draw'||k==='drawIndexed')view.trace?.push({method:k,args});return value.apply(p,args);}:value;}}):pass;};const value=target[key];return typeof value==='function'?value.bind(target):value;}}):e;owner.encode(measured,{inspectionPaused:view.inspectionPaused,view:target.createView(),format:'rgba8unorm',source,fine,reactants,dims:[2,2,2],invViewProj:view.inverse??identity,depthZeroToOne:view.depthZeroToOne??false,settings:{enabled:true,refresh:0,exchangeStrength:0,stateLife:0,...settings},cameraValues:camera,depth,identity:'fixture',gridExtinction:view.gridExtinction,allowUnavailableGridExtinction:view.allowUnavailableGridExtinction,...(view.materialQuery?{materialTransform:{scale:1,translate:[0,0,0]},afterMaterialSubmit:fn=>{publish=fn;}}:{}),profileWrites:label=>{view.profiles?.push(label);return {};}});const read=d.createBuffer({size:1024,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});e.copyTextureToBuffer({texture:target},{buffer:read,bytesPerRow:256},[4,4]);d.queue.submit([e.finish()]);publish?.();await read.mapAsync(GPUMapMode.READ);const pixels=new Uint8Array(read.getMappedRange().slice(0));read.unmap();read.destroy();return pixels;};
  try{await run({owner,seed,draw,setMaterial:grid.upload,upload:rows=>d.queue.writeBuffer(births,0,rows)});}finally{owner.dispose();births.destroy();uniform.destroy();grid.dispose();target.destroy();depth.destroy();}
 }
 test('optically negligible carriers cannot dilute an overlapping live carrier',async()=>{
@@ -229,6 +229,35 @@ test('sparse carrier display restores the same held population and draws a repea
   }
   assert.ok(kept>0&&omitted>0,'thinning keeps whole carriers and drops others');
  }));
+});
+test('paused seed neighborhoods recover nearby original material and exclude an equally bright remote carrier',async()=>{
+ const view={inspectionPaused:true};
+ await withKaminosGpu(async({device})=>opticalFixture(device,async({seed,draw,owner})=>{
+  // At 5%, generation one selects slot 1. Slot 2 is across the seed cell boundary.
+  const rows=new Float32Array(16*16);
+  const put=(slot,x,light)=>rows.set([...light,.2,x,0,0,1,-.2,.2,1,1,...light,0],slot*16);
+  put(1,-.02,[1,0,0]);put(2,.02,[0,1,0]);
+  for(const depthMode of [0,2]){
+   rows.fill(0,3*16);seed(rows);
+   const settings={depthMode,depthScale:1,depthSlices:4};
+   const expected=await draw(0,settings);
+   put(3,.75,[0,0,1]);seed(rows);
+   const dense=await draw(0,settings);assert.notDeepEqual(dense,expected);
+   const sparse={...settings,visiblePercent:5},gather={...sparse,showSeedNeighbors:true,seedRadiusCells:.1};
+   const seeds=await draw(0,sparse),records=(await owner.sample()).records;
+   assert.notDeepEqual(seeds,expected);
+   assert.deepEqual(await draw(0,gather),expected,'gather the near green carrier at its original optical weight');
+   assert.equal(owner.read().neighborhoodBytes,16*12+4);
+   assert.deepEqual(await draw(0,{...gather,seedRadiusCells:1}),dense);
+   assert.deepEqual(await draw(0,{...gather,visiblePercent:0}),new Uint8Array(dense.length));
+   view.inspectionPaused=false;
+   assert.deepEqual(await draw(0,gather),seeds,'playing shows only the live seeds');
+   assert.equal(owner.read().neighborhoodBytes,0);
+   view.inspectionPaused=true;
+   assert.deepEqual(await draw(0,gather),expected);
+   assert.deepEqual((await owner.sample()).records,records);
+  }
+ },view));
 });
 test('reaction-phase solo changes the held optical draw without changing its carrier records',async()=>{
  await withKaminosGpu(async({device:d})=>opticalFixture(d,async({owner,seed,draw,upload})=>{

@@ -9,7 +9,7 @@ import {createSceneEdits} from '../scene-edit-session.mjs';
 async function mounted({shared=false,inputs={},viewport=false,edits,preview=false}={}){
  const document=new EventTarget();document.activeElement=null;
  class Element extends EventTarget{
-  constructor(tag){super();this.tagName=tag.toUpperCase();this.children=[];this.dataset={};this.style={};this.value='';this.min='';this.max='';const classes=new Set();this.classList={add:v=>classes.add(v),remove:v=>classes.delete(v),contains:v=>classes.has(v)};}
+  constructor(tag){super();this.ownerDocument=document;this.tagName=tag.toUpperCase();this.children=[];this.dataset={};this.style={};this.value='';this.min='';this.max='';const classes=new Set();this.classList={add:v=>classes.add(v),remove:v=>classes.delete(v),contains:v=>classes.has(v)};}
   append(...els){for(let el of els){if(typeof el==='string'){const node=new Element('span');node.textContent=el;el=node;}el.parentNode=this;this.children.push(el);}}
   setAttribute(){}
   remove(){if(this.parentNode)this.parentNode.children=this.parentNode.children.filter(x=>x!==this);}
@@ -31,6 +31,17 @@ async function mounted({shared=false,inputs={},viewport=false,edits,preview=fals
  return {owner,document,field,writes,trace,native,accepted:()=>accepted,dispose:()=>owner.dispose()};
 }
 const settle=()=>new Promise(resolve=>setTimeout(resolve,220));
+test('enabling the neighborhood view requests a real simulation pause even with Look Freeze already displayed',async()=>{
+ const x=await mounted();
+ const calls=[];
+ x.document.defaultView.kaminosScenePlayback={read:()=>({paused:true}),setPaused:value=>calls.push(value)};
+ try{
+  const toggle=x.field('showSeedNeighbors');toggle.checked=true;toggle.fire('change');await Promise.resolve();
+  assert.deepEqual(calls,[true]);assert.equal(x.accepted().showSeedNeighbors,true);
+  toggle.checked=false;toggle.fire('change');await Promise.resolve();
+  assert.deepEqual(calls,[true]);assert.equal(x.accepted().showSeedNeighbors,false);
+ }finally{await x.dispose();}
+});
 test('legacy proxy soot settings cannot silently rewrite the shared simulation on reopening',async()=>{
  const old=await mounted({shared:true,inputs:{particles:{sootYield:5,smokeLife:7}}});try{assert.equal(old.owner.read().effective.simulationReaction.sootYield,.1);assert.equal(old.owner.read().effective.simulationReaction.smokeLife,90);assert.equal(old.owner.read().settings.sootYield,.1,'versioned persistence captures the effective shared law');assert.equal(old.owner.read().settings.smokeLife,90);old.owner.operations.setReaction({sootYield:.3,smokeLife:70});assert.equal(old.owner.read().effective.simulationReaction.sootYield,.3);}finally{await old.dispose();}
  const current=await mounted({shared:true,inputs:{particles:{materialStateVersion:1,sootYield:.6,smokeLife:80}}});try{assert.equal(current.owner.read().effective.simulationReaction.sootYield,.6);assert.equal(current.owner.read().effective.simulationReaction.smokeLife,80);}finally{await current.dispose();}
